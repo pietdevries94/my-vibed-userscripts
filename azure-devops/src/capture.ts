@@ -39,7 +39,16 @@ function fakePullRequestLink(url: URL, pseudonyms: Pseudonyms): string | null {
 }
 
 const rules: ScrubRules = {
-  keepAttributes: [],
+  // Azure DevOps's own layout and state attributes. Their values are fixed words.
+  keepAttributes: [
+    "aria-roledescription",
+    "data-componentregion",
+    "data-done",
+    "data-is-focusable",
+    "data-noclose",
+    "data-renderedregion",
+    "data-side",
+  ],
   keepIdPatterns: [/^__bolt-[\w-]+$/u],
   keepJsonPaths: [
     // Policy evaluation and pull request states: "approved", "running", "active".

@@ -106,7 +106,9 @@ test("GUIDs become numbered stand-in GUIDs, the same one in any case", () => {
 test("the leak check names the field of a value that is still in the output", () => {
   const { output, pseudonyms } = scrubHtml('<p title="Quill Barrow">x</p>');
   assert.deepEqual(findLeaks([output], pseudonyms), []);
-  assert.deepEqual(findLeaks([`${output} quill barrow`], pseudonyms), ["p @title"]);
+  assert.deepEqual(findLeaks([`${output}\n<i class="quill barrow-icon">`], pseudonyms), [
+    { field: "p @title", foundIn: '<i class="[value]-icon">' },
+  ]);
 });
 
 test("the leak check ignores short values and stand-ins", () => {
@@ -117,6 +119,19 @@ test("the leak check ignores short values and stand-ins", () => {
 test("a value inside a longer word is not a leak", () => {
   const { output, pseudonyms } = scrubHtml("<p>Ann</p>");
   assert.deepEqual(findLeaks([`${output} <i class="planning"></i>`], pseudonyms), []);
+});
+
+test("an id and every reference to it get the same stand-in", () => {
+  const { output } = scrubHtml('<b id="name-7">x</b><i aria-labelledby="name-7 keep-1"></i>');
+  assert.equal(
+    output,
+    '<body><b id="text-1">text-2</b><i aria-labelledby="text-1 keep-1"></i></body>',
+  );
+});
+
+test("booleans written as text stay", () => {
+  const { output } = scrubHtml('<b data-is-focusable="true" data-done="false"></b>');
+  assert.equal(output, '<body><b data-is-focusable="true" data-done="false"></b></body>');
 });
 
 test("redact replaces every replaced value", () => {

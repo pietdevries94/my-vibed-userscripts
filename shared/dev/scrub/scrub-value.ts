@@ -6,6 +6,8 @@ const GUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T/u;
 const DIGITS = /^\d+$/u;
 const LINK_BASE = "https://site.invalid";
+/** Values that carry no names: empty, and booleans written as text. */
+const KEPT_VALUES = new Set(["", "true", "false"]);
 
 function scrubValue(
   value: string,
@@ -13,7 +15,7 @@ function scrubValue(
   context: { rules: ScrubRules; pseudonyms: Pseudonyms },
 ): string {
   const trimmed = value.trim();
-  if (trimmed === "" || context.rules.keepUiWords.includes(trimmed)) {
+  if (KEPT_VALUES.has(trimmed) || context.rules.keepUiWords.includes(trimmed)) {
     return value;
   }
   if (DIGITS.test(trimmed)) {

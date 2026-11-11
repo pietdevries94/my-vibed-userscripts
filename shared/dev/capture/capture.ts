@@ -3,6 +3,7 @@
 // <script>--<page>.html and <script>--<page>.json. A failed leak check downloads nothing.
 // Dev file only; the release build never includes it.
 import { findLeaks, redact } from "../scrub/leak-check.ts";
+import type { Leak } from "../scrub/leak-check.ts";
 import type { Pseudonyms } from "../scrub/pseudonyms.ts";
 import type { ScrubRules } from "../scrub/rules.ts";
 import { createPseudonyms } from "../scrub/pseudonyms.ts";
@@ -86,7 +87,7 @@ function download(fileName: string, text: string, type: string): void {
 async function buildFiles(
   definition: CaptureDefinition,
   page: CapturePage,
-): Promise<{ html: string; json: string; leaks: string[] }> {
+): Promise<{ html: string; json: string; leaks: Leak[] }> {
   const pseudonyms = createPseudonyms();
   const { data, meta } = await page.collect(getOnlyFetch, pseudonyms);
   const html = scrubElement(page.root, definition.rules, pseudonyms).outerHTML;
@@ -119,7 +120,7 @@ async function capture(definition: CaptureDefinition): Promise<void> {
   const { html, json, leaks } = await buildFiles(definition, page);
   if (leaks.length > 0) {
     notifyOwner(
-      `Capture fixtures: the leak check refused this capture. Nothing was saved.\nFields:\n${leaks.join("\n")}`,
+      `Capture fixtures: the leak check refused this capture. Nothing was saved.\n\n${leaks.map(({ field, foundIn }) => `${field}\n  in: ${foundIn}`).join("\n")}`,
     );
     return;
   }

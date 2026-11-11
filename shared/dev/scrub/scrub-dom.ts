@@ -81,6 +81,21 @@ const SVG_GEOMETRY_ATTRIBUTES = new Set([
   "opacity",
   "xmlns",
 ]);
+/** The id itself, and attributes that refer to ids. */
+const ID_REFERENCE_ATTRIBUTES = new Set([
+  "id",
+  "for",
+  "headers",
+  "list",
+  "aria-activedescendant",
+  "aria-controls",
+  "aria-describedby",
+  "aria-details",
+  "aria-errormessage",
+  "aria-flowto",
+  "aria-labelledby",
+  "aria-owns",
+]);
 const SCRUBBED_ATTRIBUTES = new Set([
   "aria-label",
   "alt",
@@ -121,6 +136,21 @@ function keptAttributeValue(
   return null;
 }
 
+/**
+ * An id, or a space-separated list of ids. Each one is kept when it matches the
+ * script's id patterns, so an id and every reference to it get the same value.
+ */
+function scrubIds(value: string, field: string, context: ScrubContext): string {
+  return value
+    .split(/\s+/u)
+    .map((id) =>
+      context.rules.keepIdPatterns.some((pattern) => pattern.test(id))
+        ? id
+        : scrubValue(id, field, context),
+    )
+    .join(" ");
+}
+
 /** Ids, links and dates: replaced by their own kind of stand-in. Null for other attributes. */
 function scrubSpecialAttribute(
   element: Element,
@@ -128,10 +158,8 @@ function scrubSpecialAttribute(
   context: ScrubContext,
 ): string | null {
   const field = fieldOf(element, name);
-  if (name === "id") {
-    return context.rules.keepIdPatterns.some((pattern) => pattern.test(value))
-      ? value
-      : scrubValue(value, field, context);
+  if (ID_REFERENCE_ATTRIBUTES.has(name)) {
+    return scrubIds(value, field, context);
   }
   if (name === "href" || name === "src") {
     return scrubLink(value, field, context);
