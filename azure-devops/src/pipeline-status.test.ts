@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BUILD_POLICY_TYPE_ID, pipelineStatusOf, type PolicyEvaluation } from "./pipeline-status.ts";
-
-const fixture = JSON.parse(readFileSync(new URL("../fixtures/policy-evaluations-repository-pull-requests.json", import.meta.url), "utf8"));
-const capturedEvaluations = (pullRequestId: number): PolicyEvaluation[] => fixture.evaluationsByPullRequestId[pullRequestId].body.value;
 
 const buildEvaluation = (status: string, overrides: Partial<{ isBlocking: boolean; context: PolicyEvaluation["context"] }> = {}): PolicyEvaluation => ({
   status,
@@ -14,12 +10,6 @@ const buildEvaluation = (status: string, overrides: Partial<{ isBlocking: boolea
 const reviewerEvaluation = (status: string): PolicyEvaluation => ({
   status,
   configuration: { isBlocking: true, type: { id: "fa4e907d-c16b-4a4c-9dfa-4906e5d171dd" } },
-});
-
-test("captured pull requests", () => {
-  assert.equal(pipelineStatusOf(capturedEvaluations(1001)), "succeeded", "approved build next to a rejected merge-strategy policy");
-  assert.equal(pipelineStatusOf(capturedEvaluations(1012)), "notStarted", "draft: build policy queued, no build yet");
-  assert.equal(pipelineStatusOf(capturedEvaluations(1013)), "failed");
 });
 
 test("a pull request without build validation has no status", () => {

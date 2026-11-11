@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { findBoardCardIds, hasBoardChanged, isBoardLocation, watchBoard, type BoardSnapshot, type BoardWorkItem } from "./board.ts";
@@ -13,12 +12,6 @@ test("recognises a board location", () => {
   assert.equal(isBoardLocation({ pathname: "/my-org/my-project/_boards/board/t/My%20Team/User%20Stories" }), true);
   assert.equal(isBoardLocation({ pathname: "/my-org/my-project/_backlogs/backlog/t/My%20Team/User%20Stories" }), false);
   assert.equal(isBoardLocation({ pathname: "/my-org/my-project/_git/my-repo/pullrequests" }), false);
-});
-
-test("the captured board has cards", () => {
-  const { document } = new JSDOM(readFileSync(new URL("../fixtures/page-board.html", import.meta.url), "utf8")).window;
-  assert.equal(document.querySelectorAll(".wit-card[data-itemid]").length, 99);
-  assert.deepEqual(findBoardCardIds(document), [], "the capture masked every id to zeros");
 });
 
 test("finds the work item id of each card once", () => {

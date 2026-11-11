@@ -74,7 +74,7 @@ test("the extension source has one fetch call and no write methods", () => {
   const sourceFiles = readdirSync(sourceDirectory).filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"));
   const source = sourceFiles.map((name) => readFileSync(new URL(name, sourceDirectory), "utf8")).join("\n");
 
-  assert.equal(source.match(/\bfetch\(/g)?.length, 2, "one call in ado-client.ts and the browser fetch passed in by content.ts");
+  assert.equal(source.match(/\bfetch\(/g)?.length, 2, "one call in ado-client.ts and the browser fetch passed in by main.ts");
   assert.doesNotMatch(source, /["'`](POST|PUT|PATCH|DELETE)["'`]/i);
   assert.doesNotMatch(source, /XMLHttpRequest|sendBeacon|WebSocket/);
 });

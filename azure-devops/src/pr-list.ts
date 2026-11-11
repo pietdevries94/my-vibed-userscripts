@@ -42,7 +42,7 @@ export function showPipelineStatus(row: HTMLElement, pullRequestId: number, stat
 const REVIEWER_SELECTOR = ".pr-reviewer";
 
 /**
- * Marks the required reviewers of a row. content.css outlines them and puts
+ * Marks the required reviewers of a row. style.css outlines them and puts
  * them first. A reviewer is found by name in the label of its avatar.
  */
 export function markRequiredReviewers(row: HTMLElement, reviewers: Reviewer[]): void {

@@ -1,0 +1,8 @@
+{
+  "name": "Fix Azure DevOps",
+  "description": "Adds missing features to Azure DevOps. Shows the pipeline status of each pull request in the list.",
+  "match": ["https://dev.azure.com/*", "https://*.visualstudio.com/*"],
+  "grant": ["GM_addStyle"],
+  "version": "1.0.0",
+  "mode": "sealed"
+}

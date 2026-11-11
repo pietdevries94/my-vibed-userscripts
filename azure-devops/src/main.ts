@@ -7,6 +7,9 @@ import { findPullRequestRows, markRequiredReviewers, showPipelineStatus } from "
 import { watchPullRequestList } from "./pr-list-watch.ts";
 import { apiBasePath, parsePullRequestListLocation } from "./pull-request-link.ts";
 import type { Reviewer } from "./reviewers.ts";
+import style from "./style.css";
+
+GM_addStyle(style);
 
 const DOM_SETTLE_MS = 200;
 const TIMER_INTERVAL_MS = 5_000;

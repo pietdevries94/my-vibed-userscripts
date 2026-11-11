@@ -11,7 +11,7 @@ export function avatarName(avatar: Element): string {
 
 /**
  * Marks every avatar under `root` with the initials and colour of its name.
- * It only sets attributes; content.css draws the initials over ADO's picture.
+ * It only sets attributes; style.css draws the initials over ADO's picture.
  * That leaves ADO's own elements in place, so hover cards keep working. An
  * avatar without a name keeps ADO's picture. Safe to call repeatedly.
  */

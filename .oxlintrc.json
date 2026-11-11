@@ -72,6 +72,14 @@
       }
     },
     {
+      // Ambient declarations: they describe globals that Violentmonkey and the build provide.
+      "files": ["**/*.d.ts"],
+      "rules": {
+        "import/unambiguous": "off",
+        "eslint/no-implicit-globals": "off"
+      }
+    },
+    {
       // Tests run on Node, and their inputs are literal values by nature.
       "files": ["**/*.test.ts"],
       "rules": {
