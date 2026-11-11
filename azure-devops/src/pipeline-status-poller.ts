@@ -67,7 +67,7 @@ function recordStatus<Row>(
 }
 
 /** Fetches one status. Gives the Retry-After that Azure DevOps sent, if any. */
-async function updateStatus<Row>(
+async function fetchAndRecordStatus<Row>(
   state: PollerState<Row>,
   pullRequest: PullRequestRef,
   polled: PolledPullRequest,
@@ -96,7 +96,7 @@ async function fetchStatus<Row>(
     status: null,
   };
   state.polledPullRequests.set(pullRequest.pullRequestId, polled);
-  const retryAfterSeconds = await updateStatus(state, pullRequest, polled);
+  const retryAfterSeconds = await fetchAndRecordStatus(state, pullRequest, polled);
   if (retryAfterSeconds !== null) {
     state.pausedUntil = state.options.now() + retryAfterSeconds * MS_PER_SECOND;
   }

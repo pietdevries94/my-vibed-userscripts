@@ -3,11 +3,7 @@
 // unregisters service workers that an earlier session left in the profile.
 // Sign-in origins and the owner's POST exemptions come from READ_ONLY_GUARD_CONFIG.
 import type { BrowserContext, Page, Route } from "playwright-core";
-
-interface PageGuardConfig {
-  signInOrigins: string[];
-  postExemptions: { url: string }[];
-}
+import type { GuardConfig } from "./guard.ts";
 
 const SERVICE_WORKER_REPORT_WAIT_MS = 200;
 const guardedContexts = new WeakSet<BrowserContext>();
@@ -16,7 +12,7 @@ function isStringList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-function readConfig(): PageGuardConfig {
+function readConfig(): GuardConfig {
   const raw = process.env.READ_ONLY_GUARD_CONFIG ?? "{}";
   const parsed = JSON.parse(raw) as unknown;
   const config: Record<string, unknown> =
@@ -40,7 +36,7 @@ function withoutQuery(url: string): string {
   return `${parsed.origin}${parsed.pathname}`;
 }
 
-function isAllowed(method: string, url: string, config: PageGuardConfig): boolean {
+function isAllowed(method: string, url: string, config: GuardConfig): boolean {
   if (method === "GET" || method === "HEAD") {
     return true;
   }
@@ -53,7 +49,7 @@ function isAllowed(method: string, url: string, config: PageGuardConfig): boolea
   );
 }
 
-async function guardRequest(route: Route, config: PageGuardConfig): Promise<void> {
+async function guardRequest(route: Route, config: GuardConfig): Promise<void> {
   const request = route.request();
   await (isAllowed(request.method(), request.url(), config)
     ? route.fallback()
