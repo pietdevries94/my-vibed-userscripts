@@ -13,8 +13,8 @@
   "options": {
     "typeAware": true
   },
-  // The extension's capture tool and fake server, kept for reference. Steps 4 and 5 of the move replace them.
-  "ignorePatterns": ["azure-devops/tools/**", "azure-devops/dev/**"],
+  // The extension's fake server, kept for reference. Step 5 of the move replaces it.
+  "ignorePatterns": ["azure-devops/dev/**"],
   "rules": {
     // Off: conflicts with import/no-default-export. Together they forbid every export.
     "import/no-named-export": "off",

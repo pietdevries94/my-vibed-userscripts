@@ -91,7 +91,16 @@ function esbuildOptions(script: Script, target: BuildTarget): BuildOptions {
             sourcefile: "dev-entry.ts",
           },
         };
-  return { ...REPRODUCIBLE_OPTIONS, ...entry, banner: { js: metadataBlock(script, target) } };
+  // The release build drops log() calls. Dropping a call needs syntax minification;
+  // names and whitespace stay, so the release file stays readable.
+  const releaseOnly: BuildOptions =
+    target === "release" ? { minifySyntax: true, pure: ["log"] } : {};
+  return {
+    ...REPRODUCIBLE_OPTIONS,
+    ...entry,
+    ...releaseOnly,
+    banner: { js: metadataBlock(script, target) },
+  };
 }
 
 /** The full `.user.js` text. The metadata block comes first, as Violentmonkey requires. */
