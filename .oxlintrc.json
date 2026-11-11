@@ -1,0 +1,85 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["unicorn", "typescript", "oxc", "import"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "error",
+    "restriction": "error",
+    "nursery": "off"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "ignorePatterns": ["azure-devops/**"],
+  "rules": {
+    // Off: conflicts with import/no-default-export. Together they forbid every export.
+    "import/no-named-export": "off",
+    // Off: conflicts with import/no-default-export.
+    "import/prefer-default-export": "off",
+    // Off: conflicts with unicorn/no-null. Together they leave no way to say "absent".
+    "eslint/no-undefined": "off",
+    // Off: conflicts with the platform. DOM APIs take and return null.
+    "unicorn/no-null": "off",
+    // Off: conflicts with typescript/prefer-optional-chain, and with the platform (Firefox 128, Node 26).
+    "oxc/no-optional-chaining": "off",
+    // Off: conflicts with typescript/promise-function-async, and with the platform.
+    "oxc/no-async-await": "off",
+    // Off: conflicts with unicorn/prefer-spread, and with the platform.
+    "oxc/no-rest-spread-properties": "off",
+    // Off: conflicts with unicorn/prefer-ternary and eslint/prefer-object-spread.
+    "eslint/no-ternary": "off",
+    // Off: conflicts with the platform. DOM element types are mutable by design.
+    "typescript/prefer-readonly-parameter-types": "off",
+    // Off: conflicts with typescript/promise-function-async, which wants async on every promise-returning function.
+    "eslint/require-await": "off",
+    // Off: the spec imports shared/ code by relative path.
+    "import/no-relative-parent-imports": "off",
+    // Options, not switch-offs:
+    "eslint/no-duplicate-imports": ["error", { "allowSeparateTypeImports": true }],
+    "eslint/one-var": ["error", "never"],
+    "eslint/capitalized-comments": ["error", "always", { "ignoreConsecutiveComments": true }],
+    "eslint/func-style": ["error", "declaration", { "allowArrowFunctions": true }],
+    "eslint/no-void": ["error", { "allowAsStatement": true }],
+    "eslint/no-use-before-define": ["error", { "functions": false }],
+    "eslint/no-magic-numbers": [
+      "error",
+      {
+        "ignore": [-1, 0, 1, 2],
+        "ignoreArrayIndexes": true,
+        "ignoreDefaultValues": true,
+        "ignoreTypeIndexes": true
+      }
+    ]
+  },
+  "overrides": [
+    {
+      // Command-line tools and dev servers: they run on Node and talk to the terminal.
+      "files": ["build/**", "shared/dev/**", "*/fake-site/**"],
+      "rules": {
+        "import/no-nodejs-modules": "off",
+        "eslint/no-console": "off",
+        "unicorn/no-process-exit": "off"
+      }
+    },
+    {
+      // A classic script: Playwright adds it to every frame, where import and export would not parse.
+      "files": ["shared/dev/real-site/read-only.init-script.ts"],
+      "rules": {
+        "import/unambiguous": "off"
+      }
+    },
+    {
+      // Tests run on Node, and their inputs are literal values by nature.
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "import/no-nodejs-modules": "off",
+        "eslint/no-magic-numbers": "off",
+        // node:test's test() returns a promise that the runner tracks.
+        "typescript/no-floating-promises": "off"
+      }
+    }
+  ]
+}

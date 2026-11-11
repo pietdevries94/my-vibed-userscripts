@@ -1,0 +1,48 @@
+{
+  "name": "my-vibed-userscripts",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pietdevries94/my-vibed-userscripts"
+  },
+  "type": "module",
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
+    "build": "node build/build.ts",
+    "dev": "node build/dev.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --type-aware --deny-warnings",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "test": "node build/test.ts",
+    "test:fixtures": "node build/test.ts --fixtures",
+    "test:guard": "node shared/dev/real-site/guard-test/run.ts",
+    "check:dist": "node build/check-dist.ts",
+    "release": "node build/release.ts",
+    "release:detect": "node build/release.ts --detect",
+    "precommit": "node build/precommit.ts",
+    "fixtures:link": "node build/fixtures-link.ts",
+    "fixtures:import": "node build/fixtures-import.ts"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@playwright/mcp": "0.0.85",
+    "@types/jsdom": "30.0.0",
+    "@types/node": "26.6.6",
+    "@types/ws": "8.18.2",
+    "esbuild": "0.28.2",
+    "jsdom": "31.0.0",
+    "oxfmt": "0.78.0",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2006",
+    "typescript": "7.0.2",
+    "ws": "8.22.2"
+  },
+  "engines": {
+    "node": ">=26"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

@@ -1,0 +1,69 @@
+.fix-ado-pipeline-status {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: 8px;
+}
+
+.fix-ado-pipeline-status[data-status="succeeded"] { color: var(--component-status-success, rgb(85, 163, 98)); }
+.fix-ado-pipeline-status[data-status="failed"] { color: var(--component-status-error, rgb(205, 74, 69)); }
+.fix-ado-pipeline-status[data-status="expired"] { color: var(--component-status-warning, rgb(214, 119, 48)); }
+.fix-ado-pipeline-status[data-status="running"] { color: var(--component-status-info, rgb(0, 120, 212)); }
+.fix-ado-pipeline-status[data-status="queued"],
+.fix-ado-pipeline-status[data-status="notStarted"] { color: var(--component-status-neutral, rgb(102, 102, 102)); }
+
+.fix-ado-pipeline-status[data-status="running"] {
+  animation: fix-ado-spin 1.5s linear infinite;
+}
+
+@keyframes fix-ado-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-pipeline-status[data-status="running"] { animation: none; }
+}
+
+/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+[data-fix-ado-initials] {
+  position: relative;
+  border-radius: 50%;
+  background: hsl(var(--fix-ado-hue, 210) 45% 38%);
+}
+
+[data-fix-ado-initials] > .bolt-coin-content,
+[data-fix-ado-initials] > .vss-Persona-content {
+  visibility: hidden;
+}
+
+[data-fix-ado-initials]::after {
+  content: attr(data-fix-ado-initials);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: calc(var(--fix-ado-avatar-size, 24px) * 0.42);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+
+/* A glow that spills outside the circle, so the circle keeps its full size. */
+.pr-reviewer[data-fix-ado-required] .bolt-coin {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--communication-background, rgb(0, 120, 212)),
+    0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
+}
+
+/* Required reviewers first. Even spacing whatever the visual order. */
+[data-fix-ado-reviewers] > .pr-reviewer {
+  margin: 0 8px 0 0 !important;
+}
+
+[data-fix-ado-reviewers] > .pr-reviewer[data-fix-ado-required] {
+  order: -1;
+}

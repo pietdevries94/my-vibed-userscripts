@@ -1,0 +1,70 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { JSDOM } from "jsdom";
+import { avatarName, showInitialsOnAvatars } from "./avatars.ts";
+
+function pageWith(html: string) {
+  const { document } = new JSDOM(`<!doctype html><body>${html}</body>`).window;
+  const avatars = [...document.querySelectorAll<HTMLElement>(".bolt-coin, .vss-Persona")];
+  const initials = () => avatars.map((avatar) => avatar.getAttribute("data-fix-ado-initials"));
+  const hues = () => avatars.map((avatar) => avatar.style.getPropertyValue("--fix-ado-hue"));
+  return { document, avatars, initials, hues };
+}
+
+test("every named avatar gets initials, anywhere on the page", () => {
+  const page = pageWith(`
+    <header><div class="bolt-coin size32" aria-label="Elst, Tomas van"><img class="bolt-coin-content" alt=""></div></header>
+    <main><section><div class="bolt-coin size24" aria-label="Holt, Mira"><div class="bolt-coin-content"><span>HM</span></div></div></section></main>
+  `);
+  showInitialsOnAvatars(page.document);
+  assert.deepEqual(page.initials(), ["TE", "MH"]);
+});
+
+test("the same name has the same colour everywhere", () => {
+  const page = pageWith(`
+    <div class="bolt-coin" aria-label="Elst, Tomas van"></div>
+    <div class="bolt-coin" aria-label="Holt, Mira"></div>
+    <div class="bolt-coin" aria-label="Elst, Tomas van"></div>
+  `);
+  showInitialsOnAvatars(page.document);
+  const [first, second, third] = page.hues();
+  assert.equal(first, third);
+  assert.notEqual(first, second);
+  assert.notEqual(first, "");
+});
+
+test("the name comes from the image when the avatar has no label", () => {
+  const page = pageWith(`<div class="bolt-coin"><img class="bolt-coin-content" alt="Holt, Mira"></div>`);
+  assert.equal(avatarName(page.avatars[0]!), "Holt, Mira");
+});
+
+test("an avatar without a name keeps the ADO picture", () => {
+  const page = pageWith(`<div class="bolt-coin" role="presentation" aria-label=""><img class="bolt-coin-content" alt=""></div>`);
+  showInitialsOnAvatars(page.document);
+  assert.deepEqual(page.initials(), [null]);
+  assert.deepEqual(page.hues(), [""]);
+});
+
+test("an avatar reused for someone else gets the new initials", () => {
+  const page = pageWith(`<div class="bolt-coin" aria-label="Elst, Tomas van"></div>`);
+  showInitialsOnAvatars(page.document);
+  const firstHue = page.hues()[0];
+
+  page.avatars[0]!.setAttribute("aria-label", "Holt, Mira");
+  showInitialsOnAvatars(page.document);
+  assert.deepEqual(page.initials(), ["MH"]);
+  assert.notEqual(page.hues()[0], firstHue);
+
+  page.avatars[0]!.setAttribute("aria-label", "");
+  showInitialsOnAvatars(page.document);
+  assert.deepEqual(page.initials(), [null]);
+});
+
+test("board avatars get initials, the project picture does not", () => {
+  const page = pageWith(`
+    <div class="vss-Persona project-persona small" role="img" aria-label="IT"><img class="vss-Persona-content" alt=""></div>
+    <div class="vss-Persona identity-avatar extra-small-plus" role="img" aria-label="Holt, Mira"><img class="vss-Persona-content" alt=""></div>
+  `);
+  showInitialsOnAvatars(page.document);
+  assert.deepEqual(page.initials(), [null, "MH"]);
+});

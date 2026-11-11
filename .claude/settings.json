@@ -1,0 +1,31 @@
+{
+  "autoMemoryEnabled": false,
+  "enabledMcpjsonServers": ["real-site"],
+  "permissions": {
+    "deny": [
+      "mcp__real-site__browser_click",
+      "mcp__real-site__browser_type",
+      "mcp__real-site__browser_fill_form",
+      "mcp__real-site__browser_select_option",
+      "mcp__real-site__browser_press_key",
+      "mcp__real-site__browser_hover",
+      "mcp__real-site__browser_drag",
+      "mcp__real-site__browser_drop",
+      "mcp__real-site__browser_file_upload",
+      "mcp__real-site__browser_handle_dialog",
+      "mcp__real-site__browser_run_code_unsafe"
+    ]
+  },
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rm -rf \"$CLAUDE_PROJECT_DIR/.real-site\""
+          }
+        ]
+      }
+    ]
+  }
+}

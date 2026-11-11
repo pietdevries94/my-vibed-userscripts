@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "real-site": {
+      "command": "node",
+      "args": ["shared/dev/real-site/launch.ts"]
+    }
+  }
+}
