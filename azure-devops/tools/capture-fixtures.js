@@ -56,13 +56,17 @@
   const isLegacyHost = location.hostname !== "dev.azure.com";
   const firstPathSegment = location.pathname.split("/")[1] ?? "";
   const apiBase = isLegacyHost
-    ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : ""
+    ? firstPathSegment === "DefaultCollection"
+      ? "/DefaultCollection"
+      : ""
     : `/${firstPathSegment}`;
   const apiBaseSegmentCount = apiBase.split("/").filter(Boolean).length;
 
   const parsePullRequestHref = (href) => {
     const segments = new URL(href, location.origin).pathname
-      .split("/").filter(Boolean).map(decodeURIComponent);
+      .split("/")
+      .filter(Boolean)
+      .map(decodeURIComponent);
     const gitIndex = segments.indexOf("_git");
     const pullRequestIndex = segments.indexOf("pullrequest");
     const pullRequestId = Number(segments[pullRequestIndex + 1]);
@@ -84,7 +88,9 @@
   }
   const isListPage = /\/(pullrequests|_pulls)$/.test(location.pathname.replace(/\/$/, ""));
   if (isListPage && pullRequests.size === 0) {
-    console.error("capture-fixtures: no pull request links found on this list page. Nothing captured.");
+    console.error(
+      "capture-fixtures: no pull request links found on this list page. Nothing captured.",
+    );
     return;
   }
 
@@ -97,7 +103,8 @@
   ];
 
   const scrubString = (value, path) => {
-    if (KEPT_STRING_RULES.some((kept) => kept.path.test(path) && kept.value.test(value))) return value;
+    if (KEPT_STRING_RULES.some((kept) => kept.path.test(path) && kept.value.test(value)))
+      return value;
     if (GUID.test(value)) return fakeGuid(value);
     if (ISO_DATE.test(value)) return PLACEHOLDER_DATE;
     if (/^\d+$/.test(value)) return String(fakeNumber(Number(value)));
@@ -110,14 +117,21 @@
     if (typeof value === "string") return scrubString(value, path);
     if (Array.isArray(value)) return value.map((item) => scrubJson(item, path));
     return Object.fromEntries(
-      Object.entries(value).map(([key, child]) => [key, scrubJson(child, path ? `${path}.${key}` : key)]),
+      Object.entries(value).map(([key, child]) => [
+        key,
+        scrubJson(child, path ? `${path}.${key}` : key),
+      ]),
     );
   };
 
   // ---- Fetching policy evaluations ----
 
   const RATE_LIMIT_HEADERS = [
-    "retry-after", "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-cost", "x-ratelimit-delay",
+    "retry-after",
+    "x-ratelimit-limit",
+    "x-ratelimit-remaining",
+    "x-ratelimit-cost",
+    "x-ratelimit-delay",
   ];
 
   const getJson = async (url) => {
@@ -129,7 +143,8 @@
     const rateLimit = {};
     for (const header of RATE_LIMIT_HEADERS) {
       const headerValue = Number(response.headers.get(header));
-      if (response.headers.has(header) && Number.isFinite(headerValue)) rateLimit[header] = headerValue;
+      if (response.headers.has(header) && Number.isFinite(headerValue))
+        rateLimit[header] = headerValue;
     }
     return {
       httpStatus: response.status,
@@ -141,7 +156,9 @@
   const projectGuids = new Map();
   const getProjectGuid = async (project) => {
     if (!projectGuids.has(project)) {
-      const response = await getJson(`${apiBase}/_apis/projects/${encodeURIComponent(project)}?api-version=7.1`);
+      const response = await getJson(
+        `${apiBase}/_apis/projects/${encodeURIComponent(project)}?api-version=7.1`,
+      );
       projectGuids.set(project, response.body?.id ?? null);
     }
     return projectGuids.get(project);
@@ -154,7 +171,7 @@
     const artifactId = `vstfs:///CodeReview/CodeReviewId/${projectGuid}/${pullRequest.pullRequestId}`;
     const response = await getJson(
       `${apiBase}/${projectGuid}/_apis/policy/evaluations` +
-      `?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`,
+        `?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`,
     );
     evaluationsByPullRequestId[fakeNumber(pullRequest.pullRequestId)] = {
       httpStatus: response.httpStatus,
@@ -166,41 +183,107 @@
   // ---- Scrubbing the DOM ----
 
   const DROPPED_ELEMENTS = new Set([
-    "script", "style", "iframe", "noscript", "link", "meta", "object", "embed", "template",
+    "script",
+    "style",
+    "iframe",
+    "noscript",
+    "link",
+    "meta",
+    "object",
+    "embed",
+    "template",
   ]);
   const STRUCTURAL_ATTRIBUTES = new Set([
-    "role", "type", "tabindex", "colspan", "rowspan", "scope", "dir", "hidden", "disabled", "focusable",
-    "aria-hidden", "aria-expanded", "aria-selected", "aria-checked", "aria-disabled", "aria-busy",
-    "aria-haspopup", "aria-level", "aria-rowindex", "aria-colindex", "aria-rowcount", "aria-colcount",
-    "aria-setsize", "aria-posinset", "aria-sort", "aria-current", "aria-orientation", "aria-live",
+    "role",
+    "type",
+    "tabindex",
+    "colspan",
+    "rowspan",
+    "scope",
+    "dir",
+    "hidden",
+    "disabled",
+    "focusable",
+    "aria-hidden",
+    "aria-expanded",
+    "aria-selected",
+    "aria-checked",
+    "aria-disabled",
+    "aria-busy",
+    "aria-haspopup",
+    "aria-level",
+    "aria-rowindex",
+    "aria-colindex",
+    "aria-rowcount",
+    "aria-colcount",
+    "aria-setsize",
+    "aria-posinset",
+    "aria-sort",
+    "aria-current",
+    "aria-orientation",
+    "aria-live",
   ]);
   const SVG_GEOMETRY_ATTRIBUTES = new Set([
-    "viewBox", "d", "cx", "cy", "r", "rx", "ry", "x", "y", "x1", "y1", "x2", "y2", "width", "height",
-    "points", "transform", "fill", "fill-rule", "clip-rule", "stroke", "stroke-width",
-    "stroke-linecap", "stroke-linejoin", "opacity", "xmlns",
+    "viewBox",
+    "d",
+    "cx",
+    "cy",
+    "r",
+    "rx",
+    "ry",
+    "x",
+    "y",
+    "x1",
+    "y1",
+    "x2",
+    "y2",
+    "width",
+    "height",
+    "points",
+    "transform",
+    "fill",
+    "fill-rule",
+    "clip-rule",
+    "stroke",
+    "stroke-width",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "opacity",
+    "xmlns",
   ]);
   const MASKED_ATTRIBUTES = new Set(["aria-label", "alt", "title"]);
-  const maskText = (text) => text.replace(/\p{L}|\d/gu, (character) =>
-    /\d/.test(character) ? "0" : character === character.toLowerCase() ? "x" : "X");
+  const maskText = (text) =>
+    text.replace(/\p{L}|\d/gu, (character) =>
+      /\d/.test(character) ? "0" : character === character.toLowerCase() ? "x" : "X",
+    );
 
   // Keeps only the fixed route words of an image URL, to tell avatar images
   // from other images: "/*/_apis/GraphProfile/MemberAvatars/*".
   const imageRouteShape = (src) => {
     if (src.startsWith("data:")) return "data:";
     let isPastRouteMarker = false;
-    return new URL(src, location.origin).pathname.split("/").filter(Boolean).map((segment) => {
-      if (segment.startsWith("_")) isPastRouteMarker = true;
-      return isPastRouteMarker && /^_?[A-Za-z]+$/.test(segment) ? segment : "*";
-    }).join("/");
+    return new URL(src, location.origin).pathname
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => {
+        if (segment.startsWith("_")) isPastRouteMarker = true;
+        return isPastRouteMarker && /^_?[A-Za-z]+$/.test(segment) ? segment : "*";
+      })
+      .join("/");
   };
 
   // Keeps only ADO's own route words of a link, to see where a link goes
   // without its names: "*/*/_workitems/edit/0".
   const LINK_ROUTE_WORDS = new Set(["edit", "board", "backlog", "t", "results"]);
-  const linkRouteShape = (href) => new URL(href, location.origin).pathname.split("/").filter(Boolean).map((segment) => {
-    if (/^_[A-Za-z]+$/.test(segment) || LINK_ROUTE_WORDS.has(segment)) return segment;
-    return /^\d+$/.test(segment) ? "0" : "*";
-  }).join("/");
+  const linkRouteShape = (href) =>
+    new URL(href, location.origin).pathname
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => {
+        if (/^_[A-Za-z]+$/.test(segment) || LINK_ROUTE_WORDS.has(segment)) return segment;
+        return /^\d+$/.test(segment) ? "0" : "*";
+      })
+      .join("/");
 
   const VALUE_SCRUBBED_ATTRIBUTES = new Set(["placeholder", "name", "for", "value"]);
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -214,7 +297,8 @@
     }
     if (name === "datetime") return PLACEHOLDER_DATE;
     if (MASKED_ATTRIBUTES.has(name)) return maskText(value);
-    if (name === "style") return /^[\w\s:;.,%()#-]*$/.test(value) && !value.includes("url(") ? value : null;
+    if (name === "style")
+      return /^[\w\s:;.,%()#-]*$/.test(value) && !value.includes("url(") ? value : null;
     if (STRUCTURAL_ATTRIBUTES.has(name)) return /^[\w-]{0,20}$/.test(value) ? value : null;
     if (element.namespaceURI === SVG_NAMESPACE && SVG_GEOMETRY_ATTRIBUTES.has(name)) {
       return /https?:|data:/i.test(value) ? null : value;
@@ -232,7 +316,11 @@
     }
     if (node.nodeType !== Node.ELEMENT_NODE || DROPPED_ELEMENTS.has(node.localName)) return null;
     const scrubbed = fixtureDocument.createElementNS(node.namespaceURI, node.localName);
-    if (node.localName === "a" && node.getAttribute("href") && !parsePullRequestHref(node.getAttribute("href"))) {
+    if (
+      node.localName === "a" &&
+      node.getAttribute("href") &&
+      !parsePullRequestHref(node.getAttribute("href"))
+    ) {
       scrubbed.setAttribute("data-href-shape", linkRouteShape(node.getAttribute("href")));
     }
     if (node.localName === "img" && node.getAttribute("src")) {
@@ -261,40 +349,60 @@
   // ---- Output ----
 
   const pageKind = !isListPage
-    ? location.pathname.includes("/pullrequest/") ? "pull-request" : location.pathname.includes("/_boards/") ? "board" : "other"
-    : location.pathname.includes("/_pulls") ? "my-pull-requests" : "repository-pull-requests";
+    ? location.pathname.includes("/pullrequest/")
+      ? "pull-request"
+      : location.pathname.includes("/_boards/")
+        ? "board"
+        : "other"
+    : location.pathname.includes("/_pulls")
+      ? "my-pull-requests"
+      : "repository-pull-requests";
   const bodyStyle = getComputedStyle(document.body);
   const STATUS_COLOR_VARIABLES = [
-    "--component-status-success", "--component-status-error", "--component-status-warning",
-    "--component-status-info", "--component-status-neutral",
+    "--component-status-success",
+    "--component-status-error",
+    "--component-status-warning",
+    "--component-status-info",
+    "--component-status-neutral",
   ];
 
-  const evaluationsJson = JSON.stringify({
-    meta: {
-      pageKind,
-      isLegacyHost,
-      capturedRootSelector: captureRoot === document.body ? "body" : ".page-content",
-      pullRequestCount: pullRequests.size,
-      projectGuids: Object.fromEntries(
-        [...projectGuids].filter(([, guid]) => guid).map(([project, guid]) => [fakeName("project", project), fakeGuid(guid)]),
-      ),
-      statusColors: Object.fromEntries(
-        STATUS_COLOR_VARIABLES.map((variable) => [variable, bodyStyle.getPropertyValue(variable).trim()]),
-      ),
+  const evaluationsJson = JSON.stringify(
+    {
+      meta: {
+        pageKind,
+        isLegacyHost,
+        capturedRootSelector: captureRoot === document.body ? "body" : ".page-content",
+        pullRequestCount: pullRequests.size,
+        projectGuids: Object.fromEntries(
+          [...projectGuids]
+            .filter(([, guid]) => guid)
+            .map(([project, guid]) => [fakeName("project", project), fakeGuid(guid)]),
+        ),
+        statusColors: Object.fromEntries(
+          STATUS_COLOR_VARIABLES.map((variable) => [
+            variable,
+            bodyStyle.getPropertyValue(variable).trim(),
+          ]),
+        ),
+      },
+      evaluationsByPullRequestId,
     },
-    evaluationsByPullRequestId,
-  }, null, 2);
+    null,
+    2,
+  );
 
   const realNames = new Set([
     isLegacyHost ? location.hostname.split(".")[0] : firstPathSegment,
     ...[...pullRequests.values()].flatMap(({ project, repository }) => [project, repository]),
   ]);
-  const leakedNames = [...realNames].filter((name) =>
-    name.length >= 3 && (pageHtml + evaluationsJson).toLowerCase().includes(name.toLowerCase()));
+  const leakedNames = [...realNames].filter(
+    (name) =>
+      name.length >= 3 && (pageHtml + evaluationsJson).toLowerCase().includes(name.toLowerCase()),
+  );
   if (leakedNames.length > 0) {
     console.warn(
       "capture-fixtures: these org, project or repo names still occur in the output. " +
-      "It can be a coincidence (a CSS class with the same word). Check before committing:",
+        "It can be a coincidence (a CSS class with the same word). Check before committing:",
       leakedNames,
     );
   }
@@ -309,7 +417,9 @@
   if (isListPage) {
     downloadFile(`pr-list-${pageKind}.html`, pageHtml, "text/html");
     downloadFile(`policy-evaluations-${pageKind}.json`, evaluationsJson, "application/json");
-    console.log(`capture-fixtures: captured ${pullRequests.size} pull requests. Two files downloaded.`);
+    console.log(
+      `capture-fixtures: captured ${pullRequests.size} pull requests. Two files downloaded.`,
+    );
   } else {
     downloadFile(`page-${pageKind}.html`, pageHtml, "text/html");
     console.log("capture-fixtures: captured the page markup. One file downloaded.");

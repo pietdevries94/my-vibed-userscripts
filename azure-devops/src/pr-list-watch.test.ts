@@ -1,12 +1,22 @@
+import type { PullRequestListPage } from "./pull-request-link.ts";
+import type { PullRequestsResponse } from "./ado-client.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { watchPullRequestList } from "./pr-list-watch.ts";
-import type { PullRequestListPage } from "./pull-request-link.ts";
 
-const ACTIVE_LIST: PullRequestListPage = { project: "project", repository: "repo", status: "active" };
+const ACTIVE_LIST: PullRequestListPage = {
+  project: "project",
+  repository: "repo",
+  status: "active",
+};
 
 test("each list and tab is its own page", () => {
-  const client = { getPullRequests: async () => ({ pullRequests: [], retryAfterSeconds: null }) };
+  const client = {
+    getPullRequests: async (): Promise<PullRequestsResponse> => ({
+      pullRequests: [],
+      retryAfterSeconds: null,
+    }),
+  };
   const active = watchPullRequestList(client, ACTIVE_LIST, () => []);
   const completed = watchPullRequestList(client, { ...ACTIVE_LIST, status: "completed" }, () => []);
   assert.notEqual(active.key, completed.key);
@@ -17,9 +27,15 @@ test("compares the fetched list with the pull requests on screen", async () => {
   let title = "Title";
   const requestedLists: PullRequestListPage[] = [];
   const client = {
-    async getPullRequests(listPage: PullRequestListPage) {
+    async getPullRequests(listPage: PullRequestListPage): Promise<PullRequestsResponse> {
       requestedLists.push(listPage);
-      return { pullRequests: [{ pullRequestId: 1, title }, { pullRequestId: 2, title: "Other" }], retryAfterSeconds: 7 };
+      return {
+        pullRequests: [
+          { pullRequestId: 1, title },
+          { pullRequestId: 2, title: "Other" },
+        ],
+        retryAfterSeconds: 7,
+      };
     },
   };
   let onScreenIds = [2];
@@ -31,7 +47,11 @@ test("compares the fetched list with the pull requests on screen", async () => {
 
   title = "New title";
   const current = await page.fetchSnapshot();
-  assert.equal(page.hasChanged(loaded.snapshot, current.snapshot), false, "pull request 1 is not on screen");
+  assert.equal(
+    page.hasChanged(loaded.snapshot, current.snapshot),
+    false,
+    "pull request 1 is not on screen",
+  );
   onScreenIds = [1, 2];
   assert.equal(page.hasChanged(loaded.snapshot, current.snapshot), true);
 });

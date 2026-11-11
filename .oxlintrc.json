@@ -13,7 +13,8 @@
   "options": {
     "typeAware": true
   },
-  "ignorePatterns": ["azure-devops/**"],
+  // The extension's capture tool and fake server, kept for reference. Steps 4 and 5 of the move replace them.
+  "ignorePatterns": ["azure-devops/tools/**", "azure-devops/dev/**"],
   "rules": {
     // Off: conflicts with import/no-default-export. Together they forbid every export.
     "import/no-named-export": "off",
@@ -35,11 +36,18 @@
     "typescript/prefer-readonly-parameter-types": "off",
     // Off: conflicts with typescript/promise-function-async, which wants async on every promise-returning function.
     "eslint/require-await": "off",
+    // Off: the same conflict as eslint/require-await.
+    "typescript/require-await": "off",
     // Off: the spec imports shared/ code by relative path.
     "import/no-relative-parent-imports": "off",
     // Options, not switch-offs:
     "eslint/no-duplicate-imports": ["error", { "allowSeparateTypeImports": true }],
     "eslint/one-var": ["error", "never"],
+    "eslint/id-length": ["error", { "properties": "never" }],
+    "eslint/new-cap": [
+      "error",
+      { "capIsNewExceptions": ["GM_addStyle", "GM_registerMenuCommand"] }
+    ],
     "eslint/capitalized-comments": ["error", "always", { "ignoreConsecutiveComments": true }],
     "eslint/func-style": ["error", "declaration", { "allowArrowFunctions": true }],
     "eslint/no-void": ["error", { "allowAsStatement": true }],
@@ -85,6 +93,8 @@
       "rules": {
         "import/no-nodejs-modules": "off",
         "eslint/no-magic-numbers": "off",
+        // A test reads as one sequence of steps and checks.
+        "eslint/max-statements": ["error", 20],
         // node:test's test() returns a promise that the runner tracks.
         "typescript/no-floating-promises": "off"
       }

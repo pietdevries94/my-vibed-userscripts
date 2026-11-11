@@ -1,8 +1,8 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
 import { JSDOM } from "jsdom";
-import { scriptFixtures } from "../../shared/dev/fixtures.ts";
+import assert from "node:assert/strict";
 import { findBoardCardIds } from "./board.ts";
+import { scriptFixtures } from "../../shared/dev/fixtures.ts";
+import { test } from "node:test";
 
 const fixtures = scriptFixtures(import.meta.dirname);
 

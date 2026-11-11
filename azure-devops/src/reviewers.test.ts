@@ -1,6 +1,6 @@
+import { findReviewerByLabel, hueOf, initialsOf } from "./reviewers.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findReviewerByLabel, hueOf, initialsOf } from "./reviewers.ts";
 
 test("initials are the first letters of the first and last word", () => {
   assert.equal(initialsOf("Tomas van Elst"), "TE");
@@ -22,7 +22,7 @@ test("a single name gives one initial", () => {
 
 test("a company suffix and a team prefix are not part of the name", () => {
   assert.equal(initialsOf("Tomas van Elst (Acme)"), "TE");
-  assert.equal(initialsOf("[My Project]\\Backend Team"), "BT");
+  assert.equal(initialsOf(String.raw`[My Project]\Backend Team`), "BT");
 });
 
 test("an empty name gives no initials", () => {
@@ -41,9 +41,9 @@ test("a name keeps the same hue", () => {
   assert.ok(hueOf("any name at all") >= 0 && hueOf("any name at all") < 360);
 });
 
-const ANN = { id: "1", displayName: "Ann" };
-const ANN_LEE = { id: "2", displayName: "Ann Lee" };
-const TEAM = { id: "3", displayName: "[My Project]\\Backend Team" };
+const ANN = { displayName: "Ann", id: "1" };
+const ANN_LEE = { displayName: "Ann Lee", id: "2" };
+const TEAM = { displayName: String.raw`[My Project]\Backend Team`, id: "3" };
 
 test("finds the reviewer whose name is in the avatar label", () => {
   assert.equal(findReviewerByLabel("Ann Lee", [ANN_LEE, TEAM]), ANN_LEE);

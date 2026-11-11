@@ -1,15 +1,18 @@
 import { AdoRequestError } from "./ado-client.ts";
 
-export const PAGE_CHECK_INTERVAL_MS = 30_000;
-export const FAILED_PAGE_CHECK_RETRY_MS = 60_000;
+const PAGE_CHECK_INTERVAL_MS = 30_000;
+const FAILED_PAGE_CHECK_RETRY_MS = 60_000;
+const MS_PER_SECOND = 1000;
 
 /** A page whose content on the server can be compared with what the browser loaded. */
-export interface WatchedPage<Snapshot> {
+interface WatchedPage<Snapshot> {
   /** Identifies the page, so each page is compared with its own first load. */
   key: string;
-  fetchSnapshot(): Promise<{ snapshot: Snapshot; retryAfterSeconds: number | null }>;
+  fetchSnapshot: () => Promise<{ snapshot: Snapshot; retryAfterSeconds: number | null }>;
+  // oxlint-disable-next-line typescript/method-signature-style -- method syntax keeps WatchedPage<Snapshot> assignable to WatchedPage<unknown>
   hasChanged(loaded: Snapshot, current: Snapshot): boolean;
   /** Adds what `current` knows about items that appeared on the page after its first load. */
+  // oxlint-disable-next-line typescript/method-signature-style -- method syntax keeps WatchedPage<Snapshot> assignable to WatchedPage<unknown>
   extendLoaded?(loaded: Snapshot, current: Snapshot): Snapshot;
 }
 
@@ -21,50 +24,111 @@ interface ReloaderOptions {
   reload: () => void;
 }
 
+interface PageReloader {
+  /** `immediately` skips the wait between checks. Use it when the tab becomes active. */
+  check: (when?: { immediately?: boolean }) => Promise<void>;
+}
+
+interface ReloaderState {
+  options: ReloaderOptions;
+  /**
+   * Kept for the whole page lifetime. ADO can show cached content after
+   * in-app navigation, so the snapshot from the first visit stays the reference.
+   */
+  loadedSnapshots: Map<string, unknown>;
+  nextCheckAt: number;
+  pausedUntil: number;
+  isChecking: boolean;
+}
+
+interface CheckedPage {
+  page: WatchedPage<unknown>;
+  hasLoadedSnapshot: boolean;
+}
+
+/** The first check of a page always runs. Later ones wait for an active tab and the interval. */
+function isCheckDue(
+  state: ReloaderState,
+  page: WatchedPage<unknown>,
+  immediately: boolean,
+): boolean {
+  if (!state.loadedSnapshots.has(page.key)) {
+    return true;
+  }
+  if (!state.options.isTabActive() || state.options.now() < state.pausedUntil) {
+    return false;
+  }
+  return immediately || state.options.now() >= state.nextCheckAt;
+}
+
+function pauseFor(state: ReloaderState, retryAfterSeconds: number | null): void {
+  if (retryAfterSeconds !== null) {
+    state.pausedUntil = state.options.now() + retryAfterSeconds * MS_PER_SECOND;
+  }
+}
+
+function compareWithLoaded(
+  state: ReloaderState,
+  { page, hasLoadedSnapshot }: CheckedPage,
+  snapshot: unknown,
+): void {
+  if (!hasLoadedSnapshot) {
+    state.loadedSnapshots.set(page.key, snapshot);
+  } else if (page.hasChanged(state.loadedSnapshots.get(page.key), snapshot)) {
+    state.options.reload();
+  } else if (page.extendLoaded) {
+    state.loadedSnapshots.set(
+      page.key,
+      page.extendLoaded(state.loadedSnapshots.get(page.key), snapshot),
+    );
+  }
+}
+
+function recordFailure(state: ReloaderState, error: unknown): void {
+  if (error instanceof AdoRequestError) {
+    pauseFor(state, error.retryAfterSeconds);
+  }
+  state.nextCheckAt = state.options.now() + FAILED_PAGE_CHECK_RETRY_MS;
+}
+
+async function runCheck(state: ReloaderState, page: WatchedPage<unknown>): Promise<void> {
+  const checkedPage = { hasLoadedSnapshot: state.loadedSnapshots.has(page.key), page };
+  state.isChecking = true;
+  try {
+    const { snapshot, retryAfterSeconds } = await page.fetchSnapshot();
+    pauseFor(state, retryAfterSeconds);
+    state.nextCheckAt = state.options.now() + PAGE_CHECK_INTERVAL_MS;
+    compareWithLoaded(state, checkedPage, snapshot);
+  } catch (error) {
+    recordFailure(state, error);
+  } finally {
+    state.isChecking = false;
+  }
+}
+
 /**
  * Reloads the page when its content on the server differs from what the page
  * loaded. Checks only while the tab is active, except for the first check of a
  * page, which records what the page loaded.
  */
-export function createPageReloader(options: ReloaderOptions) {
-  // Kept for the whole page lifetime. ADO can show cached content after
-  // in-app navigation, so the snapshot from the first visit stays the reference.
-  const loadedSnapshots = new Map<string, unknown>();
-  let nextCheckAt = 0;
-  let pausedUntil = 0;
-  let isChecking = false;
-
+function createPageReloader(options: ReloaderOptions): PageReloader {
+  const state: ReloaderState = {
+    isChecking: false,
+    loadedSnapshots: new Map(),
+    nextCheckAt: 0,
+    options,
+    pausedUntil: 0,
+  };
   return {
-    /** `immediately` skips the wait between checks. Use it when the tab becomes active. */
-    async check({ immediately = false } = {}): Promise<void> {
+    async check({ immediately = false } = {}) {
       const page = options.currentPage();
-      if (!page || isChecking) return;
-      const hasLoadedSnapshot = loadedSnapshots.has(page.key);
-      if (hasLoadedSnapshot) {
-        if (!options.isTabActive() || options.now() < pausedUntil) return;
-        if (!immediately && options.now() < nextCheckAt) return;
+      if (!page || state.isChecking || !isCheckDue(state, page, immediately)) {
+        return;
       }
-
-      isChecking = true;
-      try {
-        const { snapshot, retryAfterSeconds } = await page.fetchSnapshot();
-        if (retryAfterSeconds !== null) pausedUntil = options.now() + retryAfterSeconds * 1000;
-        nextCheckAt = options.now() + PAGE_CHECK_INTERVAL_MS;
-        if (!hasLoadedSnapshot) {
-          loadedSnapshots.set(page.key, snapshot);
-        } else if (page.hasChanged(loadedSnapshots.get(page.key), snapshot)) {
-          options.reload();
-        } else if (page.extendLoaded) {
-          loadedSnapshots.set(page.key, page.extendLoaded(loadedSnapshots.get(page.key), snapshot));
-        }
-      } catch (error) {
-        if (error instanceof AdoRequestError && error.retryAfterSeconds !== null) {
-          pausedUntil = options.now() + error.retryAfterSeconds * 1000;
-        }
-        nextCheckAt = options.now() + FAILED_PAGE_CHECK_RETRY_MS;
-      } finally {
-        isChecking = false;
-      }
+      await runCheck(state, page);
     },
   };
 }
+
+export type { PageReloader, WatchedPage };
+export { FAILED_PAGE_CHECK_RETRY_MS, PAGE_CHECK_INTERVAL_MS, createPageReloader };

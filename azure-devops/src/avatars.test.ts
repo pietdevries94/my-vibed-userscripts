@@ -1,14 +1,24 @@
+import { avatarName, showInitialsOnAvatars } from "./avatars.ts";
+import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { JSDOM } from "jsdom";
-import { avatarName, showInitialsOnAvatars } from "./avatars.ts";
 
-function pageWith(html: string) {
+interface TestPage {
+  avatars: HTMLElement[];
+  document: Document;
+  hues: () => string[];
+  initials: () => (string | null)[];
+}
+
+function pageWith(html: string): TestPage {
   const { document } = new JSDOM(`<!doctype html><body>${html}</body>`).window;
   const avatars = [...document.querySelectorAll<HTMLElement>(".bolt-coin, .vss-Persona")];
-  const initials = () => avatars.map((avatar) => avatar.getAttribute("data-fix-ado-initials"));
-  const hues = () => avatars.map((avatar) => avatar.style.getPropertyValue("--fix-ado-hue"));
-  return { document, avatars, initials, hues };
+  const initials = (): (string | null)[] =>
+    // oxlint-disable-next-line unicorn/prefer-dom-node-dataset -- the test reads the attribute the stylesheet uses
+    avatars.map((avatar) => avatar.getAttribute("data-fix-ado-initials"));
+  const hues = (): string[] =>
+    avatars.map((avatar) => avatar.style.getPropertyValue("--fix-ado-hue"));
+  return { avatars, document, hues, initials };
 }
 
 test("every named avatar gets initials, anywhere on the page", () => {
@@ -34,12 +44,16 @@ test("the same name has the same colour everywhere", () => {
 });
 
 test("the name comes from the image when the avatar has no label", () => {
-  const page = pageWith(`<div class="bolt-coin"><img class="bolt-coin-content" alt="Holt, Mira"></div>`);
-  assert.equal(avatarName(page.avatars[0]!), "Holt, Mira");
+  const page = pageWith(
+    `<div class="bolt-coin"><img class="bolt-coin-content" alt="Holt, Mira"></div>`,
+  );
+  assert.equal(avatarName(page.avatars[0]), "Holt, Mira");
 });
 
 test("an avatar without a name keeps the ADO picture", () => {
-  const page = pageWith(`<div class="bolt-coin" role="presentation" aria-label=""><img class="bolt-coin-content" alt=""></div>`);
+  const page = pageWith(
+    `<div class="bolt-coin" role="presentation" aria-label=""><img class="bolt-coin-content" alt=""></div>`,
+  );
   showInitialsOnAvatars(page.document);
   assert.deepEqual(page.initials(), [null]);
   assert.deepEqual(page.hues(), [""]);
@@ -48,14 +62,14 @@ test("an avatar without a name keeps the ADO picture", () => {
 test("an avatar reused for someone else gets the new initials", () => {
   const page = pageWith(`<div class="bolt-coin" aria-label="Elst, Tomas van"></div>`);
   showInitialsOnAvatars(page.document);
-  const firstHue = page.hues()[0];
+  const [firstHue] = page.hues();
 
-  page.avatars[0]!.setAttribute("aria-label", "Holt, Mira");
+  page.avatars[0].setAttribute("aria-label", "Holt, Mira");
   showInitialsOnAvatars(page.document);
   assert.deepEqual(page.initials(), ["MH"]);
   assert.notEqual(page.hues()[0], firstHue);
 
-  page.avatars[0]!.setAttribute("aria-label", "");
+  page.avatars[0].setAttribute("aria-label", "");
   showInitialsOnAvatars(page.document);
   assert.deepEqual(page.initials(), [null]);
 });

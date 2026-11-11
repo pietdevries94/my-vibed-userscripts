@@ -1,33 +1,53 @@
+import {
+  FAILED_PAGE_CHECK_RETRY_MS,
+  PAGE_CHECK_INTERVAL_MS,
+  createPageReloader,
+} from "./page-reloader.ts";
+import type { PageReloader, WatchedPage } from "./page-reloader.ts";
+import { AdoRequestError } from "./ado-client.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AdoRequestError } from "./ado-client.ts";
-import { createPageReloader, FAILED_PAGE_CHECK_RETRY_MS, PAGE_CHECK_INTERVAL_MS, type WatchedPage } from "./page-reloader.ts";
 
-function reloaderOnFakeBrowser() {
-  const browser = {
+interface FakeBrowser {
+  clock: number;
+  failWith: Error | null;
+  fetchedKeys: string[];
+  isTabActive: boolean;
+  pageKey: string | null;
+  reloadCount: number;
+  retryAfterSeconds: number | null;
+  serverContent: string;
+}
+
+function reloaderOnFakeBrowser(): { browser: FakeBrowser; reloader: PageReloader } {
+  const browser: FakeBrowser = {
     clock: 0,
-    pageKey: "page-a" as string | null,
+    failWith: null,
+    fetchedKeys: [],
     isTabActive: true,
-    serverContent: "original",
-    retryAfterSeconds: null as number | null,
-    failWith: null as Error | null,
-    fetchedKeys: [] as string[],
+    pageKey: "page-a",
     reloadCount: 0,
+    retryAfterSeconds: null,
+    serverContent: "original",
   };
   const pageWithKey = (key: string): WatchedPage<string> => ({
-    key,
     async fetchSnapshot() {
       browser.fetchedKeys.push(key);
-      if (browser.failWith) throw browser.failWith;
-      return { snapshot: browser.serverContent, retryAfterSeconds: browser.retryAfterSeconds };
+      if (browser.failWith) {
+        throw browser.failWith;
+      }
+      return { retryAfterSeconds: browser.retryAfterSeconds, snapshot: browser.serverContent };
     },
     hasChanged: (loaded, current) => loaded !== current,
+    key,
   });
   const reloader = createPageReloader({
-    now: () => browser.clock,
     currentPage: () => (browser.pageKey === null ? null : pageWithKey(browser.pageKey)),
     isTabActive: () => browser.isTabActive,
-    reload: () => { browser.reloadCount += 1; },
+    now: () => browser.clock,
+    reload: () => {
+      browser.reloadCount += 1;
+    },
   });
   return { browser, reloader };
 }
@@ -164,12 +184,19 @@ test("a page can extend its record with items that appeared later", async () => 
   let reloadCount = 0;
   let clock = 0;
   const page: WatchedPage<string[]> = {
-    key: "growing-page",
-    fetchSnapshot: async () => ({ snapshot: serverItems, retryAfterSeconds: null }),
-    hasChanged: (loaded, current) => loaded.some((item) => !current.includes(item)),
     extendLoaded: (loaded, current) => [...new Set([...loaded, ...current])],
+    fetchSnapshot: async () => ({ retryAfterSeconds: null, snapshot: serverItems }),
+    hasChanged: (loaded, current) => loaded.some((item) => !current.includes(item)),
+    key: "growing-page",
   };
-  const reloader = createPageReloader({ now: () => clock, currentPage: () => page, isTabActive: () => true, reload: () => { reloadCount += 1; } });
+  const reloader = createPageReloader({
+    currentPage: () => page,
+    isTabActive: () => true,
+    now: () => clock,
+    reload: () => {
+      reloadCount += 1;
+    },
+  });
 
   await reloader.check();
   serverItems = ["a", "b"];
