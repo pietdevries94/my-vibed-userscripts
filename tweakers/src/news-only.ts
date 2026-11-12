@@ -1,4 +1,4 @@
-// On the homepage, hides the lead story and the side columns, so the news item list fills the content area.
+// On the homepage, hides the top banner, the lead story and the side columns, so the news item list fills the content area.
 
 /** On `<html>` while the homepage shows the news-only view. */
 const NEWS_ONLY_CLASS = "fix-tweakers-news-only";
@@ -7,6 +7,8 @@ const NEWS_ITEM_LIST = "#headlines-start";
 
 /** The homepage parts the news-only class hides. */
 const HIDDEN_PARTS = [
+  // The banner above the content area.
+  "#contentArea > .top-banner",
   // The lead story above the news item list.
   ".editorial-content > .ankeiler-large",
   // The side columns: the story stream, then promotions and Best Buy Guides.

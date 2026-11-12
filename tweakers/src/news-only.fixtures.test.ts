@@ -35,13 +35,7 @@ test("the news item list stays visible and holds news items", { skip: fixtures.s
 
 test("the site header and the rest of the page stay visible", { skip: fixtures.skip }, () => {
   const document = capturedHomepage();
-  const keptParts = [
-    "#top",
-    "#contentArea > .top-banner",
-    ".community-block",
-    "twk-sidebar",
-    "#bottom",
-  ];
+  const keptParts = ["#top", ".community-block", "twk-sidebar", "#bottom"];
   for (const kept of keptParts) {
     const element = document.querySelector(kept);
     assert.ok(element !== null, `${kept} is on the homepage`);
@@ -49,4 +43,11 @@ test("the site header and the rest of the page stay visible", { skip: fixtures.s
       assert.equal(element.closest(selector), null, `${selector} does not hide ${kept}`);
     }
   }
+});
+
+test("the top banner is hidden", { skip: fixtures.skip }, () => {
+  const document = capturedHomepage();
+  const banner = document.querySelector(".top-banner");
+  assert.ok(banner !== null, "the top banner is on the homepage");
+  assert.ok(HIDDEN_PARTS.some((selector) => banner.matches(selector)));
 });
