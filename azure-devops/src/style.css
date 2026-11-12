@@ -214,3 +214,27 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 .fix-ado-pipeline-tab:focus:not(:focus-visible) {
   outline: none;
 }
+
+/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+.fix-ado-days-in-column {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.fix-ado-days-in-column > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  /* Azure DevOps keeps its palette as bare "r, g, b" values, so it follows the theme. */
+  background: rgb(var(--palette-neutral-20, 200, 200, 200));
+}
+
+.fix-ado-days-in-column > span[data-age="aging"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+.fix-ado-days-in-column > span[data-age="old"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
+}

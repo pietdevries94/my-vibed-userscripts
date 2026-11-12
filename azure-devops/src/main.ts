@@ -11,6 +11,7 @@ import { hideInitialsOnAvatars, showInitialsOnAvatars } from "./avatars.ts";
 import type { PullRequestsResponse } from "./ado-client.ts";
 import type { WatchedPage } from "./page-reloader.ts";
 import { createAdoClient } from "./ado-client.ts";
+import { createDaysInColumn } from "./days-in-column.ts";
 import { createOnOffSetting } from "./on-off-setting.ts";
 import { createPageReloader } from "./page-reloader.ts";
 import { createPipelineRunFrame } from "./pipeline-run-frame.ts";
@@ -93,6 +94,8 @@ const poller = createPipelineStatusPoller<HTMLElement>({
   showStatus: showPipelineStatus,
 });
 
+const daysInColumn = createDaysInColumn({ client, document, now: () => Date.now() });
+
 const requiredReviewers = createRequiredReviewerMarker({
   client,
   findRows: () => findPullRequestRows(document, basePath),
@@ -162,6 +165,17 @@ function reloadPage(): void {
   }
 }
 
+/** The features that ask Azure DevOps for data. They wait while the tab is hidden. */
+function syncFetchingFeatures(): void {
+  void poller.sync();
+  if (isPullRequestInboxLocation(location)) {
+    void requiredReviewers.syncInbox();
+  }
+  if (isBoardLocation(location)) {
+    void daysInColumn.sync();
+  }
+}
+
 function sync(): void {
   pipelineRunFrame?.sync();
   pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath));
@@ -170,10 +184,7 @@ function sync(): void {
   }
   requiredReviewers.markAll();
   if (isTabActive()) {
-    void poller.sync();
-    if (isPullRequestInboxLocation(location)) {
-      void requiredReviewers.syncInbox();
-    }
+    syncFetchingFeatures();
   }
   void reloader.check();
 }

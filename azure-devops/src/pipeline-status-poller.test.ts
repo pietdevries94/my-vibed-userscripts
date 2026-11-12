@@ -60,6 +60,7 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     getPullRequestBuilds: notUsedByThePoller,
     getPullRequests: notUsedByThePoller,
     getTimeline: notUsedByThePoller,
+    getWorkItemUpdates: notUsedByThePoller,
     getWorkItems: notUsedByThePoller,
   };
   const poller = createPipelineStatusPoller<number>({

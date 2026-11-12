@@ -1,14 +1,21 @@
 import type { BoardSnapshot, BoardWorkItem } from "./board.ts";
 import { findBoardCardIds, hasBoardChanged } from "./board.ts";
 import { JSDOM } from "jsdom";
+import type { WorkItemUpdate } from "./days-in-column.ts";
 import assert from "node:assert/strict";
+import { columnEnteredAt } from "./days-in-column.ts";
 import { scriptFixtures } from "../../shared/dev/fixtures.ts";
 import { test } from "node:test";
 
 const fixtures = scriptFixtures(import.meta.dirname);
 
 interface CapturedBoard {
-  data: { myUserId: string | null; workItems: BoardWorkItem[] };
+  data: {
+    myUserId: string | null;
+    workItems: BoardWorkItem[];
+    /** Added with the days in column feature. Older captures lack it. */
+    updatesByWorkItemId?: Record<string, WorkItemUpdate[]>;
+  };
 }
 
 function capturedBoard(): CapturedBoard {
@@ -66,4 +73,19 @@ test("a card the signed-in user changed does not count", { skip: fixtures.skip }
   const loaded = capturedSnapshot();
   assert.ok(loaded.myUserId !== null, "the capture knows who is signed in");
   assert.equal(hasBoardChanged(loaded, withOneChange(loaded, loaded.myUserId)), false);
+});
+
+test("each captured card has a date it entered its column", { skip: fixtures.skip }, (context) => {
+  const { updatesByWorkItemId } = capturedBoard().data;
+  if (updatesByWorkItemId === undefined) {
+    context.skip("the board capture predates the days in column feature");
+    return;
+  }
+  const cards = Object.values(updatesByWorkItemId);
+  assert.ok(cards.length > 0);
+  for (const updates of cards) {
+    const enteredAt = columnEnteredAt(updates);
+    assert.ok(enteredAt !== null, "a board column change in the updates");
+    assert.ok(!Number.isNaN(Date.parse(enteredAt)));
+  }
 });

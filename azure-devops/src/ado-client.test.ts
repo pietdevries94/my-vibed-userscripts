@@ -145,6 +145,27 @@ test("fetches work items in batches of 200", async () => {
   assert.deepEqual(workItems[0], { changedById: "kestrel", id: 1, rev: 7 });
 });
 
+test("fetches every update of a work item, 200 at a time", async () => {
+  const { client, requests } = fakeAdo((url) => {
+    const skip = Number(new URL(url).searchParams.get("$skip"));
+    const count = skip === 0 ? 200 : 3;
+    return Response.json({
+      count,
+      value: Array.from({ length: count }, (_entry, index) => ({ id: skip + index + 1 })),
+    });
+  });
+  const { updates } = await client.getWorkItemUpdates(42);
+
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    [
+      "https://dev.azure.com/my-org/_apis/wit/workItems/42/updates?$top=200&$skip=0&api-version=7.1",
+      "https://dev.azure.com/my-org/_apis/wit/workItems/42/updates?$top=200&$skip=200&api-version=7.1",
+    ],
+  );
+  assert.equal(updates.length, 203);
+});
+
 test("asks who is signed in once, and gives null when that fails", async () => {
   const signedIn = fakeAdo(() => Response.json({ authenticatedUser: { id: "my-user-id" } }));
   assert.equal(await signedIn.client.getAuthenticatedUserId(), "my-user-id");

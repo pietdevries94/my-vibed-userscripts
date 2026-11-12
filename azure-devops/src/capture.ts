@@ -28,6 +28,8 @@ const STATUS_COLOR_VARIABLES = [
   "--component-status-info",
   "--component-status-neutral",
 ];
+/** The days in column feature reads the updates of each card. A few show their shape. */
+const CARDS_WITH_CAPTURED_UPDATES = 5;
 const PROJECTS_ROUTE = /\/_apis\/projects\/(?<project>[^/?]+)/u;
 
 const rules: ScrubRules = {
@@ -172,6 +174,21 @@ function pullRequestRowsPage(name: string, listPage: PullRequestListPage | null)
   };
 }
 
+/** The updates of the first few cards, by stand-in work item id. */
+async function collectUpdates(
+  client: AdoClient,
+  cardIds: number[],
+  pseudonyms: Pseudonyms,
+): Promise<Record<number, unknown>> {
+  const updatesByWorkItemId: Record<number, unknown> = {};
+  for (const id of cardIds.slice(0, CARDS_WITH_CAPTURED_UPDATES)) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- one card at a time, as the script fetches them
+    const { updates } = await client.getWorkItemUpdates(id);
+    updatesByWorkItemId[pseudonyms.number(id, "work item id")] = updates;
+  }
+  return updatesByWorkItemId;
+}
+
 function boardPage(): CapturePage {
   return {
     async collect(fetch, pseudonyms) {
@@ -181,8 +198,9 @@ function boardPage(): CapturePage {
       const cardIds = findBoardCardIds(document);
       const { workItems } = await client.getWorkItems(cardIds);
       const myUserId = await client.getAuthenticatedUserId();
+      const updatesByWorkItemId = await collectUpdates(client, cardIds, pseudonyms);
       return {
-        data: { myUserId, workItems },
+        data: { myUserId, updatesByWorkItemId, workItems },
         meta: {},
       };
     },

@@ -4,6 +4,7 @@ import type { ListedPullRequest } from "./pr-list-changes.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
 import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { TimelineRecord } from "./pipeline-timeline.ts";
+import type { WorkItemUpdate } from "./days-in-column.ts";
 
 interface PolicyEvaluationsResponse {
   evaluations: PolicyEvaluation[];
@@ -35,6 +36,13 @@ interface WorkItemsResponse {
   retryAfterSeconds: number | null;
 }
 
+interface WorkItemUpdatesResponse {
+  /** Oldest first. */
+  updates: WorkItemUpdate[];
+  /** Set when Azure DevOps asks the caller to slow down. */
+  retryAfterSeconds: number | null;
+}
+
 interface AdoClient {
   getPolicyEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluationsResponse>;
   getPullRequests: (listPage: PullRequestListPage) => Promise<PullRequestsResponse>;
@@ -46,6 +54,8 @@ interface AdoClient {
   /** The stages, jobs and steps of a pipeline run. */
   getTimeline: (project: string, buildId: number) => Promise<TimelineResponse>;
   getWorkItems: (ids: number[]) => Promise<WorkItemsResponse>;
+  /** Every change to one work item, oldest first. */
+  getWorkItemUpdates: (id: number) => Promise<WorkItemUpdatesResponse>;
   /** The id of the signed-in user, or null when Azure DevOps does not tell. */
   getAuthenticatedUserId: () => Promise<string | null>;
 }
@@ -80,6 +90,9 @@ interface JsonResponse {
 
 /** The work items API accepts at most this many ids per request. */
 const MAX_WORK_ITEMS_PER_REQUEST = 200;
+
+/** The updates API returns at most this many updates per request. */
+const MAX_UPDATES_PER_REQUEST = 200;
 
 /** The runs of one pull request that the Pipeline tab lists. */
 const MAX_PULL_REQUEST_BUILDS = 50;
@@ -168,6 +181,28 @@ async function getWorkItems(options: AdoClientOptions, ids: number[]): Promise<W
   return { retryAfterSeconds, workItems };
 }
 
+async function getWorkItemUpdates(
+  options: AdoClientOptions,
+  id: number,
+): Promise<WorkItemUpdatesResponse> {
+  const updates: WorkItemUpdate[] = [];
+  let retryAfterSeconds: number | null = null;
+  for (let skip = 0; ; skip += MAX_UPDATES_PER_REQUEST) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- each page tells whether there is a next one
+    const response = await getJson(
+      options,
+      `/_apis/wit/workItems/${id}/updates?$top=${MAX_UPDATES_PER_REQUEST}&$skip=${skip}&api-version=7.1`,
+    );
+    retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
+    const page = (response.body.value ?? []) as WorkItemUpdate[];
+    updates.push(...page);
+    if (page.length < MAX_UPDATES_PER_REQUEST) {
+      return { retryAfterSeconds, updates };
+    }
+  }
+}
+
 async function getPullRequestBuilds(
   options: AdoClientOptions,
   { project, pullRequestId }: { project: string; pullRequestId: number },
@@ -228,9 +263,9 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
       return { records: (body.records ?? []) as TimelineRecord[], retryAfterSeconds };
     },
 
-    async getWorkItems(ids) {
-      return getWorkItems(options, ids);
-    },
+    getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
+
+    getWorkItems: async (ids) => getWorkItems(options, ids),
   };
 }
 
@@ -240,6 +275,7 @@ export type {
   PullRequestBuildsResponse,
   PullRequestsResponse,
   TimelineResponse,
+  WorkItemUpdatesResponse,
   WorkItemsResponse,
 };
 export { AdoRequestError, createAdoClient };
