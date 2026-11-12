@@ -177,3 +177,22 @@ test("a running run shows its running step, follows it, and stops once a step is
   await settle();
   assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
 });
+
+test("when the log moves on by itself, the tree catches up at once", async () => {
+  const timelines = { ...TIMELINES, 502: runningTimeline("checkout") };
+  const { document } = setUp(EVALUATIONS, timelines);
+  click(pipelineTab(document));
+  await settle();
+  const frameDocument = document.querySelector("iframe")?.contentDocument;
+  assert.ok(frameDocument);
+
+  // Azure DevOps's page follows the run to the next step, before the next refresh is due.
+  timelines[502] = runningTimeline("compile");
+  // The test frame's page is empty; the run page would have its own document.
+  const frameRoot = frameDocument.createElement("html");
+  frameDocument.replaceChildren(frameRoot);
+  frameRoot.innerHTML =
+    '<div class="logs-view"><div class="log-header"><div class="job-header"><div class="title-m">compile</div></div></div></div>';
+  await settle();
+  assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
+});

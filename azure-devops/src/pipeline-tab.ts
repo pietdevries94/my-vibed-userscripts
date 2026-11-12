@@ -3,10 +3,16 @@
 // pull request and in its checks panel open there too.
 import { PANEL_CLASS, createPanel, renderPanel } from "./pipeline-tab-panel.ts";
 import type { PipelineTabData, PipelineTabSources } from "./pipeline-tab-data.ts";
-import { createTabData, loadWhatIsDue, shownRunOfData } from "./pipeline-tab-data.ts";
+import {
+  createTabData,
+  expireTimeline,
+  loadWhatIsDue,
+  shownRunOfData,
+} from "./pipeline-tab-data.ts";
 import { parsePipelineRunLocation, pipelineLogPath } from "./pipeline-run-link.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import { closestElement } from "./closest-element.ts";
+import { watchShownStep } from "./pipeline-log-frame.ts";
 
 const TAB_CLASS = "fix-ado-pipeline-tab";
 const TAB_LABEL = "Pipeline";
@@ -92,6 +98,36 @@ function render(state: TabState): void {
     runs: data.runs,
     shown: shownRunOfData(data),
   });
+  watchLog(state, panel);
+}
+
+/**
+ * The run page moved its log to another step by itself, as it does for a running run.
+ * While the tab follows the run, it fetches the timeline now to catch up.
+ */
+function onLogStep(state: TabState, stepName: string): void {
+  const { data } = state;
+  const shown = data === null ? null : shownRunOfData(data);
+  if (
+    data === null ||
+    shown === null ||
+    data.pick.stepId !== null ||
+    shown.step?.name === stepName
+  ) {
+    return;
+  }
+  expireTimeline(data, shown.run.buildId);
+  update(state);
+}
+
+/** Watches the log in the panel's frame, once the frame is there. */
+function watchLog(state: TabState, panel: Element): void {
+  const frame = panel.querySelector<HTMLIFrameElement>(".fix-ado-pipeline-frame");
+  if (frame !== null) {
+    watchShownStep(frame, (stepName) => {
+      onLogStep(state, stepName);
+    });
+  }
 }
 
 /** Shows what came in, and loads what that makes due, such as a picked run's timeline. */

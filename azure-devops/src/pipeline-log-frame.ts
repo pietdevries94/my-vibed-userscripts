@@ -33,9 +33,14 @@ function load(frame: LogFrame, log: StepLog): void {
   frame.setAttribute("src", log.path);
 }
 
-function showsStep(frame: LogFrame, stepName: string): boolean {
+/** The step the log header shows, or null while the page has none. */
+function shownStepName(frame: LogFrame): string | null {
   const title = frame.contentDocument?.querySelector(LOG_TITLE_SELECTOR);
-  return title?.textContent.trim() === stepName;
+  return title?.textContent.trim() ?? null;
+}
+
+function showsStep(frame: LogFrame, stepName: string): boolean {
+  return shownStepName(frame) === stepName;
 }
 
 /** The step's name in the run page's tree: the first one after its job's row, else the first one. */
@@ -88,5 +93,33 @@ function showStepLog(frame: LogFrame, log: StepLog, schedule: Schedule = setTime
   waitForSwitch(frame, log, schedule);
 }
 
+/**
+ * Calls `onStep` each time the log header shows another step, as when the run page
+ * follows a running run by itself. Watches every page the frame loads; once per frame.
+ */
+function watchShownStep(frame: HTMLIFrameElement, onStep: (stepName: string) => void): void {
+  if (frame.dataset.fixAdoWatched !== undefined) {
+    return;
+  }
+  frame.dataset.fixAdoWatched = "";
+  let lastStepName: string | null = null;
+  const report = (): void => {
+    const stepName = shownStepName(frame);
+    if (stepName !== null && stepName !== lastStepName) {
+      lastStepName = stepName;
+      onStep(stepName);
+    }
+  };
+  const watchPage = (): void => {
+    const view = frame.contentDocument?.defaultView;
+    if (frame.contentDocument !== null && view !== null && view !== undefined) {
+      const options = { characterData: true, childList: true, subtree: true };
+      new view.MutationObserver(report).observe(frame.contentDocument, options);
+    }
+  };
+  frame.addEventListener("load", watchPage);
+  watchPage();
+}
+
 export type { LogFrame, StepLog };
-export { showStepLog };
+export { showStepLog, watchShownStep };

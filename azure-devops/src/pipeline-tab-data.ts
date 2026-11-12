@@ -133,5 +133,10 @@ function loadWhatIsDue(loader: PipelineTabLoader): void {
   }
 }
 
+/** Makes the run's timeline due now, so the next load fetches it. */
+function expireTimeline(data: PipelineTabData, buildId: number): void {
+  data.timelineLoadedAt.delete(buildId);
+}
+
 export type { PipelineTabData, PipelineTabLoader, PipelineTabSources };
-export { createTabData, loadWhatIsDue, shownRunOfData };
+export { createTabData, expireTimeline, loadWhatIsDue, shownRunOfData };
