@@ -102,7 +102,7 @@
   display: flex;
   flex: 0 0 400px;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   overflow-y: auto;
 }
 
@@ -111,7 +111,7 @@
   gap: 8px;
   align-items: center;
   width: 100%;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 0 4px 4px 0;
   background: none;
@@ -166,8 +166,16 @@
 .fix-ado-pipeline-steps {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding-left: 16px;
+}
+
+/* A line above each run but the first, so the runs stand apart. */
+.fix-ado-pipeline-run:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 0;
 }
 
 .fix-ado-pipeline-note {
