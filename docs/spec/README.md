@@ -15,20 +15,17 @@ Terms come from `GLOSSARY.md` at the repo root. Use those terms.
 | [releasing.md](releasing.md)                           | Versions, the release command, rollback                                       |
 | [checks.md](checks.md)                                 | Pre-push hook, GitHub workflow, `check:dist`, lint, format, Node              |
 | [agents-file-and-skills.md](agents-file-and-skills.md) | `AGENTS.md`, the skills, `new-script` steps, the clean-session trial          |
-| [the-move.md](the-move.md)                             | Moving the Azure DevOps extension over as the first script                    |
 
 ## Fixed rules
 
 These are not open for change by a build session.
 
 - One script per website. A feature is a part of a script.
-- The repo has a site-neutral name. Code moves over from the old extension folder.
-- The first script does exactly what the extension does. No new features during the move.
-- The extension is dropped once the script matches it, the signed Mozilla add-on included.
+- The repo has a site-neutral name.
 - Scripts are open by default. A script is sealed only when the owner asks. Each script records its mode in its `script.json`.
 - The repo is public. Scripts install from a GitHub link.
 - Licence: MIT, in a `LICENSE` file at the repo root.
-- Fixtures are scrubbed and gitignored. None are committed. The old extension's fixtures do not go into the repo.
+- Fixtures are scrubbed and gitignored. None are committed.
 - Unit tests are required for every script. A fake site is built only for a sealed script or for a feature that reacts to change over time.
 - Violentmonkey in Zen is the only supported target.
 - The owner does the final check on the real site.
@@ -37,11 +34,10 @@ These are not open for change by a build session.
 
 ## Out of scope
 
-- New Azure DevOps features. The move keeps behaviour unchanged.
 - Support for Tampermonkey or other userscript managers.
 
 ## Open
 
 - The repo's `README.md`: what it says, including a note on what the scripts do to a page.
-- A second website to test the design against. Until the trial in [the move](the-move.md) step 9, the design is checked against Azure DevOps only.
+- A second website to test the design against. Until the trial in [agents-file-and-skills.md](agents-file-and-skills.md), the design is checked against Azure DevOps only.
 - Details the decisions leave to the build session are listed at the end of each file under **Left to the build**.

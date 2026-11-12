@@ -6,7 +6,7 @@ Goal: a clean Claude session can create a new script with the owner acting only 
 
 - `AGENTS.md` at the repo root. No `CLAUDE.md`. Claude Code reads `AGENTS.md` directly when no `CLAUDE.md` exists (v2.1.277+, code.claude.com/docs/en/memory).
 - Skills in `.claude/skills/<name>/SKILL.md`, committed.
-- The build session writes the final `AGENTS.md` and `SKILL.md` text in [the move](the-move.md) step 1, using the `writing-for-agents` skill. This file fixes the content.
+- This file fixes what `AGENTS.md` and the skills say. Edit them with the `writing-for-agents` skill.
 
 ## `AGENTS.md`
 
@@ -79,8 +79,6 @@ Committed. Holds:
 - When the owner corrects a session, or a session hits a gap, Claude edits `AGENTS.md` or the skill in that session and commits it.
 
 ## Trial
-
-Step 9 of [the move](the-move.md).
 
 - A fresh session in a fresh worktree gets one prompt: "Create a script for <site> that does <X>."
 - It gets no help beyond the owner's (O) actions.

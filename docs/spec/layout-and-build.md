@@ -100,7 +100,7 @@ Generated from `script.json`. The build adds `@namespace`, `@downloadURL` and `@
 
 `https://raw.githubusercontent.com/<user>/my-vibed-userscripts/main/dist/<script>.user.js`
 
-This nested path is not on Violentmonkey's direct-install list. Per the source, Violentmonkey fetches it and opens the installer when it parses as a userscript. It is untested until the first install in [the move](the-move.md) step 6. Fallback if it fails: release files move to the repo root. That changes only `@downloadURL` and the README links.
+This nested path is not on Violentmonkey's direct-install list. Per the source, Violentmonkey fetches it and opens the installer when it parses as a userscript. The first install, of `azure-devops` 1.0.0, worked.
 
 ## Left to the build
 
