@@ -1,6 +1,4 @@
-import style from "./style.css";
+import { newsOnlyStyle, showNewsOnly } from "./news-only.ts";
 
-const NEWS_ONLY_CLASS = "fix-tweakers-news-only";
-
-GM_addStyle(style);
-document.documentElement.classList.toggle(NEWS_ONLY_CLASS, location.pathname === "/");
+GM_addStyle(newsOnlyStyle());
+showNewsOnly(document, location);

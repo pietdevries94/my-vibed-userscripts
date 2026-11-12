@@ -55,17 +55,21 @@ _Avoid_: Deploy, publish, ship
 ## Tweakers
 
 **Homepage**:
-The front page of tweakers.net, at `/`. The only page where the script hides parts.
+The front page of tweakers.net, at `/`. The only page the script changes.
 _Avoid_: Front page, index
 
 **News item list**:
-The list of news items in the main column of the homepage. The one part the script keeps.
-_Avoid_: Feed, timeline, nieuwsoverzicht
+The list of news items under "Laatste nieuws" on the homepage. The one part the news-only view keeps.
+_Avoid_: Feed, timeline, headlines
 
 **Side columns**:
-The two columns right of the news item list on the homepage. The script hides them.
+The two columns right of the news item list on the homepage: the story stream, and promotions with Best Buy Guides.
 _Avoid_: Sidebar, widgets
 
 **Site header**:
-The bar at the top of every Tweakers page, with logo, menu and search. The script hides it on the homepage.
+The block at the top of every Tweakers page: menu bar, alert bar, search bar and category bar.
 _Avoid_: Navbar, top bar
+
+**News-only view**:
+The homepage with only the news item list. It hides the site header, the side columns, the lead story, the community block, the tracker tabs and the footer.
+_Avoid_: Clean mode, minimal view
