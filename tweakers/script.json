@@ -1,6 +1,6 @@
 {
   "name": "Fix Tweakers",
-  "description": "Trims Tweakers. Shows only the news item list on the homepage.",
+  "description": "Trims the Tweakers homepage. Hides the lead story, the side columns, the top banner and the category bar.",
   "match": ["https://tweakers.net/*"],
   "grant": ["GM_addStyle"],
   "version": "1.0.0",
