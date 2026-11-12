@@ -32,5 +32,6 @@ Build `<script>/fake-site/` only for a sealed script, or for a feature that reac
 
 - `npm run dev <script>` rebuilds `dist/dev/<script>.user.js`, serves it on `:8786` and starts the fake site.
 - Claude starts `npm run dev <script>` itself, in the background, before the hand-off or a fake-site check. It stops the server once the owner has reported back or it is no longer needed. When a port is taken, Claude finds the process and asks before stopping one it did not start.
+- Every hand-off that needs the dev script, captures included, gives its link: `http://localhost:8786/<script>.user.js`.
 - Hand-off: tell the owner what changed and the exact list to check on the real site. The owner disables the release script while the dev script runs. Their report in chat ends the feature.
 - When the owner reports a problem on a sealed site, ask for a new capture of that page. Its script log helps reproduce it.
