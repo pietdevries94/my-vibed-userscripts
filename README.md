@@ -19,11 +19,6 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 2. Click a script's name in the table above. Violentmonkey shows its install page.
 3. Click "Install". Violentmonkey checks for updates on its own.
 
-## What the scripts do to a page
-
-- **Fix Azure DevOps** reads the page and sends GET requests to the Azure DevOps REST API of the site you are on, with your own session. It never changes anything in Azure DevOps. It adds icons and outlines to the page and reloads a pull request list or board when it changed. It sends nothing anywhere else.
-- **Fix Tweakers** adds CSS to the homepage that hides parts of it. It sends no requests.
-
 ## Development
 
 Claude Code writes the scripts. You say what you want and check the result on the real site. You need Claude Code, Node 26 and Violentmonkey.
