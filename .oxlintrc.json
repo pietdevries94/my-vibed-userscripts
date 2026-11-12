@@ -13,7 +13,8 @@
   "options": {
     "typeAware": true
   },
-  // The extension's fake server, kept for reference. Step 5 of the move replaces it.
+  // Release files are build output: lint checks their source.
+  "ignorePatterns": ["dist/**"],
   "rules": {
     // Off: conflicts with import/no-default-export. Together they forbid every export.
     "import/no-named-export": "off",
