@@ -46,6 +46,10 @@ const pipelineTab = isInFrame
         const { evaluations } = await client.getPolicyEvaluations(pullRequest);
         return evaluations;
       },
+      getTimeline: async (project, buildId) => {
+        const { records } = await client.getTimeline(project, buildId);
+        return records;
+      },
       now: () => Date.now(),
     });
 

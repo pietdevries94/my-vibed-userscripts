@@ -1,4 +1,4 @@
-import { parsePipelineRunLocation, pipelineStepsPath } from "./pipeline-run-link.ts";
+import { parsePipelineRunLocation, pipelineLogPath } from "./pipeline-run-link.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -52,9 +52,21 @@ test("other pages are not a run page", () => {
   );
 });
 
-test("the steps path of a run opens its Logs view, and reads back as the steps overview", () => {
-  const path = pipelineStepsPath("/quillfield", "Ledger Works", 812);
-  assert.equal(path, "/quillfield/Ledger%20Works/_build/results?buildId=812&view=logs");
+test("the log path of a step reads back as that step's log", () => {
+  const path = pipelineLogPath("/quillfield", "Ledger Works", {
+    buildId: 812,
+    jobId: JOB_ID,
+    stepId: STEP_ID,
+  });
+  assert.equal(
+    path,
+    `/quillfield/Ledger%20Works/_build/results?buildId=812&view=logs&j=${JOB_ID}&t=${STEP_ID}`,
+  );
   const [pathname = "", search = ""] = path.split("?");
-  assert.equal(parsePipelineRunLocation({ pathname, search: `?${search}` })?.view, "steps");
+  assert.deepEqual(parsePipelineRunLocation({ pathname, search: `?${search}` }), {
+    buildId: 812,
+    jobId: JOB_ID,
+    stepId: STEP_ID,
+    view: "log",
+  });
 });

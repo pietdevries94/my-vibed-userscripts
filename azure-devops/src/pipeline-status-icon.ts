@@ -66,14 +66,15 @@ function createShape(document: Document, [tag, attributes]: Shape): SVGElement {
   return shape;
 }
 
-function createPipelineStatusIcon(
+/** A status icon. `label` names it for screen readers and on hover. */
+function createStatusIcon(
   document: Document,
   status: PipelineStatus,
-  pullRequestId: number,
+  label: string = LABELS[status],
 ): SVGElement {
   const icon = document.createElementNS(SVG_NAMESPACE, "svg");
   setAttributes(icon, {
-    "aria-label": LABELS[status],
+    "aria-label": label,
     class: PIPELINE_STATUS_ICON_CLASS,
     height: "16",
     role: "img",
@@ -81,12 +82,21 @@ function createPipelineStatusIcon(
     width: "16",
   });
   icon.dataset.status = status;
-  icon.dataset.pullRequestId = String(pullRequestId);
 
   const title = document.createElementNS(SVG_NAMESPACE, "title");
-  title.textContent = LABELS[status];
+  title.textContent = label;
   icon.append(title, ...SHAPES[status].map((shape) => createShape(document, shape)));
   return icon;
 }
 
-export { PIPELINE_STATUS_ICON_CLASS, createPipelineStatusIcon };
+function createPipelineStatusIcon(
+  document: Document,
+  status: PipelineStatus,
+  pullRequestId: number,
+): SVGElement {
+  const icon = createStatusIcon(document, status);
+  icon.dataset.pullRequestId = String(pullRequestId);
+  return icon;
+}
+
+export { PIPELINE_STATUS_ICON_CLASS, createPipelineStatusIcon, createStatusIcon };

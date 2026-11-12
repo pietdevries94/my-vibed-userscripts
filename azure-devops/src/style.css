@@ -96,20 +96,20 @@
   padding: 16px 0;
 }
 
-.fix-ado-pipeline-checks {
+.fix-ado-pipeline-tree {
   display: flex;
-  flex: 0 0 260px;
+  flex: 0 0 300px;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   overflow-y: auto;
 }
 
-.fix-ado-pipeline-check {
+.fix-ado-pipeline-item {
   display: flex;
   gap: 8px;
   align-items: center;
   width: 100%;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: none;
@@ -119,35 +119,72 @@
   cursor: pointer;
 }
 
-.fix-ado-pipeline-check:hover {
+.fix-ado-pipeline-item:hover {
   background: var(--palette-black-alpha-4, rgba(0, 0, 0, 0.04));
 }
 
-.fix-ado-pipeline-check[aria-current="true"] {
-  border-color: var(--communication-background, rgb(0, 120, 212));
+.fix-ado-pipeline-item[aria-current="true"] {
   background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
 }
 
-.fix-ado-pipeline-check .fix-ado-pipeline-status {
+.fix-ado-pipeline-check[aria-current="true"],
+.fix-ado-pipeline-step[aria-current="true"] {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-pipeline-item .fix-ado-pipeline-status {
   margin-left: 0;
 }
 
-.fix-ado-pipeline-check-text {
+.fix-ado-pipeline-item-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.fix-ado-pipeline-check-name {
+.fix-ado-pipeline-item-name {
   overflow: hidden;
-  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.fix-ado-pipeline-check-details {
+.fix-ado-pipeline-check .fix-ado-pipeline-item-name {
+  font-weight: 600;
+}
+
+.fix-ado-pipeline-item-details {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
   font-size: 12px;
+}
+
+/* Stages sit under their run, steps under their stage. */
+.fix-ado-pipeline-stages,
+.fix-ado-pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 16px;
+}
+
+.fix-ado-pipeline-job,
+.fix-ado-pipeline-note {
+  padding: 6px 10px 2px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-size: 12px;
+}
+
+.fix-ado-pipeline-job {
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.fix-ado-pipeline-log-note {
+  flex: 1 1 auto;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+
+.fix-ado-pipeline-frame[hidden] {
+  display: none;
 }
 
 .fix-ado-pipeline-frame {
@@ -158,37 +195,11 @@
   border-radius: 4px;
 }
 
-/* The run page inside the Pipeline tab. pipeline-run-frame.ts sets the view. */
-html[data-fix-ado-run-view] .project-header,
-html[data-fix-ado-run-view] .navigation-container,
-html[data-fix-ado-run-view] .bolt-master-panel .bolt-header-back-button {
+/* The run page inside the Pipeline tab. pipeline-run-frame.ts marks it; only the log stays. */
+html[data-fix-ado-run-frame] .project-header,
+html[data-fix-ado-run-frame] .navigation-container,
+html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   display: none !important;
-}
-
-html[data-fix-ado-run-view="steps"] .run-logs-view > .logs-view {
-  display: none !important;
-}
-
-html[data-fix-ado-run-view="steps"] .run-logs-view > .bolt-master-panel {
-  flex: 1 1 auto !important;
-  width: auto !important;
-  max-width: none !important;
-}
-
-html[data-fix-ado-run-view="log"] .run-logs-view > .bolt-master-panel {
-  display: none !important;
-}
-
-.fix-ado-run-back {
-  align-self: center;
-  margin-right: 12px;
-  padding: 4px 10px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
 }
 
 /* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */

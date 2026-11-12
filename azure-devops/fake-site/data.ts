@@ -6,6 +6,7 @@ import type { BoardWorkItem } from "../src/board.ts";
 import { JSDOM } from "jsdom";
 import type { ListedPullRequest } from "../src/pr-list-changes.ts";
 import type { PolicyEvaluation } from "../src/pipeline-status.ts";
+import type { TimelineRecord } from "../src/pipeline-timeline.ts";
 import { fixtureReader } from "../../shared/dev/fake-site/server.ts";
 import fs from "node:fs";
 import path from "node:path";
@@ -33,8 +34,17 @@ interface PullRequestPageData {
   meta: { projects: Record<string, string>; statusColors: Record<string, string> };
 }
 
+/** A run timeline as the capture recorded it. */
+interface CapturedTimeline {
+  body: { records: TimelineRecord[] } | null;
+  httpStatus: number;
+}
+
 interface PullRequestDetailData {
-  data: { evaluations: CapturedEvaluations };
+  data: {
+    evaluations: CapturedEvaluations;
+    timelinesByBuildId?: Record<string, CapturedTimeline>;
+  };
 }
 
 interface BoardData {

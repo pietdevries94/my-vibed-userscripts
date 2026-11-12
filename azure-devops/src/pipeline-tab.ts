@@ -1,27 +1,26 @@
-// The Pipeline tab on a pull request. It shows the pull request's pipeline runs in the
-// pull request itself, and run links on the pull request open there too.
+// The Pipeline tab on a pull request. It shows the pull request's pipeline runs, their
+// stages and steps, and a step's log, in the pull request itself. Run links on the
+// pull request and in its checks panel open there too.
 import { PANEL_CLASS, createPanel, renderPanel } from "./pipeline-tab-panel.ts";
-import { parsePipelineRunLocation, pipelineStepsPath } from "./pipeline-run-link.ts";
-import type { ChecksState } from "./pipeline-tab-panel.ts";
-import type { PolicyEvaluation } from "./pipeline-status.ts";
+import type { PipelineTabData, PipelineTabSources } from "./pipeline-tab-data.ts";
+import { createTabData, loadWhatIsDue, shownRunOfData } from "./pipeline-tab-data.ts";
+import { parsePipelineRunLocation, pipelineLogPath } from "./pipeline-run-link.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import { closestElement } from "./closest-element.ts";
-import { pipelineChecksOf } from "./pipeline-checks.ts";
 
 const TAB_CLASS = "fix-ado-pipeline-tab";
 const TAB_LABEL = "Pipeline";
 const OPEN_ATTRIBUTE = "data-fix-ado-pipeline-tab-open";
 const PAGE_SELECTOR = ".repos-pr-details-page";
 const TABBAR_SELECTOR = ".repos-pr-details-page-tabbar";
-const RUN_LINK_SELECTOR = `${PAGE_SELECTOR} a[href*="/_build/results?"]`;
-/** While the tab is open, the checks are fetched again after this long. */
-const CHECKS_REFRESH_MS = 30_000;
+/** The checks panel Azure DevOps opens from "View X checks", outside the page. */
+const CHECKS_PANEL_SELECTOR = ".bolt-panel";
+const RUN_LINK = 'a[href*="/_build/results?"]';
+const RUN_LINK_SELECTOR = `${PAGE_SELECTOR} ${RUN_LINK}, ${CHECKS_PANEL_SELECTOR} ${RUN_LINK}`;
 
-interface PipelineTabOptions {
+interface PipelineTabOptions extends PipelineTabSources {
   apiBasePath: string;
   document: Document;
-  getEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluation[]>;
-  now: () => number;
 }
 
 interface PipelineTab {
@@ -31,12 +30,9 @@ interface PipelineTab {
 
 interface TabState {
   options: PipelineTabOptions;
-  pullRequest: PullRequestRef | null;
+  /** The pull request on the page and what the tab shows for it, or null on other pages. */
+  data: PipelineTabData | null;
   isOpen: boolean;
-  /** The run the owner picked, or null for the newest. */
-  selectedBuildId: number | null;
-  checks: ChecksState;
-  checksLoadedAt: number;
   /** Azure DevOps's own selected tab, while the Pipeline tab took its place. */
   replacedTab: Element | null;
 }
@@ -57,8 +53,11 @@ function setSelected(tab: Element, isSelected: boolean): void {
   tab.setAttribute("aria-selected", String(isSelected));
 }
 
-function isSamePullRequest(first: PullRequestRef | null, second: PullRequestRef | null): boolean {
-  return JSON.stringify(first) === JSON.stringify(second);
+function isSamePullRequest(
+  data: PipelineTabData | null,
+  pullRequest: PullRequestRef | null,
+): boolean {
+  return JSON.stringify(data?.pullRequest ?? null) === JSON.stringify(pullRequest);
 }
 
 function panelOf(state: TabState, page: Element): HTMLElement | null {
@@ -73,41 +72,44 @@ function panelOf(state: TabState, page: Element): HTMLElement | null {
 }
 
 function render(state: TabState): void {
+  const { data } = state;
   const page = state.options.document.querySelector(PAGE_SELECTOR);
   const panel = page === null ? null : panelOf(state, page);
-  if (!state.isOpen || state.pullRequest === null || page === null || panel === null) {
+  if (!state.isOpen || data === null || page === null || panel === null) {
     return;
   }
   page.setAttribute(OPEN_ATTRIBUTE, "");
-  const { project, pullRequestId } = state.pullRequest;
+  const { apiBasePath } = state.options;
+  const { project } = data.pullRequest;
   renderPanel(panel, {
-    checks: state.checks,
-    onPick: (buildId) => {
-      state.selectedBuildId = buildId;
-      render(state);
+    checks: data.checks,
+    logPathOf: (buildId, step) =>
+      pipelineLogPath(apiBasePath, project, { buildId, jobId: step.jobId, stepId: step.id }),
+    onPick: (pick) => {
+      data.pick = pick;
+      update(state);
     },
-    pullRequestId,
-    selectedBuildId: state.selectedBuildId,
-    stepsPath: (buildId) => pipelineStepsPath(state.options.apiBasePath, project, buildId),
+    shown: shownRunOfData(data),
   });
 }
 
-async function loadChecks(state: TabState): Promise<void> {
-  const loadingFor = state.pullRequest;
-  if (loadingFor === null) {
+/** Shows what came in, and loads what that makes due, such as a picked run's timeline. */
+function update(state: TabState): void {
+  const { data } = state;
+  if (!state.isOpen || data === null) {
     return;
   }
-  state.checksLoadedAt = state.options.now();
-  try {
-    const evaluations = await state.options.getEvaluations(loadingFor);
-    if (isSamePullRequest(loadingFor, state.pullRequest)) {
-      state.checks = { checks: pipelineChecksOf(evaluations), kind: "loaded" };
-    }
-  } catch {
-    // Keep the checks already shown; a later refresh tries again.
-    state.checks = state.checks.kind === "loaded" ? state.checks : { kind: "failed" };
-  }
   render(state);
+  loadWhatIsDue({
+    data,
+    onChange: () => {
+      // An answer for a pull request the page has left changes nothing.
+      if (state.data === data) {
+        update(state);
+      }
+    },
+    sources: state.options,
+  });
 }
 
 function selectTab(state: TabState): void {
@@ -126,10 +128,11 @@ function selectTab(state: TabState): void {
 
 function openTab(state: TabState, buildId: number | null): void {
   state.isOpen = true;
-  state.selectedBuildId = buildId ?? state.selectedBuildId;
+  if (buildId !== null && state.data !== null) {
+    state.data.pick = { buildId, stageId: null, stepId: null };
+  }
   selectTab(state);
-  render(state);
-  void loadChecks(state);
+  update(state);
 }
 
 function closeTab(state: TabState): void {
@@ -147,6 +150,14 @@ function closeTab(state: TabState): void {
   }
 }
 
+/** Closes Azure DevOps's checks panel, if the click came from there. */
+function closeChecksPanel(target: EventTarget | null): void {
+  const panel = closestElement(target, CHECKS_PANEL_SELECTOR);
+  const closeIcon = panel?.querySelector(".bolt-panel-header .ms-Icon--Clear");
+  const closeButton = closeIcon?.closest("button");
+  closeButton?.click();
+}
+
 /** The run a plain click on a run link of the pull request opens, or null. */
 function clickedRunBuildId(event: MouseEvent, document: Document): number | null {
   const link = closestElement(event.target, RUN_LINK_SELECTOR);
@@ -159,7 +170,7 @@ function clickedRunBuildId(event: MouseEvent, document: Document): number | null
 }
 
 function onClick(state: TabState, event: MouseEvent): void {
-  if (state.pullRequest === null) {
+  if (state.data === null) {
     return;
   }
   const isPipelineTab = closestElement(event.target, `.${TAB_CLASS}`) !== null;
@@ -168,55 +179,38 @@ function onClick(state: TabState, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     openTab(state, runBuildId);
+    closeChecksPanel(event.target);
   } else if (state.isOpen && closestElement(event.target, "[role=tablist] [role=tab]") !== null) {
     closeTab(state);
   }
 }
 
-function switchPullRequest(state: TabState, pullRequest: PullRequestRef | null): void {
-  closeTab(state);
-  state.pullRequest = pullRequest;
-  state.selectedBuildId = null;
-  state.checks = { kind: "loading" };
-  state.checksLoadedAt = Number.NEGATIVE_INFINITY;
-}
-
-/** Azure DevOps may re-render its tabs or content; this puts the open tab back. */
-function refreshOpenTab(state: TabState): void {
-  selectTab(state);
-  render(state);
-  if (state.options.now() - state.checksLoadedAt >= CHECKS_REFRESH_MS) {
-    void loadChecks(state);
-  }
-}
-
-function syncTab(state: TabState, pullRequest: PullRequestRef | null): void {
-  if (!isSamePullRequest(pullRequest, state.pullRequest)) {
-    switchPullRequest(state, pullRequest);
-  }
-  const { document } = state.options;
+/** Adds the tab when Azure DevOps's tab bar is there. False while it is not. */
+function addTab(document: Document): boolean {
   const tablist = document.querySelector(`${TABBAR_SELECTOR} [role=tablist]`);
-  if (state.pullRequest === null || tablist === null) {
-    return;
+  if (tablist === null) {
+    return false;
   }
   if (tablist.querySelector(`.${TAB_CLASS}`) === null) {
     tablist.append(createTab(document));
   }
-  if (state.isOpen) {
-    refreshOpenTab(state);
+  return true;
+}
+
+function syncTab(state: TabState, pullRequest: PullRequestRef | null): void {
+  if (!isSamePullRequest(state.data, pullRequest)) {
+    closeTab(state);
+    state.data = pullRequest === null ? null : createTabData(pullRequest);
+  }
+  if (state.data !== null && addTab(state.options.document) && state.isOpen) {
+    // Azure DevOps may have re-rendered its tabs; this puts the open tab back.
+    selectTab(state);
+    update(state);
   }
 }
 
 function createPipelineTab(options: PipelineTabOptions): PipelineTab {
-  const state: TabState = {
-    checks: { kind: "loading" },
-    checksLoadedAt: Number.NEGATIVE_INFINITY,
-    isOpen: false,
-    options,
-    pullRequest: null,
-    replacedTab: null,
-    selectedBuildId: null,
-  };
+  const state: TabState = { data: null, isOpen: false, options, replacedTab: null };
   options.document.addEventListener(
     "click",
     (event) => {

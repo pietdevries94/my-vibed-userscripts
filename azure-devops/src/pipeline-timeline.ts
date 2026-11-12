@@ -1,3 +1,5 @@
+import type { PipelineStatus } from "./pipeline-status.ts";
+
 /** One record of a run's timeline: a stage, phase, job, step (`Task`) or checkpoint. */
 interface TimelineRecord {
   id: string;
@@ -33,6 +35,29 @@ interface RunStage {
   state: string;
   result: string | null;
   jobs: RunJob[];
+}
+
+/** How a stage, job or step shows: one of the pipeline status icons, with its own label. */
+interface RecordStatus {
+  status: PipelineStatus;
+  label: string;
+}
+
+const RESULT_STATUSES: Record<string, RecordStatus> = {
+  abandoned: { label: "Canceled", status: "notStarted" },
+  canceled: { label: "Canceled", status: "notStarted" },
+  failed: { label: "Failed", status: "failed" },
+  skipped: { label: "Skipped", status: "notStarted" },
+  succeeded: { label: "Succeeded", status: "succeeded" },
+  succeededWithIssues: { label: "Succeeded with warnings", status: "expired" },
+};
+
+function recordStatusOf({ result, state }: Pick<TimelineRecord, "result" | "state">): RecordStatus {
+  if (state === "inProgress") {
+    return { label: "Running", status: "running" };
+  }
+  const finished = result === null ? undefined : RESULT_STATUSES[result];
+  return finished ?? { label: "Not started", status: "notStarted" };
 }
 
 /** The stage a classic pipeline's jobs go in: it has no stage records. */
@@ -82,5 +107,5 @@ function defaultStepOf(stages: RunStage[]): RunStep | null {
   return steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
 }
 
-export type { RunJob, RunStage, RunStep, TimelineRecord };
-export { defaultStepOf, stagesOf };
+export type { RecordStatus, RunJob, RunStage, RunStep, TimelineRecord };
+export { defaultStepOf, recordStatusOf, stagesOf };

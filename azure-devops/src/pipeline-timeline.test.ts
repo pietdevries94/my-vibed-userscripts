@@ -1,4 +1,4 @@
-import { defaultStepOf, stagesOf } from "./pipeline-timeline.ts";
+import { defaultStepOf, recordStatusOf, stagesOf } from "./pipeline-timeline.ts";
 import type { TimelineRecord } from "./pipeline-timeline.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -69,4 +69,20 @@ test("a run without steps yet has nothing to pick", () => {
   const stagesWithoutSteps = stagesOf([record("Stage", "build")]);
   assert.equal(defaultStepOf(stagesWithoutSteps), null);
   assert.deepEqual(stagesOf([]), []);
+});
+
+/** A record's status and label, as one string. */
+function statusOf(state: string, result: string | null): string {
+  const { label, status } = recordStatusOf({ result, state });
+  return `${status}: ${label}`;
+}
+
+test("each state and result shows as a status with its own label", () => {
+  assert.equal(statusOf("pending", null), "notStarted: Not started");
+  assert.equal(statusOf("inProgress", null), "running: Running");
+  assert.equal(statusOf("completed", "succeeded"), "succeeded: Succeeded");
+  assert.equal(statusOf("completed", "succeededWithIssues"), "expired: Succeeded with warnings");
+  assert.equal(statusOf("completed", "failed"), "failed: Failed");
+  assert.equal(statusOf("completed", "canceled"), "notStarted: Canceled");
+  assert.equal(statusOf("completed", "skipped"), "notStarted: Skipped");
 });

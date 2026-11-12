@@ -2,6 +2,7 @@ import { BUILD_POLICY_TYPE_ID } from "./pipeline-status.ts";
 import { JSDOM } from "jsdom";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
+import type { TimelineRecord } from "./pipeline-timeline.ts";
 import assert from "node:assert/strict";
 import { createPipelineTab } from "./pipeline-tab.ts";
 import { test } from "node:test";
@@ -26,6 +27,10 @@ const PAGE = `<!doctype html><body>
       <a class="check" href="/quillfield/Ledger%20Works/_build/results?buildId=502">ledger-lint</a>
     </div>
   </div>
+  <div class="bolt-portal"><div class="bolt-panel" role="dialog">
+    <div class="bolt-panel-header"><button id="close-checks"><span class="ms-Icon--Clear"></span></button></div>
+    <a class="panel-check" href="/quillfield/Ledger%20Works/_build/results?buildId=501">ledger-ci</a>
+  </div></div>
 </body>`;
 
 function buildEvaluation(buildId: number, name: string, startedAt: string): PolicyEvaluation {
@@ -40,6 +45,41 @@ const EVALUATIONS = [
   buildEvaluation(501, "ledger-ci", "2031-04-02T09:00:00Z"),
   buildEvaluation(502, "ledger-lint", "2031-04-02T10:00:00Z"),
 ];
+
+function timelineRecord(
+  type: string,
+  id: string,
+  extra: Partial<TimelineRecord> = {},
+): TimelineRecord {
+  return {
+    id,
+    name: id,
+    order: 1,
+    parentId: null,
+    result: "succeeded",
+    state: "completed",
+    type,
+    ...extra,
+  };
+}
+
+/** Run 502: a build stage whose compile step failed, then a test stage. Run 501: one lint step. */
+const TIMELINES: Record<number, TimelineRecord[]> = {
+  501: [
+    timelineRecord("Stage", "lint-stage"),
+    timelineRecord("Job", "lint-job", { parentId: "lint-stage" }),
+    timelineRecord("Task", "lint", { parentId: "lint-job" }),
+  ],
+  502: [
+    timelineRecord("Stage", "build", { order: 1, result: "failed" }),
+    timelineRecord("Stage", "test", { order: 2 }),
+    timelineRecord("Job", "build-job", { parentId: "build" }),
+    timelineRecord("Job", "test-job", { parentId: "test" }),
+    timelineRecord("Task", "checkout", { order: 1, parentId: "build-job" }),
+    timelineRecord("Task", "compile", { order: 2, parentId: "build-job", result: "failed" }),
+    timelineRecord("Task", "unit", { parentId: "test-job" }),
+  ],
+};
 
 interface Setup {
   document: Document;
@@ -57,6 +97,7 @@ function setUp(evaluations = EVALUATIONS): Setup {
       requests.push(pullRequest);
       return evaluations;
     },
+    getTimeline: async (_project, buildId) => TIMELINES[buildId] ?? [],
     now: () => 0,
   });
   tab.sync(PULL_REQUEST);
@@ -70,16 +111,29 @@ function click(element: Element | null): void {
   element.dispatchEvent(new view.MouseEvent("click", { bubbles: true, cancelable: true }));
 }
 
+/** Lets the fetched checks, and then the shown run's timeline, come in. */
 async function settle(): Promise<void> {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  for (let round = 0; round < 3; round += 1) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- each round lets the next answer in
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
 }
 
 const pipelineTab = (document: Document): Element | null =>
   document.querySelector("[role=tablist] .fix-ado-pipeline-tab");
-const checkNames = (document: Document): string[] =>
-  [...document.querySelectorAll(".fix-ado-pipeline-check-name")].map((name) => name.textContent);
+/** The names in the tree, in order, with a * on the current ones. */
+const treeNames = (document: Document, kind: "check" | "stage" | "step"): string[] =>
+  [...document.querySelectorAll(`.fix-ado-pipeline-${kind}`)].map(
+    (item) =>
+      `${item.querySelector(".fix-ado-pipeline-item-name")?.textContent ?? ""}${item.getAttribute("aria-current") === "true" ? "*" : ""}`,
+  );
+const LOG_PATH = "/quillfield/Ledger%20Works/_build/results?buildId=";
+const pickItem = (document: Document, kind: string, name: string): Element | null =>
+  [...document.querySelectorAll(`.fix-ado-pipeline-${kind}`)].find(
+    (item) => item.querySelector(".fix-ado-pipeline-item-name")?.textContent === name,
+  ) ?? null;
 const frameSource = (document: Document): string | null =>
   document.querySelector(".fix-ado-pipeline-frame")?.getAttribute("src") ?? null;
 const isOpen = (document: Document): boolean =>
@@ -111,7 +165,7 @@ test("the tab is added once, however often the page syncs", () => {
   assert.equal(document.querySelectorAll(".fix-ado-pipeline-tab").length, 1);
 });
 
-test("opening the tab lists the checks newest first and shows the newest run's steps", async () => {
+test("opening the tab shows the newest run, the stage of its first failed step, and that step's log", async () => {
   const { document } = setUp();
   click(pipelineTab(document));
   await settle();
@@ -121,23 +175,37 @@ test("opening the tab lists the checks newest first and shows the newest run's s
     document.querySelector("#__bolt-tab-overview")?.getAttribute("aria-selected"),
     "false",
   );
-  assert.deepEqual(checkNames(document), ["ledger-lint", "ledger-ci"]);
-  assert.equal(
-    frameSource(document),
-    "/quillfield/Ledger%20Works/_build/results?buildId=502&view=logs",
-  );
+  assert.deepEqual(treeNames(document, "check"), ["ledger-lint*", "ledger-ci"]);
+  assert.deepEqual(treeNames(document, "stage"), ["build*", "test"]);
+  assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
+  assert.equal(frameSource(document), `${LOG_PATH}502&view=logs&j=build-job&t=compile`);
 });
 
-test("picking a check shows that run", async () => {
+test("picking a run shows only its stages and steps", async () => {
   const { document } = setUp();
   click(pipelineTab(document));
   await settle();
-  click(document.querySelectorAll(".fix-ado-pipeline-check")[1] ?? null);
-  assert.match(frameSource(document) ?? "", /buildId=501&/u);
-  assert.equal(
-    document.querySelectorAll(".fix-ado-pipeline-check")[1]?.getAttribute("aria-current"),
-    "true",
-  );
+  click(pickItem(document, "check", "ledger-ci"));
+  await settle();
+  assert.deepEqual(treeNames(document, "check"), ["ledger-lint", "ledger-ci*"]);
+  assert.deepEqual(treeNames(document, "stage"), ["lint-stage*"]);
+  assert.deepEqual(treeNames(document, "step"), ["lint*"]);
+  assert.equal(frameSource(document), `${LOG_PATH}501&view=logs&j=lint-job&t=lint`);
+});
+
+test("picking a stage shows only its steps, and picking a step shows its log", async () => {
+  const { document } = setUp();
+  click(pipelineTab(document));
+  await settle();
+  click(pickItem(document, "stage", "test"));
+  assert.deepEqual(treeNames(document, "stage"), ["build", "test*"]);
+  assert.deepEqual(treeNames(document, "step"), ["unit*"]);
+  assert.equal(frameSource(document), `${LOG_PATH}502&view=logs&j=test-job&t=unit`);
+
+  click(pickItem(document, "stage", "build"));
+  click(pickItem(document, "step", "checkout"));
+  assert.deepEqual(treeNames(document, "step"), ["checkout*", "compile"]);
+  assert.equal(frameSource(document), `${LOG_PATH}502&view=logs&j=build-job&t=checkout`);
 });
 
 test("another tab closes the Pipeline tab and gets its selection back", async () => {
@@ -158,6 +226,19 @@ test("a run link on the pull request opens that run in the tab", async () => {
   await settle();
   assert.equal(isOpen(document), true);
   assert.match(frameSource(document) ?? "", /buildId=502&/u);
+});
+
+test("a run in the checks panel opens in the tab, and the panel closes", async () => {
+  const { document } = setUp();
+  let closeClicks = 0;
+  document.querySelector("#close-checks")?.addEventListener("click", () => {
+    closeClicks += 1;
+  });
+  click(document.querySelector(".bolt-panel a.panel-check"));
+  await settle();
+  assert.equal(isOpen(document), true);
+  assert.deepEqual(treeNames(document, "check"), ["ledger-lint", "ledger-ci*"]);
+  assert.equal(closeClicks, 1);
 });
 
 test("a pull request without runs says so", async () => {
