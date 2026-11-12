@@ -4,13 +4,26 @@ import { withScriptList } from "./readme.ts";
 
 const README = "# Repo\n\n<!-- scripts:start -->\nold list\n<!-- scripts:end -->\n\nLicence.\n";
 
-test("the list between the markers is replaced, the rest stays", () => {
+test("the table between the markers is replaced, the rest stays", () => {
   const readme = withScriptList(README, [
-    { description: "Hides ads.", id: "example-site", name: "Fix Example", version: "1.2.0" },
+    {
+      description: "Hides ads | banners.",
+      id: "example-site",
+      name: "Fix Example",
+      version: "1.2.0",
+    },
+  ]);
+  const [before, table, after] = readme.split(/<!-- scripts:(?:start|end) -->/u);
+  assert.equal(before, "# Repo\n\n");
+  assert.equal(after, "\n\nLicence.\n");
+  const rows = (table ?? "").trim().split("\n");
+  assert.deepEqual(rows.slice(0, 2), [
+    "| Script | What it does | Version |",
+    "| --- | --- | --- |",
   ]);
   assert.match(
-    readme,
-    /^# Repo\n\n<!-- scripts:start -->\n\n- \*\*Fix Example\*\* 1\.2\.0: Hides ads\. \[Install\]\(https:\/\/raw\.githubusercontent\.com\/.+\/main\/dist\/example-site\.user\.js\)\n\n<!-- scripts:end -->\n\nLicence\.\n$/u,
+    rows[2] ?? "",
+    /^\| \[Fix Example\]\(https:\/\/raw\.githubusercontent\.com\/.+\/main\/dist\/example-site\.user\.js\) \| Hides ads \\\| banners\. \| 1\.2\.0 \|$/u,
   );
 });
 

@@ -98,6 +98,7 @@ function commitRelease(script: Script, body: string): void {
     .filter(Boolean)
     .join("\n\n");
   updateReadme();
+  runNpm(["exec", "--", "oxfmt", README_FILE]);
   const isCommitted =
     run("git", ["add", scriptJsonPath(script.id), releaseFilePath(script.id), README_FILE]) &&
     run("git", ["commit", "-m", message]);

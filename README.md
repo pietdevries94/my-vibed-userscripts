@@ -6,15 +6,17 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 <!-- scripts:start -->
 
-- **Fix Azure DevOps** 1.0.1: Adds missing features to Azure DevOps: pipeline status on pull requests, required reviewers first, avatar initials, and pull request lists and boards that reload on changes. [Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js)
-- **Fix Tweakers** 1.0.1: Trims the Tweakers homepage. Hides the lead story, the side columns, the top banner and the category bar. [Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/tweakers.user.js)
+| Script                                                                                                                  | What it does                                                                                                                                                                  | Version |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| [Fix Azure DevOps](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) | Adds missing features to Azure DevOps: pipeline status on pull requests, required reviewers first, avatar initials, and pull request lists and boards that reload on changes. | 1.0.1   |
+| [Fix Tweakers](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/tweakers.user.js)         | Trims the Tweakers homepage. Hides the lead story, the side columns, the top banner and the category bar.                                                                     | 1.0.1   |
 
 <!-- scripts:end -->
 
 ## Install
 
 1. Install [Violentmonkey](https://violentmonkey.github.io/) in your browser. The scripts are tested in Zen, a Firefox-based browser. Other userscript managers are not supported.
-2. Open a script's install link above. Violentmonkey shows its install page.
+2. Click a script's name in the table above. Violentmonkey shows its install page.
 3. Click "Install". Violentmonkey checks for updates on its own.
 
 ## What the scripts do to a page
@@ -24,15 +26,24 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 ## Development
 
-Node 26. Every script lives in its own folder with a `script.json` and its source in `src/`.
+Claude Code writes the scripts. You say what you want and check the result on the real site. You need Claude Code, Node 26 and Violentmonkey.
 
-```sh
-npm ci
-npm run dev <script>   # rebuilds the dev file and serves it on http://localhost:8786
-npm run precommit      # format, lint, typecheck, tests, build
-```
+Open Claude Code in the repo and ask:
 
-Releases go through `npm run release`. How the repo works is in [`AGENTS.md`](AGENTS.md), [`GLOSSARY.md`](GLOSSARY.md) and [`docs/spec/`](docs/spec/README.md).
+- **A new script**: "Create a script for <site> that does <X>." Claude asks whether the site is open or sealed.
+  - **Open**, the default: Claude reads the real site in a read-only browser. When it asks, you reconnect `real-site` in `/mcp`, and sign in or accept a cookie wall in that browser.
+  - **Sealed**, for a work site or anything private: Claude never opens the site. You open the pages it lists and click "Capture fixtures" in the Violentmonkey menu. Then you run `npm run fixtures:import <script>` and skim the files before Claude reads them. A capture swaps names, numbers and ids for stand-ins.
+- **A change to a script**: name the script and the change. Claude writes a failing test first, then the change.
+
+Then check it yourself:
+
+1. Claude runs `npm run dev <script>`.
+2. Install the dev file from `http://localhost:8786/<script>.user.js` and disable the released script.
+3. Check the page and tell Claude what is wrong. Each fix rebuilds the dev file.
+
+Say "release" when it is right. Claude checks the descriptions, bumps the version, rewrites the table above, commits and pushes. Installed copies update on their own. Claude commits on its own, but pushes only when you say "push" or "release".
+
+Claude works from [`AGENTS.md`](AGENTS.md) and the skills in `.claude/skills/`. The decisions behind the repo are in [`docs/spec/`](docs/spec/README.md).
 
 ## Licence
 

@@ -17,12 +17,21 @@ const README_FILE = path.join(REPO_ROOT, "README.md");
 const LIST_START = "<!-- scripts:start -->";
 const LIST_END = "<!-- scripts:end -->";
 
+/** A table cell's text: a pipe would end the cell. */
+function cellText(text: string): string {
+  return text.replaceAll("|", String.raw`\|`);
+}
+
+/** A table: the script's name links to its install file, the description says what it does. */
 function scriptListMarkdown(scripts: ReleasedScript[]): string {
-  const lines = scripts.map(
+  if (scripts.length === 0) {
+    return "No script is released yet.";
+  }
+  const rows = scripts.map(
     ({ id, name, description, version }) =>
-      `- **${name}** ${version}: ${description} [Install](${releaseInstallUrl(id)})`,
+      `| [${cellText(name)}](${releaseInstallUrl(id)}) | ${cellText(description)} | ${version} |`,
   );
-  return lines.length === 0 ? "No script is released yet." : lines.join("\n");
+  return ["| Script | What it does | Version |", "| --- | --- | --- |", ...rows].join("\n");
 }
 
 /** `readme` with the text between the markers replaced by the list. */
