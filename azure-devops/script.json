@@ -3,6 +3,6 @@
   "description": "Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs, required reviewers first, avatar initials (a menu setting, on by default), and pull request lists and boards that reload on changes.",
   "match": ["https://dev.azure.com/*", "https://*.visualstudio.com/*"],
   "grant": ["GM_addStyle", "GM_getValue", "GM_setValue", "GM_registerMenuCommand"],
-  "version": "1.1.0",
+  "version": "1.2.0",
   "mode": "sealed"
 }

@@ -1,11 +1,14 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.1.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs, required reviewers first, avatar initials, and pull request lists and boards that reload on changes.
+// @version      1.2.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs, required reviewers first, avatar initials (a menu setting, on by default), and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
 // @run-at       document-idle
 // @downloadURL  https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js
 // ==/UserScript==
@@ -132,6 +135,10 @@
       let name = avatarName(avatar), initials = initialsOf(name), shownInitials = avatar.dataset.fixAdoInitials ?? "", hue = initials ? String(hueOf(name)) : "";
       shownInitials === initials && avatar.style.getPropertyValue("--fix-ado-hue") === hue || markAvatar(avatar, initials, hue);
     }
+  }
+  function hideInitialsOnAvatars(root) {
+    for (let avatar of root.querySelectorAll("[data-fix-ado-initials]"))
+      delete avatar.dataset.fixAdoInitials, avatar.style.removeProperty("--fix-ado-hue"), avatar.style.removeProperty("--fix-ado-avatar-size");
   }
 
   // azure-devops/src/pipeline-status-icon.ts
@@ -318,6 +325,18 @@
         return getWorkItems(options, ids);
       }
     };
+  }
+
+  // azure-devops/src/on-off-setting.ts
+  function createOnOffSetting(options) {
+    let { key, label, menu, onChange, storage } = options, isOn = storage.get(key, options.defaultValue);
+    function showInMenu() {
+      menu.register(`${label}: ${isOn ? "on" : "off"}`, flip, key);
+    }
+    function flip() {
+      isOn = !isOn, storage.set(key, isOn), showInMenu(), onChange(isOn);
+    }
+    return showInMenu(), { isOn: () => isOn };
   }
 
   // azure-devops/src/page-reloader.ts
@@ -1390,7 +1409,26 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     apiBasePath: basePath,
     fetch: async (url, init) => fetch(url, init),
     origin: location.origin
-  }), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, pipelineRunFrame = isInFrame ? createPipelineRunFrame(document) : null, pipelineTab = isInFrame ? null : createPipelineTab({
+  }), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, avatarInitials = createOnOffSetting({
+    defaultValue: !0,
+    key: "avatar-initials",
+    label: "Avatar initials",
+    menu: {
+      // A frame would add a second menu entry. The top page's entry is enough.
+      register: (caption, onClick2, id) => {
+        isInFrame || GM_registerMenuCommand(caption, onClick2, { id });
+      }
+    },
+    onChange: (isOn) => {
+      isOn ? showInitialsOnAvatars(document) : hideInitialsOnAvatars(document);
+    },
+    storage: {
+      get: (key, defaultValue) => GM_getValue(key, defaultValue),
+      set: (key, value) => {
+        GM_setValue(key, value);
+      }
+    }
+  }), pipelineRunFrame = isInFrame ? createPipelineRunFrame(document) : null, pipelineTab = isInFrame ? null : createPipelineTab({
     apiBasePath: basePath,
     document,
     getEvaluations: async (pullRequest) => {
@@ -1458,7 +1496,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     !isUserBusy() && claimReload() && location.reload();
   }
   function sync() {
-    pipelineRunFrame?.sync(), pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath)), showInitialsOnAvatars(document), requiredReviewers.markAll(), isTabActive() && (poller.sync(), isPullRequestInboxLocation(location) && requiredReviewers.syncInbox()), reloader.check();
+    pipelineRunFrame?.sync(), pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath)), avatarInitials.isOn() && showInitialsOnAvatars(document), requiredReviewers.markAll(), isTabActive() && (poller.sync(), isPullRequestInboxLocation(location) && requiredReviewers.syncInbox()), reloader.check();
   }
   var settleTimer = null;
   new MutationObserver(() => {
