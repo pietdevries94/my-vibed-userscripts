@@ -7,15 +7,16 @@ import {
 } from "./pull-request-link.ts";
 import { findBoardCardIds, isBoardLocation, watchBoard } from "./board.ts";
 import { findPullRequestRows, showPipelineStatus } from "./pr-list.ts";
+import { hideInitialsOnAvatars, showInitialsOnAvatars } from "./avatars.ts";
 import type { PullRequestsResponse } from "./ado-client.ts";
 import type { WatchedPage } from "./page-reloader.ts";
 import { createAdoClient } from "./ado-client.ts";
+import { createOnOffSetting } from "./on-off-setting.ts";
 import { createPageReloader } from "./page-reloader.ts";
 import { createPipelineRunFrame } from "./pipeline-run-frame.ts";
 import { createPipelineStatusPoller } from "./pipeline-status-poller.ts";
 import { createPipelineTab } from "./pipeline-tab.ts";
 import { createRequiredReviewerMarker } from "./required-reviewers.ts";
-import { showInitialsOnAvatars } from "./avatars.ts";
 import style from "./style.css";
 import { watchPullRequestList } from "./pr-list-watch.ts";
 
@@ -36,6 +37,34 @@ const isTabActive = (): boolean => document.visibilityState === "visible";
 
 // In a frame, the script only strips a run page the Pipeline tab shows.
 const isInFrame = globalThis.top !== globalThis.self;
+
+const avatarInitials = createOnOffSetting({
+  defaultValue: true,
+  key: "avatar-initials",
+  label: "Avatar initials",
+  menu: {
+    // A frame would add a second menu entry. The top page's entry is enough.
+    register: (caption, onClick, id) => {
+      if (!isInFrame) {
+        GM_registerMenuCommand(caption, onClick, { id });
+      }
+    },
+  },
+  onChange: (isOn) => {
+    if (isOn) {
+      showInitialsOnAvatars(document);
+    } else {
+      hideInitialsOnAvatars(document);
+    }
+  },
+  storage: {
+    get: (key, defaultValue) => GM_getValue(key, defaultValue),
+    set: (key, value) => {
+      GM_setValue(key, value);
+    },
+  },
+});
+
 const pipelineRunFrame = isInFrame ? createPipelineRunFrame(document) : null;
 const pipelineTab = isInFrame
   ? null
@@ -136,7 +165,9 @@ function reloadPage(): void {
 function sync(): void {
   pipelineRunFrame?.sync();
   pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath));
-  showInitialsOnAvatars(document);
+  if (avatarInitials.isOn()) {
+    showInitialsOnAvatars(document);
+  }
   requiredReviewers.markAll();
   if (isTabActive()) {
     void poller.sync();

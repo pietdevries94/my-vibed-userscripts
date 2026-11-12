@@ -46,7 +46,14 @@
     "eslint/id-length": ["error", { "properties": "never" }],
     "eslint/new-cap": [
       "error",
-      { "capIsNewExceptions": ["GM_addStyle", "GM_registerMenuCommand"] }
+      {
+        "capIsNewExceptions": [
+          "GM_addStyle",
+          "GM_getValue",
+          "GM_registerMenuCommand",
+          "GM_setValue"
+        ]
+      }
     ],
     "eslint/capitalized-comments": ["error", "always", { "ignoreConsecutiveComments": true }],
     "eslint/func-style": ["error", "declaration", { "allowArrowFunctions": true }],

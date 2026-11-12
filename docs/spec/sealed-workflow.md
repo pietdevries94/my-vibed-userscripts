@@ -57,7 +57,7 @@ The owner reads the list in the script's rules.
 - Loads fixtures from the script's `fixtures/`, with an error that names any missing file.
 - Includes the fixture-to-DOM helper.
 - A `/__dev` index page lists the script's actions as links.
-- The GM shim: `GM_addStyle` adds a `<style>`, `GM_registerMenuCommand` is a no-op.
+- The GM shim: `GM_addStyle` adds a `<style>`, `GM_registerMenuCommand` is a no-op, `GM_getValue` and `GM_setValue` keep values in memory.
 
 ### Per script (`<script>/fake-site/`)
 
