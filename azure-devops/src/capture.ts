@@ -1,7 +1,11 @@
 // The Azure DevOps capture: which pages to capture, what to keep, and which GET
 // requests to send. Dev file only. The owner reads the keep rules below.
 import { AdoRequestError, createAdoClient } from "./ado-client.ts";
-import type { CapturePage, GetOnlyFetch } from "../../shared/dev/capture/capture.ts";
+import type {
+  CaptureDefinition,
+  CapturePage,
+  GetOnlyFetch,
+} from "../../shared/dev/capture/capture.ts";
 import type { PullRequestListPage, PullRequestRef } from "./pull-request-link.ts";
 import {
   apiBasePath,
@@ -15,7 +19,6 @@ import { PIPELINE_STATUS_ICON_CLASS } from "./pipeline-status-icon.ts";
 import type { Pseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
 import type { ScrubRules } from "../../shared/dev/scrub/rules.ts";
 import { findPullRequestRows } from "./pr-list.ts";
-import { registerCapture } from "../../shared/dev/capture/capture.ts";
 
 /** The organisation in every fake URL. */
 const FAKE_ORGANISATION = "fake-org";
@@ -243,4 +246,10 @@ function capturePage(document: Document, location: Location): CapturePage | null
   return isBoardLocation(location) ? boardPage() : null;
 }
 
-registerCapture({ page: capturePage, rules, scriptId: "azure-devops" });
+const captureDefinition: CaptureDefinition = {
+  page: capturePage,
+  rules,
+  scriptId: "azure-devops",
+};
+
+export { captureDefinition };

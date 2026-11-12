@@ -30,7 +30,11 @@ The `real-site` browser is read-only. The guard blocks every request except GET 
 
 ## What reaches disk
 
-- Fixtures come only from the shared capture bundle, run in the page with `browser_evaluate`. Scrubbing runs in the page; write only the scrubbed output to `<script>/fixtures/`.
+- Fixtures come only from the shared capture bundle. Scrubbing runs in the page:
+  1. Write `<script>/src/capture.ts`: export `captureDefinition` with the keep rules and page names.
+  2. `npm run capture:bundle <script>`, then read `.real-site/<script>-capture.js`.
+  3. Pass its full text as the `browser_evaluate` function, with `filename: .real-site/<script>-capture-result.json`.
+  4. `npm run capture:save <script> .real-site/<script>-capture-result.json`.
 - Screenshots, snapshots and network dumps go to `.real-site/`, which is deleted at session end.
 - Real values never go into code, tests, comments, commits, issues or the glossary.
 

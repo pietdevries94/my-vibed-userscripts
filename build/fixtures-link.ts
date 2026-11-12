@@ -2,19 +2,8 @@
 // In a worktree, symlinks every script's fixtures from the main checkout.
 import { REPO_ROOT, findScriptIds } from "./scripts.ts";
 import fs from "node:fs";
-import { output } from "./run.ts";
+import { mainCheckout } from "./main-checkout.ts";
 import path from "node:path";
-
-function mainCheckout(): string {
-  const worktree = /^worktree (?<directory>.+)$/mu.exec(
-    output("git", ["worktree", "list", "--porcelain"]),
-  );
-  const directory = worktree?.groups?.directory;
-  if (directory === undefined) {
-    throw new Error("git worktree list gave no main checkout");
-  }
-  return directory;
-}
 
 function linkFixtures(main: string, id: string): string {
   const source = path.join(main, id, "fixtures");

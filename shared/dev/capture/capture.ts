@@ -1,7 +1,8 @@
 // "Capture fixtures": the dev file's Violentmonkey menu command. It scrubs the page and
 // the script's GET responses, and downloads two files:
 // <script>--<page>.html and <script>--<page>.json.
-// Dev file only; the release build never includes it.
+// `npm run capture:bundle` packs `captureFiles` for the real-site browser instead.
+// Dev only; the release build never includes it.
 import type { Pseudonyms } from "../scrub/pseudonyms.ts";
 import type { ScrubRules } from "../scrub/rules.ts";
 import { createPseudonyms } from "../scrub/pseudonyms.ts";
@@ -34,6 +35,13 @@ interface CaptureDefinition {
   rules: ScrubRules;
   /** The page to capture at this location, or null when it is not on the capture list. */
   page: (document: Document, location: Location) => CapturePage | null;
+}
+
+/** The scrubbed files of one capture. `baseName` is `<script>--<page>`. */
+interface CapturedFiles {
+  baseName: string;
+  html: string;
+  json: string;
 }
 
 interface RecordedError {
@@ -110,17 +118,26 @@ function saveFiles(baseName: string, html: string, json: string): void {
   download(`${baseName}.json`, json, "application/json");
 }
 
-async function capture(definition: CaptureDefinition): Promise<void> {
+/** The scrubbed files of the page at this location, or null when it is not on the capture list. */
+async function captureFiles(definition: CaptureDefinition): Promise<CapturedFiles | null> {
   const page = definition.page(document, location);
   if (page === null) {
+    return null;
+  }
+  const { html, json } = await buildFiles(definition, page);
+  return { baseName: `${definition.scriptId}--${page.name}`, html, json };
+}
+
+async function capture(definition: CaptureDefinition): Promise<void> {
+  const files = await captureFiles(definition);
+  if (files === null) {
     notifyOwner("Capture fixtures: this page is not on the capture list. Nothing was saved.");
     return;
   }
-  const { html, json } = await buildFiles(definition, page);
-  saveFiles(`${definition.scriptId}--${page.name}`, html, json);
+  saveFiles(files.baseName, files.html, files.json);
 }
 
-/** Adds the "Capture fixtures" menu command. Call it once, from the script's capture.ts. */
+/** Adds the "Capture fixtures" menu command. The dev entry calls it with the script's capture definition. */
 function registerCapture(definition: CaptureDefinition): void {
   recordScriptErrors(definition.scriptId);
   GM_registerMenuCommand("Capture fixtures", () => {
@@ -131,5 +148,5 @@ function registerCapture(definition: CaptureDefinition): void {
   });
 }
 
-export type { CaptureDefinition, CapturePage, GetOnlyFetch };
-export { registerCapture };
+export type { CaptureDefinition, CapturedFiles, CapturePage, GetOnlyFetch };
+export { captureFiles, registerCapture };

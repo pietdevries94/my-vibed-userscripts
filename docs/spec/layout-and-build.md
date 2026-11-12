@@ -33,7 +33,7 @@ my-vibed-userscripts/
   azure-devops/            one folder per script, named after the website in kebab-case
     script.json            name, description, @match, @grant, version, mode (open | sealed)
     src/main.ts, *.ts, *.test.ts, style.css
-    src/capture.ts         capture rules and page naming; dev file only
+    src/capture.ts         exports captureDefinition: capture rules and page naming; dev only
     fixtures/              gitignored, may be a symlink
     fake-site/             optional
   shared/
@@ -95,6 +95,14 @@ Generated from `script.json`. The build adds `@namespace`, `@downloadURL` and `@
 - The owner installs the dev file once from `localhost:8786` and uses "Track external edits".
 - Dev file: `@name "<name> (dev)"`, no `@downloadURL`. It matches the real site, plus `http://localhost:8787/*` when a fake site exists. It also grants `GM_registerMenuCommand` and holds the "Capture fixtures" command and the script log. Same for open and sealed scripts.
 - The owner disables the release script by hand while the dev script runs.
+
+## Capture in the real-site browser
+
+Open scripts only.
+
+- `npm run capture:bundle <script>` writes `.real-site/<script>-capture.js`: the script's `captureDefinition` and the shared scrubber as one async function. It reads the page, scrubs in the page and returns only `{ baseName, html, json }`. It changes nothing on the page.
+- Claude passes that text to `browser_evaluate`, with `filename: .real-site/<script>-capture-result.json`.
+- `npm run capture:save <script> <result-file>` writes `<page>.html` and `<page>.json` to the main checkout's `<script>/fixtures/`, links them into a worktree, and deletes the result file.
 
 ## Install URL
 

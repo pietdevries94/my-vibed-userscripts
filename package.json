@@ -23,7 +23,9 @@
     "release:detect": "node build/release.ts --detect",
     "precommit": "node build/precommit.ts",
     "fixtures:link": "node build/fixtures-link.ts",
-    "fixtures:import": "node build/fixtures-import.ts"
+    "fixtures:import": "node build/fixtures-import.ts",
+    "capture:bundle": "node build/capture-bundle.ts",
+    "capture:save": "node build/capture-save.ts"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

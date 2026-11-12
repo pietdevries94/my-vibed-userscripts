@@ -70,13 +70,21 @@ function metadataBlock(script: Script, target: BuildTarget): string {
   return ["// ==UserScript==", ...body, "// ==/UserScript=="].join("\n");
 }
 
+const SHARED_CAPTURE_MODULE = "../shared/dev/capture/capture.ts";
+/** The name the capture bundle's exports get inside the browser_evaluate function. */
+const CAPTURE_BUNDLE_NAME = "fixtureCapture";
+
 /** The code part of the dev entry: the script itself, plus its capture command. */
 function devEntryContents(script: Script): string {
-  const imports = ['import "./src/main.ts";'];
+  const lines = ['import "./src/main.ts";'];
   if (hasCapture(script)) {
-    imports.push('import "./src/capture.ts";');
+    lines.push(
+      'import { captureDefinition } from "./src/capture.ts";',
+      `import { registerCapture } from "${SHARED_CAPTURE_MODULE}";`,
+      "registerCapture(captureDefinition);",
+    );
   }
-  return imports.join("\n");
+  return lines.join("\n");
 }
 
 function esbuildOptions(script: Script, target: BuildTarget): BuildOptions {
@@ -113,6 +121,35 @@ async function bundleScript(script: Script, target: BuildTarget): Promise<string
   return file.text;
 }
 
+/**
+ * The script's capture as one async function for `browser_evaluate`. It returns the
+ * scrubbed files, or null off the capture list. Its names stay local to the function.
+ */
+async function bundleCapture(script: Script): Promise<string> {
+  if (!hasCapture(script)) {
+    throw new Error(`${script.id} has no src/capture.ts`);
+  }
+  const result = await build({
+    ...REPRODUCIBLE_OPTIONS,
+    globalName: CAPTURE_BUNDLE_NAME,
+    stdin: {
+      contents: [
+        'import { captureDefinition } from "./src/capture.ts";',
+        `import { captureFiles } from "${SHARED_CAPTURE_MODULE}";`,
+        "export const run = async () => captureFiles(captureDefinition);",
+      ].join("\n"),
+      loader: "ts",
+      resolveDir: script.directory,
+      sourcefile: "capture-entry.ts",
+    },
+  });
+  const [file] = result.outputFiles ?? [];
+  if (file === undefined) {
+    throw new Error(`${script.id}: esbuild gave no capture output`);
+  }
+  return `async () => {\n${file.text}\nreturn ${CAPTURE_BUNDLE_NAME}.run();\n}\n`;
+}
+
 /** Drops the `@version` line, to compare two builds whatever their version. */
 function withoutVersion(userScript: string): string {
   return userScript.replace(/^\/\/ @version .*$/mu, "");
@@ -122,6 +159,7 @@ export type { BuildTarget };
 export {
   DEV_SERVER_PORT,
   FAKE_SITE_PORT,
+  bundleCapture,
   bundleScript,
   esbuildOptions,
   hasFakeSite,

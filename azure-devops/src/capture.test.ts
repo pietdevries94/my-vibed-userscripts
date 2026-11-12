@@ -63,12 +63,12 @@ interface CapturedPullRequestList {
   data: { evaluationsByPullRequestId: Record<string, { body: { value: { status: string }[] } }> };
 }
 
-interface CapturedFiles {
+interface CaptureRunResult {
   alerts: string[];
   files: Map<string, string>;
 }
 
-async function runCapture(): Promise<CapturedFiles> {
+async function runCapture(): Promise<CaptureRunResult> {
   const { window } = new JSDOM(PAGE, { url: PAGE_URL });
   const alerts: string[] = [];
   const blobs: Blob[] = [];
@@ -93,7 +93,9 @@ async function runCapture(): Promise<CapturedFiles> {
     return "blob:capture";
   };
   URL.revokeObjectURL = (): void => undefined;
-  await import("./capture.ts");
+  const { captureDefinition } = await import("./capture.ts");
+  const { registerCapture } = await import("../../shared/dev/capture/capture.ts");
+  registerCapture(captureDefinition);
   for (const command of commands) {
     command();
   }
