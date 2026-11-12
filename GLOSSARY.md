@@ -51,3 +51,21 @@ _Avoid_: Mock server, sandbox, stub
 **Release**:
 A new version of a script that installed copies pick up on their next update check. Only the owner decides when a script is released.
 _Avoid_: Deploy, publish, ship
+
+## Tweakers
+
+**Homepage**:
+The front page of tweakers.net, at `/`. The only page where the script hides parts.
+_Avoid_: Front page, index
+
+**News item list**:
+The list of news items in the main column of the homepage. The one part the script keeps.
+_Avoid_: Feed, timeline, nieuwsoverzicht
+
+**Side columns**:
+The two columns right of the news item list on the homepage. The script hides them.
+_Avoid_: Sidebar, widgets
+
+**Site header**:
+The bar at the top of every Tweakers page, with logo, menu and search. The script hides it on the homepage.
+_Avoid_: Navbar, top bar

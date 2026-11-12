@@ -1,0 +1,10 @@
+{
+  "name": "Fix Tweakers",
+  "description": "Trims Tweakers. Shows only the news item list on the homepage.",
+  "match": ["https://tweakers.net/*"],
+  "grant": ["GM_addStyle"],
+  "version": "1.0.0",
+  "mode": "open",
+  "signInOrigins": ["https://myprivacy.dpgmedia.nl"],
+  "cdnOrigins": ["https://tweakers.net", "https://ic.tweakimg.net", "https://tweakimg.net"]
+}
