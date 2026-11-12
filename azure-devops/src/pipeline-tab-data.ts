@@ -1,11 +1,13 @@
-// What the Pipeline tab shows for one pull request: its checks, the timelines of
+// What the Pipeline tab shows for one pull request: its runs, the timelines of
 // the runs it opened, and what the owner picked. Loads and refreshes them.
 import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
 import type { RunStage, TimelineRecord } from "./pipeline-timeline.ts";
+import { AdoRequestError } from "./ado-client.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
 import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import type { RunsState } from "./pipeline-tab-panel.ts";
+import { log } from "../../shared/runtime/script-log.ts";
 import { pipelineChecksOf } from "./pipeline-checks.ts";
 import { pipelineRunsOf } from "./pipeline-runs.ts";
 import { shownRunOf } from "./pipeline-tab-selection.ts";
@@ -59,15 +61,27 @@ function shownRunOfData(data: PipelineTabData): ShownRun | null {
     : null;
 }
 
+/** Notes in the script log why the run list did not load. */
+function logRunListFailure(error: unknown): PullRequestBuild[] {
+  if (error instanceof AdoRequestError) {
+    log("Pipeline tab: Azure DevOps refused the run list", { httpStatus: error.httpStatus });
+  } else {
+    log("Pipeline tab: the run list request failed without an answer");
+  }
+  return [];
+}
+
 /** The pull request's runs. Without the run list, the checks' runs still show. */
 async function loadRuns({ data, onChange, sources }: PipelineTabLoader): Promise<void> {
   data.runsLoadedAt = sources.now();
   try {
     const [evaluations, builds] = await Promise.all([
       sources.getEvaluations(data.pullRequest),
-      sources.getPullRequestBuilds(data.pullRequest).catch((): PullRequestBuild[] => []),
+      sources.getPullRequestBuilds(data.pullRequest).catch(logRunListFailure),
     ]);
-    data.runs = { kind: "loaded", runs: pipelineRunsOf(pipelineChecksOf(evaluations), builds) };
+    const checks = pipelineChecksOf(evaluations);
+    log("Pipeline tab: runs loaded", { checkCount: checks.length, runCount: builds.length });
+    data.runs = { kind: "loaded", runs: pipelineRunsOf(checks, builds) };
   } catch {
     // Keep the runs already shown; a later refresh tries again.
     data.runs = data.runs.kind === "loaded" ? data.runs : { kind: "failed" };

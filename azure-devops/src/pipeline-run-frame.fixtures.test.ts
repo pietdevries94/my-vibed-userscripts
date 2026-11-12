@@ -10,10 +10,15 @@ const fixtures = scriptFixtures(import.meta.dirname);
 const FRAME_PARTS = [
   ".project-header",
   ".navigation-container",
+  ".region-content-header",
+  ".region-content-footer",
+  ".region-footer",
   ".run-logs-view > .bolt-master-panel",
   ".run-logs-view > .logs-view",
   // The log frame reads the step name here to see that the page switched.
   ".logs-view .log-header .job-header .title-m",
+  // And clicks a step here, in the hidden tree, to switch the log.
+  ".run-logs-tree .bolt-tree-row .job-name-area [role=button]",
 ];
 
 function capturedRunPage(page: string): Document {

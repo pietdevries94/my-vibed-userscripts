@@ -2,6 +2,7 @@
 import { BUILD_POLICY_TYPE_ID } from "./pipeline-status.ts";
 import { JSDOM } from "jsdom";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
+import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import type { TimelineRecord } from "./pipeline-timeline.ts";
 import assert from "node:assert/strict";
@@ -87,7 +88,14 @@ interface Setup {
   requests: PullRequestRef[];
 }
 
-function setUp(evaluations = EVALUATIONS, timelines = TIMELINES): Setup {
+/** The run list's answer: none by default, so the checks' runs are the list. */
+type RunListAnswer = () => Promise<PullRequestBuild[]>;
+
+function setUp(
+  evaluations = EVALUATIONS,
+  timelines = TIMELINES,
+  runList: RunListAnswer = async () => [],
+): Setup {
   const { document } = new JSDOM(PAGE, { url: `https://dev.azure.com${PULL_REQUEST_PATH}` }).window;
   const requests: PullRequestRef[] = [];
   const tab = createPipelineTab({
@@ -97,7 +105,7 @@ function setUp(evaluations = EVALUATIONS, timelines = TIMELINES): Setup {
       requests.push(pullRequest);
       return evaluations;
     },
-    getPullRequestBuilds: async () => [],
+    getPullRequestBuilds: runList,
     getTimeline: async (_project, buildId) => timelines[buildId] ?? [],
     now: () => 0,
   });

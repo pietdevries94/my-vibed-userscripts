@@ -104,21 +104,22 @@ test("clicking the current run, stage or job folds it, and clicking again opens 
   assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
 });
 
-test("a name that does not fit gets its full text as a tooltip", async () => {
+test("a row whose name does not fit gets the full name as its tooltip", async () => {
   const { document } = setUp();
   click(pipelineTab(document));
   await settle();
-  const names = [
-    ...document.querySelectorAll<HTMLElement>(".fix-ado-pipeline-step .fix-ado-pipeline-item-name"),
-  ];
-  const [cutOff, fits] = names;
-  assert.ok(cutOff !== undefined && fits !== undefined);
-  Object.defineProperty(cutOff, "scrollWidth", { value: 300 });
-  Object.defineProperty(cutOff, "clientWidth", { value: 200 });
+  const [cutOff, fits] = [...document.querySelectorAll<HTMLElement>(".fix-ado-pipeline-step")];
+  const cutOffName = cutOff?.querySelector(".fix-ado-pipeline-item-name");
+  assert.ok(
+    cutOff !== undefined && fits !== undefined && cutOffName !== null && cutOffName !== undefined,
+  );
+  Object.defineProperty(cutOffName, "scrollWidth", { value: 300 });
+  Object.defineProperty(cutOffName, "clientWidth", { value: 200 });
   const view = document.defaultView;
   assert.ok(view);
-  for (const name of names) {
-    name.dispatchEvent(new view.MouseEvent("mouseover", { bubbles: true }));
+  // The pointer is on the row's icon, not on its name.
+  for (const row of [cutOff, fits]) {
+    row.querySelector("svg")?.dispatchEvent(new view.MouseEvent("mouseover", { bubbles: true }));
   }
   assert.equal(cutOff.title, "checkout");
   assert.equal(fits.hasAttribute("title"), false);

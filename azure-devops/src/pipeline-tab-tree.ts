@@ -192,17 +192,18 @@ function createRun(context: TreeContext, run: PipelineRun): HTMLElement[] {
   return isOpen ? [item, createStages(context)] : [item];
 }
 
-/** Gives a name that does not fit its full text as a tooltip, when the pointer gets there. */
+/** Gives a row whose name does not fit its full name as a tooltip, when the pointer gets there. */
 function showCutOffNames(tree: HTMLElement): void {
   tree.addEventListener("mouseover", (event) => {
-    const name = closestElement(event.target, `.${NAME_CLASS}`);
-    if (name === null) {
+    const row = closestElement(event.target, ".fix-ado-pipeline-item");
+    const name = row?.querySelector(`.${NAME_CLASS}`);
+    if (row === null || name === null || name === undefined) {
       return;
     }
     if (name.scrollWidth > name.clientWidth) {
-      name.setAttribute("title", name.textContent);
+      row.setAttribute("title", name.textContent);
     } else {
-      name.removeAttribute("title");
+      row.removeAttribute("title");
     }
   });
 }

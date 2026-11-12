@@ -195,6 +195,9 @@
 /* The run page inside the Pipeline tab. pipeline-run-frame.ts marks it; only the log stays. */
 html[data-fix-ado-run-frame] .project-header,
 html[data-fix-ado-run-frame] .navigation-container,
+html[data-fix-ado-run-frame] .region-content-header,
+html[data-fix-ado-run-frame] .region-content-footer,
+html[data-fix-ado-run-frame] .region-footer,
 html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   display: none !important;
 }

@@ -3,6 +3,7 @@
 import type { PipelineTabPick, ShownRun, TreeLevel } from "./pipeline-tab-selection.ts";
 import type { PipelineRun } from "./pipeline-runs.ts";
 import type { RunStep } from "./pipeline-timeline.ts";
+import type { StepLog } from "./pipeline-log-frame.ts";
 import { createRunTree } from "./pipeline-tab-tree.ts";
 import { showStepLog } from "./pipeline-log-frame.ts";
 
@@ -60,6 +61,12 @@ function showLogNote(panel: HTMLElement, text: string | null): void {
   note.textContent = text;
 }
 
+function stepLogOf(shown: ShownRun, step: RunStep, content: PanelContent): StepLog {
+  const { buildId } = shown.run;
+  const jobName = shown.stage?.jobs.find((job) => job.id === step.jobId)?.name ?? "";
+  return { buildId, jobName, path: content.logPathOf(buildId, step), stepName: step.name };
+}
+
 function showLog(panel: HTMLElement, shown: ShownRun, content: PanelContent): void {
   const { step } = shown;
   if (step === null) {
@@ -70,8 +77,7 @@ function showLog(panel: HTMLElement, shown: ShownRun, content: PanelContent): vo
   showLogNote(panel, null);
   const frame = frameOf(panel);
   frame.removeAttribute("hidden");
-  const { buildId } = shown.run;
-  showStepLog(frame, { buildId, path: content.logPathOf(buildId, step), stepName: step.name });
+  showStepLog(frame, stepLogOf(shown, step, content));
 }
 
 /** Puts the tree first in the panel, in place of the old one. */

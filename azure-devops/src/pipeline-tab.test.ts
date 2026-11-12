@@ -8,7 +8,9 @@ import {
   settle,
   treeNames,
 } from "./pipeline-tab.test-page.ts";
+import { AdoRequestError } from "./ado-client.ts";
 import assert from "node:assert/strict";
+import { logEntries } from "../../shared/runtime/script-log.ts";
 import { test } from "node:test";
 
 test("a pull request gets a Pipeline tab, closed until clicked", () => {
@@ -98,4 +100,17 @@ test("syncing an open tab changes nothing, so the run is not reloaded", async ()
   changes.push(...observer.takeRecords());
   observer.disconnect();
   assert.deepEqual(changes, []);
+});
+
+test("when the run list does not load, the checks' runs show and the script log says why", async () => {
+  const { document } = setUp(undefined, undefined, async () => {
+    throw new AdoRequestError(403, null);
+  });
+  click(pipelineTab(document));
+  await settle();
+  assert.deepEqual(treeNames(document, "run"), ["ledger-lint*", "ledger-ci"]);
+  assert.deepEqual(logEntries().at(-2), {
+    data: { httpStatus: 403 },
+    message: "Pipeline tab: Azure DevOps refused the run list",
+  });
 });
