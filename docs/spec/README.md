@@ -38,6 +38,5 @@ These are not open for change by a build session.
 
 ## Open
 
-- The repo's `README.md`: what it says, including a note on what the scripts do to a page.
 - A second website to test the design against. Until the trial in [agents-file-and-skills.md](agents-file-and-skills.md), the design is checked against Azure DevOps only.
 - Details the decisions leave to the build session are listed at the end of each file under **Left to the build**.
