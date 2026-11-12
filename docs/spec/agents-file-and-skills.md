@@ -17,7 +17,7 @@ Only what every session needs:
 - The sealed refusals (below).
 - Real values never go into code, tests, comments, commits, issues or the glossary. Stand-in names are invented.
 - Before every commit: `npm run precommit`. Never `--no-verify`.
-- In a new worktree: `npm run fixtures:link`.
+- In a new worktree: `npm ci`, then `npm run fixtures:link`.
 - Push only when the owner says "push" or "release".
 - Load `real-site` before using any `real-site` browser tool.
 - One trigger line per skill.

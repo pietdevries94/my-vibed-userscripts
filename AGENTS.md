@@ -24,7 +24,7 @@ The repo is public. Real values from a site stay out of code, tests, comments, c
 
 - Run `npm run precommit` before every commit. Never use `--no-verify`.
 - Push only when the owner says "push" or "release".
-- In a new worktree, run `npm run fixtures:link` first.
+- In a new worktree, run `npm ci` and `npm run fixtures:link` first.
 
 ## Skills
 

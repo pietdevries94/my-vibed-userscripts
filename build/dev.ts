@@ -63,6 +63,14 @@ function serveDevFile(id: string): void {
     });
     response.end(fs.readFileSync(file));
   });
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    const reason =
+      error.code === "EADDRINUSE"
+        ? `port ${DEV_SERVER_PORT} is in use, probably by another npm run dev. Stop that one first.`
+        : error.message;
+    console.error(`Dev server: ${reason}`);
+    process.exit(1);
+  });
   server.listen(DEV_SERVER_PORT, () => {
     console.log(`Dev file: http://localhost:${DEV_SERVER_PORT}/${id}.user.js`);
   });
