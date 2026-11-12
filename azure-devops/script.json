@@ -3,6 +3,6 @@
   "description": "Adds missing features to Azure DevOps: pipeline status on pull requests, required reviewers first, avatar initials, and pull request lists and boards that reload on changes.",
   "match": ["https://dev.azure.com/*", "https://*.visualstudio.com/*"],
   "grant": ["GM_addStyle"],
-  "version": "1.0.1",
+  "version": "1.0.2",
   "mode": "sealed"
 }

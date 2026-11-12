@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.0.1
+// @version      1.0.2
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, required reviewers first, avatar initials, and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -33,6 +33,9 @@
       return null;
     let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
     return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
+  }
+  function isPullRequestInboxLocation(location2) {
+    return pathSegments(location2.pathname).at(-1) === "_pulls";
   }
 
   // azure-devops/src/board.ts
@@ -448,6 +451,75 @@
     };
   }
 
+  // azure-devops/src/inbox-reviewers.ts
+  var REVIEWER_REFRESH_INTERVAL_MS = 12e4, repositoryKey = ({ project, repository }) => JSON.stringify([project, repository]);
+  function dueRepositories(options, nextFetchAtByRepository) {
+    let due = /* @__PURE__ */ new Map();
+    for (let pullRequest of options.findPullRequests()) {
+      let key = repositoryKey(pullRequest);
+      (nextFetchAtByRepository.get(key) ?? 0) <= options.now() && due.set(key, pullRequest);
+    }
+    return [...due.values()];
+  }
+  function createInboxReviewerFetcher(options) {
+    let nextFetchAtByRepository = /* @__PURE__ */ new Map(), isFetching = !1;
+    async function fetchRepository(pullRequest) {
+      let key = repositoryKey(pullRequest);
+      try {
+        let { pullRequests } = await options.client.getPullRequests({
+          project: pullRequest.project,
+          repository: pullRequest.repository,
+          status: "active"
+        });
+        for (let listed of pullRequests)
+          options.reviewersByPullRequestId.set(listed.pullRequestId, listed.reviewers ?? []);
+        nextFetchAtByRepository.set(key, options.now() + REVIEWER_REFRESH_INTERVAL_MS);
+      } catch {
+        nextFetchAtByRepository.set(key, options.now() + FAILED_REQUEST_RETRY_MS);
+      }
+    }
+    return {
+      async sync() {
+        if (!isFetching) {
+          isFetching = !0;
+          try {
+            for (let pullRequest of dueRepositories(options, nextFetchAtByRepository))
+              await fetchRepository(pullRequest);
+          } finally {
+            isFetching = !1;
+          }
+        }
+      }
+    };
+  }
+
+  // azure-devops/src/required-reviewers.ts
+  function createRequiredReviewerMarker(options) {
+    let reviewersByPullRequestId = /* @__PURE__ */ new Map(), inboxReviewerFetcher = createInboxReviewerFetcher({
+      client: options.client,
+      findPullRequests: () => options.findRows().map(({ pullRequest }) => pullRequest),
+      now: options.now,
+      reviewersByPullRequestId
+    });
+    function markAll() {
+      for (let { row, pullRequest } of options.findRows()) {
+        let reviewers = reviewersByPullRequestId.get(pullRequest.pullRequestId);
+        reviewers && markRequiredReviewers(row, reviewers);
+      }
+    }
+    return {
+      markAll,
+      remember(pullRequests) {
+        for (let pullRequest of pullRequests)
+          reviewersByPullRequestId.set(pullRequest.pullRequestId, pullRequest.reviewers ?? []);
+        markAll();
+      },
+      async syncInbox() {
+        await inboxReviewerFetcher.sync(), markAll();
+      }
+    };
+  }
+
   // azure-devops/src/style.css
   var style_default = `.fix-ado-pipeline-status {
   flex-shrink: 0;
@@ -586,20 +658,15 @@
     findRows: () => findPullRequestRows(document, basePath),
     now: () => Date.now(),
     showStatus: showPipelineStatus
-  }), reviewersByPullRequestId = /* @__PURE__ */ new Map();
-  function markRequiredReviewersOnAllRows() {
-    for (let { row, pullRequest } of findPullRequestRows(document, basePath)) {
-      let reviewers = reviewersByPullRequestId.get(pullRequest.pullRequestId);
-      reviewers && markRequiredReviewers(row, reviewers);
-    }
-  }
-  var pullRequestListClient = {
+  }), requiredReviewers = createRequiredReviewerMarker({
+    client,
+    findRows: () => findPullRequestRows(document, basePath),
+    now: () => Date.now()
+  }), pullRequestListClient = {
     // The list check already fetches the reviewers. Keep them to mark the required ones.
     async getPullRequests(listPage) {
       let response = await client.getPullRequests(listPage);
-      for (let pullRequest of response.pullRequests)
-        reviewersByPullRequestId.set(pullRequest.pullRequestId, pullRequest.reviewers ?? []);
-      return markRequiredReviewersOnAllRows(), response;
+      return requiredReviewers.remember(response.pullRequests), response;
     }
   };
   function currentWatchedPage() {
@@ -638,7 +705,7 @@
     !isUserBusy() && claimReload() && location.reload();
   }
   function sync() {
-    showInitialsOnAvatars(document), markRequiredReviewersOnAllRows(), isTabActive() && poller.sync(), reloader.check();
+    showInitialsOnAvatars(document), requiredReviewers.markAll(), isTabActive() && (poller.sync(), isPullRequestInboxLocation(location) && requiredReviewers.syncInbox()), reloader.check();
   }
   var settleTimer = null;
   new MutationObserver(() => {

@@ -8,7 +8,7 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 | Script                                                                                                                  | What it does                                                                                                                                                                  | Version |
 | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| [Fix Azure DevOps](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) | Adds missing features to Azure DevOps: pipeline status on pull requests, required reviewers first, avatar initials, and pull request lists and boards that reload on changes. | 1.0.1   |
+| [Fix Azure DevOps](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) | Adds missing features to Azure DevOps: pipeline status on pull requests, required reviewers first, avatar initials, and pull request lists and boards that reload on changes. | 1.0.2   |
 | [Fix Tweakers](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/tweakers.user.js)         | Trims the Tweakers homepage. Hides the lead story, the side columns, the top banner and the category bar.                                                                     | 1.0.1   |
 
 <!-- scripts:end -->
