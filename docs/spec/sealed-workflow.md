@@ -35,7 +35,7 @@ The owner reads the list in the script's rules.
 
 - The scrubber records every original value it replaced.
 - If any of them (3 or more characters) appears in the output, kept words included, the capture refuses to download and names the field.
-- Site words are skipped: values without digits of `class`, `role` and the script's kept attributes, and link segments that start with `_`. They come from the site's code. A value with digits is still checked.
+- Site words are skipped: attribute names, values without digits of `class`, `role` and the script's kept attributes, and link segments that start with `_`. They come from the site's code. A value with digits is still checked.
 - An id kept by an id pattern gets stand-ins for its numbers and for any replaced word in it, the same as its references.
 - A refusal opens a box on the page with each field and a short context around the match, other real values masked, and a Copy button.
 - It never prints the real value.

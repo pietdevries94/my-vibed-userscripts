@@ -1,8 +1,8 @@
 // The last step of a capture. Refuses the output when any replaced value of three or
 // more characters still appears in it, kept words included. A value counts when it
-// appears as a whole word, ignoring case. Site words are skipped: values without
-// digits of class, role and the script's kept attributes, and link segments that
-// start with "_". They come from the site's code, so a page value that matches one
+// appears as a whole word, ignoring case. Site words are skipped: attribute names,
+// values without digits of class, role and the script's kept attributes, and link
+// segments that start with "_". They come from the site's code, so a page value that matches one
 // gives nothing away. The report names
 // the field, and shows where the value was found with the value itself and every
 // other replaced value masked.
@@ -22,22 +22,29 @@ const MIN_LEAK_LENGTH = 3;
 const CONTEXT_LENGTH = 60;
 /** Attributes whose values are site words, besides the script's kept attributes. */
 const SITE_WORD_ATTRIBUTES = ["class", "role"];
+/** An attribute name in serialized HTML: it always comes right before `="`. */
+const ATTRIBUTE_NAME = /(?<=\s)[\w:.-]+(?==")/gu;
 const ROUTE_WORD = /(?<=\/)_[A-Za-z]+(?![\p{L}\p{N}])/gu;
 
 function longestFirst(values: string[]): string[] {
   return values.toSorted((left, right) => right.length - left.length);
 }
 
-/** The output with every stand-in removed, so a stand-in never counts as a leak. */
+/** Spaces in place of `text`. Blanking keeps every index, so a match points into the output. */
+function blank(text: string): string {
+  return " ".repeat(text.length);
+}
+
+/** The output with every stand-in blanked, so a stand-in never counts as a leak. */
 function withoutStandIns(output: string, standIns: string[]): string {
   let text = output;
   for (const standIn of longestFirst(standIns.filter((value) => value !== ""))) {
-    text = text.replaceAll(wordPattern(standIn), " ");
+    text = text.replaceAll(wordPattern(standIn), blank);
   }
   return text;
 }
 
-/** The output with site words blanked: attribute values without digits, and "_" link segments. */
+/** The output with site words blanked: attribute names, attribute values without digits, and "_" link segments. */
 function withoutSiteWords(output: string, rules: ScrubRules): string {
   const names = [...SITE_WORD_ATTRIBUTES, ...rules.keepAttributes]
     .map((name) => escapeRegExp(name))
@@ -47,10 +54,11 @@ function withoutSiteWords(output: string, rules: ScrubRules): string {
     .replaceAll(siteWordValue, (value) =>
       value
         .split(" ")
-        .map((word) => (/\d/u.test(word) ? word : " "))
+        .map((word) => (/\d/u.test(word) ? word : blank(word)))
         .join(" "),
     )
-    .replaceAll(ROUTE_WORD, " ");
+    .replaceAll(ROUTE_WORD, blank)
+    .replaceAll(ATTRIBUTE_NAME, blank);
 }
 
 function longOriginals(pseudonyms: Pseudonyms): { original: string; field: string }[] {
@@ -94,12 +102,13 @@ function foundIn(text: string, match: RegExpExecArray, pseudonyms: Pseudonyms): 
 
 /** One leak per field whose real value still appears in the output. Empty when the output is clean. */
 function findLeaks(outputs: string[], pseudonyms: Pseudonyms, rules: ScrubRules): Leak[] {
-  const text = withoutSiteWords(withoutStandIns(outputs.join("\n"), pseudonyms.standIns()), rules);
+  const output = outputs.join("\n");
+  const checked = withoutSiteWords(withoutStandIns(output, pseudonyms.standIns()), rules);
   const leaks = new Map<string, Leak>();
   for (const { field, original } of longOriginals(pseudonyms)) {
-    const match = leaks.has(field) ? null : wordPattern(original).exec(text);
+    const match = leaks.has(field) ? null : wordPattern(original).exec(checked);
     if (match !== null) {
-      leaks.set(field, { field, foundIn: foundIn(text, match, pseudonyms) });
+      leaks.set(field, { field, foundIn: foundIn(output, match, pseudonyms) });
     }
   }
   return [...leaks.values()];

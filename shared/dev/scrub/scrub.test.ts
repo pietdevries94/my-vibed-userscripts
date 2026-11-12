@@ -111,18 +111,18 @@ test("the leak check names the field of a value that is still in the output", ()
   ]);
 });
 
-test("a value inside a site word without digits, or a _ link segment, is not a leak", () => {
+test("a value inside an attribute name, a site word without digits, or a _ link segment, is not a leak", () => {
   const { output, pseudonyms } = scrubHtml("<p>Lantern</p>");
   const siteWords =
     `${output}<i class="big lantern-row" role="lantern" data-kind="lantern-x"></i>` +
-    '<a href="/text-1/_lantern"></a>';
+    '<a href="/text-1/_lantern" data-lantern=""></a>';
   assert.deepEqual(findLeaks([siteWords], pseudonyms, RULES), []);
 });
 
 test("a value inside a class name with digits is a leak", () => {
   const { output, pseudonyms } = scrubHtml("<p>Lantern</p>");
   assert.deepEqual(findLeaks([`${output}<i class="row lantern-42"></i>`], pseudonyms, RULES), [
-    { field: "p text", foundIn: '<i class=" [value]-42">' },
+    { field: "p text", foundIn: '<i class="row [value]-42">' },
   ]);
 });
 
