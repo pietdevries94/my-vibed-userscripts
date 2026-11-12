@@ -195,3 +195,39 @@ test("stops for this check when Azure DevOps asks to slow down", async () => {
   await createDaysInColumn({ client, document, now: () => 0 }).sync();
   assert.deepEqual(requests, [1]);
 });
+
+function boardWithCard(id: number): { document: Document; element: HTMLElement } {
+  const { document } = new JSDOM(`
+    <div class="kanban-board-column" data-column="col-a">
+      <div class="wit-card" data-itemid="${id}"><div class="card-content"></div></div>
+    </div>
+    <div class="kanban-board-column" data-column="col-b"></div>`).window;
+  const element = document.querySelector<HTMLElement>(".wit-card");
+  assert.ok(element !== null);
+  return { document, element };
+}
+
+test("a card moved to another column loses its bar at once, until the next check", async () => {
+  let now = Date.parse(ENTERED_AT) + 3 * DAY_MS;
+  const { client, requests, revs } = fakeClient(ENTERED_AT);
+  const { document, element } = boardWithCard(7);
+  const daysInColumn = createDaysInColumn({ client, document, now: () => now });
+  await daysInColumn.sync();
+  assert.equal(dots(element).length, 3);
+
+  document.querySelector('[data-column="col-b"]')?.append(element);
+  now += 1000;
+  await daysInColumn.sync();
+  assert.equal(dots(element).length, 0);
+  assert.equal(requests.length, 2, "no request: the server may not have saved the move yet");
+
+  // A day later, before the server answered with the move: the card has been there a day.
+  now += DAY_MS;
+  await daysInColumn.sync();
+  assert.equal(dots(element).length, 1);
+
+  revs.set(7, 2);
+  now += DAY_MS;
+  await daysInColumn.sync();
+  assert.deepEqual(requests.slice(-1), ["updates 7"]);
+});

@@ -15,6 +15,7 @@ interface ColumnEntry {
 }
 
 const CARD_SELECTOR = ".wit-card[data-itemid]";
+const COLUMN_SELECTOR = ".kanban-board-column[data-column]";
 const BAR_CLASS = "fix-ado-days-in-column";
 const MS_PER_SECOND = 1000;
 const MS_PER_DAY = 86_400_000;
@@ -97,12 +98,35 @@ interface Tracker {
   client: DaysInColumnClient;
   now: () => number;
   entries: Map<number, ColumnEntry>;
+  /** The board column each card was last seen in. */
+  columnIds: Map<number, string | null>;
   lastCheckAt: number;
   pausedUntil: number;
   isChecking: boolean;
 }
 
+function columnIdOf(card: HTMLElement): string | null {
+  return card.closest<HTMLElement>(COLUMN_SELECTOR)?.dataset.column ?? null;
+}
+
+/**
+ * A card that shows up in another column moved there just now. The server may
+ * not have saved the move yet, so the next check that sees a new revision corrects it.
+ */
+function noteMoves(tracker: Tracker, cards: Map<number, HTMLElement[]>): void {
+  for (const [id, [element]] of cards) {
+    const columnId = columnIdOf(element);
+    const lastColumnId = tracker.columnIds.get(id);
+    const entry = tracker.entries.get(id);
+    if (lastColumnId !== undefined && lastColumnId !== columnId && entry !== undefined) {
+      entry.enteredAt = new Date(tracker.now()).toISOString();
+    }
+    tracker.columnIds.set(id, columnId);
+  }
+}
+
 function showBars(tracker: Tracker, cards: Map<number, HTMLElement[]>): void {
+  noteMoves(tracker, cards);
   for (const [id, elements] of cards) {
     const enteredAt = tracker.entries.get(id)?.enteredAt ?? null;
     const days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now());
@@ -168,6 +192,7 @@ function createDaysInColumn(options: {
 }): { sync: () => Promise<void> } {
   const tracker: Tracker = {
     client: options.client,
+    columnIds: new Map(),
     entries: new Map(),
     isChecking: false,
     lastCheckAt: Number.NEGATIVE_INFINITY,

@@ -12,6 +12,7 @@ import type { PullRequestsResponse } from "./ado-client.ts";
 import type { WatchedPage } from "./page-reloader.ts";
 import { createAdoClient } from "./ado-client.ts";
 import { createDaysInColumn } from "./days-in-column.ts";
+import { createDaysInColumnToggles } from "./days-in-column-toggle.ts";
 import { createOnOffSetting } from "./on-off-setting.ts";
 import { createPageReloader } from "./page-reloader.ts";
 import { createPipelineRunFrame } from "./pipeline-run-frame.ts";
@@ -95,6 +96,16 @@ const poller = createPipelineStatusPoller<HTMLElement>({
 });
 
 const daysInColumn = createDaysInColumn({ client, document, now: () => Date.now() });
+const HIDDEN_DAYS_COLUMNS_KEY = "days-in-column-hidden-columns";
+const daysInColumnToggles = createDaysInColumnToggles({
+  document,
+  storage: {
+    load: () => GM_getValue<string[]>(HIDDEN_DAYS_COLUMNS_KEY, []),
+    save: (columnIds) => {
+      GM_setValue(HIDDEN_DAYS_COLUMNS_KEY, columnIds);
+    },
+  },
+});
 
 const requiredReviewers = createRequiredReviewerMarker({
   client,
@@ -183,6 +194,9 @@ function sync(): void {
     showInitialsOnAvatars(document);
   }
   requiredReviewers.markAll();
+  if (isBoardLocation(location)) {
+    daysInColumnToggles.sync();
+  }
   if (isTabActive()) {
     syncFetchingFeatures();
   }

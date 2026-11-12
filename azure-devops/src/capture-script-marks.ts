@@ -1,6 +1,13 @@
 // Takes what this script added out of a page before it is captured. Dev file only.
 import { PIPELINE_STATUS_ICON_CLASS } from "./pipeline-status-icon.ts";
 
+/** Elements this script adds to a page. */
+const ADDED_ELEMENT_SELECTOR = [
+  `.${PIPELINE_STATUS_ICON_CLASS}`,
+  ".fix-ado-days-in-column",
+  ".fix-ado-days-toggle",
+].join(", ");
+
 function isElement(node: Node): node is Element {
   return node.nodeType === node.ELEMENT_NODE;
 }
@@ -10,7 +17,8 @@ function hasInlineStyle(element: Element): element is Element & ElementCSSInline
 }
 
 /**
- * A copy of `root` without what this script added: status icons, data-fix-ado-*
+ * A copy of `root` without what this script added: status icons, days-in-column
+ * bars and toggles, data-fix-ado-*
  * attributes and --fix-ado-* style properties. The fixture shows the page as
  * Azure DevOps rendered it.
  */
@@ -19,8 +27,8 @@ function withoutScriptMarks(root: Element): Element {
   if (!isElement(copy)) {
     return root;
   }
-  for (const icon of copy.querySelectorAll(`.${PIPELINE_STATUS_ICON_CLASS}`)) {
-    icon.remove();
+  for (const added of copy.querySelectorAll(ADDED_ELEMENT_SELECTOR)) {
+    added.remove();
   }
   for (const element of [copy, ...copy.querySelectorAll("*")]) {
     removeScriptMarks(element);

@@ -238,3 +238,42 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 .fix-ado-days-in-column > span[data-age="old"] {
   background: var(--component-status-error, rgb(205, 74, 69));
 }
+
+.kanban-board-column[data-fix-ado-days-hidden] .fix-ado-days-in-column {
+  display: none;
+}
+
+/* The days-in-column toggle in a column header. It shows while the header is hovered or focused. */
+.fix-ado-days-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.kanban-board-column-header:is(:hover, :focus-within) .fix-ado-days-toggle {
+  opacity: 1;
+}
+
+.fix-ado-days-toggle:hover {
+  background: rgba(var(--palette-black-alpha-6, 0, 0, 0, 0.06));
+}
+
+.fix-ado-days-toggle > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+/* Off: hollow dots. */
+.fix-ado-days-toggle[aria-pressed="false"] > span {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
+}
