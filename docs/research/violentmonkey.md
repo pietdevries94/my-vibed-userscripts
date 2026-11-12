@@ -1,6 +1,6 @@
 # What Violentmonkey offers a userscript: research
 
-Researched 2026-11-11. Scope: running the Azure DevOps script as a Violentmonkey userscript in Zen (Firefox), in place of the MV3 content-script extension. Builds on [pr-pipeline-status.md](pr-pipeline-status.md) sections 1 and 3.
+Researched 2026-11-11. Scope: running the Azure DevOps script as a Violentmonkey userscript in Zen (Firefox). Builds on [pr-pipeline-status.md](pr-pipeline-status.md) sections 1 and 3.
 
 Source shorthand:
 
@@ -9,11 +9,11 @@ Source shorthand:
 
 ## Summary
 
-- **Violentmonkey is an MV2 extension.** Its manifest has `manifest_version: 2` and one content script on `<all_urls>` at `document_start` ([manifest.yml](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/manifest.yml)). A userscript runs either as a page script or inside that MV2 content script. Neither is the MV3 content-script context the extension uses now.
+- **Violentmonkey is an MV2 extension.** Its manifest has `manifest_version: 2` and one content script on `<all_urls>` at `document_start` ([manifest.yml](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/manifest.yml)). A userscript runs either as a page script or inside that MV2 content script.
 - **Two injection modes.** `page`: the script is a normal page script. `content`: it runs in the extension's isolated world. Default is `auto`: page if possible, content if the page's CSP blocks it ([@inject-into](https://violentmonkey.github.io/api/metadata-block/#inject-into)).
 - **Firefox decides the mode from the CSP response header.** If `script-src` has a nonce, VM reuses it and stays in page mode. If inline scripts are forbidden and there is no nonce, VM forces content mode ([preinject-core.js L272-L300](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/background/utils/preinject-core.js#L272-L300)). Which case Azure DevOps falls in was not verified. The script can read the result from `GM_info.injectInto` ([inject-into post](https://violentmonkey.github.io/posts/inject-into-context/)).
 - **`fetch` differs per mode.** In page mode it is the page's `fetch`: relative URLs work and same-origin requests send cookies by default ([MDN RequestInit](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#credentials)). In content mode in Firefox MV2, requests "happen in the context of an extension, so you must provide an absolute URL" ([MDN Content scripts](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts#xhr_and_fetch)). Cookie behaviour in that mode is unverified.
-- **CSS.** No manifest equivalent. Use `GM_addStyle(css)`. VM's content script creates the `<style>` element and adds the page's nonce when it has one ([gm-api.js L177-L183](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/injected/web/gm-api.js#L177-L183), [gm-api-content.js L41-L50](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/injected/content/gm-api-content.js#L41-L50)).
+- **CSS.** A userscript adds its CSS at runtime. Use `GM_addStyle(css)`. VM's content script creates the `<style>` element and adds the page's nonce when it has one ([gm-api.js L177-L183](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/injected/web/gm-api.js#L177-L183), [gm-api-content.js L41-L50](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/injected/content/gm-api-content.js#L41-L50)).
 - **Install.** Navigating to any URL ending in `.user.js` opens the installer. `raw.githubusercontent.com/{user}/{repo}/{ref}/{file}.user.js` and `github.com/{user}/{repo}/releases/latest/download/{file}.user.js` are on the direct-install list ([tab-redirector.js L55-L68](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/background/utils/tab-redirector.js#L55-L68)).
 - **Update.** Checked daily at 12:00 local time by default, and on manual request. An update installs only when the remote `@version` is higher. No `@version` means no automatic update ([@version](https://violentmonkey.github.io/api/metadata-block/#version), [update.js L142-L157](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/background/utils/update.js#L142-L157)).
 - **Dev loop.** Serve the built file on `http://localhost`, open it, click "Track external edits". VM polls the URL every 500 ms and reinstalls on change, with optional tab reload ([editor guide](https://violentmonkey.github.io/posts/how-to-edit-scripts-with-your-favorite-editor/)).
@@ -44,10 +44,9 @@ Format rules ([Metadata Block](https://violentmonkey.github.io/api/metadata-bloc
 
 Details that matter here:
 
-- **`@match` and the SPA.** VM injects only on a hard navigation, not on `history.pushState`. The docs say to match the whole site and watch for URL changes in the script ([Matching: SPA sites](https://violentmonkey.github.io/api/matching/#matching-spa-sites-like-fb-github-twitter-youtube)). The extension's patterns `https://dev.azure.com/*` and `https://*.visualstudio.com/*` carry over as two `@match` lines.
+- **`@match` and the SPA.** VM injects only on a hard navigation, not on `history.pushState`. The docs say to match the whole site and watch for URL changes in the script ([Matching: SPA sites](https://violentmonkey.github.io/api/matching/#matching-spa-sites-like-fb-github-twitter-youtube)). For Azure DevOps that is two `@match` lines: `https://dev.azure.com/*` and `https://*.visualstudio.com/*`.
 - **URL resolution for updates.** `downloadURL = custom.downloadURL || meta.downloadURL || custom.lastInstallURL`. `updateURL = custom.updateURL || meta.updateURL || downloadURL` ([script.js L101-L102](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/common/script.js#L101-L102)). `lastInstallURL` is the URL the script was installed from, stored for any http(s) URL including localhost ([db.js L709](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/background/utils/db.js#L709)). So both keys are optional when installing from the GitHub URL. Setting `@downloadURL` makes the update source independent of how the script was installed.
 - **Separate `@updateURL` is optional.** When `updateURL` equals `downloadURL` and the response contains code, VM uses that response as the new script. No second request ([update.js L148-L151](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/background/utils/update.js#L148-L151)).
-- **`@run-at document-idle`** matches the extension's `run_at: document_idle`.
 - **`@top-level-await`** (since 2.19.2) enables top-level `await`. Not needed for an IIFE bundle ([@top-level-await](https://violentmonkey.github.io/api/metadata-block/#top-level-await)).
 
 ## 2. Install and auto-update from GitHub
@@ -75,7 +74,7 @@ Details that matter here:
 
 - Default schedule is the cron expression `0 12 * * *`: daily at 12:00 local time ([cron.js](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/common/cron.js), [options-defaults.js L42](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/common/options-defaults.js#L42)). The settings page offers Disabled, Daily, or a custom five-field cron expression ([tab-settings](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/options/views/tab-settings/index.vue)).
 - If an occurrence was missed while the browser was closed, the check runs 20 s after startup ([update.js L24, L229-L232](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/background/utils/update.js#L229-L232)).
-- Manual: from the dashboard or popup, and through the extension commands `updateScripts` and `updateScriptsInTab` ([manifest.yml](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/manifest.yml)).
+- Manual: from the dashboard or popup, and through VM's commands `updateScripts` and `updateScriptsInTab` ([manifest.yml](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/manifest.yml)).
 - The scheduled check skips disabled scripts by default (`updateEnabledScriptsOnly: true`) and scripts with per-script updates turned off ([options-defaults.js L36](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/common/options-defaults.js#L36), [script.js L95-L96](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/common/script.js#L95-L96)).
 
 ### What triggers an update
@@ -88,7 +87,7 @@ Details that matter here:
 
 ## 3. Styling
 
-- The extension ships `content.css` through `content_scripts.css` in the manifest ([build.mjs](../../scripts/build.mjs)). A userscript has no such slot. It must add a `<style>` element at runtime.
+- A userscript has no stylesheet slot. It must add a `<style>` element at runtime.
 - `GM_addStyle(css)` "appends and returns a `<style>` element with the specified CSS" ([GM_addStyle](https://violentmonkey.github.io/api/gm/#gm_addstyle)). Needs `// @grant GM_addStyle`.
 - How it works: the call crosses to VM's content script, which creates the element, sets the nonce attribute if VM captured one, and appends it to `<head>` ([gm-api.js L177-L183](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/injected/web/gm-api.js#L177-L183), [gm-api-content.js L41-L50](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/injected/content/gm-api-content.js#L41-L50)). The source comment on `GM_addStyle` reads "Bypasses site's CSP for inline `style`".
 - `GM_addElement` exists for the same purpose: "circumventing a strict Content-Security-Policy that forbids adding inline code or style" ([GM_addElement](https://violentmonkey.github.io/api/gm/#gm_addelement)).
@@ -97,7 +96,7 @@ Details that matter here:
   - VM carries a Firefox workaround "to circumvent CSP style-src" that refers to [bug 1706787](https://bugzilla.mozilla.org/show_bug.cgi?id=1706787) ([content/util.js L17](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/injected/content/util.js#L17)). The bug is open (status REOPENED).
 - Where the CSS text comes from. Two options:
   - Bundle it into the script as a string. One file, one request, CSS and code always update together.
-  - `@resource css ./content.css` plus `GM_getResourceText('css')` ([GM_getResourceText](https://violentmonkey.github.io/api/gm/#gm_getresourcetext)). Keeps a separate file. Adds a second download and a second grant.
+  - `@resource css ./style.css` plus `GM_getResourceText('css')` ([GM_getResourceText](https://violentmonkey.github.io/api/gm/#gm_getresourcetext)). Keeps a separate file. Adds a second download and a second grant.
 - Any `GM_*` grant turns the sandbox on: the script's `window` becomes a wrapper, and page globals need `unsafeWindow` ([unsafeWindow](https://violentmonkey.github.io/api/gm/#unsafewindow)). The script uses only DOM APIs, so this has no effect on it.
 - Timing: the style is added when the script runs. With `@run-at document-idle` that is after `DOMContentLoaded`. The styled elements are created by the script, so nothing is shown unstyled.
 
@@ -105,7 +104,6 @@ Details that matter here:
 
 - **Page mode.** The script is a page script. `fetch` is the page's own. A relative URL resolves against the page. `credentials` defaults to `same-origin`: "Only send and include credentials for same-origin requests" ([MDN RequestInit](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#credentials)). A GET to `/_apis/...` carries the session cookie of that tab, including a container tab. This is the mode [unfuck-ado](https://github.com/nthomsencph/unfuck-ado/blob/8736abc3ecdac675037fd9b7a9beae038de75655/src/banner.txt) uses (`@inject-into page`, see pr-pipeline-status.md section 3).
 - **Content mode.** The script runs in VM's content script. VM is MV2. MDN: "In Firefox in Manifest V2, content script requests (for example, using `fetch()`) happen in the context of an extension, so you must provide an absolute URL to reference page content." Requests made this way do not set `Origin` and `Referer` "like a request from the page itself would" ([MDN Content scripts](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts#xhr_and_fetch)). So relative URLs are unsafe in content mode. Whether such a request sends the tab's session cookie is unverified.
-- This differs from the current extension. An MV3 content script's requests "happen in context of the page" ([same page](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts#xhr_and_fetch)). The existing code's relative-URL `fetch` is only equivalent in page mode.
 - **`GM_xmlhttpRequest`** "makes a request like XMLHttpRequest, with some special capabilities, not restricted by same-origin policy" ([GM_xmlhttpRequest](https://violentmonkey.github.io/api/gm/#gm_xmlhttprequest)).
   - Cookies are sent unless `anonymous: true` ([same page](https://violentmonkey.github.io/api/gm/#gm_xmlhttprequest)).
   - In Firefox, VM reads the cookies itself from the cookie store of the calling tab and sets the `Cookie` header. A container tab's store is used ([requests.js L126-L176](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/background/utils/requests.js#L126-L176)).
@@ -161,14 +159,14 @@ Source: [How to edit scripts with your favorite editor](https://violentmonkey.gi
   - Tracking stops when the installer tab closes.
   - `@require` cannot point at a local file ([@require](https://violentmonkey.github.io/api/metadata-block/#require)).
   - A localhost install stores that URL as `lastInstallURL` ([db.js L709](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/background/utils/db.js#L709)). Without `@downloadURL`, update checks would then go to localhost. Set `@downloadURL` in the metadata.
-  - The dev build and the release build replace each other if they share `@namespace` and `@name` ([@name](https://violentmonkey.github.io/api/metadata-block/#name)). Give the dev build its own `@name` to keep both, as the extension does with its two ids.
-- Scripts live in the extension's storage, not as files on disk ([FAQ](https://violentmonkey.github.io/faq/)). The build output is the source of truth.
+  - The dev build and the release build replace each other if they share `@namespace` and `@name` ([@name](https://violentmonkey.github.io/api/metadata-block/#name)). Give the dev build its own `@name` to keep both.
+- Scripts live in Violentmonkey's storage, not as files on disk ([FAQ](https://violentmonkey.github.io/faq/)). The build output is the source of truth.
 - The VM docs describe a watch build for this loop: `npm run dev` compiles to `dist` on change ([Modern Syntax](https://violentmonkey.github.io/guide/using-modern-syntax/)).
 
 ## 7. Size and structure limits of one `.user.js`
 
 - The code runs directly in the browser. Syntax must be natively supported. "ES modules won't work in userscripts because they are supposed to inject into webpage as single-file scripts" ([creating a userscript](https://violentmonkey.github.io/guide/creating-a-userscript/)).
-- TypeScript and ES modules must be compiled and bundled first ([Modern Syntax](https://violentmonkey.github.io/guide/using-modern-syntax/)). The current esbuild `format: "iife"` output fits.
+- TypeScript and ES modules must be compiled and bundled first ([Modern Syntax](https://violentmonkey.github.io/guide/using-modern-syntax/)). An esbuild `format: "iife"` bundle fits.
 - The metadata block must be at the top of the output, in line comments (section 1). A minifier must keep it.
 - Top-level `await` needs `@top-level-await`. It cannot be combined with `@unwrap` ([@top-level-await](https://violentmonkey.github.io/api/metadata-block/#top-level-await)).
 - Size: the docs state no limit. VM's manifest requests `unlimitedStorage` ([manifest.yml](https://github.com/violentmonkey/violentmonkey/blob/v2.50.0/src/manifest.yml)). A search of the source for size checks on script code found none. The FAQ treats 100 KB as "smaller than size of a feature-rich script" ([FAQ](https://violentmonkey.github.io/faq/)).
@@ -176,28 +174,18 @@ Source: [How to edit scripts with your favorite editor](https://violentmonkey.gi
 
 ---
 
-## What this means for the move from the extension
+## What this means for the script
 
-Carries over unchanged:
-
-- The esbuild IIFE bundle of `src/content.ts`.
-- `MutationObserver`, `sessionStorage`, `location.reload()`, DOM rendering. Available in both injection modes.
-- The match patterns, as `@match` lines.
-- `document_idle` timing, as `@run-at document-idle`.
-- Same-origin GET with the session cookie, provided the script runs in page mode.
-- The dev/release split: a localhost build and a GitHub build, with different `@name`s.
-
-Must change:
-
-- `manifest.json` goes. A metadata block banner replaces it: `@name`, `@namespace`, `@version` (from `package.json`), `@match`, `@run-at`, `@grant`, `@downloadURL`.
-- `content.css` can no longer ship through the manifest. Inline it into the bundle and apply it with `GM_addStyle` (`@grant GM_addStyle`).
-- Request URLs must be absolute (`location.origin + path`). Relative URLs are only safe in page mode.
-- The injection mode is no longer fixed. Either set `@inject-into page` and accept that the script does not run if Firefox blocks page injection, or leave `auto` and handle content mode. Log `GM_info.injectInto` in the first version to learn which mode Azure DevOps gives.
+- A metadata block banner at the top of the bundle: `@name`, `@namespace`, `@version` (from `package.json`), `@match`, `@run-at document-idle`, `@grant`, `@downloadURL`.
+- `MutationObserver`, `sessionStorage`, `location.reload()` and DOM rendering work in both injection modes.
+- Inline the CSS into the bundle and apply it with `GM_addStyle` (`@grant GM_addStyle`).
+- Request URLs must be absolute (`location.origin + path`). Relative URLs are only safe in page mode. Same-origin GET with the session cookie works in page mode.
+- The injection mode is not fixed. Either set `@inject-into page` and accept that the script does not run if Firefox blocks page injection, or leave `auto` and handle content mode. Log `GM_info.injectInto` in the first version to learn which mode Azure DevOps gives.
 - If content mode turns out to be the result and `fetch` does not carry the session there, switch the API client to `GM_xmlhttpRequest`. Keep the fetch call behind one function so this is a one-place change.
 - Releases need a `@version` bump. Without it, installed copies never update.
 - The output file name must end in `.user.js`. For the shortest install URL, publish it in the repo root or as a release asset (`releases/latest/download/`).
-- No signing, no AMO, no `gecko.id`, no `web-ext`. Install is one click on the raw URL. Updates arrive within a day, or on "check for updates".
-- Dev reload changes from `web-ext`-style extension reload to VM's "Track external edits" on a localhost URL, with the installer tab kept open.
+- Install is one click on the raw URL. Updates arrive within a day, or on "check for updates".
+- Dev reload uses VM's "Track external edits" on a localhost URL, with the installer tab kept open. A localhost build and a GitHub build get different `@name`s.
 
 ## Unverified
 

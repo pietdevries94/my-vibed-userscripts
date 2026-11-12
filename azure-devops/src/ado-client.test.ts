@@ -88,7 +88,7 @@ test("sends GET requests only", async () => {
   assert.deepEqual([...new Set(requests.map((request) => request.init.method))], ["GET"]);
 });
 
-test("the extension source has one fetch call and no write methods", () => {
+test("the script source has one fetch call and no write methods", () => {
   const sourceDirectory = new URL(".", import.meta.url);
   const sourceFiles = readdirSync(sourceDirectory).filter(
     (name) => name.endsWith(".ts") && !name.endsWith(".test.ts"),

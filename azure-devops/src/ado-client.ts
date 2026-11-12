@@ -89,7 +89,7 @@ async function getJson(options: AdoClientOptions, path: string): Promise<JsonRes
   if (!response.ok) {
     throw new AdoRequestError(response.status, retryAfterSeconds);
   }
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted, unchecked, as in the extension
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
   return { body: (await response.json()) as ResponseBody, retryAfterSeconds };
 }
 
@@ -111,7 +111,7 @@ function createProjectIdCache(options: AdoClientOptions): (project: string) => P
 }
 
 function toBoardWorkItems(values: unknown[] | undefined): BoardWorkItem[] {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted, unchecked, as in the extension
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
   const workItems = values as WorkItemBody[];
   return workItems.flatMap((workItem) =>
     workItem === null
@@ -162,7 +162,7 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
         options,
         `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`,
       );
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted, unchecked, as in the extension
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
       return { evaluations: body.value as PolicyEvaluation[], retryAfterSeconds };
     },
 
@@ -172,7 +172,7 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
         `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullrequests` +
           `?searchCriteria.status=${status}&$top=${MAX_LISTED_PULL_REQUESTS}&api-version=7.1`,
       );
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted, unchecked, as in the extension
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
       return { pullRequests: body.value as ListedPullRequest[], retryAfterSeconds };
     },
 
