@@ -27,7 +27,7 @@
 2. For each script being released, run the same set as the GitHub `checks` job (typecheck, lint, format check, unit tests, build, `check:dist`) plus `test:fixtures`. Missing fixtures fail the release.
 3. Bump `version` in `script.json` (skipped for a first release).
 4. Build `dist/<script>.user.js`.
-5. Commit `script.json` and the dist file as `release <script> <version>`, one commit per script. Claude writes the body: the features changed since the last release commit of that script.
+5. Rewrite the script list in `README.md` (between `<!-- scripts:start -->` and `<!-- scripts:end -->`) from the release files: name, version, description, install link. Commit `script.json`, the dist file and `README.md` as `release <script> <version>`, one commit per script. Claude writes the body: the features changed since the last release commit of that script.
 6. Push once, after all commits. The pre-push hook checks the pushed commits for fixtures.
 
 Push failure: the command stops and prints `git pull --rebase`, then `git push`. It undoes nothing. A rerun does not bump again.

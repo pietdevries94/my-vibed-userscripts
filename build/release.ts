@@ -4,6 +4,7 @@
 // its committed dist file, ignoring the @version line, each with a patch bump.
 // --notes names a JSON file that maps a script to its release commit body.
 // A rerun after a failed push finds the unpushed release commit and only pushes.
+import { README_FILE, updateReadme } from "./readme.ts";
 import { bumpVersion, isBump } from "./versions.ts";
 import { bundleScript, withoutVersion } from "./bundle.ts";
 import {
@@ -96,8 +97,9 @@ function commitRelease(script: Script, body: string): void {
   const message = [`release ${script.id} ${script.config.version}`, body.trim()]
     .filter(Boolean)
     .join("\n\n");
+  updateReadme();
   const isCommitted =
-    run("git", ["add", scriptJsonPath(script.id), releaseFilePath(script.id)]) &&
+    run("git", ["add", scriptJsonPath(script.id), releaseFilePath(script.id), README_FILE]) &&
     run("git", ["commit", "-m", message]);
   if (!isCommitted) {
     fail(`Release stopped: the commit for ${script.id} failed.`);
