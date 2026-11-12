@@ -2,8 +2,17 @@ const BUILD_POLICY_TYPE_ID = "0609b952-1397-4640-95ec-e00a01b2c241";
 
 interface PolicyEvaluation {
   status: string;
-  configuration: { isBlocking: boolean; type: { id: string } };
-  context?: { buildId?: number; isExpired?: boolean } | null;
+  configuration: {
+    isBlocking: boolean;
+    type: { id: string };
+    settings?: { displayName?: string | null } | null;
+  };
+  context?: {
+    buildId?: number | null;
+    isExpired?: boolean;
+    buildDefinitionName?: string;
+    buildStartedUtc?: string;
+  } | null;
 }
 
 type PipelineStatus = "succeeded" | "failed" | "running" | "queued" | "notStarted" | "expired";

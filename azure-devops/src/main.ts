@@ -1,6 +1,8 @@
+/* oxlint-disable import/max-dependencies -- main.ts wires up every feature */
 import {
   apiBasePath,
   isPullRequestInboxLocation,
+  parsePullRequestHref,
   parsePullRequestListLocation,
 } from "./pull-request-link.ts";
 import { findBoardCardIds, isBoardLocation, watchBoard } from "./board.ts";
@@ -9,7 +11,9 @@ import type { PullRequestsResponse } from "./ado-client.ts";
 import type { WatchedPage } from "./page-reloader.ts";
 import { createAdoClient } from "./ado-client.ts";
 import { createPageReloader } from "./page-reloader.ts";
+import { createPipelineRunFrame } from "./pipeline-run-frame.ts";
 import { createPipelineStatusPoller } from "./pipeline-status-poller.ts";
+import { createPipelineTab } from "./pipeline-tab.ts";
 import { createRequiredReviewerMarker } from "./required-reviewers.ts";
 import { showInitialsOnAvatars } from "./avatars.ts";
 import style from "./style.css";
@@ -29,6 +33,21 @@ const client = createAdoClient({
   origin: location.origin,
 });
 const isTabActive = (): boolean => document.visibilityState === "visible";
+
+// In a frame, the script only strips a run page the Pipeline tab shows.
+const isInFrame = globalThis.top !== globalThis.self;
+const pipelineRunFrame = isInFrame ? createPipelineRunFrame(document) : null;
+const pipelineTab = isInFrame
+  ? null
+  : createPipelineTab({
+      apiBasePath: basePath,
+      document,
+      getEvaluations: async (pullRequest) => {
+        const { evaluations } = await client.getPolicyEvaluations(pullRequest);
+        return evaluations;
+      },
+      now: () => Date.now(),
+    });
 
 const poller = createPipelineStatusPoller<HTMLElement>({
   client,
@@ -107,6 +126,8 @@ function reloadPage(): void {
 }
 
 function sync(): void {
+  pipelineRunFrame?.sync();
+  pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath));
   showInitialsOnAvatars(document);
   requiredReviewers.markAll();
   if (isTabActive()) {

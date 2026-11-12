@@ -10,7 +10,14 @@ import { fixtureReader } from "../../shared/dev/fake-site/server.ts";
 import fs from "node:fs";
 import path from "node:path";
 
-type Page = "board" | "pr-list" | "pr-inbox";
+type Page =
+  | "board"
+  | "pr-list"
+  | "pr-inbox"
+  | "pr-detail"
+  | "pipeline-summary"
+  | "pipeline-steps"
+  | "pipeline-log";
 
 /** A policy evaluations response as the capture recorded it. */
 interface CapturedEvaluations {
@@ -24,6 +31,10 @@ interface PullRequestPageData {
     pullRequests?: ListedPullRequest[];
   };
   meta: { projects: Record<string, string>; statusColors: Record<string, string> };
+}
+
+interface PullRequestDetailData {
+  data: { evaluations: CapturedEvaluations };
 }
 
 interface BoardData {
@@ -72,6 +83,19 @@ function pullRequestPageData(page: "pr-list" | "pr-inbox"): PullRequestPageData 
   return pageJson(page) as PullRequestPageData;
 }
 
+function pullRequestDetailData(): PullRequestDetailData {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the capture writes this shape
+  return pageJson("pr-detail") as PullRequestDetailData;
+}
+
+/** The pull request page's path, from the link of its first tab. Null when there is none. */
+function pullRequestDetailPath(): string | null {
+  const match = /href="(?<path>\/fake-org\/[^/"]+\/_git\/[^/"]+\/pullrequest\/\d+)"/u.exec(
+    readFixture("pr-detail.html"),
+  );
+  return match?.groups?.path ?? null;
+}
+
 function boardData(): BoardData {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the capture writes this shape
   return pageJson("board") as BoardData;
@@ -86,4 +110,11 @@ function pullRequestListPath(): string | null {
 }
 
 export type { CapturedEvaluations, Page, PullRequestPageData };
-export { boardData, pageHtml, pullRequestListPath, pullRequestPageData };
+export {
+  boardData,
+  pageHtml,
+  pullRequestDetailData,
+  pullRequestDetailPath,
+  pullRequestListPath,
+  pullRequestPageData,
+};

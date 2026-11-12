@@ -32,5 +32,10 @@ function parsePipelineRunLocation(location: {
     : { buildId, jobId: null, stepId: null, view: "steps" };
 }
 
+/** The Logs view of a run, which opens on its steps. */
+function pipelineStepsPath(apiBasePath: string, project: string, buildId: number): string {
+  return `${apiBasePath}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs`;
+}
+
 export type { PipelineRunLocation, PipelineRunView };
-export { parsePipelineRunLocation };
+export { parsePipelineRunLocation, pipelineStepsPath };

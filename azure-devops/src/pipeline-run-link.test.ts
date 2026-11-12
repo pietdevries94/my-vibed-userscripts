@@ -1,5 +1,5 @@
+import { parsePipelineRunLocation, pipelineStepsPath } from "./pipeline-run-link.ts";
 import assert from "node:assert/strict";
-import { parsePipelineRunLocation } from "./pipeline-run-link.ts";
 import { test } from "node:test";
 
 const JOB_ID = "3dc8fd7e-4368-5a92-293e-d53cefc8c4b3";
@@ -50,4 +50,11 @@ test("other pages are not a run page", () => {
     parsePipelineRunLocation(locationOf("https://dev.azure.com/quillfield/Ledger/_build/results")),
     null,
   );
+});
+
+test("the steps path of a run opens its Logs view, and reads back as the steps overview", () => {
+  const path = pipelineStepsPath("/quillfield", "Ledger Works", 812);
+  assert.equal(path, "/quillfield/Ledger%20Works/_build/results?buildId=812&view=logs");
+  const [pathname = "", search = ""] = path.split("?");
+  assert.equal(parsePipelineRunLocation({ pathname, search: `?${search}` })?.view, "steps");
 });

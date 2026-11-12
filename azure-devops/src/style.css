@@ -81,3 +81,112 @@
 [data-fix-ado-reviewers] > .pr-reviewer[data-fix-ado-required] {
   order: -1;
 }
+
+/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+.repos-pr-details-page[data-fix-ado-pipeline-tab-open]
+  > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
+  display: none !important;
+}
+
+.fix-ado-pipeline-panel {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 220px);
+  min-height: 400px;
+  padding: 16px 0;
+}
+
+.fix-ado-pipeline-checks {
+  display: flex;
+  flex: 0 0 260px;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.fix-ado-pipeline-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fix-ado-pipeline-check:hover {
+  background: var(--palette-black-alpha-4, rgba(0, 0, 0, 0.04));
+}
+
+.fix-ado-pipeline-check[aria-current="true"] {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+}
+
+.fix-ado-pipeline-check .fix-ado-pipeline-status {
+  margin-left: 0;
+}
+
+.fix-ado-pipeline-check-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fix-ado-pipeline-check-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fix-ado-pipeline-check-details {
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-size: 12px;
+}
+
+.fix-ado-pipeline-frame {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+}
+
+/* The run page inside the Pipeline tab. pipeline-run-frame.ts sets the view. */
+html[data-fix-ado-run-view] .project-header,
+html[data-fix-ado-run-view] .navigation-container,
+html[data-fix-ado-run-view] .bolt-master-panel .bolt-header-back-button {
+  display: none !important;
+}
+
+html[data-fix-ado-run-view="steps"] .run-logs-view > .logs-view {
+  display: none !important;
+}
+
+html[data-fix-ado-run-view="steps"] .run-logs-view > .bolt-master-panel {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+html[data-fix-ado-run-view="log"] .run-logs-view > .bolt-master-panel {
+  display: none !important;
+}
+
+.fix-ado-run-back {
+  align-self: center;
+  margin-right: 12px;
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
