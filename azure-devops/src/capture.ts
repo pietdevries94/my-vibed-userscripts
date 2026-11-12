@@ -188,7 +188,6 @@ function pullRequestListPage(
         data: { evaluationsByPullRequestId, pullRequests },
         meta: {
           isLegacyHost: location.hostname !== "dev.azure.com",
-          pageKind: "pr-list",
           projects,
           statusColors: statusColors(),
         },
@@ -210,7 +209,7 @@ function boardPage(): CapturePage {
       const myUserId = await client.getAuthenticatedUserId();
       return {
         data: { myUserId, workItems },
-        meta: { cardCount: cardIds.length, pageKind: "board" },
+        meta: {},
       };
     },
     name: "board",

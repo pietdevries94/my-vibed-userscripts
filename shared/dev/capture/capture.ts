@@ -142,7 +142,7 @@ async function buildFiles(
     stack: redact(stack, pseudonyms),
   }));
   const json = JSON.stringify({ data: scrubbedData, errors, log, meta }, null, 2);
-  return { html, json, leaks: findLeaks([html, json], pseudonyms) };
+  return { html, json, leaks: findLeaks([html, json], pseudonyms, definition.rules) };
 }
 
 /** Downloads `<baseName>.html` and `<baseName>.json`. */

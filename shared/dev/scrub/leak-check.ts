@@ -1,12 +1,14 @@
 // The last step of a capture. Refuses the output when any replaced value of three or
 // more characters still appears in it, kept words included. A value counts when it
-// appears as a whole word, ignoring case. Two kinds of site words are skipped: class
-// names without digits, and link segments that start with "_". Both come from the
-// site's code, so a page value that matches one gives nothing away. The report names
+// appears as a whole word, ignoring case. Site words are skipped: values without
+// digits of class, role and the script's kept attributes, and link segments that
+// start with "_". They come from the site's code, so a page value that matches one
+// gives nothing away. The report names
 // the field, and shows where the value was found with the value itself and every
 // other replaced value masked.
 import { escapeRegExp, wordPattern } from "./word-pattern.ts";
 import type { Pseudonyms } from "./pseudonyms.ts";
+import type { ScrubRules } from "./rules.ts";
 
 interface Leak {
   /** Where the value was replaced, such as `div.wit-card @data-itemid`. */
@@ -18,7 +20,8 @@ interface Leak {
 const MIN_LEAK_LENGTH = 3;
 /** Characters of context shown on each side of a leak. */
 const CONTEXT_LENGTH = 60;
-const CLASS_ATTRIBUTE = /(?<= class=")[^"]*/gu;
+/** Attributes whose values are site words, besides the script's kept attributes. */
+const SITE_WORD_ATTRIBUTES = ["class", "role"];
 const ROUTE_WORD = /(?<=\/)_[A-Za-z]+(?![\p{L}\p{N}])/gu;
 
 function longestFirst(values: string[]): string[] {
@@ -34,13 +37,17 @@ function withoutStandIns(output: string, standIns: string[]): string {
   return text;
 }
 
-/** The output with site words blanked: class names without digits, and "_" link segments. */
-function withoutSiteWords(output: string): string {
+/** The output with site words blanked: attribute values without digits, and "_" link segments. */
+function withoutSiteWords(output: string, rules: ScrubRules): string {
+  const names = [...SITE_WORD_ATTRIBUTES, ...rules.keepAttributes]
+    .map((name) => escapeRegExp(name))
+    .join("|");
+  const siteWordValue = new RegExp(`(?<= (?:${names})=")[^"]*`, "gu");
   return output
-    .replaceAll(CLASS_ATTRIBUTE, (classes) =>
-      classes
+    .replaceAll(siteWordValue, (value) =>
+      value
         .split(" ")
-        .map((name) => (/\d/u.test(name) ? name : " "))
+        .map((word) => (/\d/u.test(word) ? word : " "))
         .join(" "),
     )
     .replaceAll(ROUTE_WORD, " ");
@@ -86,8 +93,8 @@ function foundIn(text: string, match: RegExpExecArray, pseudonyms: Pseudonyms): 
 }
 
 /** One leak per field whose real value still appears in the output. Empty when the output is clean. */
-function findLeaks(outputs: string[], pseudonyms: Pseudonyms): Leak[] {
-  const text = withoutSiteWords(withoutStandIns(outputs.join("\n"), pseudonyms.standIns()));
+function findLeaks(outputs: string[], pseudonyms: Pseudonyms, rules: ScrubRules): Leak[] {
+  const text = withoutSiteWords(withoutStandIns(outputs.join("\n"), pseudonyms.standIns()), rules);
   const leaks = new Map<string, Leak>();
   for (const { field, original } of longOriginals(pseudonyms)) {
     const match = leaks.has(field) ? null : wordPattern(original).exec(text);
