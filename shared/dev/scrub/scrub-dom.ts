@@ -5,6 +5,7 @@
 import { scrubLink, scrubValue } from "./scrub-value.ts";
 import type { Pseudonyms } from "./pseudonyms.ts";
 import type { ScrubRules } from "./rules.ts";
+import { wordPattern } from "./word-pattern.ts";
 
 interface ScrubContext {
   rules: ScrubRules;
@@ -137,17 +138,15 @@ function keptAttributeValue(
 }
 
 /**
- * An id, or a space-separated list of ids. Each one is kept when it matches the
- * script's id patterns, so an id and every reference to it get the same value.
+ * An id, or a space-separated list of ids. An id that matches the script's id
+ * patterns stays for now; `scrubKeptIds` swaps its values for stand-ins once the
+ * whole page is scrubbed. Any other id gets a stand-in, the same one as every
+ * reference to it.
  */
 function scrubIds(value: string, field: string, context: ScrubContext): string {
   return value
     .split(/\s+/u)
-    .map((id) =>
-      context.rules.keepIdPatterns.some((pattern) => pattern.test(id))
-        ? id
-        : scrubValue(id, field, context),
-    )
+    .map((id) => (isKeptId(id, context.rules) ? id : scrubValue(id, field, context)))
     .join(" ");
 }
 
@@ -226,11 +225,65 @@ function scrubElementNode(element: Element, context: ScrubContext): Element | nu
   return copy;
 }
 
+function isKeptId(id: string, rules: ScrubRules): boolean {
+  return rules.keepIdPatterns.some((pattern) => pattern.test(id));
+}
+
+/** Replaced texts without digits, longest first. These are the ones a kept id can hold as a word. */
+function replacedWords(pseudonyms: Pseudonyms): string[] {
+  const words = pseudonyms
+    .replaced()
+    .map(({ original }) => original.trim())
+    .filter((original) => original.length > 0 && !/\d/u.test(original));
+  return [...new Set(words)].toSorted((left, right) => right.length - left.length);
+}
+
+/**
+ * A kept id with its numbers and replaced words swapped for their stand-ins.
+ * Ids like `__bolt-card-7121` carry the site's values; the stand-ins match the
+ * ones elsewhere in the page, so `data-itemid="7121"` and the id still agree.
+ */
+function scrubKeptId(
+  id: string,
+  field: string,
+  { words, pseudonyms }: { words: string[]; pseudonyms: Pseudonyms },
+): string {
+  let scrubbed = id.replaceAll(/\d+/gu, (digits) =>
+    String(pseudonyms.number(Number(digits), field)),
+  );
+  for (const word of words) {
+    scrubbed = scrubbed.replaceAll(wordPattern(word), () => pseudonyms.text(word, field));
+  }
+  return scrubbed;
+}
+
+/** The second pass: kept ids in `root`, and every reference to them, get stand-ins for their values. */
+function scrubKeptIds(root: Element, context: ScrubContext): void {
+  const words = replacedWords(context.pseudonyms);
+  for (const element of [root, ...root.querySelectorAll("*")]) {
+    for (const attribute of element.attributes) {
+      if (ID_REFERENCE_ATTRIBUTES.has(attribute.name)) {
+        const field = fieldOf(element, attribute.name);
+        attribute.value = attribute.value
+          .split(" ")
+          .map((id) =>
+            isKeptId(id, context.rules)
+              ? scrubKeptId(id, field, { pseudonyms: context.pseudonyms, words })
+              : id,
+          )
+          .join(" ");
+      }
+    }
+  }
+}
+
 /** A scrubbed copy of `root`, built in a new document. */
 function scrubElement(root: Element, rules: ScrubRules, pseudonyms: Pseudonyms): Element {
   const document = root.ownerDocument.implementation.createHTMLDocument("");
-  const scrubbed = scrubElementNode(root, { document, pseudonyms, rules });
-  return scrubbed ?? document.createElement("div");
+  const context = { document, pseudonyms, rules };
+  const scrubbed = scrubElementNode(root, context) ?? document.createElement("div");
+  scrubKeptIds(scrubbed, context);
+  return scrubbed;
 }
 
 export { scrubElement };

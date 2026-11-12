@@ -50,6 +50,46 @@ function notifyOwner(message: string): void {
   globalThis.alert(message);
 }
 
+function panelButton(label: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.textContent = label;
+  button.style.cssText = "margin: 8px 8px 0 0; padding: 4px 12px; font: inherit;";
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function reportText(report: string): HTMLTextAreaElement {
+  const text = document.createElement("textarea");
+  text.readOnly = true;
+  text.value = report;
+  text.style.cssText = "flex: 1; margin-top: 8px; font: 12px monospace; white-space: pre;";
+  return text;
+}
+
+/**
+ * Shows a long report in a box on the page, with a Copy button. An alert cuts long
+ * text off. When the clipboard is blocked, the text stays selected for Cmd+C.
+ */
+function showReport(title: string, report: string): void {
+  const panel = document.createElement("div");
+  panel.style.cssText =
+    "position: fixed; inset: 5vh 5vw; z-index: 2147483647; display: flex; flex-direction: column; padding: 16px; background: #fff; color: #000; border: 2px solid #c00; font: 14px sans-serif; box-shadow: 0 4px 24px #0006;";
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  const text = reportText(report);
+  const copy = panelButton("Copy", () => {
+    text.select();
+    navigator.clipboard.writeText(report).catch(() => {
+      // Blocked. The text is selected; the owner copies it by hand.
+    });
+  });
+  const close = panelButton("Close", () => {
+    panel.remove();
+  });
+  panel.append(heading, text, copy, close);
+  document.body.append(panel);
+}
+
 async function getOnlyFetch(url: string, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   if (method !== "GET") {
@@ -119,8 +159,9 @@ async function capture(definition: CaptureDefinition): Promise<void> {
   }
   const { html, json, leaks } = await buildFiles(definition, page);
   if (leaks.length > 0) {
-    notifyOwner(
-      `Capture fixtures: the leak check refused this capture. Nothing was saved.\n\n${leaks.map(({ field, foundIn }) => `${field}\n  in: ${foundIn}`).join("\n")}`,
+    showReport(
+      "Capture fixtures: the leak check refused this capture. Nothing was saved.",
+      leaks.map(({ field, foundIn }) => `${field}\n  in: ${foundIn}`).join("\n"),
     );
     return;
   }

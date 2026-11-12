@@ -106,9 +106,43 @@ test("GUIDs become numbered stand-in GUIDs, the same one in any case", () => {
 test("the leak check names the field of a value that is still in the output", () => {
   const { output, pseudonyms } = scrubHtml('<p title="Quill Barrow">x</p>');
   assert.deepEqual(findLeaks([output], pseudonyms), []);
-  assert.deepEqual(findLeaks([`${output}\n<i class="quill barrow-icon">`], pseudonyms), [
-    { field: "p @title", foundIn: '<i class="[value]-icon">' },
+  assert.deepEqual(findLeaks([`${output}\n<i title="quill barrow-icon">`], pseudonyms), [
+    { field: "p @title", foundIn: '<i title="[value]-icon">' },
   ]);
+});
+
+test("a value inside a class name without digits, or a _ link segment, is not a leak", () => {
+  const { output, pseudonyms } = scrubHtml("<p>Lantern</p>");
+  const siteWords = `${output}<i class="big lantern-row"></i><a href="/text-1/_lantern"></a>`;
+  assert.deepEqual(findLeaks([siteWords], pseudonyms), []);
+});
+
+test("a value inside a class name with digits is a leak", () => {
+  const { output, pseudonyms } = scrubHtml("<p>Lantern</p>");
+  assert.deepEqual(findLeaks([`${output}<i class="row lantern-42"></i>`], pseudonyms), [
+    { field: "p text", foundIn: '<i class=" [value]-42">' },
+  ]);
+});
+
+test("the context around a leak never shows part of another real value", () => {
+  const filler = "x".repeat(55);
+  const { output, pseudonyms } = scrubHtml("<p>Quill Barrow</p><b>Lantern</b>");
+  const leaks = findLeaks([`${output}<i title="Quill Barrow ${filler} Lantern">`], pseudonyms);
+  for (const { foundIn } of leaks) {
+    assert.doesNotMatch(foundIn, /uill|Barr|arrow|antern/u);
+  }
+});
+
+test("a kept id gets stand-ins for its numbers and replaced words, like its references", () => {
+  const { output } = scrubHtml(
+    '<b data-itemid="4711" aria-label="Lantern" aria-describedby="keep-lantern-4711">x</b>' +
+      '<i id="keep-lantern-4711"></i>',
+  );
+  assert.equal(
+    output,
+    '<body><b data-itemid="1001" aria-label="text-1" aria-describedby="keep-text-1-1001">text-2</b>' +
+      '<i id="keep-text-1-1001"></i></body>',
+  );
 });
 
 test("the leak check ignores short values and stand-ins", () => {
@@ -125,7 +159,7 @@ test("an id and every reference to it get the same stand-in", () => {
   const { output } = scrubHtml('<b id="name-7">x</b><i aria-labelledby="name-7 keep-1"></i>');
   assert.equal(
     output,
-    '<body><b id="text-1">text-2</b><i aria-labelledby="text-1 keep-1"></i></body>',
+    '<body><b id="text-1">text-2</b><i aria-labelledby="text-1 keep-1001"></i></body>',
   );
 });
 
