@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.0.0
-// @description  Adds missing features to Azure DevOps. Shows the pipeline status of each pull request in the list.
+// @version      1.0.1
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, required reviewers first, avatar initials, and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
