@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Tweakers
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.0.0
-// @description  Trims Tweakers. Shows only the news item list on the homepage.
+// @version      1.0.1
+// @description  Trims the Tweakers homepage. Hides the lead story, the side columns, the top banner and the category bar.
 // @match        https://tweakers.net/*
 // @grant        GM_addStyle
 // @run-at       document-idle

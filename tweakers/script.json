@@ -3,7 +3,7 @@
   "description": "Trims the Tweakers homepage. Hides the lead story, the side columns, the top banner and the category bar.",
   "match": ["https://tweakers.net/*"],
   "grant": ["GM_addStyle"],
-  "version": "1.0.0",
+  "version": "1.0.1",
   "mode": "open",
   "signInOrigins": ["https://myprivacy.dpgmedia.nl"],
   "cdnOrigins": [
