@@ -6,5 +6,10 @@
   "version": "1.0.0",
   "mode": "open",
   "signInOrigins": ["https://myprivacy.dpgmedia.nl"],
-  "cdnOrigins": ["https://tweakers.net", "https://ic.tweakimg.net", "https://tweakimg.net"]
+  "cdnOrigins": [
+    "https://myprivacy-static.dpgmedia.net",
+    "https://tweakers.net",
+    "https://ic.tweakimg.net",
+    "https://tweakimg.net"
+  ]
 }
