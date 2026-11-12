@@ -58,8 +58,12 @@ _Avoid_: Deploy, publish, ship
 The front page of tweakers.net, at `/`. The only page the script changes.
 _Avoid_: Front page, index
 
+**Lead story**:
+The large highlighted article at the top of the homepage, above the news item list.
+_Avoid_: Header, hero, ankeiler
+
 **News item list**:
-The list of news items under "Laatste nieuws" on the homepage. The one part the news-only view keeps.
+The list of news items under "Laatste nieuws" on the homepage. The news-only view widens it to the full content area.
 _Avoid_: Feed, timeline, headlines
 
 **Side columns**:
@@ -67,9 +71,9 @@ The two columns right of the news item list on the homepage: the story stream, a
 _Avoid_: Sidebar, widgets
 
 **Site header**:
-The block at the top of every Tweakers page: menu bar, alert bar, search bar and category bar.
-_Avoid_: Navbar, top bar
+The block at the top of every Tweakers page: menu bar, alert bar, search bar and category bar. The script leaves it alone.
+_Avoid_: Navbar, top bar, header (the owner may mean the lead story)
 
 **News-only view**:
-The homepage with only the news item list. It hides the site header, the side columns, the lead story, the community block, the tracker tabs and the footer.
+The homepage without the lead story and the side columns. The news item list takes their width. The rest of the page stays.
 _Avoid_: Clean mode, minimal view

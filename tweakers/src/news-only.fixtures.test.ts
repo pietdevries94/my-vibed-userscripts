@@ -32,3 +32,21 @@ test("the news item list stays visible and holds news items", { skip: fixtures.s
     );
   }
 });
+
+test("the site header and the rest of the page stay visible", { skip: fixtures.skip }, () => {
+  const document = capturedHomepage();
+  const keptParts = [
+    "#top",
+    "#contentArea > .top-banner",
+    ".community-block",
+    "twk-sidebar",
+    "#bottom",
+  ];
+  for (const kept of keptParts) {
+    const element = document.querySelector(kept);
+    assert.ok(element !== null, `${kept} is on the homepage`);
+    for (const selector of HIDDEN_PARTS) {
+      assert.equal(element.closest(selector), null, `${selector} does not hide ${kept}`);
+    }
+  }
+});

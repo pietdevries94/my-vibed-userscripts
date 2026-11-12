@@ -7,6 +7,10 @@ description: Add or change a feature of a script, test-first against fixtures. U
 
 Read `mode` in `<script>/script.json` first. A sealed script needs fixtures before any feature work; without them, switch to `sealed-capture`.
 
+## Scope
+
+Change only the parts the owner names. When a word could mean two parts of the page, such as "header", ask which one before changing anything.
+
 ## Loop
 
 1. **Red**: write a failing test.
