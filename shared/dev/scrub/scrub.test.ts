@@ -1,8 +1,8 @@
-import { findLeaks, redact } from "./leak-check.ts";
 import { JSDOM } from "jsdom";
 import type { ScrubRules } from "./rules.ts";
 import assert from "node:assert/strict";
 import { createPseudonyms } from "./pseudonyms.ts";
+import { redact } from "./redact.ts";
 import { scrubElement } from "./scrub-dom.ts";
 import { scrubJson } from "./scrub-json.ts";
 import { test } from "node:test";
@@ -103,42 +103,6 @@ test("GUIDs become numbered stand-in GUIDs, the same one in any case", () => {
   ]);
 });
 
-test("the leak check names the field of a value that is still in the output", () => {
-  const { output, pseudonyms } = scrubHtml('<p title="Quill Barrow">x</p>');
-  assert.deepEqual(findLeaks([output], pseudonyms, RULES), []);
-  assert.deepEqual(findLeaks([`${output}\n<i title="quill barrow-icon">`], pseudonyms, RULES), [
-    { field: "p @title", foundIn: '<i title="[value]-icon">' },
-  ]);
-});
-
-test("a value inside an attribute name, a site word without digits, or a _ link segment, is not a leak", () => {
-  const { output, pseudonyms } = scrubHtml("<p>Lantern</p>");
-  const siteWords =
-    `${output}<i class="big lantern-row" role="lantern" data-kind="lantern-x"></i>` +
-    '<a href="/text-1/_lantern" data-lantern=""></a>';
-  assert.deepEqual(findLeaks([siteWords], pseudonyms, RULES), []);
-});
-
-test("a value inside a class name with digits is a leak", () => {
-  const { output, pseudonyms } = scrubHtml("<p>Lantern</p>");
-  assert.deepEqual(findLeaks([`${output}<i class="row lantern-42"></i>`], pseudonyms, RULES), [
-    { field: "p text", foundIn: '<i class="row [value]-42">' },
-  ]);
-});
-
-test("the context around a leak never shows part of another real value", () => {
-  const filler = "x".repeat(55);
-  const { output, pseudonyms } = scrubHtml("<p>Quill Barrow</p><b>Lantern</b>");
-  const leaks = findLeaks(
-    [`${output}<i title="Quill Barrow ${filler} Lantern">`],
-    pseudonyms,
-    RULES,
-  );
-  for (const { foundIn } of leaks) {
-    assert.doesNotMatch(foundIn, /uill|Barr|arrow|antern/u);
-  }
-});
-
 test("a kept id gets stand-ins for its numbers and replaced words, like its references", () => {
   const { output } = scrubHtml(
     '<b data-itemid="4711" aria-label="Lantern" aria-describedby="keep-lantern-4711">x</b>' +
@@ -149,16 +113,6 @@ test("a kept id gets stand-ins for its numbers and replaced words, like its refe
     '<body><b data-itemid="1001" aria-label="text-1" aria-describedby="keep-text-1-1001">text-2</b>' +
       '<i id="keep-text-1-1001"></i></body>',
   );
-});
-
-test("the leak check ignores short values and stand-ins", () => {
-  const { output, pseudonyms } = scrubHtml('<p title="ab">1001</p><i>text-1</i>');
-  assert.deepEqual(findLeaks([`${output} ab`], pseudonyms, RULES), []);
-});
-
-test("a value inside a longer word is not a leak", () => {
-  const { output, pseudonyms } = scrubHtml("<p>Ann</p>");
-  assert.deepEqual(findLeaks([`${output} <i class="planning"></i>`], pseudonyms, RULES), []);
 });
 
 test("an id and every reference to it get the same stand-in", () => {

@@ -1,13 +1,12 @@
 // "Capture fixtures": the dev file's Violentmonkey menu command. It scrubs the page and
-// the script's GET responses, runs the leak check, and downloads two files:
-// <script>--<page>.html and <script>--<page>.json. A failed leak check downloads nothing.
+// the script's GET responses, and downloads two files:
+// <script>--<page>.html and <script>--<page>.json.
 // Dev file only; the release build never includes it.
-import { findLeaks, redact } from "../scrub/leak-check.ts";
-import type { Leak } from "../scrub/leak-check.ts";
 import type { Pseudonyms } from "../scrub/pseudonyms.ts";
 import type { ScrubRules } from "../scrub/rules.ts";
 import { createPseudonyms } from "../scrub/pseudonyms.ts";
 import { logEntries } from "../../runtime/script-log.ts";
+import { redact } from "../scrub/redact.ts";
 import { scrubElement } from "../scrub/scrub-dom.ts";
 import { scrubJson } from "../scrub/scrub-json.ts";
 
@@ -50,46 +49,6 @@ function notifyOwner(message: string): void {
   globalThis.alert(message);
 }
 
-function panelButton(label: string, onClick: () => void): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.textContent = label;
-  button.style.cssText = "margin: 8px 8px 0 0; padding: 4px 12px; font: inherit;";
-  button.addEventListener("click", onClick);
-  return button;
-}
-
-function reportText(report: string): HTMLTextAreaElement {
-  const text = document.createElement("textarea");
-  text.readOnly = true;
-  text.value = report;
-  text.style.cssText = "flex: 1; margin-top: 8px; font: 12px monospace; white-space: pre;";
-  return text;
-}
-
-/**
- * Shows a long report in a box on the page, with a Copy button. An alert cuts long
- * text off. When the clipboard is blocked, the text stays selected for Cmd+C.
- */
-function showReport(title: string, report: string): void {
-  const panel = document.createElement("div");
-  panel.style.cssText =
-    "position: fixed; inset: 5vh 5vw; z-index: 2147483647; display: flex; flex-direction: column; padding: 16px; background: #fff; color: #000; border: 2px solid #c00; font: 14px sans-serif; box-shadow: 0 4px 24px #0006;";
-  const heading = document.createElement("strong");
-  heading.textContent = title;
-  const text = reportText(report);
-  const copy = panelButton("Copy", () => {
-    text.select();
-    navigator.clipboard.writeText(report).catch(() => {
-      // Blocked. The text is selected; the owner copies it by hand.
-    });
-  });
-  const close = panelButton("Close", () => {
-    panel.remove();
-  });
-  panel.append(heading, text, copy, close);
-  document.body.append(panel);
-}
-
 async function getOnlyFetch(url: string, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   if (method !== "GET") {
@@ -127,7 +86,7 @@ function download(fileName: string, text: string, type: string): void {
 async function buildFiles(
   definition: CaptureDefinition,
   page: CapturePage,
-): Promise<{ html: string; json: string; leaks: Leak[] }> {
+): Promise<{ html: string; json: string }> {
   const pseudonyms = createPseudonyms();
   const { data, meta } = await page.collect(getOnlyFetch, pseudonyms);
   const html = scrubElement(page.root, definition.rules, pseudonyms).outerHTML;
@@ -142,7 +101,7 @@ async function buildFiles(
     stack: redact(stack, pseudonyms),
   }));
   const json = JSON.stringify({ data: scrubbedData, errors, log, meta }, null, 2);
-  return { html, json, leaks: findLeaks([html, json], pseudonyms, definition.rules) };
+  return { html, json };
 }
 
 /** Downloads `<baseName>.html` and `<baseName>.json`. */
@@ -157,14 +116,7 @@ async function capture(definition: CaptureDefinition): Promise<void> {
     notifyOwner("Capture fixtures: this page is not on the capture list. Nothing was saved.");
     return;
   }
-  const { html, json, leaks } = await buildFiles(definition, page);
-  if (leaks.length > 0) {
-    showReport(
-      "Capture fixtures: the leak check refused this capture. Nothing was saved.",
-      leaks.map(({ field, foundIn }) => `${field}\n  in: ${foundIn}`).join("\n"),
-    );
-    return;
-  }
+  const { html, json } = await buildFiles(definition, page);
   saveFiles(`${definition.scriptId}--${page.name}`, html, json);
 }
 

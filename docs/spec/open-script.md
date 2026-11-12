@@ -101,7 +101,7 @@ Known gaps:
 
 ## What reaches disk
 
-- Fixtures only through the shared capture bundle, run in the page with `browser_evaluate`. Scrubbing and the leak check run in the page. Only scrubbed output comes back. Claude writes it to `<script>/fixtures/`. A failed leak check writes nothing.
+- Fixtures only through the shared capture bundle, run in the page with `browser_evaluate`. Scrubbing runs in the page. Only scrubbed output comes back. Claude writes it to `<script>/fixtures/`.
 - Playwright MCP output (screenshots, snapshot files, network dumps) goes to a gitignored `.real-site/` folder at the repo root, outside every script folder. It is deleted at the end of the session.
 - Real values never go into code, tests, comments, commit messages, issues or the glossary. Test inputs and stand-in names are invented.
 

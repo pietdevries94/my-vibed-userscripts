@@ -11,7 +11,7 @@ Terms come from `GLOSSARY.md` at the repo root. Use those terms.
 | [layout-and-build.md](layout-and-build.md)             | Violentmonkey facts, repo layout, `script.json`, build, dev loop, install URL |
 | [fixtures.md](fixtures.md)                             | Where fixtures live, tests without fixtures, worktrees, import                |
 | [open-script.md](open-script.md)                       | What Claude may do on the real site of an open script, the read-only guard    |
-| [sealed-workflow.md](sealed-workflow.md)               | Capture, scrubbing, leak check, script log, fake site, hand-offs              |
+| [sealed-workflow.md](sealed-workflow.md)               | Capture, scrubbing, script log, fake site, hand-offs                          |
 | [releasing.md](releasing.md)                           | Versions, the release command, rollback                                       |
 | [checks.md](checks.md)                                 | Pre-push hook, GitHub workflow, `check:dist`, lint, format, Node              |
 | [agents-file-and-skills.md](agents-file-and-skills.md) | `AGENTS.md`, the skills, `new-script` steps, the clean-session trial          |

@@ -1,6 +1,6 @@
 # Sealed workflow
 
-Claude never sees the site of a sealed script. The owner captures fixtures and does every real-site check. The capture, scrubber, leak check and script log below are shared by both modes. Open scripts run the same capture bundle through the guarded browser (see [open-script.md](open-script.md)).
+Claude never sees the site of a sealed script. The owner captures fixtures and does every real-site check. The capture, scrubber and script log below are shared by both modes. Open scripts run the same capture bundle through the guarded browser (see [open-script.md](open-script.md)).
 
 ## Capture
 
@@ -31,19 +31,19 @@ A rules object that may only add keeps:
 
 The owner reads the list in the script's rules.
 
-## Leak check
+## Kept ids
 
-- The scrubber records every original value it replaced.
-- If any of them (3 or more characters) appears in the output, kept words included, the capture refuses to download and names the field.
-- Site words are skipped: attribute names, values without digits of `class`, `role` and the script's kept attributes, and link segments that start with `_`. They come from the site's code. A value with digits is still checked.
 - An id kept by an id pattern gets stand-ins for its numbers and for any replaced word in it, the same as its references.
-- A refusal opens a box on the page with each field and a short context around the match, other real values masked, and a Copy button.
-- It never prints the real value.
+
+## No leak check
+
+- Fixtures are never committed, so a capture is not checked for values the scrubber missed. It always downloads.
+- What keeps real values out of the repo is the scrubber, the owner's skim, and the rule that tests use invented values.
 
 ## Script log
 
 - The dev file has `log(message, data?)`. `message` is a string literal and is kept. `data` is scrubbed as JSON.
-- Uncaught errors from the script's own code are kept with message and stack. Any value on the leak list is replaced.
+- Uncaught errors from the script's own code are kept with message and stack. Any value the scrubber replaced is masked there too.
 - The capture includes this log.
 - The release build drops `log` calls.
 
@@ -81,7 +81,7 @@ Always invented. Never the owner's name or a colleague's. `AGENTS.md` says so.
 
 1. Claude writes or updates the capture rules and gives the owner a list of the exact pages to open.
 2. The owner opens each page with the dev script installed and clicks "Capture fixtures".
-3. The owner runs `npm run fixtures:import <script>`, reads the leak-check result, and skims the files before Claude reads them.
+3. The owner runs `npm run fixtures:import <script>`, and skims the files before Claude reads them.
 4. Claude builds the feature, unit tests and fake site, and checks them on the fake site through the `fake-site` browser.
 5. The owner checks on the real site and reports in chat. When something is wrong, the owner captures that page again. The script log in the capture helps reproduce it.
 

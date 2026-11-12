@@ -30,7 +30,7 @@ The `real-site` browser is read-only. The guard blocks every request except GET 
 
 ## What reaches disk
 
-- Fixtures come only from the shared capture bundle, run in the page with `browser_evaluate`. Scrubbing and the leak check run in the page; write only the scrubbed output to `<script>/fixtures/`. A failed leak check writes nothing.
+- Fixtures come only from the shared capture bundle, run in the page with `browser_evaluate`. Scrubbing runs in the page; write only the scrubbed output to `<script>/fixtures/`.
 - Screenshots, snapshots and network dumps go to `.real-site/`, which is deleted at session end.
 - Real values never go into code, tests, comments, commits, issues or the glossary.
 

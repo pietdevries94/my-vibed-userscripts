@@ -36,10 +36,6 @@ _Avoid_: Scrape, dump, record
 Replacing everything in a capture that could identify a person, company or record, apart from what the script's rules keep.
 _Avoid_: Anonymising, sanitising
 
-**Leak check**:
-The last step of a capture. It refuses the output if any replaced value still appears in it.
-_Avoid_: Audit, scan
-
 **Read-only guard**:
 What stops Claude from changing anything on the real website of an open script. It blocks every request that could write, and the tools that click or type.
 _Avoid_: Sandbox, safe mode

@@ -1,5 +1,5 @@
 // Consistent stand-ins for real values. The same real value gets the same stand-in
-// everywhere in one capture. Every replaced value is recorded for the leak check.
+// everywhere in one capture. Every replaced value is recorded, so error messages can be redacted.
 
 interface ReplacedValue {
   original: string;
