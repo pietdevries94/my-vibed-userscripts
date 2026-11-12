@@ -53,34 +53,57 @@ function dotAge(day: number): string {
   return day <= AGING_DAYS ? "aging" : "old";
 }
 
-function createDotBar(document: Document, days: number): HTMLElement {
+const LOADING_DOT_COUNT = 3;
+
+function dotsFor(document: Document, days: number | null): HTMLElement[] {
+  const ages =
+    days === null
+      ? Array.from({ length: LOADING_DOT_COUNT }, () => "loading")
+      : Array.from({ length: Math.min(days, MAX_DOTS) }, (_entry, index) => dotAge(index + 1));
+  return ages.map((age) => {
+    const dot = document.createElement("span");
+    dot.dataset.age = age;
+    return dot;
+  });
+}
+
+function captionFor(days: number | null): string {
+  if (days === null) {
+    return "";
+  }
+  if (days === 0) {
+    return "Less than a day in this column";
+  }
+  return `${days} ${days === 1 ? "day" : "days"} in this column`;
+}
+
+function createDotBar(document: Document, days: number | null): HTMLElement {
   const bar = document.createElement("div");
   bar.className = BAR_CLASS;
   bar.dataset.days = String(days);
-  bar.title = `${days} ${days === 1 ? "day" : "days"} in this column`;
-  bar.setAttribute("aria-label", bar.title);
-  bar.setAttribute("role", "img");
-  bar.append(
-    ...Array.from({ length: Math.min(days, MAX_DOTS) }, (_entry, index) => {
-      const dot = document.createElement("span");
-      dot.dataset.age = dotAge(index + 1);
-      return dot;
-    }),
-  );
+  bar.title = captionFor(days);
+  if (days === null) {
+    bar.setAttribute("aria-hidden", "true");
+  } else {
+    bar.setAttribute("aria-label", bar.title);
+    bar.setAttribute("role", "img");
+  }
+  bar.append(...dotsFor(document, days));
   return bar;
 }
 
-/** A dot per day under the card, like Jira. Less than a day shows nothing. */
-function showDaysInColumn(card: HTMLElement, days: number): void {
+/**
+ * A dot per day under the card, like Jira. Null while the day count is unknown:
+ * three loading dots. The bar stays, also when empty, so the card keeps its height.
+ */
+function showDaysInColumn(card: HTMLElement, days: number | null): void {
   const existing = card.querySelector<HTMLElement>(`.${BAR_CLASS}`);
   if (existing?.dataset.days === String(days)) {
     // Unchanged. Rewriting it would wake the page's mutation observer again.
     return;
   }
   existing?.remove();
-  if (days >= 1) {
-    (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days));
-  }
+  (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days));
 }
 
 function findCards(document: Document): Map<number, HTMLElement[]> {
@@ -128,8 +151,12 @@ function noteMoves(tracker: Tracker, cards: Map<number, HTMLElement[]>): void {
 function showBars(tracker: Tracker, cards: Map<number, HTMLElement[]>): void {
   noteMoves(tracker, cards);
   for (const [id, elements] of cards) {
-    const enteredAt = tracker.entries.get(id)?.enteredAt ?? null;
-    const days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now());
+    const entry = tracker.entries.get(id);
+    const enteredAt = entry?.enteredAt ?? null;
+    let days: number | null = null;
+    if (entry !== undefined) {
+      days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now());
+    }
     for (const element of elements) {
       showDaysInColumn(element, days);
     }

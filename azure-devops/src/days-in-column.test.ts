@@ -107,11 +107,23 @@ test("caps the dots, not the count", () => {
   );
 });
 
-test("less than a day shows no bar", () => {
+test("less than a day keeps an empty bar, so the card keeps its height", () => {
   const { element } = card(1);
   showDaysInColumn(element, 3);
   showDaysInColumn(element, 0);
-  assert.equal(element.querySelector(".fix-ado-days-in-column"), null);
+  const bar = element.querySelector<HTMLElement>(".fix-ado-days-in-column");
+  assert.ok(bar !== null);
+  assert.equal(bar.children.length, 0);
+  assert.equal(bar.title, "Less than a day in this column");
+});
+
+test("an unknown day count shows three loading dots", () => {
+  const { element } = card(1);
+  showDaysInColumn(element, null);
+  assert.deepEqual(dots(element), ["loading", "loading", "loading"]);
+  assert.equal(element.querySelector<HTMLElement>(".fix-ado-days-in-column")?.title, "");
+  showDaysInColumn(element, 2);
+  assert.deepEqual(dots(element), ["fresh", "fresh"]);
 });
 
 interface FakeClient {
@@ -147,7 +159,9 @@ test("fetches the updates of a card once, and redraws a card the board re-render
   const { document, element } = card(7);
   const daysInColumn = createDaysInColumn({ client, document, now: () => now });
 
-  await daysInColumn.sync();
+  const firstSync = daysInColumn.sync();
+  assert.deepEqual(dots(element), ["loading", "loading", "loading"], "loading until fetched");
+  await firstSync;
   assert.deepEqual(requests, ["work items 7", "updates 7"]);
   assert.equal(dots(element).length, 3);
 
