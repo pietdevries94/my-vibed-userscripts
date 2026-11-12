@@ -13,6 +13,7 @@ import {
 import { evaluationsOf, pullRequestOrRunPage } from "./capture-pipeline.ts";
 import { findBoardCardIds, isBoardLocation } from "./board.ts";
 import type { AdoClient } from "./ado-client.ts";
+import type { BoardWorkItem } from "./board.ts";
 import type { Pseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
 import type { PullRequestListPage } from "./pull-request-link.ts";
 import type { ScrubRules } from "../../shared/dev/scrub/rules.ts";
@@ -28,7 +29,7 @@ const STATUS_COLOR_VARIABLES = [
   "--component-status-info",
   "--component-status-neutral",
 ];
-/** The days in column feature reads the updates of each card. A few show their shape. */
+/** The days in column feature reads the updates of each card. A few show their shape: the most changed ones, which most likely moved. */
 const CARDS_WITH_CAPTURED_UPDATES = 5;
 const PROJECTS_ROUTE = /\/_apis\/projects\/(?<project>[^/?]+)/u;
 
@@ -174,14 +175,17 @@ function pullRequestRowsPage(name: string, listPage: PullRequestListPage | null)
   };
 }
 
-/** The updates of the first few cards, by stand-in work item id. */
+/** The updates of the most changed cards, by stand-in work item id. */
 async function collectUpdates(
   client: AdoClient,
-  cardIds: number[],
+  workItems: BoardWorkItem[],
   pseudonyms: Pseudonyms,
 ): Promise<Record<number, unknown>> {
   const updatesByWorkItemId: Record<number, unknown> = {};
-  for (const id of cardIds.slice(0, CARDS_WITH_CAPTURED_UPDATES)) {
+  const mostChanged = workItems
+    .toSorted((left, right) => right.rev - left.rev)
+    .slice(0, CARDS_WITH_CAPTURED_UPDATES);
+  for (const { id } of mostChanged) {
     // oxlint-disable-next-line eslint/no-await-in-loop -- one card at a time, as the script fetches them
     const { updates } = await client.getWorkItemUpdates(id);
     updatesByWorkItemId[pseudonyms.number(id, "work item id")] = updates;
@@ -198,7 +202,7 @@ function boardPage(): CapturePage {
       const cardIds = findBoardCardIds(document);
       const { workItems } = await client.getWorkItems(cardIds);
       const myUserId = await client.getAuthenticatedUserId();
-      const updatesByWorkItemId = await collectUpdates(client, cardIds, pseudonyms);
+      const updatesByWorkItemId = await collectUpdates(client, workItems, pseudonyms);
       return {
         data: { myUserId, updatesByWorkItemId, workItems },
         meta: {},

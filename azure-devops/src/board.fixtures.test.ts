@@ -50,7 +50,7 @@ test(
   () => {
     const { document } = new JSDOM(fixtures.read("board.html")).window;
     const cardIds = findBoardCardIds(document);
-    assert.equal(cardIds.length, 100);
+    assert.ok(cardIds.length > 0);
     assert.deepEqual(
       cardIds.toSorted((left, right) => left - right),
       capturedBoard()
