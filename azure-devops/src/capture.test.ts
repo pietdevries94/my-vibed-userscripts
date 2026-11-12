@@ -13,6 +13,8 @@ const BUILD_ID = 99_123;
 const PERSON = "Quill Barrow";
 const PROJECT_GUID = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
 const PERSON_GUID = "1b4e28ba-2fa1-11d2-883f-0016d3cca427";
+const JOB_GUID = "3dc8fd7e-4368-5a92-293e-d53cefc8c4b3";
+const STEP_GUID = "8c3e1b2a-77f0-5d1e-9a4b-6c2d0e9f1a35";
 const REAL_VALUES = [
   ORGANISATION,
   PROJECT,
@@ -22,6 +24,8 @@ const REAL_VALUES = [
   PERSON,
   PROJECT_GUID,
   PERSON_GUID,
+  JOB_GUID,
+  STEP_GUID,
 ];
 
 const PAGE_URL = `https://dev.azure.com/${ORGANISATION}/${encodeURIComponent(PROJECT)}/_git/${REPOSITORY}/pullrequests`;
@@ -68,8 +72,8 @@ interface CaptureRunResult {
   files: Map<string, string>;
 }
 
-async function runCapture(): Promise<CaptureRunResult> {
-  const { window } = new JSDOM(PAGE, { url: PAGE_URL });
+async function runCapture(page = PAGE, pageUrl = PAGE_URL): Promise<CaptureRunResult> {
+  const { window } = new JSDOM(page, { url: pageUrl });
   const alerts: string[] = [];
   const blobs: Blob[] = [];
   const names: string[] = [];
@@ -110,14 +114,9 @@ test("a pull request list capture keeps no real value and lines up its stand-ins
   const { alerts, files } = await runCapture();
   assert.deepEqual(alerts, []);
   assert.deepEqual([...files.keys()], ["azure-devops--pr-list.html", "azure-devops--pr-list.json"]);
+  assertNoRealValue(files);
   const html = files.get("azure-devops--pr-list.html") ?? "";
   const json = files.get("azure-devops--pr-list.json") ?? "";
-  for (const value of REAL_VALUES) {
-    assert.ok(
-      !`${html}${json}`.toLowerCase().includes(value.toLowerCase()),
-      `a real value is in the capture: ${value}`,
-    );
-  }
 
   const { document } = new JSDOM(`<!doctype html><body>${html}</body>`).window;
   const [row] = findPullRequestRows(document, "/fake-org");
@@ -127,4 +126,45 @@ test("a pull request list capture keeps no real value and lines up its stand-ins
   const evaluations =
     captured.data.evaluationsByPullRequestId[String(row?.pullRequest.pullRequestId)];
   assert.equal(evaluations?.body.value[0]?.status, "approved");
+});
+
+function assertNoRealValue(files: Map<string, string>): void {
+  const text = [...files.values()].join("").toLowerCase();
+  for (const value of REAL_VALUES) {
+    assert.ok(!text.includes(value.toLowerCase()), `a real value is in the capture: ${value}`);
+  }
+}
+
+test("a pull request page capture keeps its tabs, its run links and its evaluations", async () => {
+  const runLink = `/${ORGANISATION}/${encodeURIComponent(PROJECT)}/_build/results?buildId=${BUILD_ID}`;
+  const page = `<!doctype html><body>
+    <div role="tablist"><a role="tab">Overview</a><a role="tab">Files</a></div>
+    <a class="check" href="${runLink}">${PROJECT} build</a>
+  </body>`;
+  const { alerts, files } = await runCapture(page, `https://dev.azure.com${ROW_LINK}`);
+  assert.deepEqual(alerts, []);
+  assert.deepEqual(
+    [...files.keys()],
+    ["azure-devops--pr-detail.html", "azure-devops--pr-detail.json"],
+  );
+  assertNoRealValue(files);
+  const html = files.get("azure-devops--pr-detail.html") ?? "";
+  assert.match(html, />Overview</u);
+  assert.match(html, /href="\/fake-org\/text-\d+\/_build\/results\?buildId=\d+"/u);
+});
+
+test("a pipeline log capture keeps the job and step of its links as stand-ins", async () => {
+  const stepLink = `/${ORGANISATION}/${encodeURIComponent(PROJECT)}/_build/results?buildId=${BUILD_ID}&view=logs&j=${JOB_GUID}&t=${STEP_GUID}`;
+  const page = `<!doctype html><body><a href="${stepLink}">Logs</a></body>`;
+  const { alerts, files } = await runCapture(page, `https://dev.azure.com${stepLink}`);
+  assert.deepEqual(alerts, []);
+  assert.deepEqual(
+    [...files.keys()],
+    ["azure-devops--pipeline-log.html", "azure-devops--pipeline-log.json"],
+  );
+  assertNoRealValue(files);
+  assert.match(
+    files.get("azure-devops--pipeline-log.html") ?? "",
+    /buildId=\d+&amp;view=logs&amp;j=0{8}-[\d-]+&amp;t=0{8}-[\d-]+/u,
+  );
 });

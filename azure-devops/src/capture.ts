@@ -16,12 +16,13 @@ import {
 import { findBoardCardIds, isBoardLocation } from "./board.ts";
 import type { AdoClient } from "./ado-client.ts";
 import { PIPELINE_STATUS_ICON_CLASS } from "./pipeline-status-icon.ts";
+import type { PipelineRunView } from "./pipeline-run-link.ts";
 import type { Pseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
 import type { ScrubRules } from "../../shared/dev/scrub/rules.ts";
+import { fakeLink } from "./capture-links.ts";
 import { findPullRequestRows } from "./pr-list.ts";
+import { parsePipelineRunLocation } from "./pipeline-run-link.ts";
 
-/** The organisation in every fake URL. */
-const FAKE_ORGANISATION = "fake-org";
 const STATUS_COLOR_VARIABLES = [
   "--component-status-success",
   "--component-status-error",
@@ -30,17 +31,6 @@ const STATUS_COLOR_VARIABLES = [
   "--component-status-neutral",
 ];
 const PROJECTS_ROUTE = /\/_apis\/projects\/(?<project>[^/?]+)/u;
-
-function fakePullRequestLink(url: URL, pseudonyms: Pseudonyms): string | null {
-  const pullRequest = parsePullRequestHref(url.pathname, apiBasePath(location));
-  if (pullRequest === null) {
-    return null;
-  }
-  const project = pseudonyms.text(pullRequest.project, "pull request link project");
-  const repository = pseudonyms.text(pullRequest.repository, "pull request link repository");
-  const pullRequestId = pseudonyms.number(pullRequest.pullRequestId, "pull request link id");
-  return `/${FAKE_ORGANISATION}/${project}/_git/${repository}/pullrequest/${pullRequestId}`;
-}
 
 const rules: ScrubRules = {
   // Azure DevOps's own layout and state attributes. Their values are fixed words.
@@ -66,8 +56,22 @@ const rules: ScrubRules = {
     { path: /(?:^|\.)(?:httpStatus|retryAfterSeconds|rev)$/u, value: /^\d{1,6}$/u },
   ],
   keepRouteWords: ["edit", "board", "backlog", "t", "results", "pullrequest", "pullrequests"],
-  keepUiWords: ["Active", "Draft"],
-  mapUrl: fakePullRequestLink,
+  keepUiWords: [
+    "Active",
+    "Draft",
+    // Pull request tabs.
+    "Overview",
+    "Files",
+    "Updates",
+    "Commits",
+    // Pipeline run tabs and sections.
+    "Summary",
+    "Logs",
+    "Tests",
+    "Stages",
+    "Jobs",
+  ],
+  mapUrl: fakeLink,
 };
 
 function isElement(node: Node): node is Element {
@@ -235,6 +239,47 @@ function boardPage(): CapturePage {
   };
 }
 
+/** The pull request page: its checks section and the policy evaluations behind it. */
+function pullRequestPage(pullRequest: PullRequestRef): CapturePage {
+  return {
+    async collect(fetch, pseudonyms) {
+      const basePath = apiBasePath(location);
+      pseudonyms.text(basePath.replaceAll("/", ""), "organisation");
+      const client = createAdoClient({ apiBasePath: basePath, fetch, origin: location.origin });
+      return { data: { evaluations: await evaluationsOf(client, pullRequest) }, meta: {} };
+    },
+    name: "pr-detail",
+    root: withoutScriptMarks(document.body),
+  };
+}
+
+const PIPELINE_RUN_PAGE_NAMES: Record<PipelineRunView, string> = {
+  log: "pipeline-log",
+  steps: "pipeline-steps",
+  summary: "pipeline-summary",
+};
+
+/** A pipeline run page. The page itself is enough; it sends no requests. */
+function pipelineRunPage(view: PipelineRunView): CapturePage {
+  return {
+    // oxlint-disable-next-line typescript/require-await -- the capture interface is async
+    async collect() {
+      return { data: {}, meta: {} };
+    },
+    name: PIPELINE_RUN_PAGE_NAMES[view],
+    root: withoutScriptMarks(document.body),
+  };
+}
+
+function pullRequestOrRunPage(location: Location): CapturePage | null {
+  const pullRequest = parsePullRequestHref(location.pathname, apiBasePath(location));
+  if (pullRequest !== null) {
+    return pullRequestPage(pullRequest);
+  }
+  const pipelineRun = parsePipelineRunLocation(location);
+  return pipelineRun === null ? null : pipelineRunPage(pipelineRun.view);
+}
+
 function capturePage(document: Document, location: Location): CapturePage | null {
   const listPage = parsePullRequestListLocation(location, apiBasePath(location));
   if (listPage !== null) {
@@ -243,7 +288,7 @@ function capturePage(document: Document, location: Location): CapturePage | null
   if (isPullRequestInboxLocation(location)) {
     return pullRequestRowsPage("pr-inbox", null);
   }
-  return isBoardLocation(location) ? boardPage() : null;
+  return isBoardLocation(location) ? boardPage() : pullRequestOrRunPage(location);
 }
 
 const captureDefinition: CaptureDefinition = {
