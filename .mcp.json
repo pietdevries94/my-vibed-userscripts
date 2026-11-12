@@ -3,6 +3,10 @@
     "real-site": {
       "command": "node",
       "args": ["shared/dev/real-site/launch.ts"]
+    },
+    "fake-site": {
+      "command": "node",
+      "args": ["shared/dev/fake-site/launch.ts"]
     }
   }
 }

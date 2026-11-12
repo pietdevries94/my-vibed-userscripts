@@ -21,6 +21,9 @@ Code that only this script needs stays in `<script>/src/`. A file moves to `shar
 
 Build `<script>/fake-site/` only for a sealed script, or for a feature that reacts to change over time (polling, reloads). It runs on `http://localhost:8787` on the shared base in `shared/dev/fake-site`, with routes, state, named actions under `/__dev`, and stand-in labels for masked names. Check every feature there in the `fake-site` browser. Details: `docs/spec/sealed-workflow.md`, section "Fake site".
 
+- The `fake-site` tools load when a session starts. Run `npm run dev <script>` before opening a page.
+- A feature that polls waits for its own interval. Change a value the script polls soon, or wait the interval out, before calling a check failed.
+
 ## Dev loop and hand-off
 
 - `npm run dev <script>` rebuilds `dist/dev/<script>.user.js`, serves it on `:8786` and starts the fake site.

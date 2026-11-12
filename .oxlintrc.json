@@ -14,7 +14,6 @@
     "typeAware": true
   },
   // The extension's fake server, kept for reference. Step 5 of the move replaces it.
-  "ignorePatterns": ["azure-devops/dev/**"],
   "rules": {
     // Off: conflicts with import/no-default-export. Together they forbid every export.
     "import/no-named-export": "off",

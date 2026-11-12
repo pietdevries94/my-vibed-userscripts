@@ -1,6 +1,6 @@
 {
   "autoMemoryEnabled": false,
-  "enabledMcpjsonServers": ["real-site"],
+  "enabledMcpjsonServers": ["real-site", "fake-site"],
   "permissions": {
     "deny": [
       "mcp__real-site__browser_click",
@@ -22,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "rm -rf \"$CLAUDE_PROJECT_DIR/.real-site\""
+            "command": "rm -rf \"$CLAUDE_PROJECT_DIR/.real-site\" \"$CLAUDE_PROJECT_DIR/.fake-site\""
           }
         ]
       }

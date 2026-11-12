@@ -3,3 +3,4 @@ fixtures
 dist/dev/
 .real-site/
 .DS_Store
+.fake-site/
