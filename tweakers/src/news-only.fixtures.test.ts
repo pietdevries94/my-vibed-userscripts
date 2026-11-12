@@ -33,21 +33,30 @@ test("the news item list stays visible and holds news items", { skip: fixtures.s
   }
 });
 
-test("the site header and the rest of the page stay visible", { skip: fixtures.skip }, () => {
-  const document = capturedHomepage();
-  const keptParts = ["#top", ".community-block", "twk-sidebar", "#bottom"];
-  for (const kept of keptParts) {
-    const element = document.querySelector(kept);
-    assert.ok(element !== null, `${kept} is on the homepage`);
-    for (const selector of HIDDEN_PARTS) {
-      assert.equal(element.closest(selector), null, `${selector} does not hide ${kept}`);
+test(
+  "the menu bar, the search bar and the rest of the page stay visible",
+  { skip: fixtures.skip },
+  () => {
+    const document = capturedHomepage();
+    const keptParts = ["#menubar", "#searchbar", ".community-block", "twk-sidebar", "#bottom"];
+    for (const kept of keptParts) {
+      const element = document.querySelector(kept);
+      assert.ok(element !== null, `${kept} is on the homepage`);
+      for (const selector of HIDDEN_PARTS) {
+        assert.equal(element.closest(selector), null, `${selector} does not hide ${kept}`);
+      }
     }
-  }
-});
+  },
+);
 
-test("the top banner is hidden", { skip: fixtures.skip }, () => {
+test("the top banner and the category bar are hidden", { skip: fixtures.skip }, () => {
   const document = capturedHomepage();
-  const banner = document.querySelector(".top-banner");
-  assert.ok(banner !== null, "the top banner is on the homepage");
-  assert.ok(HIDDEN_PARTS.some((selector) => banner.matches(selector)));
+  for (const part of [".top-banner", "#categoryBar"]) {
+    const element = document.querySelector(part);
+    assert.ok(element !== null, `${part} is on the homepage`);
+    assert.ok(
+      HIDDEN_PARTS.some((selector) => element.matches(selector)),
+      `${part} is hidden`,
+    );
+  }
 });

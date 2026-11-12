@@ -66,14 +66,18 @@ _Avoid_: Header, hero, ankeiler
 The list of news items under "Laatste nieuws" on the homepage. The news-only view widens it to the full content area.
 _Avoid_: Feed, timeline, headlines
 
+**Category bar**:
+The row under the search bar headed "Vergelijk producten en prijzen", with a tile per product category.
+_Avoid_: Product bar, category menu
+
 **Side columns**:
 The two columns right of the news item list on the homepage: the story stream, and promotions with Best Buy Guides.
 _Avoid_: Sidebar, widgets
 
 **Site header**:
-The block at the top of every Tweakers page: menu bar, alert bar, search bar and category bar. The script leaves it alone.
+The block at the top of every Tweakers page: menu bar, alert bar, search bar and category bar. The news-only view hides only its category bar.
 _Avoid_: Navbar, top bar, header (the owner may mean the lead story)
 
 **News-only view**:
-The homepage without the top banner, the lead story and the side columns. The news item list takes their width. The rest of the page stays.
+The homepage without the category bar, the top banner, the lead story and the side columns. The news item list takes their width. The rest of the page stays.
 _Avoid_: Clean mode, minimal view

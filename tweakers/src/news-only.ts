@@ -1,4 +1,4 @@
-// On the homepage, hides the top banner, the lead story and the side columns, so the news item list fills the content area.
+// On the homepage, hides the category bar, the top banner, the lead story and the side columns, so the news item list fills the content area.
 
 /** On `<html>` while the homepage shows the news-only view. */
 const NEWS_ONLY_CLASS = "fix-tweakers-news-only";
@@ -7,6 +7,8 @@ const NEWS_ITEM_LIST = "#headlines-start";
 
 /** The homepage parts the news-only class hides. */
 const HIDDEN_PARTS = [
+  // "Vergelijk producten en prijzen" and its product categories, under the search bar.
+  "#top > #categoryBar",
   // The banner above the content area.
   "#contentArea > .top-banner",
   // The lead story above the news item list.
