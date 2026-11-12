@@ -2,6 +2,7 @@ import type { PullRequestListPage, PullRequestRef } from "./pull-request-link.ts
 import type { BoardWorkItem } from "./board.ts";
 import type { ListedPullRequest } from "./pr-list-changes.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
+import type { TimelineRecord } from "./pipeline-timeline.ts";
 
 interface PolicyEvaluationsResponse {
   evaluations: PolicyEvaluation[];
@@ -15,6 +16,12 @@ interface PullRequestsResponse {
   retryAfterSeconds: number | null;
 }
 
+interface TimelineResponse {
+  records: TimelineRecord[];
+  /** Set when Azure DevOps asks the caller to slow down. */
+  retryAfterSeconds: number | null;
+}
+
 interface WorkItemsResponse {
   workItems: BoardWorkItem[];
   /** Set when Azure DevOps asks the caller to slow down. */
@@ -24,6 +31,8 @@ interface WorkItemsResponse {
 interface AdoClient {
   getPolicyEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluationsResponse>;
   getPullRequests: (listPage: PullRequestListPage) => Promise<PullRequestsResponse>;
+  /** The stages, jobs and steps of a pipeline run. */
+  getTimeline: (project: string, buildId: number) => Promise<TimelineResponse>;
   getWorkItems: (ids: number[]) => Promise<WorkItemsResponse>;
   /** The id of the signed-in user, or null when Azure DevOps does not tell. */
   getAuthenticatedUserId: () => Promise<string | null>;
@@ -42,6 +51,7 @@ interface ResponseBody {
   id?: string;
   authenticatedUser?: { id?: string };
   value?: unknown[];
+  records?: unknown[];
 }
 
 /** A work item from the work items API. With errorPolicy=Omit, null for one that was deleted or is not readable. */
@@ -89,8 +99,9 @@ async function getJson(options: AdoClientOptions, path: string): Promise<JsonRes
   if (!response.ok) {
     throw new AdoRequestError(response.status, retryAfterSeconds);
   }
+  // A run that has not started has no timeline; Azure DevOps answers `null`.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
-  return { body: (await response.json()) as ResponseBody, retryAfterSeconds };
+  return { body: ((await response.json()) as ResponseBody | null) ?? {}, retryAfterSeconds };
 }
 
 /** Looks up a project id once per project. A failed lookup is retried on the next call. */
@@ -176,11 +187,26 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
       return { pullRequests: body.value as ListedPullRequest[], retryAfterSeconds };
     },
 
+    async getTimeline(project, buildId) {
+      const { body, retryAfterSeconds } = await getJson(
+        options,
+        `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?api-version=7.1`,
+      );
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
+      return { records: (body.records ?? []) as TimelineRecord[], retryAfterSeconds };
+    },
+
     async getWorkItems(ids) {
       return getWorkItems(options, ids);
     },
   };
 }
 
-export type { AdoClient, PolicyEvaluationsResponse, PullRequestsResponse, WorkItemsResponse };
+export type {
+  AdoClient,
+  PolicyEvaluationsResponse,
+  PullRequestsResponse,
+  TimelineResponse,
+  WorkItemsResponse,
+};
 export { AdoRequestError, createAdoClient };

@@ -58,6 +58,9 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     async getPullRequests() {
       throw new Error("not used by the pipeline status poller");
     },
+    async getTimeline() {
+      throw new Error("not used by the pipeline status poller");
+    },
     async getWorkItems() {
       throw new Error("not used by the pipeline status poller");
     },

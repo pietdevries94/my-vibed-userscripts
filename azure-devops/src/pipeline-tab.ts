@@ -47,7 +47,7 @@ function createTab(document: Document): HTMLAnchorElement {
   tab.className = `bolt-tab focus-treatment flex-noshrink ${TAB_CLASS}`;
   tab.setAttribute("role", "tab");
   tab.href = "#";
-  tab.innerHTML = `<span class="bolt-tab-text" data-content="${TAB_LABEL}">${TAB_LABEL}</span>`;
+  tab.innerHTML = `<span class="bolt-tab-inner-container"><span class="bolt-tab-text" data-content="${TAB_LABEL}">${TAB_LABEL}</span></span>`;
   setSelected(tab, false);
   return tab;
 }

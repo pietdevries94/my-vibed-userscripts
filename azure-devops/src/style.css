@@ -190,3 +190,8 @@ html[data-fix-ado-run-view="log"] .run-logs-view > .bolt-master-panel {
   font: inherit;
   cursor: pointer;
 }
+
+/* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */
+.fix-ado-pipeline-tab:focus:not(:focus-visible) {
+  outline: none;
+}

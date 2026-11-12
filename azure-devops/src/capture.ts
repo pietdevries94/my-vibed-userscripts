@@ -1,27 +1,25 @@
 // The Azure DevOps capture: which pages to capture, what to keep, and which GET
 // requests to send. Dev file only. The owner reads the keep rules below.
-import { AdoRequestError, createAdoClient } from "./ado-client.ts";
 import type {
   CaptureDefinition,
   CapturePage,
   GetOnlyFetch,
 } from "../../shared/dev/capture/capture.ts";
-import type { PullRequestListPage, PullRequestRef } from "./pull-request-link.ts";
 import {
   apiBasePath,
   isPullRequestInboxLocation,
-  parsePullRequestHref,
   parsePullRequestListLocation,
 } from "./pull-request-link.ts";
+import { evaluationsOf, pullRequestOrRunPage } from "./capture-pipeline.ts";
 import { findBoardCardIds, isBoardLocation } from "./board.ts";
 import type { AdoClient } from "./ado-client.ts";
-import { PIPELINE_STATUS_ICON_CLASS } from "./pipeline-status-icon.ts";
-import type { PipelineRunView } from "./pipeline-run-link.ts";
 import type { Pseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
+import type { PullRequestListPage } from "./pull-request-link.ts";
 import type { ScrubRules } from "../../shared/dev/scrub/rules.ts";
+import { createAdoClient } from "./ado-client.ts";
 import { fakeLink } from "./capture-links.ts";
 import { findPullRequestRows } from "./pr-list.ts";
-import { parsePipelineRunLocation } from "./pipeline-run-link.ts";
+import { withoutScriptMarks } from "./capture-script-marks.ts";
 
 const STATUS_COLOR_VARIABLES = [
   "--component-status-success",
@@ -52,6 +50,10 @@ const rules: ScrubRules = {
     { path: /configuration\.type\.displayName$/u, value: /^[\w ]{1,60}$/u },
     // Reviewer votes: -10, -5, 0, 5, 10.
     { path: /(?:^|\.)vote$/u, value: /^-?\d{1,2}$/u },
+    // Run timeline records: Stage, Job or Task; pending or completed; succeeded or failed.
+    { path: /records\.(?:type|state|result)$/u, value: /^[A-Za-z.]{1,40}$/u },
+    // The order of a record within its parent. A stand-in would lose it.
+    { path: /records\.order$/u, value: /^\d{1,4}$/u },
     // Response status, Retry-After and work item revisions.
     { path: /(?:^|\.)(?:httpStatus|retryAfterSeconds|rev)$/u, value: /^\d{1,6}$/u },
   ],
@@ -73,49 +75,6 @@ const rules: ScrubRules = {
   ],
   mapUrl: fakeLink,
 };
-
-function isElement(node: Node): node is Element {
-  return node.nodeType === node.ELEMENT_NODE;
-}
-
-function hasInlineStyle(element: Element): element is Element & ElementCSSInlineStyle {
-  return "style" in element;
-}
-
-/**
- * A copy of `root` without what this script added: status icons, data-fix-ado-*
- * attributes and --fix-ado-* style properties. The fixture shows the page as
- * Azure DevOps rendered it.
- */
-function withoutScriptMarks(root: Element): Element {
-  const copy = root.cloneNode(true);
-  if (!isElement(copy)) {
-    return root;
-  }
-  for (const icon of copy.querySelectorAll(`.${PIPELINE_STATUS_ICON_CLASS}`)) {
-    icon.remove();
-  }
-  for (const element of [copy, ...copy.querySelectorAll("*")]) {
-    removeScriptMarks(element);
-  }
-  return copy;
-}
-
-function removeScriptMarks(element: Element): void {
-  for (const name of element
-    .getAttributeNames()
-    .filter((attribute) => attribute.startsWith("data-fix-ado-"))) {
-    element.removeAttribute(name);
-  }
-  if (hasInlineStyle(element)) {
-    for (const property of [...element.style].filter((name) => name.startsWith("--fix-ado-"))) {
-      element.style.removeProperty(property);
-    }
-    if (element.getAttribute("style") === "") {
-      element.removeAttribute("style");
-    }
-  }
-}
 
 function statusColors(): Record<string, string> {
   const style = getComputedStyle(document.body);
@@ -142,17 +101,6 @@ function recordProjectIds(getOnly: GetOnlyFetch, projectIds: Map<string, string>
     }
     return response;
   };
-}
-
-async function evaluationsOf(client: AdoClient, pullRequest: PullRequestRef): Promise<unknown> {
-  try {
-    const { evaluations, retryAfterSeconds } = await client.getPolicyEvaluations(pullRequest);
-    return { body: { value: evaluations }, httpStatus: 200, retryAfterSeconds };
-  } catch (error) {
-    return error instanceof AdoRequestError
-      ? { body: null, httpStatus: error.httpStatus, retryAfterSeconds: error.retryAfterSeconds }
-      : { body: null, httpStatus: 0, retryAfterSeconds: null };
-  }
 }
 
 /** Policy evaluations of every listed pull request, by stand-in pull request id. */
@@ -237,47 +185,6 @@ function boardPage(): CapturePage {
     name: "board",
     root: withoutScriptMarks(document.body),
   };
-}
-
-/** The pull request page: its checks section and the policy evaluations behind it. */
-function pullRequestPage(pullRequest: PullRequestRef): CapturePage {
-  return {
-    async collect(fetch, pseudonyms) {
-      const basePath = apiBasePath(location);
-      pseudonyms.text(basePath.replaceAll("/", ""), "organisation");
-      const client = createAdoClient({ apiBasePath: basePath, fetch, origin: location.origin });
-      return { data: { evaluations: await evaluationsOf(client, pullRequest) }, meta: {} };
-    },
-    name: "pr-detail",
-    root: withoutScriptMarks(document.body),
-  };
-}
-
-const PIPELINE_RUN_PAGE_NAMES: Record<PipelineRunView, string> = {
-  log: "pipeline-log",
-  steps: "pipeline-steps",
-  summary: "pipeline-summary",
-};
-
-/** A pipeline run page. The page itself is enough; it sends no requests. */
-function pipelineRunPage(view: PipelineRunView): CapturePage {
-  return {
-    // oxlint-disable-next-line typescript/require-await -- the capture interface is async
-    async collect() {
-      return { data: {}, meta: {} };
-    },
-    name: PIPELINE_RUN_PAGE_NAMES[view],
-    root: withoutScriptMarks(document.body),
-  };
-}
-
-function pullRequestOrRunPage(location: Location): CapturePage | null {
-  const pullRequest = parsePullRequestHref(location.pathname, apiBasePath(location));
-  if (pullRequest !== null) {
-    return pullRequestPage(pullRequest);
-  }
-  const pipelineRun = parsePipelineRunLocation(location);
-  return pipelineRun === null ? null : pipelineRunPage(pipelineRun.view);
 }
 
 function capturePage(document: Document, location: Location): CapturePage | null {

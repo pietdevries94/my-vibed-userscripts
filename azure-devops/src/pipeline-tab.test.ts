@@ -18,8 +18,8 @@ const PAGE = `<!doctype html><body>
     <div class="repos-pr-header">Fix the totals</div>
     <div class="repos-pr-details-page-tabbar">
       <div role="tablist">
-        <a class="bolt-tab selected" role="tab" aria-selected="true" id="__bolt-tab-overview"><span class="bolt-tab-text">Overview</span></a>
-        <a class="bolt-tab" role="tab" aria-selected="false" id="__bolt-tab-files"><span class="bolt-tab-text">Files</span></a>
+        <a class="bolt-tab selected" role="tab" aria-selected="true" id="__bolt-tab-overview"><span class="bolt-tab-inner-container"><span class="bolt-tab-text">Overview</span></span></a>
+        <a class="bolt-tab" role="tab" aria-selected="false" id="__bolt-tab-files"><span class="bolt-tab-inner-container"><span class="bolt-tab-text">Files</span></span></a>
       </div>
     </div>
     <div class="page-content">
@@ -92,6 +92,16 @@ test("a pull request gets a Pipeline tab, closed until clicked", () => {
   assert.equal(isOpen(document), false);
   assert.equal(document.querySelector(".fix-ado-pipeline-panel"), null);
   assert.deepEqual(requests, []);
+});
+
+/** The classes inside a tab, in order. */
+const tabShape = (tab: Element | null): string[] =>
+  [...(tab?.querySelectorAll("*") ?? [])].map((element) => element.className);
+
+test("the tab is built like Azure DevOps's own tabs, so it lines up with them", () => {
+  const { document } = setUp();
+  const overview = document.querySelector("#__bolt-tab-overview");
+  assert.deepEqual(tabShape(pipelineTab(document)), tabShape(overview));
 });
 
 test("the tab is added once, however often the page syncs", () => {

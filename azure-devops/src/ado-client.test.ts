@@ -157,3 +157,25 @@ test("asks who is signed in once, and gives null when that fails", async () => {
   const failing = fakeAdo(() => new Response("", { status: 500 }));
   assert.equal(await failing.client.getAuthenticatedUserId(), null);
 });
+
+test("fetches the timeline of a pipeline run", async () => {
+  const record = { id: "step-guid", name: "npm test", type: "Task" };
+  const { client, requests } = fakeAdo(() => Response.json({ records: [record] }));
+  const response = await client.getTimeline("my project", 812);
+
+  assert.deepEqual(response, { records: [record], retryAfterSeconds: null });
+  assert.deepEqual(
+    requests.map((request) => `${request.init.method} ${request.url}`),
+    [
+      "GET https://dev.azure.com/my-org/my%20project/_apis/build/builds/812/timeline?api-version=7.1",
+    ],
+  );
+});
+
+test("a run without a timeline yet has no records", async () => {
+  const { client } = fakeAdo(() => new Response("null", { status: 200 }));
+  assert.deepEqual(await client.getTimeline("my project", 812), {
+    records: [],
+    retryAfterSeconds: null,
+  });
+});
