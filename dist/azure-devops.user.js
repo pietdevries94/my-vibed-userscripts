@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.2.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs, required reviewers first, avatar initials (a menu setting, on by default), and pull request lists and boards that reload on changes.
+// @version      1.3.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs, required reviewers first, avatar initials (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -286,6 +286,19 @@
     }
     return { retryAfterSeconds, workItems };
   }
+  async function getWorkItemUpdates(options, id) {
+    let updates = [], retryAfterSeconds = null;
+    for (let skip = 0; ; skip += 200) {
+      let response = await getJson(
+        options,
+        `/_apis/wit/workItems/${id}/updates?$top=200&$skip=${skip}&api-version=7.1`
+      );
+      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
+      let page = response.body.value ?? [];
+      if (updates.push(...page), page.length < 200)
+        return { retryAfterSeconds, updates };
+    }
+  }
   async function getPullRequestBuilds(options, { project, pullRequestId }) {
     let branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`), { body, retryAfterSeconds } = await getJson(
       options,
@@ -321,10 +334,160 @@
         );
         return { records: body.records ?? [], retryAfterSeconds };
       },
-      async getWorkItems(ids) {
-        return getWorkItems(options, ids);
+      getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
+      getWorkItems: async (ids) => getWorkItems(options, ids)
+    };
+  }
+
+  // azure-devops/src/days-in-column.ts
+  var CARD_SELECTOR2 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS = "fix-ado-days-in-column";
+  function columnEnteredAt(updates) {
+    for (let update2 of updates.toReversed()) {
+      let columnChange = update2.fields?.["System.BoardColumn"];
+      if (columnChange !== void 0 && columnChange.newValue !== columnChange.oldValue) {
+        let changedDate = update2.fields?.["System.ChangedDate"]?.newValue;
+        return typeof changedDate == "string" ? changedDate : null;
+      }
+    }
+    return null;
+  }
+  function daysSince(enteredAt, now) {
+    return Math.max(0, Math.floor((now - Date.parse(enteredAt)) / 864e5));
+  }
+  function dotAge(day) {
+    return day <= 7 ? "fresh" : day <= 14 ? "aging" : "old";
+  }
+  var LOADING_DOT_COUNT = 3;
+  function dotsFor(document2, days) {
+    return (days === null ? Array.from({ length: LOADING_DOT_COUNT }, () => "loading") : Array.from({ length: Math.min(days, 30) }, (_entry, index) => dotAge(index + 1))).map((age) => {
+      let dot = document2.createElement("span");
+      return dot.dataset.age = age, dot;
+    });
+  }
+  function captionFor(days) {
+    return days === null ? "" : days === 0 ? "Less than a day in this column" : `${days} ${days === 1 ? "day" : "days"} in this column`;
+  }
+  function createDotBar(document2, days) {
+    let bar = document2.createElement("div");
+    return bar.className = BAR_CLASS, bar.dataset.days = String(days), bar.title = captionFor(days), days === null ? bar.setAttribute("aria-hidden", "true") : (bar.setAttribute("aria-label", bar.title), bar.setAttribute("role", "img")), bar.append(...dotsFor(document2, days)), bar;
+  }
+  function showDaysInColumn(card, days) {
+    let existing = card.querySelector(`.${BAR_CLASS}`);
+    existing?.dataset.days !== String(days) && (existing?.remove(), (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days)));
+  }
+  function findCards(document2) {
+    let cards = /* @__PURE__ */ new Map();
+    for (let card of document2.querySelectorAll(CARD_SELECTOR2)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && cards.set(id, [...cards.get(id) ?? [], card]);
+    }
+    return cards;
+  }
+  function columnIdOf(card) {
+    return card.closest(COLUMN_SELECTOR)?.dataset.column ?? null;
+  }
+  function noteMoves(tracker, cards) {
+    for (let [id, [element]] of cards) {
+      let columnId = columnIdOf(element), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
+      lastColumnId !== void 0 && lastColumnId !== columnId && entry !== void 0 && (entry.enteredAt = new Date(tracker.now()).toISOString()), tracker.columnIds.set(id, columnId);
+    }
+  }
+  function showBars(tracker, cards) {
+    noteMoves(tracker, cards);
+    for (let [id, elements] of cards) {
+      let entry = tracker.entries.get(id), enteredAt = entry?.enteredAt ?? null, days = null;
+      entry !== void 0 && (days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now()));
+      for (let element of elements)
+        showDaysInColumn(element, days);
+    }
+  }
+  function pauseIfAsked(tracker, retryAfterSeconds) {
+    return retryAfterSeconds === null ? !1 : (tracker.pausedUntil = tracker.now() + retryAfterSeconds * 1e3, !0);
+  }
+  async function fetchChangedCards(tracker, ids) {
+    let { workItems, retryAfterSeconds } = await tracker.client.getWorkItems(ids);
+    if (pauseIfAsked(tracker, retryAfterSeconds))
+      return;
+    let changed = workItems.filter(({ id, rev }) => tracker.entries.get(id)?.rev !== rev);
+    for (let { id, rev } of changed) {
+      let response = await tracker.client.getWorkItemUpdates(id);
+      if (tracker.entries.set(id, { enteredAt: columnEnteredAt(response.updates), rev }), pauseIfAsked(tracker, response.retryAfterSeconds))
+        return;
+    }
+  }
+  function isCheckDue(tracker, ids) {
+    let now = tracker.now(), isDue = ids.some((id) => !tracker.entries.has(id)) || now - tracker.lastCheckAt >= 6e4;
+    return !tracker.isChecking && ids.length > 0 && isDue && now >= tracker.pausedUntil;
+  }
+  async function check(tracker, ids) {
+    tracker.isChecking = !0, tracker.lastCheckAt = tracker.now();
+    try {
+      await fetchChangedCards(tracker, ids);
+    } catch {
+      tracker.pausedUntil = tracker.now() + 6e4;
+    } finally {
+      tracker.isChecking = !1;
+    }
+  }
+  function createDaysInColumn(options) {
+    let tracker = {
+      client: options.client,
+      columnIds: /* @__PURE__ */ new Map(),
+      entries: /* @__PURE__ */ new Map(),
+      isChecking: !1,
+      lastCheckAt: Number.NEGATIVE_INFINITY,
+      now: options.now,
+      pausedUntil: Number.NEGATIVE_INFINITY
+    };
+    return {
+      async sync() {
+        let cards = findCards(options.document);
+        showBars(tracker, cards);
+        let ids = [...cards.keys()];
+        isCheckDue(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
       }
     };
+  }
+
+  // azure-devops/src/days-in-column-toggle.ts
+  var HEADER_SELECTOR = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS = "fix-ado-days-toggle";
+  function showColumnState(column, toggle, isHidden) {
+    Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
+    let pressed = String(!isHidden);
+    toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", toggle.title));
+  }
+  function createToggle(document2, onClick2) {
+    let toggle = document2.createElement("button");
+    return toggle.type = "button", toggle.className = TOGGLE_CLASS, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
+      event.preventDefault(), event.stopPropagation(), onClick2();
+    }), toggle;
+  }
+  function findOrAddToggle(header, onClick2) {
+    let existing = header.querySelector(`.${TOGGLE_CLASS}`);
+    if (existing !== null)
+      return existing;
+    let toggle = createToggle(header.ownerDocument, onClick2);
+    return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
+  }
+  function createDaysInColumnToggles(options) {
+    let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
+    function flip(columnId) {
+      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync2();
+    }
+    function sync2() {
+      let headers = [...document2.querySelectorAll(HEADER_SELECTOR)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
+      if (headers.length === columns.length)
+        for (let [index, header] of headers.entries()) {
+          let column = columns[index], columnId = column?.dataset.column;
+          if (column !== void 0 && columnId !== void 0) {
+            let toggle = findOrAddToggle(header, () => {
+              flip(columnId);
+            });
+            showColumnState(column, toggle, hiddenColumnIds.has(columnId));
+          }
+        }
+    }
+    return { sync: sync2 };
   }
 
   // azure-devops/src/on-off-setting.ts
@@ -341,7 +504,7 @@
 
   // azure-devops/src/page-reloader.ts
   var PAGE_CHECK_INTERVAL_MS = 3e4, FAILED_PAGE_CHECK_RETRY_MS = 6e4, MS_PER_SECOND = 1e3;
-  function isCheckDue(state, page, immediately) {
+  function isCheckDue2(state, page, immediately) {
     return state.loadedSnapshots.has(page.key) ? !state.options.isTabActive() || state.options.now() < state.pausedUntil ? !1 : immediately || state.options.now() >= state.nextCheckAt : !0;
   }
   function pauseFor(state, retryAfterSeconds) {
@@ -379,7 +542,7 @@
     return {
       async check({ immediately = !1 } = {}) {
         let page = options.currentPage();
-        !page || state.isChecking || !isCheckDue(state, page, immediately) || await runCheck(state, page);
+        !page || state.isChecking || !isCheckDue2(state, page, immediately) || await runCheck(state, page);
       }
     };
   }
@@ -705,10 +868,10 @@
     return names.slice(jobIndex + 1).find((name) => isStep(name)) ?? names.find((name) => isStep(name)) ?? null;
   }
   function waitForSwitch(frame, log2, schedule) {
-    let checksLeft = 15, check = () => {
-      frame.dataset.fixAdoLogPath !== log2.path || showsStep(frame, log2.stepName) || (checksLeft -= 1, checksLeft > 0 ? schedule(check, 100) : load(frame, log2));
+    let checksLeft = 15, check2 = () => {
+      frame.dataset.fixAdoLogPath !== log2.path || showsStep(frame, log2.stepName) || (checksLeft -= 1, checksLeft > 0 ? schedule(check2, 100) : load(frame, log2));
     };
-    schedule(check, 100);
+    schedule(check2, 100);
   }
   function stepInFrame(frame, log2) {
     let isSameRun = frame.dataset.fixAdoBuildId === String(log2.buildId), document2 = frame.contentDocument;
@@ -825,11 +988,11 @@
       status: pipelineStatusOf([evaluation])
     };
   }
-  function startedAtMs(check) {
-    return check.startedAt === null ? 0 : Date.parse(check.startedAt);
+  function startedAtMs(check2) {
+    return check2.startedAt === null ? 0 : Date.parse(check2.startedAt);
   }
   function pipelineChecksOf(evaluations) {
-    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check) => check !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
+    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check2) => check2 !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
   }
 
   // azure-devops/src/pipeline-runs.ts
@@ -847,28 +1010,28 @@
   function buildStatusOf(build) {
     return (build.result === void 0 ? void 0 : RESULT_STATUSES2[build.result]) ?? PROGRESS_STATUSES[build.status] ?? null;
   }
-  function runOfBuild(build, check) {
+  function runOfBuild(build, check2) {
     return {
       buildId: build.id,
       buildNumber: build.buildNumber,
-      isRequired: check?.isRequired ?? null,
-      name: check?.name ?? build.definition?.name ?? `Run ${build.buildNumber}`,
-      startedAt: build.startTime ?? build.queueTime ?? check?.startedAt ?? null,
-      status: check?.status === null || check === void 0 ? buildStatusOf(build) : { status: check.status }
+      isRequired: check2?.isRequired ?? null,
+      name: check2?.name ?? build.definition?.name ?? `Run ${build.buildNumber}`,
+      startedAt: build.startTime ?? build.queueTime ?? check2?.startedAt ?? null,
+      status: check2?.status === null || check2 === void 0 ? buildStatusOf(build) : { status: check2.status }
     };
   }
-  function runOfCheck(check) {
-    let status = check.status === null ? null : { status: check.status };
-    return { ...check, buildNumber: null, status };
+  function runOfCheck(check2) {
+    let status = check2.status === null ? null : { status: check2.status };
+    return { ...check2, buildNumber: null, status };
   }
   function pipelineRunsOf(checks, builds) {
     let listed = new Set(builds.map((build) => build.id));
     return [
-      ...checks.filter((check) => !listed.has(check.buildId)).map((check) => runOfCheck(check)),
+      ...checks.filter((check2) => !listed.has(check2.buildId)).map((check2) => runOfCheck(check2)),
       ...builds.map(
         (build) => runOfBuild(
           build,
-          checks.find((check) => check.buildId === build.id)
+          checks.find((check2) => check2.buildId === build.id)
         )
       )
     ];
@@ -1360,6 +1523,99 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 .fix-ado-pipeline-tab:focus:not(:focus-visible) {
   outline: none;
 }
+
+/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+.fix-ado-days-in-column {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  /* One row of dots, also when empty, so a card keeps its height. */
+  min-height: 5px;
+  margin-top: 6px;
+}
+
+.fix-ado-days-in-column > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  /* Azure DevOps keeps its palette as bare "r, g, b" values, so it follows the theme. */
+  background: rgb(var(--palette-neutral-20, 200, 200, 200));
+}
+
+.fix-ado-days-in-column > span[data-age="aging"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+.fix-ado-days-in-column > span[data-age="old"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
+}
+
+/* Skeleton while the day count loads: three grey dots that pulse one after another. */
+.fix-ado-days-in-column > span[data-age="loading"] {
+  animation: fix-ado-pulse 1.2s ease-in-out infinite;
+}
+.fix-ado-days-in-column > span[data-age="loading"]:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.fix-ado-days-in-column > span[data-age="loading"]:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes fix-ado-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-days-in-column > span[data-age="loading"] {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.kanban-board-column[data-fix-ado-days-hidden] .fix-ado-days-in-column {
+  display: none;
+}
+
+/* The days-in-column toggle in a column header. It shows while the header is hovered or focused. */
+.fix-ado-days-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.kanban-board-column-header:is(:hover, :focus-within) .fix-ado-days-toggle {
+  opacity: 1;
+}
+
+.fix-ado-days-toggle:hover {
+  background: rgba(var(--palette-black-alpha-6, 0, 0, 0, 0.06));
+}
+
+.fix-ado-days-toggle > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+/* Off: hollow dots. */
+.fix-ado-days-toggle[aria-pressed="false"] > span {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
+}
 `;
 
   // azure-devops/src/pr-list-changes.ts
@@ -1449,6 +1705,14 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     findRows: () => findPullRequestRows(document, basePath),
     now: () => Date.now(),
     showStatus: showPipelineStatus
+  }), daysInColumn = createDaysInColumn({ client, document, now: () => Date.now() }), HIDDEN_DAYS_COLUMNS_KEY = "days-in-column-hidden-columns", daysInColumnToggles = createDaysInColumnToggles({
+    document,
+    storage: {
+      load: () => GM_getValue(HIDDEN_DAYS_COLUMNS_KEY, []),
+      save: (columnIds) => {
+        GM_setValue(HIDDEN_DAYS_COLUMNS_KEY, columnIds);
+      }
+    }
   }), requiredReviewers = createRequiredReviewerMarker({
     client,
     findRows: () => findPullRequestRows(document, basePath),
@@ -1495,8 +1759,11 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   function reloadPage() {
     !isUserBusy() && claimReload() && location.reload();
   }
+  function syncFetchingFeatures() {
+    poller.sync(), isPullRequestInboxLocation(location) && requiredReviewers.syncInbox(), isBoardLocation(location) && daysInColumn.sync();
+  }
   function sync() {
-    pipelineRunFrame?.sync(), pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath)), avatarInitials.isOn() && showInitialsOnAvatars(document), requiredReviewers.markAll(), isTabActive() && (poller.sync(), isPullRequestInboxLocation(location) && requiredReviewers.syncInbox()), reloader.check();
+    pipelineRunFrame?.sync(), pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath)), avatarInitials.isOn() && showInitialsOnAvatars(document), requiredReviewers.markAll(), isBoardLocation(location) && daysInColumnToggles.sync(), isTabActive() && syncFetchingFeatures(), reloader.check();
   }
   var settleTimer = null;
   new MutationObserver(() => {
