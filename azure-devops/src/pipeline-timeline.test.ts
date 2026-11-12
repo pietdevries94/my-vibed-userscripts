@@ -86,3 +86,11 @@ test("each state and result shows as a status with its own label", () => {
   assert.equal(statusOf("completed", "canceled"), "notStarted: Canceled");
   assert.equal(statusOf("completed", "skipped"), "notStarted: Skipped");
 });
+
+test("a running step goes before a failed one", () => {
+  const records = [
+    ...RECORDS.filter((item) => item.id !== "e2e"),
+    record("Task", "e2e", { parentId: "test-e2e", result: null, state: "inProgress" }),
+  ];
+  assert.equal(defaultStepOf(stagesOf(records))?.id, "e2e");
+});

@@ -1,8 +1,10 @@
 import {
   EVALUATIONS,
   LOG_PATH,
+  PULL_REQUEST,
   TIMELINES,
   click,
+  clock,
   frameSource,
   isOpen,
   pickItem,
@@ -12,6 +14,7 @@ import {
   timelineRecord,
   treeNames,
 } from "./pipeline-tab.test-page.ts";
+import type { TimelineRecord } from "./pipeline-timeline.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -123,4 +126,54 @@ test("a row whose name does not fit gets the full name as its tooltip", async ()
   }
   assert.equal(cutOff.title, "checkout");
   assert.equal(fits.hasAttribute("title"), false);
+});
+
+const RUN_502_STEPS = ["checkout", "compile", "unit"];
+
+/** The state of the step at `index` while the step at `runningIndex` runs. -1: not a step. */
+function stateWhileRunning(
+  index: number,
+  runningIndex: number,
+): Pick<TimelineRecord, "result" | "state"> {
+  if (index === -1 || index === runningIndex) {
+    return { result: null, state: "inProgress" };
+  }
+  return index < runningIndex
+    ? { result: "succeeded", state: "completed" }
+    : { result: null, state: "pending" };
+}
+
+/** Run 502 with `running` in progress, the steps before it done and the ones after it pending. */
+function runningTimeline(running: string): TimelineRecord[] {
+  const runningIndex = RUN_502_STEPS.indexOf(running);
+  return (TIMELINES[502] ?? []).map((record) =>
+    Object.assign(
+      structuredClone(record),
+      stateWhileRunning(RUN_502_STEPS.indexOf(record.id), runningIndex),
+    ),
+  );
+}
+
+test("a running run shows its running step, follows it, and stops once a step is picked", async () => {
+  const timelines = { ...TIMELINES, 502: runningTimeline("checkout") };
+  const { document, tab } = setUp(EVALUATIONS, timelines);
+  click(pipelineTab(document));
+  await settle();
+  assert.deepEqual(treeNames(document, "step"), ["checkout*", "compile"]);
+
+  timelines[502] = runningTimeline("unit");
+  clock.nowMs = 5000;
+  tab.sync(PULL_REQUEST);
+  await settle();
+  assert.deepEqual(treeNames(document, "stage"), ["build", "test*"]);
+  assert.deepEqual(treeNames(document, "step"), ["unit*"]);
+  assert.equal(frameSource(document), `${LOG_PATH}502&view=logs&j=test-job&t=unit`);
+
+  click(pickItem(document, "stage", "build"));
+  click(pickItem(document, "step", "compile"));
+  timelines[502] = runningTimeline("unit");
+  clock.nowMs = 10_000;
+  tab.sync(PULL_REQUEST);
+  await settle();
+  assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
 });

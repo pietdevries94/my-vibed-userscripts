@@ -91,11 +91,15 @@ interface Setup {
 /** The run list's answer: none by default, so the checks' runs are the list. */
 type RunListAnswer = () => Promise<PullRequestBuild[]>;
 
+/** The tab's clock. Each setUp starts it at 0; a test moves it to let refreshes come due. */
+const clock = { nowMs: 0 };
+
 function setUp(
   evaluations = EVALUATIONS,
   timelines = TIMELINES,
   runList: RunListAnswer = async () => [],
 ): Setup {
+  clock.nowMs = 0;
   const { document } = new JSDOM(PAGE, { url: `https://dev.azure.com${PULL_REQUEST_PATH}` }).window;
   const requests: PullRequestRef[] = [];
   const tab = createPipelineTab({
@@ -107,7 +111,7 @@ function setUp(
     },
     getPullRequestBuilds: runList,
     getTimeline: async (_project, buildId) => timelines[buildId] ?? [],
-    now: () => 0,
+    now: () => clock.nowMs,
   });
   tab.sync(PULL_REQUEST);
   return { document, requests, tab };
@@ -156,6 +160,7 @@ export {
   PULL_REQUEST,
   TIMELINES,
   click,
+  clock,
   frameSource,
   isOpen,
   pickItem,

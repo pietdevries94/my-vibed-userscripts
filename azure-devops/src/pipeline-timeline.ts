@@ -101,10 +101,18 @@ function stagesOf(records: TimelineRecord[]): RunStage[] {
   }));
 }
 
-/** The step to show first: the first failed one, else the first one. Null without steps. */
+/**
+ * The step to show first: the running one, else the first failed one, else the first
+ * one. Null without steps.
+ */
 function defaultStepOf(stages: RunStage[]): RunStep | null {
   const steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
-  return steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
+  return (
+    steps.find((step) => step.state === "inProgress") ??
+    steps.find((step) => step.result === "failed") ??
+    steps[0] ??
+    null
+  );
 }
 
 export type { RecordStatus, RunJob, RunStage, RunStep, TimelineRecord };

@@ -1,6 +1,6 @@
 // The content of the Pipeline tab: the run tree on the left, the shown step's log
 // on the right, as the run page in a frame.
-import type { PipelineTabPick, ShownRun, TreeLevel } from "./pipeline-tab-selection.ts";
+import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
 import type { PipelineRun } from "./pipeline-runs.ts";
 import type { RunStep } from "./pipeline-timeline.ts";
 import type { StepLog } from "./pipeline-log-frame.ts";
@@ -17,8 +17,8 @@ type RunsState = { kind: "loading" } | { kind: "failed" } | { kind: "loaded"; ru
 interface PanelContent {
   runs: RunsState;
   shown: ShownRun | null;
-  /** The level of the run tree that is folded, or null. */
-  folded: TreeLevel | null;
+  /** What the owner picked, with the level of the run tree that is folded. */
+  pick: PipelineTabPick;
   logPathOf: (buildId: number, step: RunStep) => string;
   onPick: (pick: PipelineTabPick) => void;
 }
@@ -99,8 +99,8 @@ function showRun(panel: HTMLElement, runs: PipelineRun[], content: PanelContent)
   panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
   const tree = createRunTree({
     document: panel.ownerDocument,
-    folded: content.folded,
     onPick: content.onPick,
+    pick: content.pick,
     runs,
     shown,
   });
@@ -109,8 +109,8 @@ function showRun(panel: HTMLElement, runs: PipelineRun[], content: PanelContent)
 }
 
 /** What the panel shows. A render with the same key leaves the page alone. */
-function renderKey({ folded, runs, shown }: PanelContent): string {
-  return JSON.stringify([runs, shown, folded]);
+function renderKey({ pick, runs, shown }: PanelContent): string {
+  return JSON.stringify([runs, shown, pick]);
 }
 
 function renderPanel(panel: HTMLElement, content: PanelContent): void {

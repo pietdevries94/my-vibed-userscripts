@@ -10,6 +10,8 @@ type TreeLevel = "run" | "stage" | "job";
 interface PipelineTabPick {
   buildId: number | null;
   stageId: string | null;
+  jobId: string | null;
+  /** Null to follow the default step: the running one, else the first failed one. */
   stepId: string | null;
   /** The level the owner folded, to see the list it is in. Null when nothing is folded. */
   folded: TreeLevel | null;
@@ -29,13 +31,21 @@ function stageWithStep(stages: RunStage[], stepId: string): RunStage | undefined
   );
 }
 
-function shownStepOf(stages: RunStage[], pick: PipelineTabPick): RunStep | null {
+/** The stages the pick narrows to: its job, else its stage, else the whole run. */
+function pickedScope(stages: RunStage[], pick: PipelineTabPick): RunStage[] {
   const pickedStage = stages.find((stage) => stage.id === pick.stageId);
-  const steps = (pickedStage === undefined ? stages : [pickedStage]).flatMap((stage) =>
-    stage.jobs.flatMap((job) => job.steps),
-  );
+  const pickedJob = (pickedStage?.jobs ?? []).find((job) => job.id === pick.jobId);
+  if (pickedStage !== undefined && pickedJob !== undefined) {
+    return [{ ...pickedStage, jobs: [pickedJob] }];
+  }
+  return pickedStage === undefined ? stages : [pickedStage];
+}
+
+function shownStepOf(stages: RunStage[], pick: PipelineTabPick): RunStep | null {
+  const scope = pickedScope(stages, pick);
+  const steps = scope.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
   const pickedStep = steps.find((step) => step.id === pick.stepId);
-  return pickedStep ?? defaultStepOf(pickedStage === undefined ? stages : [pickedStage]);
+  return pickedStep ?? defaultStepOf(scope);
 }
 
 function shownRunOf(

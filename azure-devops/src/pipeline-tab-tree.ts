@@ -29,8 +29,8 @@ interface TreeItem {
 interface TreeContext {
   document: Document;
   shown: ShownRun;
-  /** The level that is folded now, or null. */
-  folded: TreeLevel | null;
+  /** What the owner picked, with the level that is folded now. */
+  pick: PipelineTabPick;
   onPick: (pick: PipelineTabPick) => void;
 }
 
@@ -50,15 +50,10 @@ function createItemText(document: Document, item: TreeItem): HTMLElement {
   return text;
 }
 
-/** The pick of a click on the current item: the same selection, folded or opened at its level. */
+/** The pick of a click on the current item: the same pick, folded or opened at its level. */
 function foldPick(context: TreeContext, level: TreeLevel): PipelineTabPick {
-  const { run, stage, step } = context.shown;
-  return {
-    buildId: run.buildId,
-    folded: context.folded === level ? null : level,
-    stageId: stage?.id ?? null,
-    stepId: step?.id ?? null,
-  };
+  const { pick } = context;
+  return { ...pick, folded: pick.folded === level ? null : level };
 }
 
 function createItem(context: TreeContext, item: TreeItem): HTMLButtonElement {
@@ -109,6 +104,7 @@ function createJobSteps(context: TreeContext, job: RunJob): HTMLElement {
       pick: {
         buildId: run.buildId,
         folded: null,
+        jobId: candidate.jobId,
         stageId: stage?.id ?? null,
         stepId: candidate.id,
       },
@@ -118,10 +114,9 @@ function createJobSteps(context: TreeContext, job: RunJob): HTMLElement {
   return group(context.document, "fix-ado-pipeline-steps", steps);
 }
 
-/** A job row, then its steps. Picking a job shows its first failed step, else its first. */
+/** A job row, then its steps. Picking a job shows its running step, else its first failed one, else its first. */
 function createJob(context: TreeContext, job: RunJob): HTMLElement[] {
   const { shown } = context;
-  const firstStep = job.steps.find((step) => step.result === "failed") ?? job.steps[0];
   const isCurrent = shown.step?.jobId === job.id;
   const item = createItem(context, {
     className: "fix-ado-pipeline-job",
@@ -131,12 +126,13 @@ function createJob(context: TreeContext, job: RunJob): HTMLElement[] {
     pick: {
       buildId: shown.run.buildId,
       folded: null,
+      jobId: job.id,
       stageId: shown.stage?.id ?? null,
-      stepId: firstStep?.id ?? null,
+      stepId: null,
     },
     status: recordStatusOf(job),
   });
-  const isFolded = isCurrent && context.folded === "job";
+  const isFolded = isCurrent && context.pick.folded === "job";
   return isFolded ? [item] : [item, createJobSteps(context, job)];
 }
 
@@ -158,10 +154,16 @@ function createStage(context: TreeContext, stage: RunStage): HTMLElement[] {
     isCurrent,
     level: "stage",
     name: stageName(stage),
-    pick: { buildId: shown.run.buildId, folded: null, stageId: stage.id, stepId: null },
+    pick: {
+      buildId: shown.run.buildId,
+      folded: null,
+      jobId: null,
+      stageId: stage.id,
+      stepId: null,
+    },
     status: recordStatusOf(stage),
   });
-  const isOpen = isCurrent && context.folded !== "stage";
+  const isOpen = isCurrent && context.pick.folded !== "stage";
   return isOpen ? [item, createJobs(context)] : [item];
 }
 
@@ -185,10 +187,10 @@ function createRun(context: TreeContext, run: PipelineRun): HTMLElement[] {
     isCurrent,
     level: "run",
     name: run.name,
-    pick: { buildId: run.buildId, folded: null, stageId: null, stepId: null },
+    pick: { buildId: run.buildId, folded: null, jobId: null, stageId: null, stepId: null },
     status: run.status,
   });
-  const isOpen = isCurrent && context.folded !== "run";
+  const isOpen = isCurrent && context.pick.folded !== "run";
   return isOpen ? [item, createStages(context)] : [item];
 }
 

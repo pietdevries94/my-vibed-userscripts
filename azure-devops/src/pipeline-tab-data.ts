@@ -15,8 +15,8 @@ import { stagesOf } from "./pipeline-timeline.ts";
 
 /** The runs are fetched again after this long. */
 const RUNS_REFRESH_MS = 30_000;
-/** The timeline of a run in progress is fetched again after this long. */
-const RUNNING_TIMELINE_REFRESH_MS = 10_000;
+/** The timeline of a run in progress is fetched again after this long, to follow its steps. */
+const RUNNING_TIMELINE_REFRESH_MS = 5000;
 
 interface PipelineTabSources {
   getEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluation[]>;
@@ -42,7 +42,13 @@ interface PipelineTabLoader {
   onChange: () => void;
 }
 
-const NO_PICK: PipelineTabPick = { buildId: null, folded: null, stageId: null, stepId: null };
+const NO_PICK: PipelineTabPick = {
+  buildId: null,
+  folded: null,
+  jobId: null,
+  stageId: null,
+  stepId: null,
+};
 
 function createTabData(pullRequest: PullRequestRef): PipelineTabData {
   return {
@@ -107,7 +113,10 @@ function isTimelineDue(data: PipelineTabData, shown: ShownRun, now: number): boo
     return true;
   }
   const status = shown.run.status?.status;
-  const isRunning = status === "running" || status === "queued";
+  const isRunning =
+    status === "running" ||
+    status === "queued" ||
+    (shown.stages ?? []).some((stage) => stage.state !== "completed");
   return (isRunning || shown.stages === null) && now - loadedAt >= RUNNING_TIMELINE_REFRESH_MS;
 }
 

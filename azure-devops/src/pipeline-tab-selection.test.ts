@@ -30,7 +30,7 @@ const STAGES = [
   stage("test", [step("unit", "failed"), step("e2e", "failed")]),
 ];
 const STAGES_BY_BUILD_ID = new Map([[2, STAGES]]);
-const NOTHING_PICKED = { buildId: null, folded: null, stageId: null, stepId: null };
+const NOTHING_PICKED = { buildId: null, folded: null, jobId: null, stageId: null, stepId: null };
 
 const shownNames = (shown: ReturnType<typeof shownRunOf>): string[] => [
   String(shown?.run.buildId),
@@ -44,7 +44,7 @@ test("without a pick, the newest run, its first failed step and that step's stag
 });
 
 test("a picked stage shows its own first failed step, else its first step", () => {
-  const picked = { buildId: 2, folded: null, stageId: "build", stepId: null };
+  const picked = { buildId: 2, folded: null, jobId: null, stageId: "build", stepId: null };
   assert.deepEqual(shownNames(shownRunOf(RUNS, STAGES_BY_BUILD_ID, picked)), [
     "2",
     "build",
@@ -53,19 +53,19 @@ test("a picked stage shows its own first failed step, else its first step", () =
 });
 
 test("a picked step is shown with its stage", () => {
-  const picked = { buildId: 2, folded: null, stageId: "test", stepId: "e2e" };
+  const picked = { buildId: 2, folded: null, jobId: null, stageId: "test", stepId: "e2e" };
   assert.deepEqual(shownNames(shownRunOf(RUNS, STAGES_BY_BUILD_ID, picked)), ["2", "test", "e2e"]);
 });
 
 test("a run whose timeline is not loaded yet shows no stage or step", () => {
-  const picked = { buildId: 1, folded: null, stageId: null, stepId: null };
+  const picked = { buildId: 1, folded: null, jobId: null, stageId: null, stepId: null };
   const shown = shownRunOf(RUNS, STAGES_BY_BUILD_ID, picked);
   assert.deepEqual(shownNames(shown), ["1", "-", "-"]);
   assert.equal(shown?.stages, null);
 });
 
 test("a picked step that is gone falls back to the stage's default", () => {
-  const picked = { buildId: 2, folded: null, stageId: "build", stepId: "removed" };
+  const picked = { buildId: 2, folded: null, jobId: null, stageId: "build", stepId: "removed" };
   assert.deepEqual(shownNames(shownRunOf(RUNS, STAGES_BY_BUILD_ID, picked)), [
     "2",
     "build",
@@ -75,4 +75,15 @@ test("a picked step that is gone falls back to the stage's default", () => {
 
 test("no runs, nothing shown", () => {
   assert.equal(shownRunOf([], STAGES_BY_BUILD_ID, NOTHING_PICKED), null);
+});
+
+test("a picked job without a picked step shows its running step, else its first failed, else its first", () => {
+  const running = { ...step("e2e", "failed"), result: null, state: "inProgress" };
+  const stages = [
+    stage("build", [step("checkout")]),
+    stage("test", [step("unit", "failed"), running]),
+  ];
+  const picked = { buildId: 2, folded: null, jobId: "test-job", stageId: "test", stepId: null };
+  const shown = shownRunOf(RUNS, new Map([[2, stages]]), picked);
+  assert.equal(shown?.step?.id, "e2e");
 });

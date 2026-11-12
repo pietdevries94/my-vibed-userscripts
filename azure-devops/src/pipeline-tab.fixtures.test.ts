@@ -102,7 +102,7 @@ test(
     skip: fixtures.skip,
   },
   async () => {
-    const document = capturedPullRequestPage("pr-detail");
+    const document = capturedPullRequestPage("pr-detail-three-runs");
     await openPipelineTab(document);
     const kinds = itemDetails(document, "run");
     assert.equal(kinds.length, 3);
