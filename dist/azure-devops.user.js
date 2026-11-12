@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.3.0
+// @version      1.3.1
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs, required reviewers first, avatar initials (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -1203,8 +1203,8 @@
     closestElement(target, CHECKS_PANEL_SELECTOR)?.querySelector(".bolt-panel-header .ms-Icon--Clear")?.closest("button")?.click();
   }
   function clickedRunBuildId(event, document2) {
-    let link = closestElement(event.target, RUN_LINK_SELECTOR), isPlainClick = event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-    if (link === null || !isPlainClick || closestElement(event.target, `.${PANEL_CLASS}`) !== null)
+    let link = closestElement(event.target, RUN_LINK_SELECTOR), isPlainClick = event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey, button = closestElement(event.target, "button, [role=button]"), isOnButtonInLink = button !== null && link?.contains(button) === !0;
+    if (link === null || !isPlainClick || isOnButtonInLink || closestElement(event.target, `.${PANEL_CLASS}`) !== null)
       return null;
     let url = new URL(link.getAttribute("href") ?? "", document2.location.href);
     return parsePipelineRunLocation(url)?.buildId ?? null;
