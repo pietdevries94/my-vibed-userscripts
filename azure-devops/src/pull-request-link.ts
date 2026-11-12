@@ -77,5 +77,15 @@ function parsePullRequestListLocation(
   return { project, repository, status };
 }
 
+/** The pull request inbox across repositories: `<organisation>/_pulls`, or `<project>/_pulls`. */
+function isPullRequestInboxLocation(location: { pathname: string }): boolean {
+  return pathSegments(location.pathname).at(-1) === "_pulls";
+}
+
 export type { PullRequestListPage, PullRequestListStatus, PullRequestRef };
-export { apiBasePath, parsePullRequestHref, parsePullRequestListLocation };
+export {
+  apiBasePath,
+  isPullRequestInboxLocation,
+  parsePullRequestHref,
+  parsePullRequestListLocation,
+};

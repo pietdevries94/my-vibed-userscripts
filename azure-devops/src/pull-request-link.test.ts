@@ -1,5 +1,6 @@
 import {
   apiBasePath,
+  isPullRequestInboxLocation,
   parsePullRequestHref,
   parsePullRequestListLocation,
 } from "./pull-request-link.ts";
@@ -113,5 +114,15 @@ test("other locations are not a repository pull request list", () => {
       "/my-org",
     ),
     null,
+  );
+});
+
+test("the pull request inbox location", () => {
+  assert.equal(isPullRequestInboxLocation({ pathname: "/my-org/_pulls" }), true);
+  assert.equal(isPullRequestInboxLocation({ pathname: "/my-org/my-project/_pulls/" }), true);
+  assert.equal(isPullRequestInboxLocation({ pathname: "/_pulls" }), true, "on visualstudio.com");
+  assert.equal(
+    isPullRequestInboxLocation({ pathname: "/my-org/my-project/_git/my-repo/pullrequests" }),
+    false,
   );
 });

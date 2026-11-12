@@ -7,26 +7,31 @@ import { test } from "node:test";
 const fixtures = scriptFixtures(import.meta.dirname);
 
 interface CapturedEvaluations {
-  evaluationsByPullRequestId: Record<number, { body: { value: PolicyEvaluation[] } }>;
+  data: {
+    evaluationsByPullRequestId: Record<number, { body: { value: PolicyEvaluation[] } | null }>;
+  };
 }
 
-function capturedEvaluations(pullRequestId: number): PolicyEvaluation[] {
-  const text = fixtures.read("policy-evaluations-repository-pull-requests.json");
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the capture tool writes this shape
-  const fixture = JSON.parse(text) as CapturedEvaluations;
-  return fixture.evaluationsByPullRequestId[pullRequestId].body.value;
+/** Pipeline status per stand-in pull request id, for a captured page. */
+function capturedStatuses(page: string): Record<string, string | null> {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the capture writes this shape
+  const { data } = JSON.parse(fixtures.read(`${page}.json`)) as CapturedEvaluations;
+  return Object.fromEntries(
+    Object.entries(data.evaluationsByPullRequestId).map(([id, response]) => [
+      id,
+      response.body === null ? "no response" : pipelineStatusOf(response.body.value),
+    ]),
+  );
 }
 
-test("captured pull requests", { skip: fixtures.skip }, () => {
-  assert.equal(
-    pipelineStatusOf(capturedEvaluations(1001)),
-    "succeeded",
-    "approved build next to a rejected merge-strategy policy",
-  );
-  assert.equal(
-    pipelineStatusOf(capturedEvaluations(1012)),
-    "notStarted",
-    "draft: build policy queued, no build yet",
-  );
-  assert.equal(pipelineStatusOf(capturedEvaluations(1013)), "failed");
+test("statuses of the captured repository list", { skip: fixtures.skip }, () => {
+  assert.deepEqual(capturedStatuses("pr-list"), { 1001: "failed", 1002: "queued" });
+});
+
+test("statuses of the captured inbox", { skip: fixtures.skip }, () => {
+  assert.deepEqual(capturedStatuses("pr-inbox"), {
+    1001: "queued",
+    1002: "failed",
+    1003: "queued",
+  });
 });

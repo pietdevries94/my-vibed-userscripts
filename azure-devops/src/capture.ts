@@ -2,8 +2,10 @@
 // requests to send. Dev file only. The owner reads the keep rules below.
 import { AdoRequestError, createAdoClient } from "./ado-client.ts";
 import type { CapturePage, GetOnlyFetch } from "../../shared/dev/capture/capture.ts";
+import type { PullRequestListPage, PullRequestRef } from "./pull-request-link.ts";
 import {
   apiBasePath,
+  isPullRequestInboxLocation,
   parsePullRequestHref,
   parsePullRequestListLocation,
 } from "./pull-request-link.ts";
@@ -11,7 +13,6 @@ import { findBoardCardIds, isBoardLocation } from "./board.ts";
 import type { AdoClient } from "./ado-client.ts";
 import { PIPELINE_STATUS_ICON_CLASS } from "./pipeline-status-icon.ts";
 import type { Pseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
-import type { PullRequestRef } from "./pull-request-link.ts";
 import type { ScrubRules } from "../../shared/dev/scrub/rules.ts";
 import { findPullRequestRows } from "./pr-list.ts";
 import { registerCapture } from "../../shared/dev/capture/capture.ts";
@@ -163,37 +164,51 @@ async function collectEvaluations(
   return evaluationsByPullRequestId;
 }
 
-function pullRequestListPage(
-  listPage: NonNullable<ReturnType<typeof parsePullRequestListLocation>>,
-): CapturePage {
+/**
+ * The rows' policy evaluations, the project ids they needed, and the status colours.
+ * `listPage` also adds the repository's pull request list, as the list check fetches it.
+ */
+async function collectPullRequestRows(
+  fetch: GetOnlyFetch,
+  pseudonyms: Pseudonyms,
+  listPage: PullRequestListPage | null,
+): Promise<{ data: Record<string, unknown>; meta: Record<string, unknown> }> {
+  const basePath = apiBasePath(location);
+  pseudonyms.text(basePath.replaceAll("/", ""), "organisation");
+  const projectIds = new Map<string, string>();
+  const client = createAdoClient({
+    apiBasePath: basePath,
+    fetch: recordProjectIds(fetch, projectIds),
+    origin: location.origin,
+  });
+  const listed = listPage === null ? null : await client.getPullRequests(listPage);
+  const evaluationsByPullRequestId = await collectEvaluations(client, basePath, pseudonyms);
+  const projects = Object.fromEntries(
+    [...projectIds].map(([project, id]) => [
+      pseudonyms.text(project, "project"),
+      pseudonyms.guid(id, "project id"),
+    ]),
+  );
+  const meta = {
+    isLegacyHost: location.hostname !== "dev.azure.com",
+    projects,
+    statusColors: statusColors(),
+  };
+  return {
+    data:
+      listed === null
+        ? { evaluationsByPullRequestId }
+        : { evaluationsByPullRequestId, pullRequests: listed.pullRequests },
+    meta,
+  };
+}
+
+function pullRequestRowsPage(name: string, listPage: PullRequestListPage | null): CapturePage {
   return {
     async collect(fetch, pseudonyms) {
-      const basePath = apiBasePath(location);
-      pseudonyms.text(basePath.replaceAll("/", ""), "organisation");
-      const projectIds = new Map<string, string>();
-      const client = createAdoClient({
-        apiBasePath: basePath,
-        fetch: recordProjectIds(fetch, projectIds),
-        origin: location.origin,
-      });
-      const { pullRequests } = await client.getPullRequests(listPage);
-      const evaluationsByPullRequestId = await collectEvaluations(client, basePath, pseudonyms);
-      const projects = Object.fromEntries(
-        [...projectIds].map(([project, id]) => [
-          pseudonyms.text(project, "project"),
-          pseudonyms.guid(id, "project id"),
-        ]),
-      );
-      return {
-        data: { evaluationsByPullRequestId, pullRequests },
-        meta: {
-          isLegacyHost: location.hostname !== "dev.azure.com",
-          projects,
-          statusColors: statusColors(),
-        },
-      };
+      return collectPullRequestRows(fetch, pseudonyms, listPage);
     },
-    name: "pr-list",
+    name,
     root: withoutScriptMarks(document.querySelector(".page-content") ?? document.body),
   };
 }
@@ -220,7 +235,10 @@ function boardPage(): CapturePage {
 function capturePage(document: Document, location: Location): CapturePage | null {
   const listPage = parsePullRequestListLocation(location, apiBasePath(location));
   if (listPage !== null) {
-    return pullRequestListPage(listPage);
+    return pullRequestRowsPage("pr-list", listPage);
+  }
+  if (isPullRequestInboxLocation(location)) {
+    return pullRequestRowsPage("pr-inbox", null);
   }
   return isBoardLocation(location) ? boardPage() : null;
 }
