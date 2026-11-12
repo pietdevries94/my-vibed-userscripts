@@ -98,7 +98,7 @@
 
 .fix-ado-pipeline-tree {
   display: flex;
-  flex: 0 0 300px;
+  flex: 0 0 400px;
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
@@ -123,13 +123,9 @@
   background: var(--palette-black-alpha-4, rgba(0, 0, 0, 0.04));
 }
 
+/* The picked run, stage, job and step get a bar on the left, as in Azure DevOps's own lists. */
 .fix-ado-pipeline-item[aria-current="true"] {
   background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
-}
-
-/* The picked run and step get a bar on the left, as in Azure DevOps's own lists. */
-.fix-ado-pipeline-check[aria-current="true"],
-.fix-ado-pipeline-step[aria-current="true"] {
   box-shadow: inset 3px 0 0 var(--communication-background, rgb(0, 120, 212));
 }
 
@@ -162,8 +158,9 @@
   font-size: 12px;
 }
 
-/* Stages sit under their run, steps under their stage. */
+/* Stages sit under their run, jobs under their stage, steps under their job. */
 .fix-ado-pipeline-stages,
+.fix-ado-pipeline-jobs,
 .fix-ado-pipeline-steps {
   display: flex;
   flex-direction: column;
@@ -171,16 +168,10 @@
   padding-left: 16px;
 }
 
-.fix-ado-pipeline-job,
 .fix-ado-pipeline-note {
   padding: 6px 10px 2px;
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
   font-size: 12px;
-}
-
-.fix-ado-pipeline-job {
-  font-weight: 600;
-  text-transform: uppercase;
 }
 
 .fix-ado-pipeline-log-note {

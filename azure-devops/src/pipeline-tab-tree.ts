@@ -1,5 +1,5 @@
 // The left column of the Pipeline tab: the runs, the shown run's stages, and the
-// shown stage's steps, grouped by job when the stage has more than one.
+// shown stage's jobs with their steps.
 import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
 import type { RunJob, RunStage } from "./pipeline-timeline.ts";
 import type { PipelineCheck } from "./pipeline-checks.ts";
@@ -98,16 +98,40 @@ function createJobSteps(
   );
 }
 
-function createSteps(document: Document, shown: ShownRun, onPick: OnPick): HTMLElement {
+/** A job row, then its steps. Picking a job shows its first failed step, else its first. */
+function createJob(
+  document: Document,
+  { job, shown }: { job: RunJob; shown: ShownRun },
+  onPick: OnPick,
+): HTMLElement[] {
+  const firstStep = job.steps.find((step) => step.result === "failed") ?? job.steps[0];
+  const item = createItem(
+    document,
+    {
+      className: "fix-ado-pipeline-job",
+      isCurrent: shown.step?.jobId === job.id,
+      name: job.name,
+      pick: {
+        buildId: shown.check.buildId,
+        stageId: shown.stage?.id ?? null,
+        stepId: firstStep?.id ?? null,
+      },
+      status: recordStatusOf(job),
+    },
+    onPick,
+  );
+  const steps = group(
+    document,
+    "fix-ado-pipeline-steps",
+    createJobSteps(document, { job, shown }, onPick),
+  );
+  return [item, steps];
+}
+
+function createJobs(document: Document, shown: ShownRun, onPick: OnPick): HTMLElement {
   const jobs = shown.stage?.jobs ?? [];
-  const items: HTMLElement[] = [];
-  for (const job of jobs) {
-    if (jobs.length > 1) {
-      items.push(textElement(document, "fix-ado-pipeline-job", job.name));
-    }
-    items.push(...createJobSteps(document, { job, shown }, onPick));
-  }
-  return group(document, "fix-ado-pipeline-steps", items);
+  const items = jobs.flatMap((job) => createJob(document, { job, shown }, onPick));
+  return group(document, "fix-ado-pipeline-jobs", items);
 }
 
 function stageName(stage: RunStage): string {
@@ -135,7 +159,7 @@ function createStages(document: Document, shown: ShownRun, onPick: OnPick): HTML
       },
       onPick,
     );
-    return isCurrent ? [item, createSteps(document, shown, onPick)] : [item];
+    return isCurrent ? [item, createJobs(document, shown, onPick)] : [item];
   });
   return group(document, "fix-ado-pipeline-stages", items);
 }

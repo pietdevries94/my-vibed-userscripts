@@ -87,7 +87,7 @@ interface Setup {
   requests: PullRequestRef[];
 }
 
-function setUp(evaluations = EVALUATIONS): Setup {
+function setUp(evaluations = EVALUATIONS, timelines = TIMELINES): Setup {
   const { document } = new JSDOM(PAGE, { url: `https://dev.azure.com${PULL_REQUEST_PATH}` }).window;
   const requests: PullRequestRef[] = [];
   const tab = createPipelineTab({
@@ -97,7 +97,7 @@ function setUp(evaluations = EVALUATIONS): Setup {
       requests.push(pullRequest);
       return evaluations;
     },
-    getTimeline: async (_project, buildId) => TIMELINES[buildId] ?? [],
+    getTimeline: async (_project, buildId) => timelines[buildId] ?? [],
     now: () => 0,
   });
   tab.sync(PULL_REQUEST);
@@ -124,7 +124,7 @@ async function settle(): Promise<void> {
 const pipelineTab = (document: Document): Element | null =>
   document.querySelector("[role=tablist] .fix-ado-pipeline-tab");
 /** The names in the tree, in order, with a * on the current ones. */
-const treeNames = (document: Document, kind: "check" | "stage" | "step"): string[] =>
+const treeNames = (document: Document, kind: "check" | "stage" | "job" | "step"): string[] =>
   [...document.querySelectorAll(`.fix-ado-pipeline-${kind}`)].map(
     (item) =>
       `${item.querySelector(".fix-ado-pipeline-item-name")?.textContent ?? ""}${item.getAttribute("aria-current") === "true" ? "*" : ""}`,
@@ -177,8 +177,31 @@ test("opening the tab shows the newest run, the stage of its first failed step, 
   );
   assert.deepEqual(treeNames(document, "check"), ["ledger-lint*", "ledger-ci"]);
   assert.deepEqual(treeNames(document, "stage"), ["build*", "test"]);
+  assert.deepEqual(treeNames(document, "job"), ["build-job*"]);
   assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
   assert.equal(frameSource(document), `${LOG_PATH}502&view=logs&j=build-job&t=compile`);
+});
+
+test("a stage shows all its jobs, each with its steps, and picking a job shows its first failed step", async () => {
+  const timelines = {
+    ...TIMELINES,
+    502: [
+      ...(TIMELINES[502] ?? []),
+      timelineRecord("Job", "lint-job", { order: 2, parentId: "build" }),
+      timelineRecord("Task", "eslint", { order: 1, parentId: "lint-job" }),
+      timelineRecord("Task", "prettier", { order: 2, parentId: "lint-job", result: "failed" }),
+    ],
+  };
+  const { document } = setUp(EVALUATIONS, timelines);
+  click(pipelineTab(document));
+  await settle();
+  assert.deepEqual(treeNames(document, "job"), ["build-job*", "lint-job"]);
+  assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*", "eslint", "prettier"]);
+
+  click(pickItem(document, "job", "lint-job"));
+  assert.deepEqual(treeNames(document, "job"), ["build-job", "lint-job*"]);
+  assert.deepEqual(treeNames(document, "step"), ["checkout", "compile", "eslint", "prettier*"]);
+  assert.equal(frameSource(document), `${LOG_PATH}502&view=logs&j=lint-job&t=prettier`);
 });
 
 test("picking a run shows only its stages and steps", async () => {
