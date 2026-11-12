@@ -8,7 +8,7 @@ Checked against Violentmonkey 2.50.0. Full findings with sources: `docs/research
 - Firefox picks the mode from the CSP header. A `script-src` nonce is reused (page mode). No nonce and no `'unsafe-inline'` forces content mode. `GM_info.injectInto` gives the mode at runtime.
 - Page mode: `fetch` is the page's own. Same-origin GETs send the session cookie.
 - Content mode: requests run in the extension's context and need absolute URLs. Cookie behaviour is unverified. The fallback is `GM_xmlhttpRequest`, which sends the tab's cookies, container tabs included.
-- CSS: there is no manifest slot. Inline the CSS in the bundle and call `GM_addStyle` (`@grant GM_addStyle`). Violentmonkey creates the `<style>` and adds the page's nonce.
+- CSS: a userscript has no stylesheet slot. Inline the CSS in the bundle and call `GM_addStyle` (`@grant GM_addStyle`). Violentmonkey creates the `<style>` and adds the page's nonce.
 - Install: open a URL that ends in `.user.js`. Documented direct-install forms are `raw.githubusercontent.com/{user}/{repo}/{ref}/{file}.user.js` (repo root) and `github.com/{user}/{repo}/releases/latest/download/{file}.user.js`.
 - Update: checked daily at 12:00 local time and on manual request. Installs only when the remote `@version` is higher. No `@version`, no updates. Violentmonkey never downgrades. `@downloadURL` defaults to the install URL. `@updateURL` is optional.
 - The metadata block must be the first thing in the file.
