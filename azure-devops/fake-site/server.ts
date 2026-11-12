@@ -124,6 +124,13 @@ function detailEvaluationsResponse(): FakeResponse {
     : jsonResponse({ value: evaluations.body.value });
 }
 
+function buildsResponse(): FakeResponse {
+  const { builds } = pullRequestDetailData().data;
+  return builds?.body === null || builds === undefined
+    ? jsonResponse({ message: "No runs" }, builds?.httpStatus ?? HTTP_NOT_FOUND)
+    : jsonResponse({ count: builds.body.value.length, value: builds.body.value });
+}
+
 function timelineResponse(_request: FakeRequest, match: RegExpExecArray): FakeResponse {
   const buildId = match.groups?.buildId ?? "";
   const timeline = pullRequestDetailData().data.timelinesByBuildId?.[buildId];
@@ -178,6 +185,7 @@ const API_ROUTES: [RegExp, (request: FakeRequest, match: RegExpExecArray) => Fak
   ],
   [/^\/fake-org\/[^/]+\/_apis\/policy\/evaluations$/u, evaluationsResponse],
   [/^\/fake-org\/[^/]+\/_apis\/build\/builds\/(?<buildId>\d+)\/timeline$/u, timelineResponse],
+  [/^\/fake-org\/[^/]+\/_apis\/build\/builds$/u, buildsResponse],
   [/^\/fake-org\/[^/]+\/_apis\/git\/repositories\/[^/]+\/pullrequests$/u, pullRequestsResponse],
   [/^\/fake-org\/_apis\/wit\/workitems$/u, workItemsResponse],
   [

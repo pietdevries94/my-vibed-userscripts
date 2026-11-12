@@ -97,6 +97,7 @@ function setUp(evaluations = EVALUATIONS, timelines = TIMELINES): Setup {
       requests.push(pullRequest);
       return evaluations;
     },
+    getPullRequestBuilds: async () => [],
     getTimeline: async (_project, buildId) => timelines[buildId] ?? [],
     now: () => 0,
   });
@@ -124,7 +125,7 @@ async function settle(): Promise<void> {
 const pipelineTab = (document: Document): Element | null =>
   document.querySelector("[role=tablist] .fix-ado-pipeline-tab");
 /** The names in the tree, in order, with a * on the current ones. */
-const treeNames = (document: Document, kind: "check" | "stage" | "job" | "step"): string[] =>
+const treeNames = (document: Document, kind: "run" | "stage" | "job" | "step"): string[] =>
   [...document.querySelectorAll(`.fix-ado-pipeline-${kind}`)].map(
     (item) =>
       `${item.querySelector(".fix-ado-pipeline-item-name")?.textContent ?? ""}${item.getAttribute("aria-current") === "true" ? "*" : ""}`,

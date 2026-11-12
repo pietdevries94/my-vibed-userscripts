@@ -1,6 +1,6 @@
 // Which run, stage and step the Pipeline tab shows, from what the owner picked.
 import type { RunStage, RunStep } from "./pipeline-timeline.ts";
-import type { PipelineCheck } from "./pipeline-checks.ts";
+import type { PipelineRun } from "./pipeline-runs.ts";
 import { defaultStepOf } from "./pipeline-timeline.ts";
 
 /** A level of the run tree that can be folded. */
@@ -16,7 +16,7 @@ interface PipelineTabPick {
 }
 
 interface ShownRun {
-  check: PipelineCheck;
+  run: PipelineRun;
   /** Null while the run's timeline loads. */
   stages: RunStage[] | null;
   stage: RunStage | null;
@@ -39,17 +39,17 @@ function shownStepOf(stages: RunStage[], pick: PipelineTabPick): RunStep | null 
 }
 
 function shownRunOf(
-  checks: PipelineCheck[],
+  runs: PipelineRun[],
   stagesByBuildId: Map<number, RunStage[]>,
   pick: PipelineTabPick,
 ): ShownRun | null {
-  const check = checks.find((candidate) => candidate.buildId === pick.buildId) ?? checks[0];
-  if (check === undefined) {
+  const run = runs.find((candidate) => candidate.buildId === pick.buildId) ?? runs[0];
+  if (run === undefined) {
     return null;
   }
-  const stages = stagesByBuildId.get(check.buildId) ?? null;
+  const stages = stagesByBuildId.get(run.buildId) ?? null;
   if (stages === null) {
-    return { check, stage: null, stages, step: null };
+    return { run, stage: null, stages, step: null };
   }
   const step = shownStepOf(stages, pick);
   const stage =
@@ -57,7 +57,7 @@ function shownRunOf(
     stages.find((candidate) => candidate.id === pick.stageId) ??
     stages[0] ??
     null;
-  return { check, stage, stages, step };
+  return { run, stage, stages, step };
 }
 
 export type { PipelineTabPick, ShownRun, TreeLevel };

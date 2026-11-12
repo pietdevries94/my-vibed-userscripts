@@ -6,7 +6,6 @@ import type { BoardWorkItem } from "../src/board.ts";
 import { JSDOM } from "jsdom";
 import type { ListedPullRequest } from "../src/pr-list-changes.ts";
 import type { PolicyEvaluation } from "../src/pipeline-status.ts";
-import type { TimelineRecord } from "../src/pipeline-timeline.ts";
 import { fixtureReader } from "../../shared/dev/fake-site/server.ts";
 import fs from "node:fs";
 import path from "node:path";
@@ -36,13 +35,16 @@ interface PullRequestPageData {
 
 /** A run timeline as the capture recorded it. */
 interface CapturedTimeline {
-  body: { records: TimelineRecord[] } | null;
+  /** The timeline records, passed on as captured. */
+  body: { records: unknown[] } | null;
   httpStatus: number;
 }
 
 interface PullRequestDetailData {
   data: {
     evaluations: CapturedEvaluations;
+    /** The run list, passed on as captured. */
+    builds?: { body: { value: unknown[] } | null; httpStatus: number };
     timelinesByBuildId?: Record<string, CapturedTimeline>;
   };
 }

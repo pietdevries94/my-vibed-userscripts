@@ -1,10 +1,9 @@
 // The left column of the Pipeline tab: the runs, the shown run's stages, and the
 // shown stage's jobs with their steps. Clicking the current run, stage or job folds
 // it; clicking it again opens it.
+import type { PipelineRun, RunStatus } from "./pipeline-runs.ts";
 import type { PipelineTabPick, ShownRun, TreeLevel } from "./pipeline-tab-selection.ts";
 import type { RunJob, RunStage } from "./pipeline-timeline.ts";
-import type { PipelineCheck } from "./pipeline-checks.ts";
-import type { PipelineStatus } from "./pipeline-status.ts";
 import { closestElement } from "./closest-element.ts";
 import { createStatusIcon } from "./pipeline-status-icon.ts";
 import { recordStatusOf } from "./pipeline-timeline.ts";
@@ -14,17 +13,11 @@ const DEFAULT_STAGE_NAME = "__default";
 const DATE_FORMAT: Intl.DateTimeFormatOptions = { dateStyle: "short", timeStyle: "short" };
 const NAME_CLASS = "fix-ado-pipeline-item-name";
 
-/** The icon of an item. Without a label, the icon's own label for the status. */
-interface ItemStatus {
-  status: PipelineStatus;
-  label?: string;
-}
-
 interface TreeItem {
   className: string;
   name: string;
   details?: string;
-  status: ItemStatus | null;
+  status: RunStatus | null;
   isCurrent: boolean;
   /** What a click on an item that is not current picks. */
   pick: PipelineTabPick;
@@ -59,9 +52,9 @@ function createItemText(document: Document, item: TreeItem): HTMLElement {
 
 /** The pick of a click on the current item: the same selection, folded or opened at its level. */
 function foldPick(context: TreeContext, level: TreeLevel): PipelineTabPick {
-  const { check, stage, step } = context.shown;
+  const { run, stage, step } = context.shown;
   return {
-    buildId: check.buildId,
+    buildId: run.buildId,
     folded: context.folded === level ? null : level,
     stageId: stage?.id ?? null,
     stepId: step?.id ?? null,
@@ -85,15 +78,17 @@ function createItem(context: TreeContext, item: TreeItem): HTMLButtonElement {
   return button;
 }
 
-function checkDetails(check: PipelineCheck): string {
-  const required = check.isRequired ? "Required" : "Optional";
-  return check.startedAt === null
-    ? required
-    : `${required} · ${new Date(check.startedAt).toLocaleString([], DATE_FORMAT)}`;
+function requiredLabel(isRequired: boolean): string {
+  return isRequired ? "Required" : "Optional";
 }
 
-function checkStatus(check: PipelineCheck): ItemStatus | null {
-  return check.status === null ? null : { status: check.status };
+/** Required or Optional for a current check, else the run's number; then when it started. */
+function runDetails(run: PipelineRun): string {
+  const kind =
+    run.isRequired === null ? `#${run.buildNumber ?? run.buildId}` : requiredLabel(run.isRequired);
+  return run.startedAt === null
+    ? kind
+    : `${kind} · ${new Date(run.startedAt).toLocaleString([], DATE_FORMAT)}`;
 }
 
 function group(document: Document, className: string, children: Node[]): HTMLElement {
@@ -104,7 +99,7 @@ function group(document: Document, className: string, children: Node[]): HTMLEle
 }
 
 function createJobSteps(context: TreeContext, job: RunJob): HTMLElement {
-  const { check, stage, step } = context.shown;
+  const { run, stage, step } = context.shown;
   const steps = job.steps.map((candidate) =>
     createItem(context, {
       className: "fix-ado-pipeline-step",
@@ -112,7 +107,7 @@ function createJobSteps(context: TreeContext, job: RunJob): HTMLElement {
       level: null,
       name: candidate.name,
       pick: {
-        buildId: check.buildId,
+        buildId: run.buildId,
         folded: null,
         stageId: stage?.id ?? null,
         stepId: candidate.id,
@@ -134,7 +129,7 @@ function createJob(context: TreeContext, job: RunJob): HTMLElement[] {
     level: "job",
     name: job.name,
     pick: {
-      buildId: shown.check.buildId,
+      buildId: shown.run.buildId,
       folded: null,
       stageId: shown.stage?.id ?? null,
       stepId: firstStep?.id ?? null,
@@ -163,7 +158,7 @@ function createStage(context: TreeContext, stage: RunStage): HTMLElement[] {
     isCurrent,
     level: "stage",
     name: stageName(stage),
-    pick: { buildId: shown.check.buildId, folded: null, stageId: stage.id, stepId: null },
+    pick: { buildId: shown.run.buildId, folded: null, stageId: stage.id, stepId: null },
     status: recordStatusOf(stage),
   });
   const isOpen = isCurrent && context.folded !== "stage";
@@ -182,16 +177,16 @@ function createStages(context: TreeContext): HTMLElement {
   return group(document, "fix-ado-pipeline-stages", items);
 }
 
-function createRun(context: TreeContext, check: PipelineCheck): HTMLElement[] {
-  const isCurrent = check.buildId === context.shown.check.buildId;
+function createRun(context: TreeContext, run: PipelineRun): HTMLElement[] {
+  const isCurrent = run.buildId === context.shown.run.buildId;
   const item = createItem(context, {
-    className: "fix-ado-pipeline-check",
-    details: checkDetails(check),
+    className: "fix-ado-pipeline-run",
+    details: runDetails(run),
     isCurrent,
     level: "run",
-    name: check.name,
-    pick: { buildId: check.buildId, folded: null, stageId: null, stepId: null },
-    status: checkStatus(check),
+    name: run.name,
+    pick: { buildId: run.buildId, folded: null, stageId: null, stepId: null },
+    status: run.status,
   });
   const isOpen = isCurrent && context.folded !== "run";
   return isOpen ? [item, createStages(context)] : [item];
@@ -212,8 +207,8 @@ function showCutOffNames(tree: HTMLElement): void {
   });
 }
 
-function createRunTree(context: TreeContext & { checks: PipelineCheck[] }): HTMLElement {
-  const items = context.checks.flatMap((check) => createRun(context, check));
+function createRunTree(context: TreeContext & { runs: PipelineRun[] }): HTMLElement {
+  const items = context.runs.flatMap((run) => createRun(context, run));
   const tree = group(context.document, "fix-ado-pipeline-tree", items);
   tree.setAttribute("role", "navigation");
   tree.setAttribute("aria-label", "Pipeline runs");

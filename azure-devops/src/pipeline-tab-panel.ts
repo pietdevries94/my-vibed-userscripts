@@ -1,7 +1,7 @@
 // The content of the Pipeline tab: the run tree on the left, the shown step's log
 // on the right, as the run page in a frame.
 import type { PipelineTabPick, ShownRun, TreeLevel } from "./pipeline-tab-selection.ts";
-import type { PipelineCheck } from "./pipeline-checks.ts";
+import type { PipelineRun } from "./pipeline-runs.ts";
 import type { RunStep } from "./pipeline-timeline.ts";
 import { createRunTree } from "./pipeline-tab-tree.ts";
 import { showStepLog } from "./pipeline-log-frame.ts";
@@ -11,13 +11,10 @@ const TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree";
 const FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame";
 const LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note";
 
-type ChecksState =
-  | { kind: "loading" }
-  | { kind: "failed" }
-  | { kind: "loaded"; checks: PipelineCheck[] };
+type RunsState = { kind: "loading" } | { kind: "failed" } | { kind: "loaded"; runs: PipelineRun[] };
 
 interface PanelContent {
-  checks: ChecksState;
+  runs: RunsState;
   shown: ShownRun | null;
   /** The level of the run tree that is folded, or null. */
   folded: TreeLevel | null;
@@ -73,7 +70,7 @@ function showLog(panel: HTMLElement, shown: ShownRun, content: PanelContent): vo
   showLogNote(panel, null);
   const frame = frameOf(panel);
   frame.removeAttribute("hidden");
-  const { buildId } = shown.check;
+  const { buildId } = shown.run;
   showStepLog(frame, { buildId, path: content.logPathOf(buildId, step), stepName: step.name });
 }
 
@@ -87,7 +84,7 @@ function placeTree(panel: HTMLElement, tree: HTMLElement): void {
   }
 }
 
-function showRun(panel: HTMLElement, checks: PipelineCheck[], content: PanelContent): void {
+function showRun(panel: HTMLElement, runs: PipelineRun[], content: PanelContent): void {
   const { shown } = content;
   if (shown === null) {
     message(panel, "This pull request has no pipeline runs.");
@@ -95,10 +92,10 @@ function showRun(panel: HTMLElement, checks: PipelineCheck[], content: PanelCont
   }
   panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
   const tree = createRunTree({
-    checks,
     document: panel.ownerDocument,
     folded: content.folded,
     onPick: content.onPick,
+    runs,
     shown,
   });
   placeTree(panel, tree);
@@ -106,8 +103,8 @@ function showRun(panel: HTMLElement, checks: PipelineCheck[], content: PanelCont
 }
 
 /** What the panel shows. A render with the same key leaves the page alone. */
-function renderKey({ checks, folded, shown }: PanelContent): string {
-  return JSON.stringify([checks, shown, folded]);
+function renderKey({ folded, runs, shown }: PanelContent): string {
+  return JSON.stringify([runs, shown, folded]);
 }
 
 function renderPanel(panel: HTMLElement, content: PanelContent): void {
@@ -116,12 +113,12 @@ function renderPanel(panel: HTMLElement, content: PanelContent): void {
     return;
   }
   panel.dataset.fixAdoRendered = key;
-  if (content.checks.kind === "loading") {
-    message(panel, "Loading pipeline checks…");
-  } else if (content.checks.kind === "failed") {
-    message(panel, "Could not load the pipeline checks.");
+  if (content.runs.kind === "loading") {
+    message(panel, "Loading pipeline runs…");
+  } else if (content.runs.kind === "failed") {
+    message(panel, "Could not load the pipeline runs.");
   } else {
-    showRun(panel, content.checks.checks, content);
+    showRun(panel, content.runs.runs, content);
   }
 }
 
@@ -132,5 +129,5 @@ function createPanel(document: Document): HTMLElement {
   return panel;
 }
 
-export type { ChecksState, PanelContent };
+export type { PanelContent, RunsState };
 export { PANEL_CLASS, createPanel, renderPanel };

@@ -65,7 +65,7 @@ test("a run in the checks panel opens in the tab, and the panel closes", async (
   click(document.querySelector(".bolt-panel a.panel-check"));
   await settle();
   assert.equal(isOpen(document), true);
-  assert.deepEqual(treeNames(document, "check"), ["ledger-lint", "ledger-ci*"]);
+  assert.deepEqual(treeNames(document, "run"), ["ledger-lint", "ledger-ci*"]);
   assert.equal(closeClicks, 1);
 });
 

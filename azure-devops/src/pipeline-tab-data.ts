@@ -2,28 +2,31 @@
 // the runs it opened, and what the owner picked. Loads and refreshes them.
 import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
 import type { RunStage, TimelineRecord } from "./pipeline-timeline.ts";
-import type { ChecksState } from "./pipeline-tab-panel.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
+import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
+import type { RunsState } from "./pipeline-tab-panel.ts";
 import { pipelineChecksOf } from "./pipeline-checks.ts";
+import { pipelineRunsOf } from "./pipeline-runs.ts";
 import { shownRunOf } from "./pipeline-tab-selection.ts";
 import { stagesOf } from "./pipeline-timeline.ts";
 
-/** The checks are fetched again after this long. */
-const CHECKS_REFRESH_MS = 30_000;
+/** The runs are fetched again after this long. */
+const RUNS_REFRESH_MS = 30_000;
 /** The timeline of a run in progress is fetched again after this long. */
 const RUNNING_TIMELINE_REFRESH_MS = 10_000;
 
 interface PipelineTabSources {
   getEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluation[]>;
+  getPullRequestBuilds: (pullRequest: PullRequestRef) => Promise<PullRequestBuild[]>;
   getTimeline: (project: string, buildId: number) => Promise<TimelineRecord[]>;
   now: () => number;
 }
 
 interface PipelineTabData {
   pullRequest: PullRequestRef;
-  checks: ChecksState;
-  checksLoadedAt: number;
+  runs: RunsState;
+  runsLoadedAt: number;
   /** The stages of each run whose timeline came in, by build id. */
   stagesByBuildId: Map<number, RunStage[]>;
   timelineLoadedAt: Map<number, number>;
@@ -41,29 +44,33 @@ const NO_PICK: PipelineTabPick = { buildId: null, folded: null, stageId: null, s
 
 function createTabData(pullRequest: PullRequestRef): PipelineTabData {
   return {
-    checks: { kind: "loading" },
-    checksLoadedAt: Number.NEGATIVE_INFINITY,
     pick: NO_PICK,
     pullRequest,
+    runs: { kind: "loading" },
+    runsLoadedAt: Number.NEGATIVE_INFINITY,
     stagesByBuildId: new Map(),
     timelineLoadedAt: new Map(),
   };
 }
 
 function shownRunOfData(data: PipelineTabData): ShownRun | null {
-  return data.checks.kind === "loaded"
-    ? shownRunOf(data.checks.checks, data.stagesByBuildId, data.pick)
+  return data.runs.kind === "loaded"
+    ? shownRunOf(data.runs.runs, data.stagesByBuildId, data.pick)
     : null;
 }
 
-async function loadChecks({ data, onChange, sources }: PipelineTabLoader): Promise<void> {
-  data.checksLoadedAt = sources.now();
+/** The pull request's runs. Without the run list, the checks' runs still show. */
+async function loadRuns({ data, onChange, sources }: PipelineTabLoader): Promise<void> {
+  data.runsLoadedAt = sources.now();
   try {
-    const evaluations = await sources.getEvaluations(data.pullRequest);
-    data.checks = { checks: pipelineChecksOf(evaluations), kind: "loaded" };
+    const [evaluations, builds] = await Promise.all([
+      sources.getEvaluations(data.pullRequest),
+      sources.getPullRequestBuilds(data.pullRequest).catch((): PullRequestBuild[] => []),
+    ]);
+    data.runs = { kind: "loaded", runs: pipelineRunsOf(pipelineChecksOf(evaluations), builds) };
   } catch {
-    // Keep the checks already shown; a later refresh tries again.
-    data.checks = data.checks.kind === "loaded" ? data.checks : { kind: "failed" };
+    // Keep the runs already shown; a later refresh tries again.
+    data.runs = data.runs.kind === "loaded" ? data.runs : { kind: "failed" };
   }
   onChange();
 }
@@ -81,24 +88,25 @@ async function loadTimeline(loader: PipelineTabLoader, buildId: number): Promise
 }
 
 function isTimelineDue(data: PipelineTabData, shown: ShownRun, now: number): boolean {
-  const loadedAt = data.timelineLoadedAt.get(shown.check.buildId);
+  const loadedAt = data.timelineLoadedAt.get(shown.run.buildId);
   if (loadedAt === undefined) {
     return true;
   }
-  const isRunning = shown.check.status === "running" || shown.check.status === "queued";
+  const status = shown.run.status?.status;
+  const isRunning = status === "running" || status === "queued";
   return (isRunning || shown.stages === null) && now - loadedAt >= RUNNING_TIMELINE_REFRESH_MS;
 }
 
-/** Starts the loads that are due: the checks now and then, and the shown run's timeline. */
+/** Starts the loads that are due: the runs now and then, and the shown run's timeline. */
 function loadWhatIsDue(loader: PipelineTabLoader): void {
   const { data, sources } = loader;
   const now = sources.now();
-  if (now - data.checksLoadedAt >= CHECKS_REFRESH_MS) {
-    void loadChecks(loader);
+  if (now - data.runsLoadedAt >= RUNS_REFRESH_MS) {
+    void loadRuns(loader);
   }
   const shown = shownRunOfData(data);
   if (shown !== null && isTimelineDue(data, shown, now)) {
-    void loadTimeline(loader, shown.check.buildId);
+    void loadTimeline(loader, shown.run.buildId);
   }
 }
 

@@ -82,7 +82,6 @@ function render(state: TabState): void {
   const { apiBasePath } = state.options;
   const { project } = data.pullRequest;
   renderPanel(panel, {
-    checks: data.checks,
     folded: data.pick.folded,
     logPathOf: (buildId, step) =>
       pipelineLogPath(apiBasePath, project, { buildId, jobId: step.jobId, stepId: step.id }),
@@ -90,6 +89,7 @@ function render(state: TabState): void {
       data.pick = pick;
       update(state);
     },
+    runs: data.runs,
     shown: shownRunOfData(data),
   });
 }

@@ -25,7 +25,7 @@ test("opening the tab shows the newest run, the stage of its first failed step, 
     document.querySelector("#__bolt-tab-overview")?.getAttribute("aria-selected"),
     "false",
   );
-  assert.deepEqual(treeNames(document, "check"), ["ledger-lint*", "ledger-ci"]);
+  assert.deepEqual(treeNames(document, "run"), ["ledger-lint*", "ledger-ci"]);
   assert.deepEqual(treeNames(document, "stage"), ["build*", "test"]);
   assert.deepEqual(treeNames(document, "job"), ["build-job*"]);
   assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
@@ -58,9 +58,9 @@ test("picking a run shows only its stages and steps", async () => {
   const { document } = setUp();
   click(pipelineTab(document));
   await settle();
-  click(pickItem(document, "check", "ledger-ci"));
+  click(pickItem(document, "run", "ledger-ci"));
   await settle();
-  assert.deepEqual(treeNames(document, "check"), ["ledger-lint", "ledger-ci*"]);
+  assert.deepEqual(treeNames(document, "run"), ["ledger-lint", "ledger-ci*"]);
   assert.deepEqual(treeNames(document, "stage"), ["lint-stage*"]);
   assert.deepEqual(treeNames(document, "step"), ["lint*"]);
   assert.equal(frameSource(document), `${LOG_PATH}501&view=logs&j=lint-job&t=lint`);
@@ -95,12 +95,12 @@ test("clicking the current run, stage or job folds it, and clicking again opens 
   assert.deepEqual(treeNames(document, "stage"), ["build*", "test"]);
   assert.deepEqual(treeNames(document, "job"), []);
 
-  click(pickItem(document, "check", "ledger-lint"));
-  assert.deepEqual(treeNames(document, "check"), ["ledger-lint*", "ledger-ci"]);
+  click(pickItem(document, "run", "ledger-lint"));
+  assert.deepEqual(treeNames(document, "run"), ["ledger-lint*", "ledger-ci"]);
   assert.deepEqual(treeNames(document, "stage"), []);
   assert.equal(frameSource(document), source, "the log stays");
 
-  click(pickItem(document, "check", "ledger-lint"));
+  click(pickItem(document, "run", "ledger-lint"));
   assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
 });
 
