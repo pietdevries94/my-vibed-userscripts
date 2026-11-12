@@ -58,6 +58,20 @@ test("a run link on the pull request opens that run in the tab", async () => {
   assert.match(frameSource(document) ?? "", /buildId=502&/u);
 });
 
+test("a button inside a run link, such as re-queue, works as Azure DevOps made it", async () => {
+  const { document } = setUp();
+  let requeueClicks = 0;
+  document.querySelector(".page-content")?.addEventListener("click", (event) => {
+    if (!event.defaultPrevented) {
+      requeueClicks += 1;
+    }
+  });
+  click(document.querySelector(".page-content a.check button span"));
+  await settle();
+  assert.equal(isOpen(document), false);
+  assert.equal(requeueClicks, 1);
+});
+
 test("a run in the checks panel opens in the tab, and the panel closes", async () => {
   const { document } = setUp();
   let closeClicks = 0;

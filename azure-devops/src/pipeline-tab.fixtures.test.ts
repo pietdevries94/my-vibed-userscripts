@@ -77,6 +77,27 @@ test(
   },
 );
 
+test(
+  "the button in the captured failed run's row stays Azure DevOps's own",
+  {
+    skip: fixtures.skip,
+  },
+  async () => {
+    const document = capturedPullRequestPage("pr-detail-failed");
+    const view = document.defaultView;
+    assert.ok(view);
+    const button = document.querySelector('a[href*="/_build/results?"] button');
+    assert.ok(button, "the failed run's row has a button");
+    const event = new view.MouseEvent("click", { bubbles: true, cancelable: true });
+    button.dispatchEvent(event);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
+    assert.equal(event.defaultPrevented, false);
+    assert.equal(document.querySelector(".fix-ado-pipeline-panel"), null);
+  },
+);
+
 async function openPipelineTab(document: Document): Promise<void> {
   const view = document.defaultView;
   assert.ok(view);

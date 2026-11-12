@@ -199,7 +199,15 @@ function closeChecksPanel(target: EventTarget | null): void {
 function clickedRunBuildId(event: MouseEvent, document: Document): number | null {
   const link = closestElement(event.target, RUN_LINK_SELECTOR);
   const isPlainClick = event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-  if (link === null || !isPlainClick || closestElement(event.target, `.${PANEL_CLASS}`) !== null) {
+  // A button inside the link, such as re-queue, belongs to Azure DevOps.
+  const button = closestElement(event.target, "button, [role=button]");
+  const isOnButtonInLink = button !== null && link?.contains(button) === true;
+  if (
+    link === null ||
+    !isPlainClick ||
+    isOnButtonInLink ||
+    closestElement(event.target, `.${PANEL_CLASS}`) !== null
+  ) {
     return null;
   }
   const url = new URL(link.getAttribute("href") ?? "", document.location.href);

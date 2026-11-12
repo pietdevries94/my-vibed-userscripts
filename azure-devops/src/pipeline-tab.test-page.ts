@@ -25,7 +25,7 @@ const PAGE = `<!doctype html><body>
       </div>
     </div>
     <div class="page-content">
-      <a class="check" href="/quillfield/Ledger%20Works/_build/results?buildId=502">ledger-lint</a>
+      <a class="check" href="/quillfield/Ledger%20Works/_build/results?buildId=502">ledger-lint <button class="requeue" type="button"><span>Re-queue</span></button></a>
     </div>
   </div>
   <div class="bolt-portal"><div class="bolt-panel" role="dialog">
