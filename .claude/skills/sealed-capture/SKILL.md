@@ -26,5 +26,5 @@ The shared scrubber in `shared/dev/scrub` keeps structure and replaces every val
 When the owner asks to seal an open script:
 
 1. Set `mode` to `sealed` in `<script>/script.json` and commit.
-2. (O) The owner restarts Claude Code; the site leaves the `real-site` allowlist.
+2. (O) The owner reconnects `real-site` in `/mcp`; the site leaves the `real-site` allowlist.
 3. Delete `~/.cache/my-vibed-userscripts/<script>/profile` and the `.real-site/` output. Captured fixtures stay.

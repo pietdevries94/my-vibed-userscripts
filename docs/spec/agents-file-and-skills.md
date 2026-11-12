@@ -57,7 +57,7 @@ Claude never pushes on its own. It pushes when the owner says "push", or as part
 
 1. (O) The owner names the website and the first feature. Claude asks the mode: open unless the owner says sealed.
 2. Claude creates `<site>/`, `script.json` (name, description, `@match`, `@grant`, mode, `version` `1.0.0`, and sign-in and CDN origins when open) and `src/main.ts`. Site terms go into `GLOSSARY.md`.
-3. Open: (O) the owner restarts Claude Code so the allowlist picks up the origins, then signs in when the browser opens. Claude runs `test:guard` if it has not run since the last guard change. Sealed: continue in `sealed-capture`.
+3. Open: (O) the owner reconnects `real-site` in `/mcp` so the allowlist picks up the origins, then signs in when the browser opens. Claude runs `test:guard` if it has not run since the last guard change. Sealed: continue in `sealed-capture`.
 4. Capture fixtures, through `real-site` or `sealed-capture`.
 5. Build the feature through `feature`.
 6. (O) The owner installs the dev file once from `localhost:8786` and checks on the real site.

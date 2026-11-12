@@ -73,7 +73,7 @@ Known gaps:
 - The wrapper builds `--allowed-origins` from the `script.json` of every open script: site origins, sign-in origins, CDN origins.
 - Sealed scripts never appear, so their sites are blocked at network level.
 - Sign-in origins are exact origins, never wildcards.
-- The list is built when Claude Code starts. A changed list needs a restart.
+- The list is built when the `real-site` entry starts. A changed list needs a reconnect in `/mcp`.
 
 ## Sign-in
 

@@ -26,7 +26,7 @@ The `real-site` browser is read-only. The guard blocks every request except GET 
 
 - A sign-in page or a 401: stop and ask the owner to sign in again. No retries.
 - The guard blocks a request: stop the step and report the method and URL. A site that reads through POST needs an exemption in `script.json` (`postExemptions`) that the owner writes or approves, or the sealed workflow.
-- The `real-site` entry fails to start: run `npm run test:guard`, or ask the owner to restart Claude Code after an allowlist change.
+- The `real-site` entry fails to start: run `npm run test:guard`, or, after an allowlist change, ask the owner to reconnect `real-site` in `/mcp`.
 
 ## What reaches disk
 

@@ -15,7 +15,7 @@ description: Create a userscript for a website that has no script yet. Use when 
    - The site's own terms in `GLOSSARY.md`, in its format.
      Done when `npm run build <site>` writes `dist/dev/<site>.user.js` and `npm run precommit` passes. Commit.
 3. Access:
-   - Open: (O) the owner restarts Claude Code, so the `real-site` allowlist picks up the new origins, and signs in when the browser opens. Run `npm run test:guard` first if it has not passed since the last guard change; the `real-site` entry refuses to start without a pass.
+   - Open: (O) the owner reconnects `real-site` in `/mcp`, so its allowlist picks up the new origins, and signs in when the browser opens. Run `npm run test:guard` first if it has not passed since the last guard change; the `real-site` entry refuses to start without a pass.
    - Sealed: continue in `sealed-capture`.
 4. Capture fixtures, through `real-site` (open) or `sealed-capture` (sealed).
 5. Build the feature through `feature`.
