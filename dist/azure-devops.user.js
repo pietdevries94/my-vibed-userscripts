@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.0.2
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, required reviewers first, avatar initials, and pull request lists and boards that reload on changes.
+// @version      1.1.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs, required reviewers first, avatar initials, and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -183,18 +183,22 @@
     let shape = document2.createElementNS(SVG_NAMESPACE, tag);
     return setAttributes(shape, attributes), shape;
   }
-  function createPipelineStatusIcon(document2, status, pullRequestId) {
+  function createStatusIcon(document2, status, label = LABELS[status]) {
     let icon = document2.createElementNS(SVG_NAMESPACE, "svg");
     setAttributes(icon, {
-      "aria-label": LABELS[status],
+      "aria-label": label,
       class: PIPELINE_STATUS_ICON_CLASS,
       height: "16",
       role: "img",
       viewBox: "0 0 16 16",
       width: "16"
-    }), icon.dataset.status = status, icon.dataset.pullRequestId = String(pullRequestId);
+    }), icon.dataset.status = status;
     let title = document2.createElementNS(SVG_NAMESPACE, "title");
-    return title.textContent = LABELS[status], icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
+    return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
+  }
+  function createPipelineStatusIcon(document2, status, pullRequestId) {
+    let icon = createStatusIcon(document2, status);
+    return icon.dataset.pullRequestId = String(pullRequestId), icon;
   }
 
   // azure-devops/src/pr-list.ts
@@ -241,7 +245,7 @@
     }), retryAfterSeconds = retryAfterSecondsOf(response);
     if (!response.ok)
       throw new AdoRequestError(response.status, retryAfterSeconds);
-    return { body: await response.json(), retryAfterSeconds };
+    return { body: await response.json() ?? {}, retryAfterSeconds };
   }
   function createProjectIdCache(options) {
     let projectIdRequests = /* @__PURE__ */ new Map();
@@ -275,6 +279,13 @@
     }
     return { retryAfterSeconds, workItems };
   }
+  async function getPullRequestBuilds(options, { project, pullRequestId }) {
+    let branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`), { body, retryAfterSeconds } = await getJson(
+      options,
+      `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}&queryOrder=queueTimeDescending&$top=50&api-version=7.1`
+    );
+    return { builds: body.value ?? [], retryAfterSeconds };
+  }
   function createAdoClient(options) {
     let getProjectId = createProjectIdCache(options), authenticatedUserIdRequest = null;
     return {
@@ -288,12 +299,20 @@
         );
         return { evaluations: body.value, retryAfterSeconds };
       },
+      getPullRequestBuilds: async (project, pullRequestId) => getPullRequestBuilds(options, { project, pullRequestId }),
       async getPullRequests({ project, repository, status }) {
         let { body, retryAfterSeconds } = await getJson(
           options,
           `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullrequests?searchCriteria.status=${status}&$top=200&api-version=7.1`
         );
         return { pullRequests: body.value, retryAfterSeconds };
+      },
+      async getTimeline(project, buildId) {
+        let { body, retryAfterSeconds } = await getJson(
+          options,
+          `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?api-version=7.1`
+        );
+        return { records: body.records ?? [], retryAfterSeconds };
       },
       async getWorkItems(ids) {
         return getWorkItems(options, ids);
@@ -342,6 +361,29 @@
       async check({ immediately = !1 } = {}) {
         let page = options.currentPage();
         !page || state.isChecking || !isCheckDue(state, page, immediately) || await runCheck(state, page);
+      }
+    };
+  }
+
+  // azure-devops/src/pipeline-run-link.ts
+  var RUN_PATH_END = "/_build/results";
+  function parsePipelineRunLocation(location2) {
+    let query = new URLSearchParams(location2.search), buildId = Number(query.get("buildId") ?? Number.NaN);
+    if (!location2.pathname.endsWith(RUN_PATH_END) || !Number.isInteger(buildId))
+      return null;
+    let jobId = query.get("j"), stepId = query.get("t");
+    return query.get("view") !== "logs" ? { buildId, jobId: null, stepId: null, view: "summary" } : jobId !== null && stepId !== null ? { buildId, jobId, stepId, view: "log" } : { buildId, jobId: null, stepId: null, view: "steps" };
+  }
+  function pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) {
+    let step = `j=${encodeURIComponent(jobId)}&t=${encodeURIComponent(stepId)}`;
+    return `${apiBasePath2}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs&${step}`;
+  }
+
+  // azure-devops/src/pipeline-run-frame.ts
+  function createPipelineRunFrame(document2) {
+    return parsePipelineRunLocation(document2.location) === null ? null : {
+      sync: () => {
+        document2.documentElement.dataset.fixAdoRunFrame = "";
       }
     };
   }
@@ -447,6 +489,568 @@
             state.isFetching = !1;
           }
         }
+      }
+    };
+  }
+
+  // azure-devops/src/closest-element.ts
+  function isElement(target) {
+    return target !== null && "nodeType" in target && target.nodeType === 1;
+  }
+  function closestElement(target, selector) {
+    return isElement(target) ? target.closest(selector) : null;
+  }
+
+  // azure-devops/src/pipeline-timeline.ts
+  var RESULT_STATUSES = {
+    abandoned: { label: "Canceled", status: "notStarted" },
+    canceled: { label: "Canceled", status: "notStarted" },
+    failed: { label: "Failed", status: "failed" },
+    skipped: { label: "Skipped", status: "notStarted" },
+    succeeded: { label: "Succeeded", status: "succeeded" },
+    succeededWithIssues: { label: "Succeeded with warnings", status: "expired" }
+  };
+  function recordStatusOf({ result, state }) {
+    return state === "inProgress" ? { label: "Running", status: "running" } : (result === null ? void 0 : RESULT_STATUSES[result]) ?? { label: "Not started", status: "notStarted" };
+  }
+  var NO_STAGE_ID = "";
+  function inRunOrder(records) {
+    return records.toSorted((first, second) => (first.order ?? 0) - (second.order ?? 0));
+  }
+  function stageIdOf(record, byId) {
+    let parent = record.parentId === null ? void 0 : byId.get(record.parentId);
+    for (; parent !== void 0 && parent.type !== "Stage"; )
+      parent = parent.parentId === null ? void 0 : byId.get(parent.parentId);
+    return parent?.id ?? NO_STAGE_ID;
+  }
+  function jobOf(job, records) {
+    let steps = inRunOrder(
+      records.filter((record) => record.type === "Task" && record.parentId === job.id)
+    ).map(({ id, name, result, state }) => ({ id, jobId: job.id, name, result, state }));
+    return { id: job.id, name: job.name, result: job.result, state: job.state, steps };
+  }
+  function stagesOf(records) {
+    let byId = new Map(records.map((record) => [record.id, record])), jobs = inRunOrder(records.filter((record) => record.type === "Job")), stages = inRunOrder(records.filter((record) => record.type === "Stage"));
+    return (stages.length > 0 || jobs.length === 0 ? stages : [{ id: NO_STAGE_ID, name: "Jobs", result: null, state: "" }]).map(({ id, name, result, state }) => ({
+      id,
+      jobs: jobs.filter((job) => stageIdOf(job, byId) === id).map((job) => jobOf(job, records)),
+      name,
+      result,
+      state
+    }));
+  }
+  function defaultStepOf(stages) {
+    let steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
+    return steps.find((step) => step.state === "inProgress") ?? steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
+  }
+
+  // azure-devops/src/pipeline-tab-tree.ts
+  var DEFAULT_STAGE_NAME = "__default", DATE_FORMAT = { dateStyle: "short", timeStyle: "short" }, NAME_CLASS = "fix-ado-pipeline-item-name";
+  function textElement(document2, className, text) {
+    let element = document2.createElement("span");
+    return element.className = className, element.textContent = text, element;
+  }
+  function createItemText(document2, item) {
+    let text = textElement(document2, "fix-ado-pipeline-item-text", "");
+    return text.append(textElement(document2, NAME_CLASS, item.name)), item.details !== void 0 && text.append(textElement(document2, "fix-ado-pipeline-item-details", item.details)), text;
+  }
+  function foldPick(context, level) {
+    let { pick } = context;
+    return { ...pick, folded: pick.folded === level ? null : level };
+  }
+  function createItem(context, item) {
+    let { document: document2 } = context, button = document2.createElement("button");
+    button.type = "button", button.className = `fix-ado-pipeline-item ${item.className}`, button.setAttribute("aria-current", String(item.isCurrent));
+    let text = createItemText(document2, item), icon = item.status === null ? [] : [createStatusIcon(document2, item.status.status, item.status.label)];
+    return button.append(...icon, text), button.addEventListener("click", () => {
+      let { level } = item;
+      context.onPick(item.isCurrent && level !== null ? foldPick(context, level) : item.pick);
+    }), button;
+  }
+  function requiredLabel(isRequired) {
+    return isRequired ? "Required" : "Optional";
+  }
+  function runDetails(run) {
+    let kind = run.isRequired === null ? `#${run.buildNumber ?? run.buildId}` : requiredLabel(run.isRequired);
+    return run.startedAt === null ? kind : `${kind} · ${new Date(run.startedAt).toLocaleString([], DATE_FORMAT)}`;
+  }
+  function group(document2, className, children) {
+    let element = document2.createElement("div");
+    return element.className = className, element.append(...children), element;
+  }
+  function createJobSteps(context, job) {
+    let { run, stage, step } = context.shown, steps = job.steps.map(
+      (candidate) => createItem(context, {
+        className: "fix-ado-pipeline-step",
+        isCurrent: candidate.id === step?.id,
+        level: null,
+        name: candidate.name,
+        pick: {
+          buildId: run.buildId,
+          folded: null,
+          jobId: candidate.jobId,
+          stageId: stage?.id ?? null,
+          stepId: candidate.id
+        },
+        status: recordStatusOf(candidate)
+      })
+    );
+    return group(context.document, "fix-ado-pipeline-steps", steps);
+  }
+  function createJob(context, job) {
+    let { shown } = context, isCurrent = shown.step?.jobId === job.id, item = createItem(context, {
+      className: "fix-ado-pipeline-job",
+      isCurrent,
+      level: "job",
+      name: job.name,
+      pick: {
+        buildId: shown.run.buildId,
+        folded: null,
+        jobId: job.id,
+        stageId: shown.stage?.id ?? null,
+        stepId: null
+      },
+      status: recordStatusOf(job)
+    });
+    return isCurrent && context.pick.folded === "job" ? [item] : [item, createJobSteps(context, job)];
+  }
+  function createJobs(context) {
+    let items = (context.shown.stage?.jobs ?? []).flatMap((job) => createJob(context, job));
+    return group(context.document, "fix-ado-pipeline-jobs", items);
+  }
+  function stageName(stage) {
+    return stage.name === DEFAULT_STAGE_NAME ? "Jobs" : stage.name;
+  }
+  function createStage(context, stage) {
+    let { shown } = context, isCurrent = stage.id === shown.stage?.id, item = createItem(context, {
+      className: "fix-ado-pipeline-stage",
+      isCurrent,
+      level: "stage",
+      name: stageName(stage),
+      pick: {
+        buildId: shown.run.buildId,
+        folded: null,
+        jobId: null,
+        stageId: stage.id,
+        stepId: null
+      },
+      status: recordStatusOf(stage)
+    });
+    return isCurrent && context.pick.folded !== "stage" ? [item, createJobs(context)] : [item];
+  }
+  function createStages(context) {
+    let { document: document2, shown } = context;
+    if (shown.stages === null)
+      return textElement(document2, "fix-ado-pipeline-note", "Loading stages…");
+    if (shown.stages.length === 0)
+      return textElement(document2, "fix-ado-pipeline-note", "No stages yet.");
+    let items = shown.stages.flatMap((stage) => createStage(context, stage));
+    return group(document2, "fix-ado-pipeline-stages", items);
+  }
+  function createRun(context, run) {
+    let isCurrent = run.buildId === context.shown.run.buildId, item = createItem(context, {
+      className: "fix-ado-pipeline-run",
+      details: runDetails(run),
+      isCurrent,
+      level: "run",
+      name: run.name,
+      pick: { buildId: run.buildId, folded: null, jobId: null, stageId: null, stepId: null },
+      status: run.status
+    });
+    return isCurrent && context.pick.folded !== "run" ? [item, createStages(context)] : [item];
+  }
+  function showCutOffNames(tree) {
+    tree.addEventListener("mouseover", (event) => {
+      let row = closestElement(event.target, ".fix-ado-pipeline-item"), name = row?.querySelector(`.${NAME_CLASS}`);
+      row === null || name === null || name === void 0 || (name.scrollWidth > name.clientWidth ? row.setAttribute("title", name.textContent) : row.removeAttribute("title"));
+    });
+  }
+  function createRunTree(context) {
+    let items = context.runs.flatMap((run) => createRun(context, run)), tree = group(context.document, "fix-ado-pipeline-tree", items);
+    return tree.setAttribute("role", "navigation"), tree.setAttribute("aria-label", "Pipeline runs"), showCutOffNames(tree), tree;
+  }
+
+  // azure-devops/src/pipeline-log-frame.ts
+  var LOG_TITLE_SELECTOR = ".logs-view .log-header .job-header .title-m", TREE_ROW_SELECTOR = ".run-logs-tree .bolt-tree-row", ROW_NAME_SELECTOR = ".job-name-area [role=button]";
+  function load(frame, log2) {
+    frame.setAttribute("src", log2.path);
+  }
+  function shownStepName(frame) {
+    return frame.contentDocument?.querySelector(LOG_TITLE_SELECTOR)?.textContent.trim() ?? null;
+  }
+  function showsStep(frame, stepName) {
+    return shownStepName(frame) === stepName;
+  }
+  function stepInTree(document2, log2) {
+    let names = [...document2.querySelectorAll(TREE_ROW_SELECTOR)].map((row) => row.querySelector(ROW_NAME_SELECTOR)).filter((name) => name !== null), jobIndex = names.findIndex((name) => name.textContent.trim() === log2.jobName), isStep = (name) => name.textContent.trim() === log2.stepName;
+    return names.slice(jobIndex + 1).find((name) => isStep(name)) ?? names.find((name) => isStep(name)) ?? null;
+  }
+  function waitForSwitch(frame, log2, schedule) {
+    let checksLeft = 15, check = () => {
+      frame.dataset.fixAdoLogPath !== log2.path || showsStep(frame, log2.stepName) || (checksLeft -= 1, checksLeft > 0 ? schedule(check, 100) : load(frame, log2));
+    };
+    schedule(check, 100);
+  }
+  function stepInFrame(frame, log2) {
+    let isSameRun = frame.dataset.fixAdoBuildId === String(log2.buildId), document2 = frame.contentDocument;
+    return isSameRun && document2 !== null ? stepInTree(document2, log2) : null;
+  }
+  function showStepLog(frame, log2, schedule = setTimeout) {
+    if (frame.dataset.fixAdoLogPath === log2.path)
+      return;
+    let step = stepInFrame(frame, log2);
+    if (frame.dataset.fixAdoLogPath = log2.path, frame.dataset.fixAdoBuildId = String(log2.buildId), step === null) {
+      load(frame, log2);
+      return;
+    }
+    step.click(), waitForSwitch(frame, log2, schedule);
+  }
+  function watchShownStep(frame, onStep) {
+    if (frame.dataset.fixAdoWatched !== void 0)
+      return;
+    frame.dataset.fixAdoWatched = "";
+    let lastStepName = null, report = () => {
+      let stepName = shownStepName(frame);
+      stepName !== null && stepName !== lastStepName && (lastStepName = stepName, onStep(stepName));
+    }, watchPage = () => {
+      let view = frame.contentDocument?.defaultView;
+      if (frame.contentDocument !== null && view !== null && view !== void 0) {
+        let options = { characterData: !0, childList: !0, subtree: !0 };
+        new view.MutationObserver(report).observe(frame.contentDocument, options);
+      }
+    };
+    frame.addEventListener("load", watchPage), watchPage();
+  }
+
+  // azure-devops/src/pipeline-tab-panel.ts
+  var PANEL_CLASS = "fix-ado-pipeline-panel", TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree", FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame", LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note";
+  function message(panel, text) {
+    let note = panel.ownerDocument.createElement("p");
+    note.className = "fix-ado-pipeline-message", note.textContent = text, panel.replaceChildren(note);
+  }
+  function frameOf(panel) {
+    let existing = panel.querySelector(FRAME_SELECTOR);
+    if (existing !== null)
+      return existing;
+    let frame = panel.ownerDocument.createElement("iframe");
+    return frame.className = "fix-ado-pipeline-frame", frame.title = "Step log", panel.append(frame), frame;
+  }
+  function showLogNote(panel, text) {
+    let note = panel.querySelector(LOG_NOTE_SELECTOR);
+    if (text === null) {
+      note?.remove();
+      return;
+    }
+    note === null && (note = panel.ownerDocument.createElement("p"), note.className = "fix-ado-pipeline-log-note", panel.append(note)), note.textContent = text;
+  }
+  function stepLogOf(shown, step, content) {
+    let { buildId } = shown.run, jobName = shown.stage?.jobs.find((job) => job.id === step.jobId)?.name ?? "";
+    return { buildId, jobName, path: content.logPathOf(buildId, step), stepName: step.name };
+  }
+  function showLog(panel, shown, content) {
+    let { step } = shown;
+    if (step === null) {
+      panel.querySelector(FRAME_SELECTOR)?.setAttribute("hidden", ""), showLogNote(panel, shown.stages === null ? "Loading steps…" : "This run has no steps yet.");
+      return;
+    }
+    showLogNote(panel, null);
+    let frame = frameOf(panel);
+    frame.removeAttribute("hidden"), showStepLog(frame, stepLogOf(shown, step, content));
+  }
+  function placeTree(panel, tree) {
+    let oldTree = panel.querySelector(TREE_SELECTOR);
+    oldTree === null ? panel.prepend(tree) : oldTree.replaceWith(tree);
+  }
+  function showRun(panel, runs, content) {
+    let { shown } = content;
+    if (shown === null) {
+      message(panel, "This pull request has no pipeline runs.");
+      return;
+    }
+    panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
+    let tree = createRunTree({
+      document: panel.ownerDocument,
+      onPick: content.onPick,
+      pick: content.pick,
+      runs,
+      shown
+    });
+    placeTree(panel, tree), showLog(panel, shown, content);
+  }
+  function renderKey({ pick, runs, shown }) {
+    return JSON.stringify([runs, shown, pick]);
+  }
+  function renderPanel(panel, content) {
+    let key = renderKey(content);
+    panel.dataset.fixAdoRendered !== key && (panel.dataset.fixAdoRendered = key, content.runs.kind === "loading" ? message(panel, "Loading pipeline runs…") : content.runs.kind === "failed" ? message(panel, "Could not load the pipeline runs.") : showRun(panel, content.runs.runs, content));
+  }
+  function createPanel(document2) {
+    let panel = document2.createElement("div");
+    return panel.className = PANEL_CLASS, panel.setAttribute("role", "tabpanel"), panel;
+  }
+
+  // shared/runtime/script-log.ts
+  var entries = [];
+  function log(message2, data) {
+    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
+  }
+
+  // azure-devops/src/pipeline-checks.ts
+  function pipelineCheckOf(evaluation) {
+    let buildId = evaluation.context?.buildId ?? null;
+    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId === null ? null : {
+      buildId,
+      isRequired: evaluation.configuration.isBlocking,
+      name: evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? `Run ${buildId}`,
+      startedAt: evaluation.context?.buildStartedUtc ?? null,
+      status: pipelineStatusOf([evaluation])
+    };
+  }
+  function startedAtMs(check) {
+    return check.startedAt === null ? 0 : Date.parse(check.startedAt);
+  }
+  function pipelineChecksOf(evaluations) {
+    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check) => check !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
+  }
+
+  // azure-devops/src/pipeline-runs.ts
+  var RESULT_STATUSES2 = {
+    canceled: { label: "Canceled", status: "notStarted" },
+    failed: { label: "Failed", status: "failed" },
+    partiallySucceeded: { label: "Partly succeeded", status: "expired" },
+    succeeded: { label: "Succeeded", status: "succeeded" }
+  }, PROGRESS_STATUSES = {
+    cancelling: { label: "Canceling", status: "running" },
+    inProgress: { label: "Running", status: "running" },
+    notStarted: { label: "Queued", status: "queued" },
+    postponed: { label: "Queued", status: "queued" }
+  };
+  function buildStatusOf(build) {
+    return (build.result === void 0 ? void 0 : RESULT_STATUSES2[build.result]) ?? PROGRESS_STATUSES[build.status] ?? null;
+  }
+  function runOfBuild(build, check) {
+    return {
+      buildId: build.id,
+      buildNumber: build.buildNumber,
+      isRequired: check?.isRequired ?? null,
+      name: check?.name ?? build.definition?.name ?? `Run ${build.buildNumber}`,
+      startedAt: build.startTime ?? build.queueTime ?? check?.startedAt ?? null,
+      status: check?.status === null || check === void 0 ? buildStatusOf(build) : { status: check.status }
+    };
+  }
+  function runOfCheck(check) {
+    let status = check.status === null ? null : { status: check.status };
+    return { ...check, buildNumber: null, status };
+  }
+  function pipelineRunsOf(checks, builds) {
+    let listed = new Set(builds.map((build) => build.id));
+    return [
+      ...checks.filter((check) => !listed.has(check.buildId)).map((check) => runOfCheck(check)),
+      ...builds.map(
+        (build) => runOfBuild(
+          build,
+          checks.find((check) => check.buildId === build.id)
+        )
+      )
+    ];
+  }
+
+  // azure-devops/src/pipeline-tab-selection.ts
+  function stageWithStep(stages, stepId) {
+    return stages.find(
+      (stage) => stage.jobs.some((job) => job.steps.some((step) => step.id === stepId))
+    );
+  }
+  function pickedScope(stages, pick) {
+    let pickedStage = stages.find((stage) => stage.id === pick.stageId), pickedJob = (pickedStage?.jobs ?? []).find((job) => job.id === pick.jobId);
+    return pickedStage !== void 0 && pickedJob !== void 0 ? [{ ...pickedStage, jobs: [pickedJob] }] : pickedStage === void 0 ? stages : [pickedStage];
+  }
+  function shownStepOf(stages, pick) {
+    let scope = pickedScope(stages, pick);
+    return scope.flatMap((stage) => stage.jobs.flatMap((job) => job.steps)).find((step) => step.id === pick.stepId) ?? defaultStepOf(scope);
+  }
+  function shownRunOf(runs, stagesByBuildId, pick) {
+    let run = runs.find((candidate) => candidate.buildId === pick.buildId) ?? runs[0];
+    if (run === void 0)
+      return null;
+    let stages = stagesByBuildId.get(run.buildId) ?? null;
+    if (stages === null)
+      return { run, stage: null, stages, step: null };
+    let step = shownStepOf(stages, pick), stage = (step === null ? void 0 : stageWithStep(stages, step.id)) ?? stages.find((candidate) => candidate.id === pick.stageId) ?? stages[0] ?? null;
+    return { run, stage, stages, step };
+  }
+
+  // azure-devops/src/pipeline-tab-data.ts
+  var RUNS_REFRESH_MS = 3e4, RUNNING_TIMELINE_REFRESH_MS = 5e3, NO_PICK = {
+    buildId: null,
+    folded: null,
+    jobId: null,
+    stageId: null,
+    stepId: null
+  };
+  function createTabData(pullRequest) {
+    return {
+      pick: NO_PICK,
+      pullRequest,
+      runs: { kind: "loading" },
+      runsLoadedAt: Number.NEGATIVE_INFINITY,
+      stagesByBuildId: /* @__PURE__ */ new Map(),
+      timelineLoadedAt: /* @__PURE__ */ new Map()
+    };
+  }
+  function shownRunOfData(data) {
+    return data.runs.kind === "loaded" ? shownRunOf(data.runs.runs, data.stagesByBuildId, data.pick) : null;
+  }
+  function logRunListFailure(error) {
+    return error instanceof AdoRequestError ? log("Pipeline tab: Azure DevOps refused the run list", { httpStatus: error.httpStatus }) : log("Pipeline tab: the run list request failed without an answer"), [];
+  }
+  async function loadRuns({ data, onChange, sources }) {
+    data.runsLoadedAt = sources.now();
+    try {
+      let [evaluations, builds] = await Promise.all([
+        sources.getEvaluations(data.pullRequest),
+        sources.getPullRequestBuilds(data.pullRequest).catch(logRunListFailure)
+      ]), checks = pipelineChecksOf(evaluations);
+      log("Pipeline tab: runs loaded", { checkCount: checks.length, runCount: builds.length }), data.runs = { kind: "loaded", runs: pipelineRunsOf(checks, builds) };
+    } catch {
+      data.runs = data.runs.kind === "loaded" ? data.runs : { kind: "failed" };
+    }
+    onChange();
+  }
+  async function loadTimeline(loader, buildId) {
+    let { data, onChange, sources } = loader;
+    data.timelineLoadedAt.set(buildId, sources.now());
+    try {
+      let records = await sources.getTimeline(data.pullRequest.project, buildId);
+      data.stagesByBuildId.set(buildId, stagesOf(records));
+    } catch {
+    }
+    onChange();
+  }
+  function isTimelineDue(data, shown, now) {
+    let loadedAt = data.timelineLoadedAt.get(shown.run.buildId);
+    if (loadedAt === void 0)
+      return !0;
+    let status = shown.run.status?.status;
+    return (status === "running" || status === "queued" || (shown.stages ?? []).some((stage) => stage.state !== "completed") || shown.stages === null) && now - loadedAt >= RUNNING_TIMELINE_REFRESH_MS;
+  }
+  function loadWhatIsDue(loader) {
+    let { data, sources } = loader, now = sources.now();
+    now - data.runsLoadedAt >= RUNS_REFRESH_MS && loadRuns(loader);
+    let shown = shownRunOfData(data);
+    shown !== null && isTimelineDue(data, shown, now) && loadTimeline(loader, shown.run.buildId);
+  }
+  function expireTimeline(data, buildId) {
+    data.timelineLoadedAt.delete(buildId);
+  }
+
+  // azure-devops/src/pipeline-tab.ts
+  var TAB_CLASS = "fix-ado-pipeline-tab", TAB_LABEL = "Pipeline", OPEN_ATTRIBUTE = "data-fix-ado-pipeline-tab-open", PAGE_SELECTOR = ".repos-pr-details-page", TABBAR_SELECTOR = ".repos-pr-details-page-tabbar", CHECKS_PANEL_SELECTOR = ".bolt-panel", RUN_LINK = 'a[href*="/_build/results?"]', RUN_LINK_SELECTOR = `${PAGE_SELECTOR} ${RUN_LINK}, ${CHECKS_PANEL_SELECTOR} ${RUN_LINK}`;
+  function createTab(document2) {
+    let tab = document2.createElement("a");
+    return tab.className = `bolt-tab focus-treatment flex-noshrink ${TAB_CLASS}`, tab.setAttribute("role", "tab"), tab.href = "#", tab.innerHTML = `<span class="bolt-tab-inner-container"><span class="bolt-tab-text" data-content="${TAB_LABEL}">${TAB_LABEL}</span></span>`, setSelected(tab, !1), tab;
+  }
+  function setSelected(tab, isSelected) {
+    tab.classList.toggle("selected", isSelected), tab.setAttribute("aria-selected", String(isSelected));
+  }
+  function isSamePullRequest(data, pullRequest) {
+    return JSON.stringify(data?.pullRequest ?? null) === JSON.stringify(pullRequest);
+  }
+  function panelOf(state, page) {
+    let existing = page.querySelector(`.${PANEL_CLASS}`), tabbar = page.querySelector(TABBAR_SELECTOR);
+    if (existing !== null || tabbar === null)
+      return existing;
+    let panel = createPanel(state.options.document);
+    return tabbar.after(panel), panel;
+  }
+  function render(state) {
+    let { data } = state, page = state.options.document.querySelector(PAGE_SELECTOR), panel = page === null ? null : panelOf(state, page);
+    if (!state.isOpen || data === null || page === null || panel === null)
+      return;
+    page.setAttribute(OPEN_ATTRIBUTE, "");
+    let { apiBasePath: apiBasePath2 } = state.options, { project } = data.pullRequest;
+    renderPanel(panel, {
+      logPathOf: (buildId, step) => pipelineLogPath(apiBasePath2, project, { buildId, jobId: step.jobId, stepId: step.id }),
+      onPick: (pick) => {
+        data.pick = pick, update(state);
+      },
+      pick: data.pick,
+      runs: data.runs,
+      shown: shownRunOfData(data)
+    }), watchLog(state, panel);
+  }
+  function onLogStep(state, stepName) {
+    let { data } = state, shown = data === null ? null : shownRunOfData(data);
+    data === null || shown === null || data.pick.stepId !== null || shown.step?.name === stepName || (expireTimeline(data, shown.run.buildId), update(state));
+  }
+  function watchLog(state, panel) {
+    let frame = panel.querySelector(".fix-ado-pipeline-frame");
+    frame !== null && watchShownStep(frame, (stepName) => {
+      onLogStep(state, stepName);
+    });
+  }
+  function update(state) {
+    let { data } = state;
+    !state.isOpen || data === null || (render(state), loadWhatIsDue({
+      data,
+      onChange: () => {
+        state.data === data && update(state);
+      },
+      sources: state.options
+    }));
+  }
+  function selectTab(state) {
+    let { document: document2 } = state.options, tab = document2.querySelector(`.${TAB_CLASS}`);
+    for (let other of document2.querySelectorAll("[role=tablist] [role=tab].selected"))
+      other !== tab && (state.replacedTab = other, setSelected(other, !1));
+    tab !== null && setSelected(tab, !0);
+  }
+  function openTab(state, buildId) {
+    state.isOpen = !0, buildId !== null && state.data !== null && (state.data.pick = { buildId, folded: null, jobId: null, stageId: null, stepId: null }), selectTab(state), update(state);
+  }
+  function closeTab(state) {
+    let { document: document2 } = state.options;
+    state.isOpen = !1;
+    let page = document2.querySelector(PAGE_SELECTOR);
+    page?.removeAttribute(OPEN_ATTRIBUTE), page?.querySelector(`.${PANEL_CLASS}`)?.remove();
+    for (let tab of document2.querySelectorAll(`.${TAB_CLASS}`))
+      setSelected(tab, !1);
+    state.replacedTab !== null && (setSelected(state.replacedTab, !0), state.replacedTab = null);
+  }
+  function closeChecksPanel(target) {
+    closestElement(target, CHECKS_PANEL_SELECTOR)?.querySelector(".bolt-panel-header .ms-Icon--Clear")?.closest("button")?.click();
+  }
+  function clickedRunBuildId(event, document2) {
+    let link = closestElement(event.target, RUN_LINK_SELECTOR), isPlainClick = event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    if (link === null || !isPlainClick || closestElement(event.target, `.${PANEL_CLASS}`) !== null)
+      return null;
+    let url = new URL(link.getAttribute("href") ?? "", document2.location.href);
+    return parsePipelineRunLocation(url)?.buildId ?? null;
+  }
+  function onClick(state, event) {
+    if (state.data === null)
+      return;
+    let isPipelineTab = closestElement(event.target, `.${TAB_CLASS}`) !== null, runBuildId = clickedRunBuildId(event, state.options.document);
+    isPipelineTab || runBuildId !== null ? (event.preventDefault(), event.stopPropagation(), openTab(state, runBuildId), closeChecksPanel(event.target)) : state.isOpen && closestElement(event.target, "[role=tablist] [role=tab]") !== null && closeTab(state);
+  }
+  function addTab(document2) {
+    let tablist = document2.querySelector(`${TABBAR_SELECTOR} [role=tablist]`);
+    return tablist === null ? !1 : (tablist.querySelector(`.${TAB_CLASS}`) === null && tablist.append(createTab(document2)), !0);
+  }
+  function syncTab(state, pullRequest) {
+    isSamePullRequest(state.data, pullRequest) || (closeTab(state), state.data = pullRequest === null ? null : createTabData(pullRequest)), state.data !== null && addTab(state.options.document) && state.isOpen && (selectTab(state), update(state));
+  }
+  function createPipelineTab(options) {
+    let state = { data: null, isOpen: !1, options, replacedTab: null };
+    return options.document.addEventListener(
+      "click",
+      (event) => {
+        onClick(state, event);
+      },
+      { capture: !0 }
+    ), {
+      sync: (pullRequest) => {
+        syncTab(state, pullRequest);
       }
     };
   }
@@ -604,6 +1208,139 @@
 [data-fix-ado-reviewers] > .pr-reviewer[data-fix-ado-required] {
   order: -1;
 }
+
+/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+.repos-pr-details-page[data-fix-ado-pipeline-tab-open]
+  > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
+  display: none !important;
+}
+
+/* The pull request page is a column that fills the window; the panel takes what the
+   header and tabs leave, so the log reaches the bottom. */
+.fix-ado-pipeline-panel {
+  display: flex;
+  flex: 1 0 0;
+  gap: 16px;
+  min-height: 400px;
+  padding-top: 16px;
+}
+
+.fix-ado-pipeline-tree {
+  display: flex;
+  flex: 0 0 400px;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.fix-ado-pipeline-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0 4px 4px 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fix-ado-pipeline-item:hover {
+  background: var(--palette-black-alpha-4, rgba(0, 0, 0, 0.04));
+}
+
+/* The picked run, stage, job and step get a bar on the left, as in Azure DevOps's own lists. */
+.fix-ado-pipeline-item[aria-current="true"] {
+  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+  box-shadow: inset 3px 0 0 var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-pipeline-item:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.fix-ado-pipeline-item .fix-ado-pipeline-status {
+  margin-left: 0;
+}
+
+.fix-ado-pipeline-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fix-ado-pipeline-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fix-ado-pipeline-run .fix-ado-pipeline-item-name {
+  font-weight: 600;
+}
+
+.fix-ado-pipeline-item-details {
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-size: 12px;
+}
+
+/* Stages sit under their run, jobs under their stage, steps under their job. */
+.fix-ado-pipeline-stages,
+.fix-ado-pipeline-jobs,
+.fix-ado-pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+}
+
+/* A line above each run but the first, so the runs stand apart. */
+.fix-ado-pipeline-run:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 0;
+}
+
+.fix-ado-pipeline-note {
+  padding: 6px 10px 2px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-size: 12px;
+}
+
+.fix-ado-pipeline-log-note {
+  flex: 1 1 auto;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+
+.fix-ado-pipeline-frame[hidden] {
+  display: none;
+}
+
+.fix-ado-pipeline-frame {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+}
+
+/* The run page inside the Pipeline tab. pipeline-run-frame.ts marks it; only the log stays. */
+html[data-fix-ado-run-frame] .project-header,
+html[data-fix-ado-run-frame] .navigation-container,
+html[data-fix-ado-run-frame] .region-content-header,
+html[data-fix-ado-run-frame] .region-content-footer,
+html[data-fix-ado-run-frame] .region-footer,
+html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
+  display: none !important;
+}
+
+/* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */
+.fix-ado-pipeline-tab:focus:not(:focus-visible) {
+  outline: none;
+}
 `;
 
   // azure-devops/src/pr-list-changes.ts
@@ -653,7 +1390,23 @@
     apiBasePath: basePath,
     fetch: async (url, init) => fetch(url, init),
     origin: location.origin
-  }), isTabActive = () => document.visibilityState === "visible", poller = createPipelineStatusPoller({
+  }), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, pipelineRunFrame = isInFrame ? createPipelineRunFrame(document) : null, pipelineTab = isInFrame ? null : createPipelineTab({
+    apiBasePath: basePath,
+    document,
+    getEvaluations: async (pullRequest) => {
+      let { evaluations } = await client.getPolicyEvaluations(pullRequest);
+      return evaluations;
+    },
+    getPullRequestBuilds: async ({ project, pullRequestId }) => {
+      let { builds } = await client.getPullRequestBuilds(project, pullRequestId);
+      return builds;
+    },
+    getTimeline: async (project, buildId) => {
+      let { records } = await client.getTimeline(project, buildId);
+      return records;
+    },
+    now: () => Date.now()
+  }), poller = createPipelineStatusPoller({
     client,
     findRows: () => findPullRequestRows(document, basePath),
     now: () => Date.now(),
@@ -705,7 +1458,7 @@
     !isUserBusy() && claimReload() && location.reload();
   }
   function sync() {
-    showInitialsOnAvatars(document), requiredReviewers.markAll(), isTabActive() && (poller.sync(), isPullRequestInboxLocation(location) && requiredReviewers.syncInbox()), reloader.check();
+    pipelineRunFrame?.sync(), pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath)), showInitialsOnAvatars(document), requiredReviewers.markAll(), isTabActive() && (poller.sync(), isPullRequestInboxLocation(location) && requiredReviewers.syncInbox()), reloader.check();
   }
   var settleTimer = null;
   new MutationObserver(() => {
