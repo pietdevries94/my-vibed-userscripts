@@ -83,6 +83,7 @@ function render(state: TabState): void {
   const { project } = data.pullRequest;
   renderPanel(panel, {
     checks: data.checks,
+    folded: data.pick.folded,
     logPathOf: (buildId, step) =>
       pipelineLogPath(apiBasePath, project, { buildId, jobId: step.jobId, stepId: step.id }),
     onPick: (pick) => {
@@ -129,7 +130,7 @@ function selectTab(state: TabState): void {
 function openTab(state: TabState, buildId: number | null): void {
   state.isOpen = true;
   if (buildId !== null && state.data !== null) {
-    state.data.pick = { buildId, stageId: null, stepId: null };
+    state.data.pick = { buildId, folded: null, stageId: null, stepId: null };
   }
   selectTab(state);
   update(state);

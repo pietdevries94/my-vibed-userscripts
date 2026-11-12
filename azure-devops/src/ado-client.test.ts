@@ -179,3 +179,17 @@ test("a run without a timeline yet has no records", async () => {
     retryAfterSeconds: null,
   });
 });
+
+test("fetches the runs of a pull request, newest first", async () => {
+  const build = { buildNumber: "20310402.3", id: 812, status: "completed" };
+  const { client, requests } = fakeAdo(() => Response.json({ value: [build] }));
+  const response = await client.getPullRequestBuilds("my project", 42);
+
+  assert.deepEqual(response, { builds: [build], retryAfterSeconds: null });
+  assert.deepEqual(
+    requests.map((request) => `${request.init.method} ${request.url}`),
+    [
+      "GET https://dev.azure.com/my-org/my%20project/_apis/build/builds?branchName=refs%2Fpull%2F42%2Fmerge&queryOrder=queueTimeDescending&$top=50&api-version=7.1",
+    ],
+  );
+});

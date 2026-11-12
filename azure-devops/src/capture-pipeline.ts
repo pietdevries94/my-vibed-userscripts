@@ -7,6 +7,7 @@ import type { CapturePage } from "../../shared/dev/capture/capture.ts";
 import type { PipelineRunView } from "./pipeline-run-link.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
 import type { Pseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
+import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import { parsePipelineRunLocation } from "./pipeline-run-link.ts";
 import { pipelineChecksOf } from "./pipeline-checks.ts";
@@ -80,21 +81,42 @@ function clientFor(
   return createAdoClient({ apiBasePath: basePath, fetch, origin: location.origin });
 }
 
-/** The pull request page: its checks, the policy evaluations behind them, and their runs. */
+/** Older runs whose timeline the capture takes along, besides the checks' runs. */
+const CAPTURED_OLDER_RUNS = 5;
+
+async function buildsOf(
+  client: AdoClient,
+  pullRequest: PullRequestRef,
+): Promise<CapturedResponse<{ value: PullRequestBuild[] }>> {
+  return captured(async () => {
+    const { builds, retryAfterSeconds } = await client.getPullRequestBuilds(
+      pullRequest.project,
+      pullRequest.pullRequestId,
+    );
+    return { body: { value: builds }, retryAfterSeconds };
+  });
+}
+
+/** The pull request page: its checks and runs, the evaluations behind them, and timelines. */
 function pullRequestPage(pullRequest: PullRequestRef): CapturePage {
   return {
     async collect(fetch, pseudonyms) {
       const client = clientFor(fetch, pseudonyms);
       const evaluations = await evaluationsOf(client, pullRequest);
-      const buildIds = pipelineChecksOf(evaluations.body?.value ?? []).map(
+      const builds = await buildsOf(client, pullRequest);
+      const checkBuildIds = pipelineChecksOf(evaluations.body?.value ?? []).map(
         (check) => check.buildId,
       );
+      const newestBuildIds = (builds.body?.value ?? [])
+        .slice(0, CAPTURED_OLDER_RUNS)
+        .map((build) => build.id);
+      const buildIds = [...new Set([...checkBuildIds, ...newestBuildIds])];
       const timelinesByBuildId = await timelinesOf(
         client,
         { buildIds, project: pullRequest.project },
         pseudonyms,
       );
-      return { data: { evaluations, timelinesByBuildId }, meta: {} };
+      return { data: { builds, evaluations, timelinesByBuildId }, meta: {} };
     },
     name: "pr-detail",
     root: withoutScriptMarks(document.body),

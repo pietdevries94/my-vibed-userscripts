@@ -89,7 +89,7 @@
     },
     {
       // Tests run on Node, and their inputs are literal values by nature.
-      "files": ["**/*.test.ts"],
+      "files": ["**/*.test.ts", "**/*.test-page.ts"],
       "rules": {
         "import/no-nodejs-modules": "off",
         "eslint/no-magic-numbers": "off",

@@ -88,12 +88,14 @@
   display: none !important;
 }
 
+/* The pull request page is a column that fills the window; the panel takes what the
+   header and tabs leave, so the log reaches the bottom. */
 .fix-ado-pipeline-panel {
   display: flex;
+  flex: 1 0 0;
   gap: 16px;
-  height: calc(100vh - 220px);
   min-height: 400px;
-  padding: 16px 0;
+  padding-top: 16px;
 }
 
 .fix-ado-pipeline-tree {
@@ -186,7 +188,6 @@
 .fix-ado-pipeline-frame {
   flex: 1 1 auto;
   min-width: 0;
-  height: 100%;
   border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
   border-radius: 4px;
 }

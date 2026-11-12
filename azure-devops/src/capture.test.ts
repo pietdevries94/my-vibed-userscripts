@@ -38,6 +38,11 @@ const PAGE = `<!doctype html><body><div class="page-content">
 </div></body>`;
 
 function respond(url: string): Response {
+  if (url.includes("/_apis/build/builds?")) {
+    return Response.json({
+      value: [{ buildNumber: `${PROJECT} 7`, id: BUILD_ID, result: "failed", status: "completed" }],
+    });
+  }
   if (url.includes("/timeline")) {
     const step = { id: STEP_GUID, name: `Test ${PROJECT}`, order: 3, parentId: JOB_GUID };
     return Response.json({
@@ -160,6 +165,10 @@ test("a pull request page capture keeps its tabs, its run links and its evaluati
   assert.match(json, /"type": "Task"/u);
   assert.match(json, /"result": "failed"/u);
   assert.match(json, /"order": 3/u);
+  assert.match(
+    json,
+    /"result": "failed",\s*"status": "completed"|"status": "completed"[^}]*"result": "failed"/u,
+  );
   assert.match(html, /href="\/fake-org\/text-\d+\/_build\/results\?buildId=\d+"/u);
 });
 

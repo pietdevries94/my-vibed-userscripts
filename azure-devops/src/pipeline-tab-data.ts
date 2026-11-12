@@ -37,7 +37,7 @@ interface PipelineTabLoader {
   onChange: () => void;
 }
 
-const NO_PICK: PipelineTabPick = { buildId: null, stageId: null, stepId: null };
+const NO_PICK: PipelineTabPick = { buildId: null, folded: null, stageId: null, stepId: null };
 
 function createTabData(pullRequest: PullRequestRef): PipelineTabData {
   return {

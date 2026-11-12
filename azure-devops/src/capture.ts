@@ -52,6 +52,8 @@ const rules: ScrubRules = {
     { path: /(?:^|\.)vote$/u, value: /^-?\d{1,2}$/u },
     // Run timeline records: Stage, Job or Task; pending or completed; succeeded or failed.
     { path: /records\.(?:type|state|result)$/u, value: /^[A-Za-z.]{1,40}$/u },
+    // A run's result: succeeded, partiallySucceeded, failed or canceled.
+    { path: /(?:^|\.)builds\.body\.value\.result$/u, value: /^[A-Za-z]{1,30}$/u },
     // The order of a record within its parent. A stand-in would lose it.
     { path: /records\.order$/u, value: /^\d{1,4}$/u },
     // Response status, Retry-After and work item revisions.

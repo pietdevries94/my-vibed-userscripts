@@ -2,6 +2,7 @@ import type { PullRequestListPage, PullRequestRef } from "./pull-request-link.ts
 import type { BoardWorkItem } from "./board.ts";
 import type { ListedPullRequest } from "./pr-list-changes.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
+import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { TimelineRecord } from "./pipeline-timeline.ts";
 
 interface PolicyEvaluationsResponse {
@@ -12,6 +13,12 @@ interface PolicyEvaluationsResponse {
 
 interface PullRequestsResponse {
   pullRequests: ListedPullRequest[];
+  /** Set when Azure DevOps asks the caller to slow down. */
+  retryAfterSeconds: number | null;
+}
+
+interface PullRequestBuildsResponse {
+  builds: PullRequestBuild[];
   /** Set when Azure DevOps asks the caller to slow down. */
   retryAfterSeconds: number | null;
 }
@@ -31,6 +38,11 @@ interface WorkItemsResponse {
 interface AdoClient {
   getPolicyEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluationsResponse>;
   getPullRequests: (listPage: PullRequestListPage) => Promise<PullRequestsResponse>;
+  /** The pipeline runs of a pull request, newest first. */
+  getPullRequestBuilds: (
+    project: string,
+    pullRequestId: number,
+  ) => Promise<PullRequestBuildsResponse>;
   /** The stages, jobs and steps of a pipeline run. */
   getTimeline: (project: string, buildId: number) => Promise<TimelineResponse>;
   getWorkItems: (ids: number[]) => Promise<WorkItemsResponse>;
@@ -68,6 +80,9 @@ interface JsonResponse {
 
 /** The work items API accepts at most this many ids per request. */
 const MAX_WORK_ITEMS_PER_REQUEST = 200;
+
+/** The runs of one pull request that the Pipeline tab lists. */
+const MAX_PULL_REQUEST_BUILDS = 50;
 
 /** Enough to detect an added or removed pull request in any realistic list. */
 const MAX_LISTED_PULL_REQUESTS = 200;
@@ -153,6 +168,20 @@ async function getWorkItems(options: AdoClientOptions, ids: number[]): Promise<W
   return { retryAfterSeconds, workItems };
 }
 
+async function getPullRequestBuilds(
+  options: AdoClientOptions,
+  { project, pullRequestId }: { project: string; pullRequestId: number },
+): Promise<PullRequestBuildsResponse> {
+  const branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`);
+  const { body, retryAfterSeconds } = await getJson(
+    options,
+    `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}` +
+      `&queryOrder=queueTimeDescending&$top=${MAX_PULL_REQUEST_BUILDS}&api-version=7.1`,
+  );
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
+  return { builds: (body.value ?? []) as PullRequestBuild[], retryAfterSeconds };
+}
+
 /** Read-only client. Every request is a GET with the page's session cookie. */
 function createAdoClient(options: AdoClientOptions): AdoClient {
   const getProjectId = createProjectIdCache(options);
@@ -176,6 +205,9 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
       return { evaluations: body.value as PolicyEvaluation[], retryAfterSeconds };
     },
+
+    getPullRequestBuilds: async (project, pullRequestId) =>
+      getPullRequestBuilds(options, { project, pullRequestId }),
 
     async getPullRequests({ project, repository, status }) {
       const { body, retryAfterSeconds } = await getJson(
@@ -205,6 +237,7 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
 export type {
   AdoClient,
   PolicyEvaluationsResponse,
+  PullRequestBuildsResponse,
   PullRequestsResponse,
   TimelineResponse,
   WorkItemsResponse,

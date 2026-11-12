@@ -1,6 +1,19 @@
 import { BUILD_POLICY_TYPE_ID, pipelineStatusOf } from "./pipeline-status.ts";
 import type { PipelineStatus, PolicyEvaluation } from "./pipeline-status.ts";
 
+/** A pipeline run of a pull request, as the builds API gives it. */
+interface PullRequestBuild {
+  id: number;
+  buildNumber: string;
+  /** `notStarted`, `inProgress`, `completed`, … */
+  status: string;
+  /** `succeeded`, `partiallySucceeded`, `failed`, `canceled`, or absent while it runs. */
+  result?: string;
+  queueTime?: string;
+  startTime?: string;
+  definition?: { name?: string };
+}
+
 /** One build check of a pull request, with the run behind it. */
 interface PipelineCheck {
   buildId: number;
@@ -40,5 +53,5 @@ function pipelineChecksOf(evaluations: PolicyEvaluation[]): PipelineCheck[] {
     .toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
 }
 
-export type { PipelineCheck };
+export type { PipelineCheck, PullRequestBuild };
 export { pipelineChecksOf };

@@ -31,6 +31,10 @@ interface FakeList {
   shown: Map<number, PipelineStatus | null>;
 }
 
+async function notUsedByThePoller(): Promise<never> {
+  throw new Error("not used by the pipeline status poller");
+}
+
 function pollerOnFakeList(pullRequestIds: number[]): {
   list: FakeList;
   poller: PipelineStatusPoller;
@@ -48,22 +52,15 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     shown: new Map<number, PipelineStatus | null>(),
   };
   const client: AdoClient = {
-    async getAuthenticatedUserId() {
-      throw new Error("not used by the pipeline status poller");
-    },
+    getAuthenticatedUserId: notUsedByThePoller,
     async getPolicyEvaluations({ pullRequestId }) {
       list.fetchedIds.push(pullRequestId);
       return list.respond(pullRequestId);
     },
-    async getPullRequests() {
-      throw new Error("not used by the pipeline status poller");
-    },
-    async getTimeline() {
-      throw new Error("not used by the pipeline status poller");
-    },
-    async getWorkItems() {
-      throw new Error("not used by the pipeline status poller");
-    },
+    getPullRequestBuilds: notUsedByThePoller,
+    getPullRequests: notUsedByThePoller,
+    getTimeline: notUsedByThePoller,
+    getWorkItems: notUsedByThePoller,
   };
   const poller = createPipelineStatusPoller<number>({
     client,

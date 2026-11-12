@@ -3,11 +3,16 @@ import type { RunStage, RunStep } from "./pipeline-timeline.ts";
 import type { PipelineCheck } from "./pipeline-checks.ts";
 import { defaultStepOf } from "./pipeline-timeline.ts";
 
+/** A level of the run tree that can be folded. */
+type TreeLevel = "run" | "stage" | "job";
+
 /** What the owner picked. Null at a level means "the default". */
 interface PipelineTabPick {
   buildId: number | null;
   stageId: string | null;
   stepId: string | null;
+  /** The level the owner folded, to see the list it is in. Null when nothing is folded. */
+  folded: TreeLevel | null;
 }
 
 interface ShownRun {
@@ -55,5 +60,5 @@ function shownRunOf(
   return { check, stage, stages, step };
 }
 
-export type { PipelineTabPick, ShownRun };
+export type { PipelineTabPick, ShownRun, TreeLevel };
 export { shownRunOf };
