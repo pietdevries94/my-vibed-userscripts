@@ -1,12 +1,16 @@
-import { apiBasePath, parsePullRequestListLocation } from "./pull-request-link.ts";
+import {
+  apiBasePath,
+  isPullRequestInboxLocation,
+  parsePullRequestListLocation,
+} from "./pull-request-link.ts";
 import { findBoardCardIds, isBoardLocation, watchBoard } from "./board.ts";
-import { findPullRequestRows, markRequiredReviewers, showPipelineStatus } from "./pr-list.ts";
+import { findPullRequestRows, showPipelineStatus } from "./pr-list.ts";
 import type { PullRequestsResponse } from "./ado-client.ts";
-import type { Reviewer } from "./reviewers.ts";
 import type { WatchedPage } from "./page-reloader.ts";
 import { createAdoClient } from "./ado-client.ts";
 import { createPageReloader } from "./page-reloader.ts";
 import { createPipelineStatusPoller } from "./pipeline-status-poller.ts";
+import { createRequiredReviewerMarker } from "./required-reviewers.ts";
 import { showInitialsOnAvatars } from "./avatars.ts";
 import style from "./style.css";
 import { watchPullRequestList } from "./pr-list-watch.ts";
@@ -33,16 +37,11 @@ const poller = createPipelineStatusPoller<HTMLElement>({
   showStatus: showPipelineStatus,
 });
 
-const reviewersByPullRequestId = new Map<number, Reviewer[]>();
-
-function markRequiredReviewersOnAllRows(): void {
-  for (const { row, pullRequest } of findPullRequestRows(document, basePath)) {
-    const reviewers = reviewersByPullRequestId.get(pullRequest.pullRequestId);
-    if (reviewers) {
-      markRequiredReviewers(row, reviewers);
-    }
-  }
-}
+const requiredReviewers = createRequiredReviewerMarker({
+  client,
+  findRows: () => findPullRequestRows(document, basePath),
+  now: () => Date.now(),
+});
 
 const pullRequestListClient = {
   // The list check already fetches the reviewers. Keep them to mark the required ones.
@@ -50,10 +49,7 @@ const pullRequestListClient = {
     listPage: Parameters<typeof client.getPullRequests>[0],
   ): Promise<PullRequestsResponse> {
     const response = await client.getPullRequests(listPage);
-    for (const pullRequest of response.pullRequests) {
-      reviewersByPullRequestId.set(pullRequest.pullRequestId, pullRequest.reviewers ?? []);
-    }
-    markRequiredReviewersOnAllRows();
+    requiredReviewers.remember(response.pullRequests);
     return response;
   },
 };
@@ -112,9 +108,12 @@ function reloadPage(): void {
 
 function sync(): void {
   showInitialsOnAvatars(document);
-  markRequiredReviewersOnAllRows();
+  requiredReviewers.markAll();
   if (isTabActive()) {
     void poller.sync();
+    if (isPullRequestInboxLocation(location)) {
+      void requiredReviewers.syncInbox();
+    }
   }
   void reloader.check();
 }
