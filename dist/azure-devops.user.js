@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.6.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.
+// @version      1.7.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials (a menu setting, on by default), Light or Dark to match the system (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -357,7 +357,7 @@
   }
 
   // azure-devops/src/ado-client.ts
-  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200, MAX_PULL_REQUEST_BUILDS = 50, MAX_LISTED_PULL_REQUESTS = 200;
+  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200, MAX_PULL_REQUEST_BUILDS = 50, MAX_LISTED_PULL_REQUESTS = 200, THEME_SETTING_KEY = "WebPlatform/Theme";
   function createProjectIdCache(options) {
     let projectIdRequests = /* @__PURE__ */ new Map();
     return async (project) => {
@@ -417,6 +417,12 @@
       { body: { status: "cancelling" }, method: "PATCH" }
     );
   }
+  async function saveTheme(options, themeId) {
+    await sendRequest(options, "/_apis/Settings/Entries/globalme?api-version=7.1-preview.1", {
+      body: { [THEME_SETTING_KEY]: themeId },
+      method: "PATCH"
+    });
+  }
   async function requeuePolicyEvaluation(options, projectId, evaluationId) {
     await sendRequest(
       options,
@@ -457,6 +463,7 @@
       getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
       getWorkItems: async (ids) => getWorkItems(options, ids),
       requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
+      saveTheme: async (themeId) => saveTheme(options, themeId),
       ...createReviewerRequests(options)
     };
   }
@@ -614,9 +621,9 @@
 
   // azure-devops/src/on-off-setting.ts
   function createOnOffSetting(options) {
-    let { key, label, menu, onChange, storage } = options, isOn = storage.get(key, options.defaultValue);
+    let { key, label, menu: menu2, onChange, storage } = options, isOn = storage.get(key, options.defaultValue);
     function showInMenu() {
-      menu.register(`${label}: ${isOn ? "on" : "off"}`, flip, key);
+      menu2.register(`${label}: ${isOn ? "on" : "off"}`, flip, key);
     }
     function flip() {
       isOn = !isOn, storage.set(key, isOn), showInMenu(), onChange(isOn);
@@ -2487,6 +2494,143 @@ ${issue.message ?? ""}`;
     };
   }
 
+  // azure-devops/src/system-theme.ts
+  var LIGHT_THEME_ID = "ms.vss-web.vsts-theme", DARK_THEME_ID = "ms.vss-web.vsts-theme-dark", THEME_CLASS_PREFIX = "ms-vss-web-vsts-theme", PALETTE_VARIABLE = "--palette-neutral-0", LIGHT_THEME_CLASS = "ms-vss-web-vsts-theme", DARK_THEME_CLASS = "ms-vss-web-vsts-theme-dark";
+  function currentThemeId(document2) {
+    let { body } = document2;
+    if (body.dataset.theme !== void 0)
+      return body.dataset.theme;
+    let themeClasses = [...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX));
+    if (!themeClasses.some((name) => name !== LIGHT_THEME_CLASS && name !== DARK_THEME_CLASS))
+      return themeClasses.includes(DARK_THEME_CLASS) ? DARK_THEME_ID : themeClasses.includes(LIGHT_THEME_CLASS) ? LIGHT_THEME_ID : void 0;
+  }
+  function isFollowedTheme(themeId) {
+    return themeId === LIGHT_THEME_ID || themeId === DARK_THEME_ID;
+  }
+  function findRootStyle(document2) {
+    return [...document2.head.querySelectorAll("style")].find((style) => {
+      let text = style.textContent.trimStart();
+      return text.startsWith(":root") && text.includes(PALETTE_VARIABLE);
+    }) ?? null;
+  }
+  function readLook(document2) {
+    let rootStyle = findRootStyle(document2);
+    return rootStyle === null ? null : {
+      bodyClasses: [...document2.body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX)),
+      rootStyle: rootStyle.textContent
+    };
+  }
+  function applyLook(document2, themeId, look) {
+    let rootStyle = findRootStyle(document2);
+    if (rootStyle === null)
+      return !1;
+    rootStyle.textContent = look.rootStyle;
+    let { body } = document2;
+    return body.classList.remove(
+      ...[...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX))
+    ), body.classList.add(...look.bodyClasses), body.dataset.theme = themeId, !0;
+  }
+  function rememberLook({ document: document2, looks }) {
+    let themeId = currentThemeId(document2), look = readLook(document2);
+    if (!isFollowedTheme(themeId) || look === null)
+      return;
+    let stored = looks.load();
+    JSON.stringify(stored[themeId]) !== JSON.stringify(look) && looks.save({ ...stored, [themeId]: look });
+  }
+  function themeToSwitchTo(options) {
+    let current = currentThemeId(options.document), wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
+    return options.isOn() && isFollowedTheme(current) && current !== wanted ? wanted : null;
+  }
+  async function trySaveTheme(options, themeId) {
+    try {
+      return await options.saveTheme(themeId), !0;
+    } catch (error) {
+      return log("System theme: Azure DevOps refused the theme save", {
+        httpStatus: error instanceof AdoRequestError ? error.httpStatus : null
+      }), !1;
+    }
+  }
+  async function switchToSystemTheme(options, isPageLoad) {
+    let wanted = themeToSwitchTo(options);
+    if (log("System theme: checked", {
+      current: currentThemeId(options.document) ?? null,
+      isOn: options.isOn(),
+      isPageLoad,
+      prefersDark: options.prefersDark(),
+      rememberedThemes: Object.keys(options.looks.load())
+    }), wanted === null || !await trySaveTheme(options, wanted))
+      return;
+    let look = options.looks.load()[wanted], isSwitched = look !== void 0 && applyLook(options.document, wanted, look);
+    log("System theme: saved", {
+      hasRootStyle: findRootStyle(options.document) !== null,
+      isSwitched,
+      wanted
+    }), !isSwitched && isPageLoad && options.reload();
+  }
+  function createSystemTheme(options) {
+    let lastSwitch = Promise.resolve(), seenPrefersDark = options.prefersDark(), isWaitingForTheme = !1;
+    function queueSwitch(isPageLoad) {
+      lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, isPageLoad));
+    }
+    function onPageChange() {
+      rememberLook(options), isWaitingForTheme && currentThemeId(options.document) !== void 0 && (isWaitingForTheme = !1, queueSwitch(!0));
+    }
+    function onSystemThemeChange() {
+      onPageChange();
+      let prefersDark = options.prefersDark();
+      prefersDark !== seenPrefersDark && (seenPrefersDark = prefersDark, queueSwitch(!1));
+    }
+    return options.onSystemThemeChange(() => {
+      log("System theme: the system's theme changed"), onSystemThemeChange();
+    }), {
+      onPageChange,
+      settled: async () => lastSwitch,
+      async start() {
+        seenPrefersDark = options.prefersDark(), rememberLook(options), isWaitingForTheme = currentThemeId(options.document) === void 0, isWaitingForTheme || queueSwitch(!0), await lastSwitch;
+      }
+    };
+  }
+
+  // azure-devops/src/follow-system-theme.ts
+  var THEME_LOOKS_KEY = "system-theme-looks", SETTING_KEY = "follow-system-theme", IS_ON_BY_DEFAULT = !0, SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
+  function followSystemTheme({
+    client: client2,
+    document: document2,
+    menu: menu2,
+    reload,
+    storage
+  }) {
+    let systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY), systemTheme = createSystemTheme({
+      document: document2,
+      // The menu setting stores every flip, so the stored value is the current one.
+      isOn: () => storage.get(SETTING_KEY, IS_ON_BY_DEFAULT),
+      looks: {
+        load: () => GM_getValue(THEME_LOOKS_KEY, {}),
+        save: (looks) => {
+          GM_setValue(THEME_LOOKS_KEY, looks);
+        }
+      },
+      onSystemThemeChange: (listener) => {
+        systemDark.addEventListener("change", listener);
+      },
+      prefersDark: () => systemDark.matches,
+      reload,
+      saveTheme: async (themeId) => client2.saveTheme(themeId)
+    });
+    createOnOffSetting({
+      defaultValue: IS_ON_BY_DEFAULT,
+      key: SETTING_KEY,
+      label: "Follow system theme",
+      menu: menu2,
+      onChange: (isOn) => {
+        isOn && systemTheme.start();
+      },
+      storage
+    }), new MutationObserver(() => {
+      systemTheme.onPageChange();
+    }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), systemTheme.start();
+  }
+
   // azure-devops/src/style.css
   var style_default = `.fix-ado-pipeline-status {
   flex-shrink: 0;
@@ -3060,25 +3204,25 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     apiBasePath: basePath,
     fetch: async (url, init) => fetch(url, init),
     origin: location.origin
-  }), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, avatarInitials = createOnOffSetting({
+  }), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, menu = {
+    // A frame would add a second menu entry. The top page's entry is enough.
+    register: (caption, onClick2, id) => {
+      isInFrame || GM_registerMenuCommand(caption, onClick2, { id });
+    }
+  }, settingStorage = {
+    get: (key, defaultValue) => GM_getValue(key, defaultValue),
+    set: (key, value) => {
+      GM_setValue(key, value);
+    }
+  }, avatarInitials = createOnOffSetting({
     defaultValue: !0,
     key: "avatar-initials",
     label: "Avatar initials",
-    menu: {
-      // A frame would add a second menu entry. The top page's entry is enough.
-      register: (caption, onClick2, id) => {
-        isInFrame || GM_registerMenuCommand(caption, onClick2, { id });
-      }
-    },
+    menu,
     onChange: (isOn) => {
       isOn ? showInitialsOnAvatars(document) : hideInitialsOnAvatars(document);
     },
-    storage: {
-      get: (key, defaultValue) => GM_getValue(key, defaultValue),
-      set: (key, value) => {
-        GM_setValue(key, value);
-      }
-    }
+    storage: settingStorage
   }), getEvaluations = async (pullRequest) => {
     let { evaluations } = await client.getPolicyEvaluations(pullRequest);
     return evaluations;
@@ -3204,4 +3348,5 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     isTabActive() && (poller.sync(), reloader.check({ immediately: !0 }));
   });
   sync2();
+  isInFrame || followSystemTheme({ client, document, menu, reload: reloadPage, storage: settingStorage });
 })();
