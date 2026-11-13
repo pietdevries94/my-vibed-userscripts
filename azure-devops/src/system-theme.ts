@@ -34,10 +34,11 @@ interface SystemThemeOptions {
 interface SystemTheme {
   /** Remembers the current look and follows the system: in place, or with a reload. */
   start: () => Promise<void>;
-  /** Remembers the look of the theme the page shows, such as one picked in the theme panel. */
-  remember: () => void;
-  /** Switches when the system's theme changed since the last look, even if no event said so. */
-  checkSystemTheme: () => void;
+  /**
+   * Remembers the look of the theme the page shows, such as one picked in the theme panel.
+   * Azure DevOps marks the theme after the script starts, so the page-load switch waits for it here.
+   */
+  onPageChange: () => void;
   /** Resolves when the last switch has finished. */
   settled: () => Promise<void>;
 }
@@ -167,30 +168,46 @@ async function switchToSystemTheme(
 function createSystemTheme(options: SystemThemeOptions): SystemTheme {
   let lastSwitch = Promise.resolve();
   let seenPrefersDark = options.prefersDark();
+  let isWaitingForTheme = false;
 
-  function checkSystemTheme(): void {
+  function queueSwitch(isPageLoad: boolean): void {
+    lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, isPageLoad));
+  }
+
+  function onPageChange(): void {
+    rememberLook(options);
+    if (isWaitingForTheme && currentThemeId(options.document) !== undefined) {
+      isWaitingForTheme = false;
+      queueSwitch(true);
+    }
+  }
+
+  /** Switches when the system's theme changed since the last switch. */
+  function onSystemThemeChange(): void {
+    // The look of the theme being left, in case the page had not marked it before.
+    onPageChange();
     const prefersDark = options.prefersDark();
     if (prefersDark !== seenPrefersDark) {
       seenPrefersDark = prefersDark;
-      lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, false));
+      queueSwitch(false);
     }
   }
 
   options.onSystemThemeChange(() => {
     log("System theme: the system's theme changed");
-    checkSystemTheme();
+    onSystemThemeChange();
   });
 
   return {
-    checkSystemTheme,
-    remember: () => {
-      rememberLook(options);
-    },
+    onPageChange,
     settled: async () => lastSwitch,
     async start() {
       seenPrefersDark = options.prefersDark();
       rememberLook(options);
-      lastSwitch = switchToSystemTheme(options, true);
+      isWaitingForTheme = currentThemeId(options.document) === undefined;
+      if (!isWaitingForTheme) {
+        queueSwitch(true);
+      }
       await lastSwitch;
     },
   };

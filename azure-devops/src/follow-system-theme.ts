@@ -10,8 +10,6 @@ const THEME_LOOKS_KEY = "system-theme-looks";
 const SETTING_KEY = "follow-system-theme";
 const IS_ON_BY_DEFAULT = true;
 const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
-/** How often the script reads the system's theme, for browsers that send no change event to it. */
-const SYSTEM_THEME_CHECK_INTERVAL_MS = 2000;
 
 interface FollowSystemThemeOptions {
   client: Pick<AdoClient, "saveTheme">;
@@ -42,8 +40,7 @@ function followSystemTheme({
     onSystemThemeChange: (listener) => {
       systemDark.addEventListener("change", listener);
     },
-    // A fresh query each time: a kept one may not update where its event does not arrive.
-    prefersDark: () => globalThis.matchMedia(SYSTEM_DARK_QUERY).matches,
+    prefersDark: () => systemDark.matches,
     reload,
     saveTheme: async (themeId) => client.saveTheme(themeId),
   });
@@ -59,13 +56,11 @@ function followSystemTheme({
     },
     storage,
   });
-  // A theme picked in Azure DevOps's theme panel: remember how it looks.
+  // Azure DevOps marks the theme on the body after the script starts, and again when
+  // the theme panel switches.
   new MutationObserver(() => {
-    systemTheme.remember();
-  }).observe(document.body, { attributeFilter: ["data-theme"], attributes: true });
-  setInterval(() => {
-    systemTheme.checkSystemTheme();
-  }, SYSTEM_THEME_CHECK_INTERVAL_MS);
+    systemTheme.onPageChange();
+  }).observe(document.body, { attributeFilter: ["class", "data-theme"], attributes: true });
   void systemTheme.start();
 }
 

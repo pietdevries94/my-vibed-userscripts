@@ -15,6 +15,7 @@ const DARK_THEME_ID = "ms.vss-web.vsts-theme-dark";
 const THEME_PATH = "/fake-org/_theme";
 const THEME_SETTING_KEY = "WebPlatform/Theme";
 const HTTP_OK = 200;
+const THEME_CLASS_DELAY_MS = 500;
 const HTTP_NO_CONTENT = 204;
 const HTTP_BAD_REQUEST = 400;
 
@@ -54,7 +55,7 @@ function rootStyleOf(themeId: string, darkRoot: string): string {
   );
 }
 
-/** A page that just loaded marks its theme with one body class, and no `data-theme`. */
+/** A page that just loaded marks its theme with one body class, late, and no `data-theme`. */
 function themeClassOf(themeId: string): string {
   return themeId === DARK_THEME_ID ? "ms-vss-web-vsts-theme-dark" : "ms-vss-web-vsts-theme";
 }
@@ -66,7 +67,7 @@ function themePage(): FakeResponse {
 <title>Fake Azure DevOps: theme</title>
 <style>${rest}</style>
 <style type="text/css">${rootStyleOf(savedThemeId, darkRoot)}</style>
-<body class="lwp ${themeClassOf(savedThemeId)}"><p>Loading…</p>
+<body class="lwp"><p>Loading…</p>
 <script type="module">
   import { buildFixtureDom } from "/__dev/fixture-dom.js";
   const response = await fetch("/fake-site/theme.html");
@@ -75,6 +76,8 @@ function themePage(): FakeResponse {
     .replace(/<\\/body>\\s*$/u, "</div>");
   const root = buildFixtureDom(document, html);
   document.body.replaceChildren(...(root === null ? [] : [root]));
+  // Azure DevOps marks the theme on the body after the script has started.
+  setTimeout(() => document.body.classList.add(${JSON.stringify(themeClassOf(savedThemeId))}), ${String(THEME_CLASS_DELAY_MS)});
   if (new URLSearchParams(location.search).get("panel") === "closed") {
     for (const dialog of document.querySelectorAll('[role="dialog"]')) {
       dialog.remove();
