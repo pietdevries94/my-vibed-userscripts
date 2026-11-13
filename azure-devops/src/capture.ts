@@ -121,7 +121,9 @@ function pullRequestRowsPage(name: string, listPage: PullRequestListPage | null)
       return collectPullRequestRows(fetch, pseudonyms, listPage);
     },
     name,
-    root: withoutScriptMarks(document.querySelector(".page-content") ?? document.body),
+    // The whole body, so the capture holds Azure DevOps's top bar, where the settings button goes.
+    root: withoutScriptMarks(document.body),
+    styleRoot: document.body,
   };
 }
 

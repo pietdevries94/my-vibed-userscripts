@@ -81,3 +81,9 @@ _Avoid_: Navbar, top bar, header (the owner may mean the lead story)
 **News-only view**:
 The homepage without the category bar, the top banner, the lead story and the side columns. The news item list takes their width. The rest of the page stays.
 _Avoid_: Clean mode, minimal view
+
+## Azure DevOps
+
+**Settings panel**:
+The script's own dialog on Azure DevOps where the owner turns each feature on or off. Saving reloads the page. Opened from a button the script adds to Azure DevOps's top bar.
+_Avoid_: Options, preferences, config screen

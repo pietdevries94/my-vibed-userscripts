@@ -139,7 +139,10 @@ async function runCapture(page = PAGE, pageUrl = PAGE_URL): Promise<CaptureRunRe
 test("a pull request list capture keeps no real value and lines up its stand-ins", async () => {
   const { alerts, files } = await runCapture();
   assert.deepEqual(alerts, []);
-  assert.deepEqual([...files.keys()], ["azure-devops--pr-list.html", "azure-devops--pr-list.json"]);
+  assert.deepEqual(
+    [...files.keys()],
+    ["azure-devops--pr-list.html", "azure-devops--pr-list.json", "azure-devops--pr-list.css"],
+  );
   assertNoRealValue(files);
   const html = files.get("azure-devops--pr-list.html") ?? "";
   const json = files.get("azure-devops--pr-list.json") ?? "";
