@@ -1,6 +1,6 @@
 // The fake theme page: the captured theme panel over a pull request, in the theme the
 // fake user saved. Like Azure DevOps, the page carries only that theme's palette, in a
-// `:root` style, and marks the body with the theme id and classes. The theme panel's
+// `:root` style, and marks the body with the theme's class. The theme panel's
 // save, a PATCH of the user's global settings, changes the saved theme.
 import type {
   FakeRequest,
@@ -54,10 +54,9 @@ function rootStyleOf(themeId: string, darkRoot: string): string {
   );
 }
 
-function themeClassesOf(themeId: string): string {
-  return themeId === DARK_THEME_ID
-    ? "ms-vss-web-vsts-theme ms-vss-web-vsts-theme-dark"
-    : "ms-vss-web-vsts-theme";
+/** A page that just loaded marks its theme with one body class, and no `data-theme`. */
+function themeClassOf(themeId: string): string {
+  return themeId === DARK_THEME_ID ? "ms-vss-web-vsts-theme-dark" : "ms-vss-web-vsts-theme";
 }
 
 function themePage(): FakeResponse {
@@ -67,7 +66,7 @@ function themePage(): FakeResponse {
 <title>Fake Azure DevOps: theme</title>
 <style>${rest}</style>
 <style type="text/css">${rootStyleOf(savedThemeId, darkRoot)}</style>
-<body class="lwp ${themeClassesOf(savedThemeId)}" data-theme="${savedThemeId}"><p>Loading…</p>
+<body class="lwp ${themeClassOf(savedThemeId)}"><p>Loading…</p>
 <script type="module">
   import { buildFixtureDom } from "/__dev/fixture-dom.js";
   const response = await fetch("/fake-site/theme.html");

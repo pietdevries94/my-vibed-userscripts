@@ -28,10 +28,23 @@ interface FakePage {
   saveFails: boolean;
 }
 
+/** A page as Azure DevOps renders it after a switch in its theme panel: with `data-theme`. */
 function pageIn(themeId: string, look: { bodyClasses: string[]; rootStyle: string }): FakePage {
+  return pageWithBody(
+    look.rootStyle,
+    `class="lwp ${look.bodyClasses.join(" ")}" data-theme="${themeId}"`,
+  );
+}
+
+/** A page as Azure DevOps first renders it: the theme only in one body class. */
+function freshPageIn(themeClass: string, rootStyle: string): FakePage {
+  return pageWithBody(rootStyle, `class="lwp ${themeClass}"`);
+}
+
+function pageWithBody(rootStyle: string, bodyAttributes: string): FakePage {
   const { document } = new JSDOM(
-    `<!doctype html><head><style type="text/css">${look.rootStyle}</style><style type="text/css">${BUILD_OUTPUT}</style></head>
-    <body class="lwp ${look.bodyClasses.join(" ")}" data-theme="${themeId}"></body>`,
+    `<!doctype html><head><style type="text/css">${rootStyle}</style><style type="text/css">${BUILD_OUTPUT}</style></head>
+    <body ${bodyAttributes}></body>`,
   ).window;
   const page: FakePage = {
     document,
@@ -195,4 +208,43 @@ test("a theme picked in Azure DevOps's own panel is remembered on the next check
   systemTheme.remember();
 
   assert.deepEqual(page.stored, { [DARK]: DARK_LOOK, [LIGHT]: LIGHT_LOOK });
+});
+
+test("a freshly loaded dark page, marked only by its body class, switches to Light", async () => {
+  const page = freshPageIn("ms-vss-web-vsts-theme-dark", DARK_ROOT);
+  page.stored = { [LIGHT]: LIGHT_LOOK };
+  await follow(page).start();
+
+  assert.deepEqual(page.saved, [LIGHT]);
+  assert.equal(rootStyleOf(page.document), LIGHT_ROOT);
+  assert.deepEqual([...page.document.body.classList], ["lwp", "ms-vss-web-vsts-theme"]);
+  assert.equal(page.document.body.dataset.theme, LIGHT);
+});
+
+test("a freshly loaded page is remembered by the theme of its body class", async () => {
+  const page = freshPageIn("ms-vss-web-vsts-theme-dark", DARK_ROOT);
+  page.prefersDark.matches = true;
+  await follow(page).start();
+
+  assert.deepEqual(page.stored, {
+    [DARK]: { bodyClasses: ["ms-vss-web-vsts-theme-dark"], rootStyle: DARK_ROOT },
+  });
+  assert.deepEqual(page.saved, []);
+});
+
+test("a freshly loaded light page on a dark system saves Dark and reloads", async () => {
+  const page = freshPageIn("ms-vss-web-vsts-theme", LIGHT_ROOT);
+  page.prefersDark.matches = true;
+  await follow(page).start();
+
+  assert.deepEqual(page.saved, [DARK]);
+  assert.equal(page.reloads, 1);
+});
+
+test("a freshly loaded high contrast page stays", async () => {
+  const page = freshPageIn("ms-vss-web-vsts-theme-hc-dark", DARK_ROOT);
+  page.stored = { [LIGHT]: LIGHT_LOOK };
+  await follow(page).start();
+
+  assert.deepEqual(page.saved, []);
 });

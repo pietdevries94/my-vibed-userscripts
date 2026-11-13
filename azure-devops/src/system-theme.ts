@@ -3,6 +3,9 @@
 // remembers how each theme looks once a page has shown it, and switches in place to
 // a remembered look. Without one, it saves the theme and reloads a page that just loaded.
 
+import { AdoRequestError } from "./ado-request.ts";
+import { log } from "../../shared/runtime/script-log.ts";
+
 const LIGHT_THEME_ID = "ms.vss-web.vsts-theme";
 const DARK_THEME_ID = "ms.vss-web.vsts-theme-dark";
 /** The start of the body classes Azure DevOps sets per theme, such as `ms-vss-web-vsts-theme-dark`. */
@@ -35,6 +38,29 @@ interface SystemTheme {
   remember: () => void;
   /** Resolves when the last switch has finished. */
   settled: () => Promise<void>;
+}
+
+const LIGHT_THEME_CLASS = "ms-vss-web-vsts-theme";
+const DARK_THEME_CLASS = "ms-vss-web-vsts-theme-dark";
+
+/**
+ * The theme the page shows. A page that just loaded marks it only with a body class;
+ * `data-theme` comes when the theme panel switches. A light page after a switch to Dark
+ * keeps the light class next to the dark one.
+ */
+function currentThemeId(document: Document): string | undefined {
+  const { body } = document;
+  if (body.dataset.theme !== undefined) {
+    return body.dataset.theme;
+  }
+  const themeClasses = [...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX));
+  if (themeClasses.some((name) => name !== LIGHT_THEME_CLASS && name !== DARK_THEME_CLASS)) {
+    return undefined;
+  }
+  if (themeClasses.includes(DARK_THEME_CLASS)) {
+    return DARK_THEME_ID;
+  }
+  return themeClasses.includes(LIGHT_THEME_CLASS) ? LIGHT_THEME_ID : undefined;
 }
 
 function isFollowedTheme(themeId: string | undefined): themeId is string {
@@ -78,7 +104,7 @@ function applyLook(document: Document, themeId: string, look: ThemeLook): boolea
 }
 
 function rememberLook({ document, looks }: SystemThemeOptions): void {
-  const themeId = document.body.dataset.theme;
+  const themeId = currentThemeId(document);
   const look = readLook(document);
   if (!isFollowedTheme(themeId) || look === null) {
     return;
@@ -91,7 +117,7 @@ function rememberLook({ document, looks }: SystemThemeOptions): void {
 
 /** The theme to switch to, or null when the page shows it already or is not followed. */
 function themeToSwitchTo(options: SystemThemeOptions): string | null {
-  const current = options.document.body.dataset.theme;
+  const current = currentThemeId(options.document);
   const wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
   return options.isOn() && isFollowedTheme(current) && current !== wanted ? wanted : null;
 }
@@ -100,7 +126,10 @@ async function trySaveTheme(options: SystemThemeOptions, themeId: string): Promi
   try {
     await options.saveTheme(themeId);
     return true;
-  } catch {
+  } catch (error: unknown) {
+    log("System theme: Azure DevOps refused the theme save", {
+      httpStatus: error instanceof AdoRequestError ? error.httpStatus : null,
+    });
     return false;
   }
 }
@@ -111,11 +140,23 @@ async function switchToSystemTheme(
   isPageLoad: boolean,
 ): Promise<void> {
   const wanted = themeToSwitchTo(options);
+  log("System theme: checked", {
+    current: currentThemeId(options.document) ?? null,
+    isOn: options.isOn(),
+    isPageLoad,
+    prefersDark: options.prefersDark(),
+    rememberedThemes: Object.keys(options.looks.load()),
+  });
   if (wanted === null || !(await trySaveTheme(options, wanted))) {
     return;
   }
   const look = options.looks.load()[wanted];
   const isSwitched = look !== undefined && applyLook(options.document, wanted, look);
+  log("System theme: saved", {
+    hasRootStyle: findRootStyle(options.document) !== null,
+    isSwitched,
+    wanted,
+  });
   if (!isSwitched && isPageLoad) {
     options.reload();
   }

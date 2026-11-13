@@ -19,7 +19,7 @@ The download folder stays unread at every step.
 
 ## Capture rules
 
-The shared scrubber in `shared/dev/scrub` keeps structure and replaces every value. Per script, the rules may only add keeps: attribute names, JSON paths with a value pattern, id patterns, link route words, exact UI words, and a mapping from the site's URLs to fake ones. Keep the list short enough for the owner to read. A panel that opens over any page, such as a settings panel from the user menu, has no URL of its own: match it by its element before the page routes, or it is captured as the page under it. Details: `docs/spec/sealed-workflow.md`.
+The shared scrubber in `shared/dev/scrub` keeps structure and replaces every value. Per script, the rules may only add keeps: attribute names, JSON paths with a value pattern, id patterns, link route words, exact UI words, and a mapping from the site's URLs to fake ones. Keep the list short enough for the owner to read. A panel that opens over any page, such as a settings panel from the user menu, has no URL of its own: match it by its element before the page routes, or it is captured as the page under it. A capture made after clicking around can show marks a freshly loaded page lacks; when a feature acts on page load, also capture the page right after it loads. Details: `docs/spec/sealed-workflow.md`.
 
 ## Open to sealed
 
