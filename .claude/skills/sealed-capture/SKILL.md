@@ -11,7 +11,7 @@ Claude never sees a sealed site. The owner captures; Claude works from scrubbed 
 
 1. Write or update the capture rules in `<script>/src/capture.ts`, exported as `captureDefinition` (what to keep, which GET requests to send, how to name each page). Start `npm run dev <script>` and give the owner the exact list of pages to open, with the dev script link `http://localhost:8786/<script>.user.js`. Done when every page the feature needs is on the list.
 2. (O) The owner opens each page with the dev script installed and clicks the Violentmonkey menu command "Capture fixtures". Files download as `<script>--<page>.<ext>`.
-3. (O) The owner runs `npm run fixtures:import <script>`, and skims the files. Wait for the owner to say so before reading any fixture.
+3. (O) The owner runs `npm run fixtures:import <script> [name]`, and skims the files. A capture of a page that already has a fixture needs a name, such as `warnings`, or it replaces that fixture. Give the owner the exact command. Wait for the owner to say so before reading any fixture.
 4. Build the feature, unit tests and fake site through `feature`, and check on the fake site in the `fake-site` browser.
 5. (O) The owner checks on the real site and reports in chat. When something is wrong, the owner captures that page again.
 

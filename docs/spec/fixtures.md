@@ -23,7 +23,7 @@ A fixture is a scrubbed copy of a page or a response. Fixtures stay on the owner
 ## Getting captures in
 
 - Capture files are named `<script>--<page>.<ext>`.
-- `npm run fixtures:import <script>` finds them in the download folder by that prefix, drops the prefix, and moves them into the script's `fixtures/`. It overwrites files with the same name and lists which files are new and which were replaced. There is no fixture history.
+- `npm run fixtures:import <script> [name]` finds them in the download folder by that prefix, drops the prefix, and moves them into the script's `fixtures/`. A name goes after the page name: `pr-detail-warnings.html`. It overwrites files with the same name and lists which files are new and which were replaced. There is no fixture history.
 - For an open script, Claude's capture writes straight into `<script>/fixtures/`.
 
 ## Protection against committing a fixture

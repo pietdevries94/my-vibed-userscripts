@@ -81,7 +81,7 @@ Always invented. Never the owner's name or a colleague's. `AGENTS.md` says so.
 
 1. Claude writes or updates the capture rules and gives the owner a list of the exact pages to open.
 2. The owner opens each page with the dev script installed and clicks "Capture fixtures".
-3. The owner runs `npm run fixtures:import <script>`, and skims the files before Claude reads them.
+3. The owner runs `npm run fixtures:import <script> [name]`, and skims the files before Claude reads them.
 4. Claude builds the feature, unit tests and fake site, and checks them on the fake site through the `fake-site` browser.
 5. The owner checks on the real site and reports in chat. When something is wrong, the owner captures that page again. The script log in the capture helps reproduce it.
 
