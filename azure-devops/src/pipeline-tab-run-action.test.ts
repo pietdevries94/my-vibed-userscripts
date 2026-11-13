@@ -184,3 +184,13 @@ test("a cancelling run is not busy, so the button starts a new run again", async
   );
   assert.equal(document.querySelector(ACTION_BUTTON)?.textContent, "Start new run");
 });
+
+test("a cancelling run says so in its row, with its own icon", async () => {
+  const { document } = await openTab([], undefined, answerRuns([busyBuild(7, "cancelling")]));
+  const row = document.querySelector(".fix-ado-pipeline-run");
+  assert.match(
+    row?.querySelector(".fix-ado-pipeline-item-details")?.textContent ?? "",
+    /^Cancelling · /u,
+  );
+  assert.equal(row?.querySelector("svg")?.dataset.status, "cancelling");
+});

@@ -1,10 +1,14 @@
 import type { PipelineStatus } from "./pipeline-status.ts";
 
+/** A pipeline status, or a run that is being cancelled. */
+type IconStatus = PipelineStatus | "cancelling";
+
 const PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
-const LABELS: Record<PipelineStatus, string> = {
+const LABELS: Record<IconStatus, string> = {
+  cancelling: "Pipeline cancelling",
   expired: "Pipeline result expired",
   failed: "Pipeline failed",
   notStarted: "Pipeline not started",
@@ -45,7 +49,8 @@ function line(pathData: string, stroke: string): Shape {
   return ["path", { d: pathData, ...attributes }];
 }
 
-const SHAPES: Record<PipelineStatus, Shape[]> = {
+const SHAPES: Record<IconStatus, Shape[]> = {
+  cancelling: [RING, line("M5 11l6-6", "currentColor")],
   expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
   failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
   notStarted: [RING],
@@ -69,7 +74,7 @@ function createShape(document: Document, [tag, attributes]: Shape): SVGElement {
 /** A status icon. `label` names it for screen readers and on hover. */
 function createStatusIcon(
   document: Document,
-  status: PipelineStatus,
+  status: IconStatus,
   label: string = LABELS[status],
 ): SVGElement {
   const icon = document.createElementNS(SVG_NAMESPACE, "svg");
@@ -99,4 +104,5 @@ function createPipelineStatusIcon(
   return icon;
 }
 
+export type { IconStatus };
 export { PIPELINE_STATUS_ICON_CLASS, createPipelineStatusIcon, createStatusIcon };

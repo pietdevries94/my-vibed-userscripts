@@ -10,7 +10,8 @@
 .fix-ado-pipeline-status[data-status="failed"] {
   color: var(--component-status-error, rgb(205, 74, 69));
 }
-.fix-ado-pipeline-status[data-status="expired"] {
+.fix-ado-pipeline-status[data-status="expired"],
+.fix-ado-pipeline-status[data-status="cancelling"] {
   color: var(--component-status-warning, rgb(214, 119, 48));
 }
 .fix-ado-pipeline-status[data-status="running"] {

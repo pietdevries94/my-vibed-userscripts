@@ -59,6 +59,7 @@ test("an older run's icon comes from its own status and result", () => {
   assert.equal(statusOf({ result: "canceled" }), "notStarted: Canceled");
   assert.equal(statusOf({ result: undefined, status: "inProgress" }), "running: Running");
   assert.equal(statusOf({ result: undefined, status: "notStarted" }), "queued: Queued");
+  assert.equal(statusOf({ result: undefined, status: "cancelling" }), "cancelling: Cancelling");
 });
 
 test("a check whose run is not in the run list is still listed, first", () => {
@@ -82,4 +83,12 @@ test("a queued or running run is busy; a cancelling or finished one is not", () 
 test("a check's run that is not in the run list is busy while the check runs", () => {
   const [run] = pipelineRunsOf([{ ...CHECK, status: "running" }], []);
   assert.equal(run?.isBusy, true);
+});
+
+test("a cancelling run shows as cancelling, even when its check already failed", () => {
+  const [run] = pipelineRunsOf(
+    [{ ...CHECK, status: "failed" }],
+    [build(3, { result: undefined, status: "cancelling" })],
+  );
+  assert.deepEqual(run?.status, { label: "Cancelling", status: "cancelling" });
 });

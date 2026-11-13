@@ -156,7 +156,7 @@ test(
 );
 
 test(
-  "the captured running pull request opens its running run on the running step",
+  "the captured cancelling pull request opens its cancelling run on the step still running",
   {
     skip: fixtures.skip,
   },
@@ -165,8 +165,8 @@ test(
     await openPipelineTab(document);
     const label = (selector: string): string | null | undefined =>
       document.querySelector(`${selector}[aria-current=true] svg`)?.getAttribute("aria-label");
-    assert.equal(document.querySelectorAll(".fix-ado-pipeline-run").length, 6);
-    assert.equal(label(".fix-ado-pipeline-run"), "Pipeline running");
+    assert.equal(document.querySelectorAll(".fix-ado-pipeline-run").length, 5);
+    assert.equal(label(".fix-ado-pipeline-run"), "Cancelling");
     assert.equal(label(".fix-ado-pipeline-step"), "Running");
   },
 );

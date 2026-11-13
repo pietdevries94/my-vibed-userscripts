@@ -2,11 +2,11 @@
 // builds API orders them. A run that is a current build check keeps the check's name
 // and Required/Optional label.
 import type { PipelineCheck, PullRequestBuild } from "./pipeline-checks.ts";
-import type { PipelineStatus } from "./pipeline-status.ts";
+import type { IconStatus } from "./pipeline-status-icon.ts";
 
 /** A status icon, with its own label. Without one, the icon's label for the status. */
 interface RunStatus {
-  status: PipelineStatus;
+  status: IconStatus;
   label?: string;
 }
 
@@ -32,7 +32,7 @@ const RESULT_STATUSES: Record<string, RunStatus> = {
 };
 
 const PROGRESS_STATUSES: Record<string, RunStatus> = {
-  cancelling: { label: "Canceling", status: "running" },
+  cancelling: { label: "Cancelling", status: "cancelling" },
   inProgress: { label: "Running", status: "running" },
   notStarted: { label: "Queued", status: "queued" },
   postponed: { label: "Queued", status: "queued" },
@@ -46,6 +46,14 @@ function buildStatusOf(build: PullRequestBuild): RunStatus | null {
   return finished ?? PROGRESS_STATUSES[build.status] ?? null;
 }
 
+/** The check's status, but the run's own while it cancels or when the check has none. */
+function runStatusOf(build: PullRequestBuild, check: PipelineCheck | undefined): RunStatus | null {
+  const isCancelling = build.status === "cancelling";
+  return check?.status === null || check === undefined || isCancelling
+    ? buildStatusOf(build)
+    : { status: check.status };
+}
+
 function runOfBuild(build: PullRequestBuild, check: PipelineCheck | undefined): PipelineRun {
   return {
     buildId: build.id,
@@ -54,10 +62,7 @@ function runOfBuild(build: PullRequestBuild, check: PipelineCheck | undefined): 
     isRequired: check?.isRequired ?? null,
     name: check?.name ?? build.definition?.name ?? `Run ${build.buildNumber}`,
     startedAt: build.startTime ?? build.queueTime ?? check?.startedAt ?? null,
-    status:
-      check?.status === null || check === undefined
-        ? buildStatusOf(build)
-        : { status: check.status },
+    status: runStatusOf(build, check),
   };
 }
 

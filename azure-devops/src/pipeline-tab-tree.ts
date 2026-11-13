@@ -77,13 +77,17 @@ function requiredLabel(isRequired: boolean): string {
   return isRequired ? "Required" : "Optional";
 }
 
-/** Required or Optional for a current check, else the run's number; then when it started. */
+/**
+ * Cancelling while the run cancels; Required or Optional for a current check, else the
+ * run's number; then when it started.
+ */
 function runDetails(run: PipelineRun): string {
   const kind =
     run.isRequired === null ? `#${run.buildNumber ?? run.buildId}` : requiredLabel(run.isRequired);
-  return run.startedAt === null
-    ? kind
-    : `${kind} · ${new Date(run.startedAt).toLocaleString([], DATE_FORMAT)}`;
+  const started =
+    run.startedAt === null ? [] : [new Date(run.startedAt).toLocaleString([], DATE_FORMAT)];
+  const cancelling = run.status?.status === "cancelling" ? ["Cancelling"] : [];
+  return [...cancelling, kind, ...started].join(" · ");
 }
 
 function group(document: Document, className: string, children: Node[]): HTMLElement {
