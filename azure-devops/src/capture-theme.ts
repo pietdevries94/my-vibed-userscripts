@@ -13,12 +13,33 @@ function isThemePanelOpen(document: Document): boolean {
   return document.querySelector(".theme-panel") !== null;
 }
 
-/** The URLs of the page's requests about settings and themes, such as the one a theme tile sends. */
-function themeRequestUrls(): string[] {
+/** Path segments that identify nothing: routes, Microsoft's theme ids and file names. */
+const KEPT_SEGMENT = /^(?:_\w+|apis|Settings|Entries|me|ms\.vss-[\w.-]+|[\w.-]*theme[\w.-]*)$/iu;
+const KEPT_QUERY_VALUE = /^(?:ms\.vss-[\w.-]+|[\d.-]+(?:preview[\d.]*)?)$/iu;
+
+/** A URL's shape: other segments become "x", query values too, and the host says only whether it is the page's own. */
+function urlShape(url: string): string {
+  const parsed = new URL(url, location.href);
+  const host = parsed.origin === location.origin ? "page-origin" : "other-origin";
+  const path = parsed.pathname
+    .split("/")
+    .map((segment) => (segment === "" || KEPT_SEGMENT.test(segment) ? segment : "x"))
+    .join("/");
+  const query = [...parsed.searchParams]
+    .map(([name, value]) => `${name}=${KEPT_QUERY_VALUE.test(value) ? value : "x"}`)
+    .join("&");
+  return `${host}${path}${query === "" ? "" : `?${query}`}`;
+}
+
+/** The page's requests about settings and themes, such as the one a theme tile sends. */
+function themeRequests(): string[] {
   return performance
     .getEntriesByType("resource")
-    .map((entry) => entry.name)
-    .filter((url) => THEME_REQUEST.test(url));
+    .filter((entry) => THEME_REQUEST.test(entry.name))
+    .map(
+      (entry) =>
+        `${entry instanceof PerformanceResourceTiming ? entry.initiatorType : ""} ${urlShape(entry.name)}`,
+    );
 }
 
 /** The data providers in the page's own JSON, limited to the ones about themes. */
@@ -48,9 +69,14 @@ function themeMarks(document: Document): Record<string, unknown> {
     body: marksOf(document.body),
     html: marksOf(document.documentElement),
     prefersDark: globalThis.matchMedia("(prefers-color-scheme: dark)").matches,
-    themeStylesheetCount: [...document.querySelectorAll("link[rel=stylesheet]")].filter((link) =>
-      /theme/iu.test(link.getAttribute("href") ?? ""),
-    ).length,
+    requests: themeRequests(),
+    styleElementIds: [...document.querySelectorAll("style[id]")]
+      .map((style) => style.id)
+      .filter((id) => KEPT_SEGMENT.test(id)),
+    themeStylesheets: [...document.querySelectorAll("link[rel=stylesheet]")]
+      .map((link) => link.getAttribute("href") ?? "")
+      .filter((href) => /theme/iu.test(href))
+      .map((href) => urlShape(href)),
   };
 }
 
@@ -60,7 +86,7 @@ function themeSettingsPage(document: Document, location: Location): CapturePage 
       const options = { apiBasePath: apiBasePath(location), fetch, origin: location.origin };
       const settings = await getJson(
         options,
-        `/_apis/Settings/Entries/me?api-version=${SETTINGS_API_VERSION}`,
+        `/_apis/Settings/Entries/me/WebPlatform/Theme?api-version=${SETTINGS_API_VERSION}`,
       ).then(
         ({ body }) => body,
         (error: unknown) => ({
@@ -70,7 +96,6 @@ function themeSettingsPage(document: Document, location: Location): CapturePage 
       return {
         data: {
           dataProviders: themeDataProviders(document),
-          requestUrls: themeRequestUrls(),
           settings,
         },
         meta: themeMarks(document),

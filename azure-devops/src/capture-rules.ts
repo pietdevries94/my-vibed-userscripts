@@ -12,6 +12,7 @@ const rules: ScrubRules = {
     "data-noclose",
     "data-renderedregion",
     "data-side",
+    "data-theme",
   ],
   keepIdPatterns: [/^__bolt-[\w-]+$/u],
   keepJsonPaths: [
