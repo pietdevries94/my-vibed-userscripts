@@ -74,8 +74,22 @@ interface Setup {
   answers: { evaluations: PolicyEvaluation[]; timelines: Record<number, TimelineRecord[]> };
 }
 
-function setUp(evaluations = [check(601, "ledger-ci"), check(602, "ledger-lint")]): Setup {
-  const { document } = new JSDOM(PAGE, {
+/** Azure DevOps's checks area, with a run's error as it shows a failed check. */
+function checksAreaError(buildId: number, message: string): string {
+  return `<a class="bolt-table-link" href="/quillfield/Ledger%20Works/_build/results?buildId=${buildId}">
+    <div class="flex-row monospaced-m dark-build-output"><div class="line-number">12</div><div class="error-text word-break">${message}</div></div>
+  </a>`;
+}
+
+function setUp(
+  evaluations = [check(601, "ledger-ci"), check(602, "ledger-lint")],
+  checksArea = "",
+): Setup {
+  const page = PAGE.replace(
+    '<div class="status-card">Checks</div>',
+    `<div class="status-card">${checksArea}</div>`,
+  );
+  const { document } = new JSDOM(page, {
     url: "https://dev.azure.com/quillfield/Ledger%20Works/_git/ledger-api/pullrequest/4711",
   }).window;
   const clock = { nowMs: 0 };
@@ -209,4 +223,48 @@ test("nothing is fetched while the page may not fetch", async () => {
   setup.sync(false);
   await settle();
   assert.deepEqual(setup.timelineRequests, []);
+});
+
+test("an error the checks area already shows for that run is left out, and not counted", async () => {
+  const setup = setUp(undefined, checksAreaError(601, "Missing semicolon"));
+  await syncAndShow(setup);
+  const { document } = setup;
+  assert.deepEqual(rows(document), ["warning: Agent is out of date"]);
+  const details = document.querySelector(".fix-ado-overview-issues .fix-ado-issue-box-details");
+  assert.equal(details?.textContent, "1 warning");
+  const heading = document.querySelector(".fix-ado-overview-issues-heading");
+  assert.equal(heading?.textContent, "1 warning in the latest run");
+});
+
+test("the same error of another run still shows", async () => {
+  const setup = setUp(undefined, checksAreaError(599, "Missing semicolon"));
+  await syncAndShow(setup);
+  assert.deepEqual(rows(setup.document), [
+    "error: Missing semicolon",
+    "warning: Agent is out of date",
+  ]);
+});
+
+test("when the checks area shows a run's only issue, the run gets no box", async () => {
+  const setup = setUp(undefined, checksAreaError(601, "Missing semicolon"));
+  setup.answers.timelines = {
+    ...TIMELINES,
+    601: [
+      ...(TIMELINES[601] ?? []).filter((item) => item.type !== "Job"),
+      record("Job", "build-job", { parentId: "build" }),
+    ],
+  };
+  await syncAndShow(setup);
+  assert.equal(block(setup.document), null);
+});
+
+test("the checks area showing up later takes its error out of the card", async () => {
+  const setup = setUp();
+  await syncAndShow(setup);
+  assert.equal(rows(setup.document).length, 2);
+  setup.document
+    .querySelector(".status-card")
+    ?.insertAdjacentHTML("beforeend", checksAreaError(601, "Missing semicolon"));
+  setup.sync();
+  assert.deepEqual(rows(setup.document), ["warning: Agent is out of date"]);
 });

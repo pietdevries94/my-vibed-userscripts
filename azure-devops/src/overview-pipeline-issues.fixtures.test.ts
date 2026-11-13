@@ -26,24 +26,23 @@ async function capturedOverview(page: string): Promise<Document> {
   return document;
 }
 
-test(
-  "the captured Overview shows the check's error and warning above the description",
-  {
-    skip: fixtures.skip,
-  },
-  async () => {
-    const document = await capturedOverview("pr-detail-warnings");
-    const block = document.querySelector(".fix-ado-overview-issues");
-    assert.ok(block, "the block is there");
-    assert.match(block.nextElementSibling?.className ?? "", /repos-pr-description-card/u);
-    assert.deepEqual(issueKindsAndPlaces(document, ".fix-ado-overview-issues"), [
-      "error: place",
-      "warning: place",
-    ]);
-    const links = [...block.querySelectorAll("a.fix-ado-issue")].map((link) =>
-      link.getAttribute("href"),
-    );
-    assert.match(links[0] ?? "", /buildId=1001&view=logs&j=[\w-]+&t=[\w-]+$/u);
-    assert.match(links[1] ?? "", /buildId=1001$/u);
-  },
-);
+for (const page of ["pr-detail-warnings", "pr-detail-duplicate-error"]) {
+  test(
+    `the captured Overview (${page}) shows the warning above the description, and leaves out the error the checks area shows`,
+    {
+      skip: fixtures.skip,
+    },
+    async () => {
+      const document = await capturedOverview(page);
+      const blocks = document.querySelectorAll(".fix-ado-overview-issues");
+      assert.equal(blocks.length, 1, "one card, also where the capture holds an old one");
+      const [block] = blocks;
+      assert.match(block?.nextElementSibling?.className ?? "", /repos-pr-description-card/u);
+      assert.deepEqual(issueKindsAndPlaces(document, ".fix-ado-overview-issues"), [
+        "warning: place",
+      ]);
+      const link = block?.querySelector("a.fix-ado-issue")?.getAttribute("href");
+      assert.match(link ?? "", /buildId=1001$/u);
+    },
+  );
+}
