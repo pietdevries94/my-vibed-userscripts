@@ -6,6 +6,7 @@ const ADDED_ELEMENT_SELECTOR = [
   `.${PIPELINE_STATUS_ICON_CLASS}`,
   ".fix-ado-days-in-column",
   ".fix-ado-days-toggle",
+  ".fix-ado-overview-issues",
 ].join(", ");
 
 function isElement(node: Node): node is Element {

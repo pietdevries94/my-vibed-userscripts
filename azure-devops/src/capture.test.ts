@@ -164,6 +164,7 @@ test("a pull request page capture keeps its tabs, its run links and its evaluati
   const page = `<!doctype html><body>
     <div role="tablist"><a role="tab">Overview</a><a role="tab">Files</a></div>
     <a class="check" href="${runLink}">${PROJECT} build</a>
+    <section class="fix-ado-overview-issues"><span class="error-text">Lint failed</span></section>
   </body>`;
   const { alerts, files } = await runCapture(page, `https://dev.azure.com${ROW_LINK}`);
   assert.deepEqual(alerts, []);
@@ -174,6 +175,11 @@ test("a pull request page capture keeps its tabs, its run links and its evaluati
   assertNoRealValue(files);
   const html = files.get("azure-devops--pr-detail.html") ?? "";
   assert.match(html, />Overview</u);
+  assert.doesNotMatch(
+    html,
+    /fix-ado-overview-issues|error-text/u,
+    "the script's own card is left out",
+  );
   const json = files.get("azure-devops--pr-detail.json") ?? "";
   assert.match(json, /"type": "Task"/u);
   assert.match(json, /"result": "failed"/u);
