@@ -1,32 +1,33 @@
 import type { AdoClient } from "./ado-client.ts";
-import type { ListedPullRequest } from "./pr-list-changes.ts";
+import type { PullRequestListStatus } from "./pull-request-link.ts";
 import type { PullRequestRow } from "./pr-list.ts";
 import type { Reviewer } from "./reviewers.ts";
-import { createInboxReviewerFetcher } from "./inbox-reviewers.ts";
+import { createReviewerFetcher } from "./reviewer-fetcher.ts";
 import { markRequiredReviewers } from "./pr-list.ts";
 
 interface RequiredReviewerMarkerOptions {
   client: Pick<AdoClient, "getPullRequests">;
   now: () => number;
   findRows: () => PullRequestRow[];
+  /** "active" on the inbox; the shown status on a repository list. */
+  listStatus: () => PullRequestListStatus;
 }
 
 interface RequiredReviewerMarker {
   /** Marks every row whose reviewers are known. */
   markAll: () => void;
-  /** Keeps reviewers that another request already fetched, and marks them. */
-  remember: (pullRequests: ListedPullRequest[]) => void;
-  /** Fetches the reviewers of the inbox rows when due, and marks them. */
-  syncInbox: () => Promise<void>;
+  /** Fetches the reviewers of the listed pull requests when due, and marks them. */
+  sync: () => Promise<void>;
 }
 
 function createRequiredReviewerMarker(
   options: RequiredReviewerMarkerOptions,
 ): RequiredReviewerMarker {
   const reviewersByPullRequestId = new Map<number, Reviewer[]>();
-  const inboxReviewerFetcher = createInboxReviewerFetcher({
+  const reviewerFetcher = createReviewerFetcher({
     client: options.client,
     findPullRequests: () => options.findRows().map(({ pullRequest }) => pullRequest),
+    listStatus: options.listStatus,
     now: options.now,
     reviewersByPullRequestId,
   });
@@ -42,14 +43,8 @@ function createRequiredReviewerMarker(
 
   return {
     markAll,
-    remember(pullRequests) {
-      for (const pullRequest of pullRequests) {
-        reviewersByPullRequestId.set(pullRequest.pullRequestId, pullRequest.reviewers ?? []);
-      }
-      markAll();
-    },
-    async syncInbox() {
-      await inboxReviewerFetcher.sync();
+    async sync() {
+      await reviewerFetcher.sync();
       markAll();
     },
   };

@@ -1,35 +1,38 @@
+import type { PullRequestListStatus, PullRequestRef } from "./pull-request-link.ts";
 import type { AdoClient } from "./ado-client.ts";
 import { FAILED_REQUEST_RETRY_MS } from "./pipeline-status-poller.ts";
-import type { PullRequestRef } from "./pull-request-link.ts";
 import type { Reviewer } from "./reviewers.ts";
 
 /** Required reviewers change rarely: a policy adds them when the pull request is created or retargeted. */
 const REVIEWER_REFRESH_INTERVAL_MS = 120_000;
 
-interface InboxReviewerFetcherOptions {
+interface ReviewerFetcherOptions {
   client: Pick<AdoClient, "getPullRequests">;
   now: () => number;
   findPullRequests: () => PullRequestRef[];
+  /** "active" on the inbox; the shown status on a repository list. */
+  listStatus: () => PullRequestListStatus;
   /** Filled with the reviewers of every pull request in each fetched repository. */
   reviewersByPullRequestId: Map<number, Reviewer[]>;
 }
 
-interface InboxReviewerFetcher {
+interface ReviewerFetcher {
   sync: () => Promise<void>;
 }
 
-const repositoryKey = ({ project, repository }: PullRequestRef): string =>
-  JSON.stringify([project, repository]);
+const listKey = ({ project, repository }: PullRequestRef, status: PullRequestListStatus): string =>
+  JSON.stringify([project, repository, status]);
 
 /** One pull request per repository whose reviewers are due for a fetch. */
 function dueRepositories(
-  options: InboxReviewerFetcherOptions,
-  nextFetchAtByRepository: Map<string, number>,
+  options: ReviewerFetcherOptions,
+  nextFetchAtByList: Map<string, number>,
 ): PullRequestRef[] {
+  const status = options.listStatus();
   const due = new Map<string, PullRequestRef>();
   for (const pullRequest of options.findPullRequests()) {
-    const key = repositoryKey(pullRequest);
-    if ((nextFetchAtByRepository.get(key) ?? 0) <= options.now()) {
+    const key = listKey(pullRequest, status);
+    if ((nextFetchAtByList.get(key) ?? 0) <= options.now()) {
       due.set(key, pullRequest);
     }
   }
@@ -37,27 +40,28 @@ function dueRepositories(
 }
 
 /**
- * Fetches the reviewers of the pull requests in the inbox, which spans repositories.
- * The inbox page itself does not fetch them. `sync` is cheap: call it on DOM changes and on a timer.
+ * Fetches the reviewers of the listed pull requests, per repository: one on a repository
+ * list, several in the inbox. `sync` is cheap: call it on DOM changes and on a timer.
  */
-function createInboxReviewerFetcher(options: InboxReviewerFetcherOptions): InboxReviewerFetcher {
-  const nextFetchAtByRepository = new Map<string, number>();
+function createReviewerFetcher(options: ReviewerFetcherOptions): ReviewerFetcher {
+  const nextFetchAtByList = new Map<string, number>();
   let isFetching = false;
 
   async function fetchRepository(pullRequest: PullRequestRef): Promise<void> {
-    const key = repositoryKey(pullRequest);
+    const status = options.listStatus();
+    const key = listKey(pullRequest, status);
     try {
       const { pullRequests } = await options.client.getPullRequests({
         project: pullRequest.project,
         repository: pullRequest.repository,
-        status: "active",
+        status,
       });
       for (const listed of pullRequests) {
         options.reviewersByPullRequestId.set(listed.pullRequestId, listed.reviewers ?? []);
       }
-      nextFetchAtByRepository.set(key, options.now() + REVIEWER_REFRESH_INTERVAL_MS);
+      nextFetchAtByList.set(key, options.now() + REVIEWER_REFRESH_INTERVAL_MS);
     } catch {
-      nextFetchAtByRepository.set(key, options.now() + FAILED_REQUEST_RETRY_MS);
+      nextFetchAtByList.set(key, options.now() + FAILED_REQUEST_RETRY_MS);
     }
   }
 
@@ -68,7 +72,7 @@ function createInboxReviewerFetcher(options: InboxReviewerFetcherOptions): Inbox
       }
       isFetching = true;
       try {
-        for (const pullRequest of dueRepositories(options, nextFetchAtByRepository)) {
+        for (const pullRequest of dueRepositories(options, nextFetchAtByList)) {
           // oxlint-disable-next-line eslint/no-await-in-loop -- one request at a time, to stay gentle on the API
           await fetchRepository(pullRequest);
         }
@@ -79,5 +83,5 @@ function createInboxReviewerFetcher(options: InboxReviewerFetcherOptions): Inbox
   };
 }
 
-export type { InboxReviewerFetcher };
-export { REVIEWER_REFRESH_INTERVAL_MS, createInboxReviewerFetcher };
+export type { ReviewerFetcher };
+export { REVIEWER_REFRESH_INTERVAL_MS, createReviewerFetcher };

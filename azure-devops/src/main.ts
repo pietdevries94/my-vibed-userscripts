@@ -9,7 +9,6 @@ import { findBoardCardIds, isBoardLocation, watchBoard } from "./board.ts";
 import { findPullRequestRows, showPipelineStatus } from "./pr-list.ts";
 import { hideInitialsOnAvatars, showInitialsOnAvatars } from "./avatars.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
-import type { PullRequestsResponse } from "./ado-client.ts";
 import type { TimelineRecord } from "./pipeline-timeline.ts";
 import type { WatchedPage } from "./page-reloader.ts";
 import { createAdoClient } from "./ado-client.ts";
@@ -166,24 +165,14 @@ const starredReviewers = isInFrame
 const requiredReviewers = createRequiredReviewerMarker({
   client,
   findRows: () => findPullRequestRows(document, basePath),
+  listStatus: () => parsePullRequestListLocation(location, basePath)?.status ?? "active",
   now: () => Date.now(),
 });
-
-const pullRequestListClient = {
-  // The list check already fetches the reviewers. Keep them to mark the required ones.
-  async getPullRequests(
-    listPage: Parameters<typeof client.getPullRequests>[0],
-  ): Promise<PullRequestsResponse> {
-    const response = await client.getPullRequests(listPage);
-    requiredReviewers.remember(response.pullRequests);
-    return response;
-  },
-};
 
 function currentWatchedPage(): WatchedPage<unknown> | null {
   const listPage = parsePullRequestListLocation(location, basePath);
   if (listPage) {
-    return watchPullRequestList(pullRequestListClient, listPage, () =>
+    return watchPullRequestList(client, listPage, () =>
       findPullRequestRows(document, basePath).map(({ pullRequest }) => pullRequest.pullRequestId),
     );
   }
@@ -235,8 +224,8 @@ function reloadPage(): void {
 /** The features that ask Azure DevOps for data. They wait while the tab is hidden. */
 function syncFetchingFeatures(): void {
   void poller.sync();
-  if (isPullRequestInboxLocation(location)) {
-    void requiredReviewers.syncInbox();
+  if (isPullRequestInboxLocation(location) || parsePullRequestListLocation(location, basePath)) {
+    void requiredReviewers.sync();
   }
   if (isBoardLocation(location)) {
     void daysInColumn.sync();
