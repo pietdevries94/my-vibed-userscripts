@@ -1,5 +1,5 @@
 // The Azure DevOps capture: which pages to capture, what to keep, and which GET
-// requests to send. Dev file only. The owner reads the keep rules below.
+// requests to send. Dev file only. The keep rules are in capture-rules.ts.
 import type {
   CaptureDefinition,
   CapturePage,
@@ -12,14 +12,14 @@ import {
 } from "./pull-request-link.ts";
 import { evaluationsOf, pullRequestOrRunPage } from "./capture-pipeline.ts";
 import { findBoardCardIds, isBoardLocation } from "./board.ts";
+import { isThemePanelOpen, themeSettingsPage } from "./capture-theme.ts";
 import type { AdoClient } from "./ado-client.ts";
 import type { BoardWorkItem } from "./board.ts";
 import type { Pseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
 import type { PullRequestListPage } from "./pull-request-link.ts";
-import type { ScrubRules } from "../../shared/dev/scrub/rules.ts";
 import { createAdoClient } from "./ado-client.ts";
-import { fakeLink } from "./capture-links.ts";
 import { findPullRequestRows } from "./pr-list.ts";
+import { rules } from "./capture-rules.ts";
 import { withoutScriptMarks } from "./capture-script-marks.ts";
 
 const STATUS_COLOR_VARIABLES = [
@@ -32,67 +32,6 @@ const STATUS_COLOR_VARIABLES = [
 /** The days in column feature reads the updates of each card. A few show their shape: the most changed ones, which most likely moved. */
 const CARDS_WITH_CAPTURED_UPDATES = 5;
 const PROJECTS_ROUTE = /\/_apis\/projects\/(?<project>[^/?]+)/u;
-
-const rules: ScrubRules = {
-  // Azure DevOps's own layout and state attributes. Their values are fixed words.
-  keepAttributes: [
-    "aria-roledescription",
-    "data-componentregion",
-    "data-done",
-    "data-is-focusable",
-    "data-noclose",
-    "data-renderedregion",
-    "data-side",
-  ],
-  keepIdPatterns: [/^__bolt-[\w-]+$/u],
-  keepJsonPaths: [
-    // Policy evaluation and pull request states: "approved", "running", "active".
-    { path: /(?:^|\.)status$/u, value: /^[A-Za-z]{1,30}$/u },
-    // The policy type tells build validation from other policies.
-    { path: /configuration\.type\.id$/u, value: /^[\da-f-]{36}$/iu },
-    { path: /configuration\.type\.displayName$/u, value: /^[\w ]{1,60}$/u },
-    // Reviewer votes: -10, -5, 0, 5, 10.
-    { path: /(?:^|\.)vote$/u, value: /^-?\d{1,2}$/u },
-    // Run timeline records: Stage, Job or Task; pending or completed; succeeded or failed.
-    { path: /records\.(?:type|state|result)$/u, value: /^[A-Za-z.]{1,40}$/u },
-    // A record's issue kind, and how many warnings and errors it has. The messages stay scrubbed.
-    { path: /records\.issues\.type$/u, value: /^(?:warning|error)$/u },
-    { path: /records\.(?:warningCount|errorCount)$/u, value: /^\d{1,4}$/u },
-    // A run's result: succeeded, partiallySucceeded, failed or canceled.
-    { path: /(?:^|\.)builds\.body\.value\.result$/u, value: /^[A-Za-z]{1,30}$/u },
-    // The order of a record within its parent. A stand-in would lose it.
-    { path: /records\.order$/u, value: /^\d{1,4}$/u },
-    // What kinds of identities a starred reviewer search found, in the script log.
-    { path: /(?:^|\.)found\.(?:entityType|originDirectory)$/u, value: /^[A-Za-z]{1,20}$/u },
-    { path: /(?:^|\.)foundCount$/u, value: /^\d{1,4}$/u },
-    // Counts the Pipeline tab notes in the script log.
-    { path: /(?:^|\.)(?:checkCount|runCount)$/u, value: /^\d{1,4}$/u },
-    // Response status, Retry-After and work item revisions.
-    { path: /(?:^|\.)(?:httpStatus|retryAfterSeconds|rev)$/u, value: /^\d{1,6}$/u },
-  ],
-  keepRouteWords: ["edit", "board", "backlog", "t", "results", "pullrequest", "pullrequests"],
-  keepUiWords: [
-    "Active",
-    "Draft",
-    // Pull request tabs.
-    "Overview",
-    "Files",
-    "Updates",
-    "Commits",
-    // The reviewer section and its add dropdown.
-    "Reviewers",
-    "Required",
-    "Optional",
-    "Add",
-    // Pipeline run tabs and sections.
-    "Summary",
-    "Logs",
-    "Tests",
-    "Stages",
-    "Jobs",
-  ],
-  mapUrl: fakeLink,
-};
 
 function statusColors(): Record<string, string> {
   const style = getComputedStyle(document.body);
@@ -225,6 +164,9 @@ function boardPage(): CapturePage {
 }
 
 function capturePage(document: Document, location: Location): CapturePage | null {
+  if (isThemePanelOpen(document)) {
+    return themeSettingsPage(document, location);
+  }
   const listPage = parsePullRequestListLocation(location, apiBasePath(location));
   if (listPage !== null) {
     return pullRequestRowsPage("pr-list", listPage);
