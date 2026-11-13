@@ -24,6 +24,7 @@ import { createPipelineTab } from "./pipeline-tab.ts";
 import { createRequiredReviewerMarker } from "./required-reviewers.ts";
 import { createStarredReviewers } from "./starred-reviewers.ts";
 import { createStarredReviewersStore } from "./starred-reviewers-store.ts";
+import { followSystemTheme } from "./follow-system-theme.ts";
 import style from "./style.css";
 import { watchPullRequestList } from "./pr-list-watch.ts";
 
@@ -45,18 +46,26 @@ const isTabActive = (): boolean => document.visibilityState === "visible";
 // In a frame, the script only strips a run page the Pipeline tab shows.
 const isInFrame = globalThis.top !== globalThis.self;
 
+const menu = {
+  // A frame would add a second menu entry. The top page's entry is enough.
+  register: (caption: string, onClick: () => void, id: string): void => {
+    if (!isInFrame) {
+      GM_registerMenuCommand(caption, onClick, { id });
+    }
+  },
+};
+const settingStorage = {
+  get: (key: string, defaultValue: boolean): boolean => GM_getValue(key, defaultValue),
+  set: (key: string, value: boolean): void => {
+    GM_setValue(key, value);
+  },
+};
+
 const avatarInitials = createOnOffSetting({
   defaultValue: true,
   key: "avatar-initials",
   label: "Avatar initials",
-  menu: {
-    // A frame would add a second menu entry. The top page's entry is enough.
-    register: (caption, onClick, id) => {
-      if (!isInFrame) {
-        GM_registerMenuCommand(caption, onClick, { id });
-      }
-    },
-  },
+  menu,
   onChange: (isOn) => {
     if (isOn) {
       showInitialsOnAvatars(document);
@@ -64,12 +73,7 @@ const avatarInitials = createOnOffSetting({
       hideInitialsOnAvatars(document);
     }
   },
-  storage: {
-    get: (key, defaultValue) => GM_getValue(key, defaultValue),
-    set: (key, value) => {
-      GM_setValue(key, value);
-    },
-  },
+  storage: settingStorage,
 });
 
 const getEvaluations = async (
@@ -281,3 +285,7 @@ document.addEventListener("visibilitychange", () => {
   void reloader.check({ immediately: true });
 });
 sync();
+// A frame shows a run page inside a pull request; the top page follows the system.
+if (!isInFrame) {
+  followSystemTheme({ client, document, menu, reload: reloadPage, storage: settingStorage });
+}

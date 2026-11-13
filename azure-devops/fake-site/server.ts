@@ -4,6 +4,7 @@
 // the state the actions change. Open http://localhost:8787/__dev for links.
 import { BOARD_STYLE, PULL_REQUEST_STYLE, RUN_STYLE } from "./styles.ts";
 import type { FakeRequest, FakeResponse } from "../../shared/dev/fake-site/server.ts";
+import { THEME_PATH, themeAction, themeResponse } from "./theme.ts";
 import { actions, currentEvaluations, currentPullRequest, currentWorkItem } from "./state.ts";
 import {
   boardData,
@@ -241,6 +242,10 @@ const PAGES: Page[] = [
 ];
 
 function respond(request: FakeRequest): FakeResponse | null {
+  const theme = themeResponse(request);
+  if (theme !== null) {
+    return theme;
+  }
   const fixture = PAGES.find((page) => request.url.pathname === `/fake-site/${page}.html`);
   if (fixture !== undefined) {
     return { body: pageHtml(fixture), contentType: "text/html", status: HTTP_OK };
@@ -251,7 +256,7 @@ function respond(request: FakeRequest): FakeResponse | null {
 
 startFakeSite(
   {
-    actions,
+    actions: () => [...actions(), themeAction],
     pages: () => [
       { label: "Board", path: BOARD_PATH },
       {
@@ -263,6 +268,8 @@ startFakeSite(
         label: "Pull request",
         path: pullRequestDetailPath() ?? "/fake-org/text-16/_git/text-17/pullrequest/1003",
       },
+      { label: "Theme panel", path: THEME_PATH },
+      { label: "Theme panel closed", path: `${THEME_PATH}?panel=closed` },
     ],
     respond,
   },

@@ -64,6 +64,8 @@ interface AdoClient {
   getAuthenticatedUserId: () => Promise<string | null>;
   /** Cancels a queued or running run. */
   cancelBuild: (project: string, buildId: number) => Promise<void>;
+  /** Saves the theme Azure DevOps shows the signed-in user, such as `ms.vss-web.vsts-theme-dark`. */
+  saveTheme: (themeId: string) => Promise<void>;
   /** Starts a new run of a build check, as Azure DevOps's own Queue button does. */
   requeuePolicyEvaluation: (project: string, evaluationId: string) => Promise<void>;
   getPullRequestReviewers: (pullRequest: PullRequestRef) => Promise<Identity[]>;
@@ -93,6 +95,7 @@ const MAX_PULL_REQUEST_BUILDS = 50;
 
 /** Enough to detect an added or removed pull request in any realistic list. */
 const MAX_LISTED_PULL_REQUESTS = 200;
+const THEME_SETTING_KEY = "WebPlatform/Theme";
 
 /** Looks up a project id once per project. A failed lookup is retried on the next call. */
 function createProjectIdCache(options: AdoClientOptions): (project: string) => Promise<string> {
@@ -191,6 +194,14 @@ async function cancelBuild(
   );
 }
 
+/** The theme lives in the user's global settings, where Azure DevOps's own theme panel saves it. */
+async function saveTheme(options: AdoClientOptions, themeId: string): Promise<void> {
+  await sendRequest(options, "/_apis/Settings/Entries/globalme?api-version=7.1-preview.1", {
+    body: { [THEME_SETTING_KEY]: themeId },
+    method: "PATCH",
+  });
+}
+
 async function requeuePolicyEvaluation(
   options: AdoClientOptions,
   projectId: string,
@@ -219,7 +230,7 @@ async function getPullRequestBuilds(
 
 /**
  * Client with the page's session cookie. Every request is a GET, but the re-queue of a
- * build check, the cancel of a run, adding a reviewer and the identity search.
+ * build check, the cancel of a run, saving the theme, adding a reviewer and the identity search.
  */
 function createAdoClient(options: AdoClientOptions): AdoClient {
   const getProjectId = createProjectIdCache(options);
@@ -266,6 +277,7 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
 
     requeuePolicyEvaluation: async (project, evaluationId) =>
       requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
+    saveTheme: async (themeId) => saveTheme(options, themeId),
 
     ...createReviewerRequests(options),
   };

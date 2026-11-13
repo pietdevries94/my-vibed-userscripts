@@ -114,13 +114,14 @@ test("the script source has one fetch call and no write methods", () => {
     [
       "ado-client.ts PATCH",
       "ado-client.ts PATCH",
+      "ado-client.ts PATCH",
       "ado-request.ts PATCH",
       "ado-request.ts POST",
       "ado-request.ts PUT",
       "reviewer-requests.ts PUT",
       "reviewer-requests.ts POST",
     ],
-    "only the re-queue of a build check, the cancel of a run, adding a reviewer and the identity search (a POST that reads) write",
+    "only the re-queue of a build check, the cancel of a run, saving the theme, adding a reviewer and the identity search (a POST that reads) write",
   );
   assert.doesNotMatch(source, /XMLHttpRequest|sendBeacon|WebSocket/u);
 });
@@ -155,6 +156,18 @@ test("cancels a run with one PATCH", async () => {
     "PATCH https://dev.azure.com/my-org/my%20project/_apis/build/builds/812?api-version=7.1",
   );
   assert.equal(cancel?.init.body, JSON.stringify({ status: "cancelling" }));
+});
+
+test("saves the theme in the user's global settings with one PATCH", async () => {
+  const { client, requests } = fakeAdo(() => new Response(null, { status: 204 }));
+  await client.saveTheme("ms.vss-web.vsts-theme");
+
+  const [save] = requests;
+  assert.equal(
+    `${save?.init.method} ${save?.url}`,
+    "PATCH https://dev.azure.com/my-org/_apis/Settings/Entries/globalme?api-version=7.1-preview.1",
+  );
+  assert.equal(save?.init.body, JSON.stringify({ "WebPlatform/Theme": "ms.vss-web.vsts-theme" }));
 });
 
 test("a refused re-queue throws", async () => {

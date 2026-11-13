@@ -1,6 +1,6 @@
 {
   "name": "Fix Azure DevOps",
-  "description": "Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.",
+  "description": "Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials (a menu setting, on by default), Light or Dark to match the system (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.",
   "match": ["https://dev.azure.com/*", "https://*.visualstudio.com/*"],
   "grant": ["GM_addStyle", "GM_getValue", "GM_setValue", "GM_registerMenuCommand"],
   "version": "1.6.0",
