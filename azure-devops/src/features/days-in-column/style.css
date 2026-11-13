@@ -56,7 +56,9 @@
   display: none;
 }
 
-/* The days-in-column toggle in a column header. It shows while the header is hovered or focused. */
+/* The days-in-column toggle in a column header. It shows while the header is hovered, or
+   while something in it has keyboard focus. A click also focuses the toggle; that focus must
+   not keep it showing once the pointer leaves. */
 .fix-ado-days-toggle {
   display: inline-flex;
   align-items: center;
@@ -70,7 +72,7 @@
   opacity: 0;
 }
 
-.kanban-board-column-header:is(:hover, :focus-within) .fix-ado-days-toggle {
+.kanban-board-column-header:is(:hover, :has(:focus-visible)) .fix-ado-days-toggle {
   opacity: 1;
 }
 
