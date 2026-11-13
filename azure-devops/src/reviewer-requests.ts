@@ -34,7 +34,20 @@ interface PickerIdentityBody {
   originDirectory?: string;
 }
 
-const MAX_FOUND_IDENTITIES = 20;
+/** As Azure DevOps's own add reviewer field asks. */
+const SEARCH_OPTIONS = { MaxResults: 40, MinResults: 5 };
+const SEARCH_PROPERTIES = [
+  "DisplayName",
+  "IsMru",
+  "ScopeName",
+  "SamAccountName",
+  "Active",
+  "SubjectDescriptor",
+  "Mail",
+  "MailNickname",
+  "SignInAddress",
+  "Guest",
+];
 
 function reviewersPath({ project, repository, pullRequestId }: PullRequestRef): string {
   return (
@@ -101,8 +114,8 @@ async function searchIdentities(options: AdoClientOptions, query: string): Promi
       body: {
         identityTypes: ["user", "group"],
         operationScopes: ["ims", "source"],
-        options: { MaxResults: MAX_FOUND_IDENTITIES, MinResults: MAX_FOUND_IDENTITIES },
-        properties: ["DisplayName", "Mail", "SignInAddress"],
+        options: SEARCH_OPTIONS,
+        properties: SEARCH_PROPERTIES,
         query,
       },
       method: "POST",
@@ -118,10 +131,12 @@ async function searchIdentities(options: AdoClientOptions, query: string): Promi
 /** What kinds of identities a search found, without their names, for a capture's log. */
 function logFound(found: PickerIdentityBody[]): void {
   log("Starred reviewers: search answered", {
-    found: found.map(({ entityType, originDirectory, localId }) => ({
-      entityType,
-      hasLocalId: localId !== undefined && localId !== null && localId !== "",
-      originDirectory,
+    found: found.map((identity) => ({
+      entityType: identity.entityType,
+      // Field names only: each one maps to true, so the capture keeps them and no value.
+      fields: Object.fromEntries(Object.keys(identity).map((key) => [key, true])),
+      hasLocalId: identityOf(identity).length > 0,
+      originDirectory: identity.originDirectory,
     })),
     foundCount: found.length,
   });

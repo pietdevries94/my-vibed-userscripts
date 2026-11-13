@@ -4,6 +4,25 @@ import { createAdoClient } from "./ado-client.ts";
 import { test } from "node:test";
 
 const TEAM = String.raw`[Ledger Works]\Ledger Team`;
+/** The search as Azure DevOps's own add reviewer field sends it, for "led". */
+const SEARCH_BODY = {
+  identityTypes: ["user", "group"],
+  operationScopes: ["ims", "source"],
+  options: { MaxResults: 40, MinResults: 5 },
+  properties: [
+    "DisplayName",
+    "IsMru",
+    "ScopeName",
+    "SamAccountName",
+    "Active",
+    "SubjectDescriptor",
+    "Mail",
+    "MailNickname",
+    "SignInAddress",
+    "Guest",
+  ],
+  query: "led",
+};
 const PULL_REQUEST = { project: "Ledger Works", pullRequestId: 4711, repository: "ledger-api" };
 
 interface Sent {
@@ -96,11 +115,5 @@ test("searches people and groups, and leaves out those without a local id", asyn
     sent[0]?.url,
     "https://dev.azure.com/quillfield/_apis/IdentityPicker/Identities?api-version=5.0-preview.1",
   );
-  assert.deepEqual(sent[0]?.body, {
-    identityTypes: ["user", "group"],
-    operationScopes: ["ims", "source"],
-    options: { MaxResults: 20, MinResults: 20 },
-    properties: ["DisplayName", "Mail", "SignInAddress"],
-    query: "led",
-  });
+  assert.deepEqual(sent[0]?.body, SEARCH_BODY);
 });

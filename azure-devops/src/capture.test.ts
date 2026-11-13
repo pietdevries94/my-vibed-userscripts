@@ -228,7 +228,15 @@ test("a pipeline log capture keeps the job and step of its links as stand-ins", 
 test("the capture keeps the kinds of identities a search found, and drops their names", async () => {
   const { captureDefinition } = await import("./capture.ts");
   const logged = {
-    found: [{ displayName: PERSON, entityType: "User", hasLocalId: false, originDirectory: "aad" }],
+    found: [
+      {
+        entityType: "User",
+        fields: { displayName: true, localId: true },
+        hasLocalId: false,
+        originDirectory: "aad",
+        title: PERSON,
+      },
+    ],
     foundCount: 1,
   };
   const scrubbed = JSON.stringify(scrubJson(logged, captureDefinition.rules, createPseudonyms()));
@@ -236,5 +244,6 @@ test("the capture keeps the kinds of identities a search found, and drops their 
   assert.match(scrubbed, /"originDirectory":"aad"/u);
   assert.match(scrubbed, /"hasLocalId":false/u);
   assert.match(scrubbed, /"foundCount":1/u);
+  assert.match(scrubbed, /"fields":\{"displayName":true,"localId":true\}/u);
   assert.ok(!scrubbed.includes(PERSON));
 });
