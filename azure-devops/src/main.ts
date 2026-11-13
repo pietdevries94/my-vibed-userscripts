@@ -22,6 +22,8 @@ import { createPipelineRunFrame } from "./pipeline-run-frame.ts";
 import { createPipelineStatusPoller } from "./pipeline-status-poller.ts";
 import { createPipelineTab } from "./pipeline-tab.ts";
 import { createRequiredReviewerMarker } from "./required-reviewers.ts";
+import { createStarredReviewers } from "./starred-reviewers.ts";
+import { createStarredReviewersStore } from "./starred-reviewers-store.ts";
 import style from "./style.css";
 import { watchPullRequestList } from "./pr-list-watch.ts";
 
@@ -131,6 +133,32 @@ const daysInColumnToggles = createDaysInColumnToggles({
   },
 });
 
+// One starred list per organisation.
+const STARRED_REVIEWERS_KEY = `starred-reviewers:${location.host}${basePath}`;
+const starredReviewers = isInFrame
+  ? null
+  : createStarredReviewers({
+      client,
+      document,
+      imageUrlOf: ({ id }) =>
+        `${location.origin}${basePath}/_api/_common/identityImage?id=${encodeURIComponent(id)}`,
+      reload: () => {
+        location.reload();
+      },
+      schedule: (callback, delayMs): (() => void) => {
+        const timer = setTimeout(callback, delayMs);
+        return () => {
+          clearTimeout(timer);
+        };
+      },
+      store: createStarredReviewersStore({
+        load: () => GM_getValue<unknown>(STARRED_REVIEWERS_KEY, []),
+        save: (starred) => {
+          GM_setValue(STARRED_REVIEWERS_KEY, starred);
+        },
+      }),
+    });
+
 const requiredReviewers = createRequiredReviewerMarker({
   client,
   findRows: () => findPullRequestRows(document, basePath),
@@ -211,10 +239,11 @@ function syncFetchingFeatures(): void {
   }
 }
 
-/** The Pipeline tab and the Overview's warnings, on a pull request page. */
+/** The Pipeline tab, the Overview's warnings and starred reviewers, on a pull request page. */
 function syncPullRequestFeatures(): void {
   const pullRequest = parsePullRequestHref(location.pathname, basePath);
   pipelineTab?.sync(pullRequest);
+  starredReviewers?.sync(pullRequest);
   overviewPipelineIssues?.sync(pullRequest, isTabActive());
 }
 

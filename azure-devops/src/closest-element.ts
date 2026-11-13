@@ -9,4 +9,14 @@ function closestElement(target: EventTarget | null, selector: string): Element |
   return isElement(target) ? target.closest(selector) : null;
 }
 
-export { closestElement };
+function isHtmlElement(element: Element): element is HTMLElement {
+  return "dataset" in element;
+}
+
+/** As `closestElement`, for an HTML element. */
+function closestHtmlElement(target: EventTarget | null, selector: string): HTMLElement | null {
+  const found = closestElement(target, selector);
+  return found !== null && isHtmlElement(found) ? found : null;
+}
+
+export { closestElement, closestHtmlElement, isElement };

@@ -1,11 +1,13 @@
 // The shared base of every fake site: a local stand-in for a website, built from the
-// script's fixtures. It answers GET only, sends no-store and logs every request.
+// script's fixtures. It answers GET, and other methods only where the script's fake site
+// handles them; it sends no-store and logs every request.
 // Built in: /__dev (an index of pages and actions), /__dev/requests (the log),
 // /__dev/fixture-dom.js (the fixture-to-DOM helper), and /__dev/<action>.
 // The server does not serve the script; the dev server on :8786 does.
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { text as readText } from "node:stream/consumers";
 import { stripTypeScriptTypes } from "node:module";
 
 interface FakeResponse {
@@ -16,6 +18,10 @@ interface FakeResponse {
 
 interface FakeRequest {
   url: URL;
+  /** GET, or a method the script's fake site may handle, such as PUT. */
+  method: string;
+  /** The request body, empty for a GET. */
+  body: string;
   /** The path of the page that sent the request, from the Referer header. */
   refererPath: string | null;
 }
@@ -34,7 +40,7 @@ interface FakeSiteDefinition {
   /** Pages for the /__dev index. A function, so a missing fixture fails the request, not the start. */
   pages: () => { path: string; label: string }[];
   actions: () => FakeSiteAction[];
-  /** The response to a request, or null for a 404. */
+  /** The response to a request, or null for a 404 (a 405 for a method other than GET). */
   respond: (request: FakeRequest) => FakeResponse | null;
 }
 
@@ -110,34 +116,47 @@ function devResponse(
   return action === undefined ? null : jsonResponse(action.run(url.searchParams));
 }
 
-function respondTo(
+/** A request other than GET: the script's fake site answers it, or it is refused. */
+function writeResponse(definition: FakeSiteDefinition, fakeRequest: FakeRequest): FakeResponse {
+  return (
+    definition.respond(fakeRequest) ??
+    jsonResponse(
+      { message: `The fake site does not handle ${fakeRequest.method} here.` },
+      HTTP_METHOD_NOT_ALLOWED,
+    )
+  );
+}
+
+async function respondTo(
   request: http.IncomingMessage,
   definition: FakeSiteDefinition,
   requests: string[],
-): FakeResponse {
+): Promise<FakeResponse> {
   const url = new URL(request.url ?? "/", "http://localhost");
+  const method = request.method ?? "GET";
   if (!url.pathname.startsWith("/__dev")) {
-    requests.push(`${request.method ?? "GET"} ${url.pathname}${url.search}`);
-  }
-  if (request.method !== "GET") {
-    return jsonResponse({ message: "The fake site answers GET only." }, HTTP_METHOD_NOT_ALLOWED);
+    requests.push(`${method} ${url.pathname}${url.search}`);
   }
   const { referer } = request.headers;
   const refererPath = referer === undefined ? null : new URL(referer).pathname;
+  const fakeRequest = { body: await readText(request), method, refererPath, url };
+  if (method !== "GET") {
+    return writeResponse(definition, fakeRequest);
+  }
   return (
     devResponse(url, definition, requests) ??
-    definition.respond({ refererPath, url }) ??
+    definition.respond(fakeRequest) ??
     jsonResponse({ message: `Not found: ${url.pathname}` }, HTTP_NOT_FOUND)
   );
 }
 
-function safeResponse(
+async function safeResponse(
   request: http.IncomingMessage,
   definition: FakeSiteDefinition,
   requests: string[],
-): FakeResponse {
+): Promise<FakeResponse> {
   try {
-    return respondTo(request, definition, requests);
+    return await respondTo(request, definition, requests);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return jsonResponse({ message }, HTTP_SERVER_ERROR);
@@ -148,9 +167,12 @@ function safeResponse(
 function startFakeSite(definition: FakeSiteDefinition, port: number): http.Server {
   const requests: string[] = [];
   const server = http.createServer((request, response) => {
-    const { body, contentType, status = HTTP_OK } = safeResponse(request, definition, requests);
-    response.writeHead(status, { "Cache-Control": "no-store", "Content-Type": contentType });
-    response.end(body);
+    void safeResponse(request, definition, requests).then(
+      ({ body, contentType, status = HTTP_OK }) => {
+        response.writeHead(status, { "Cache-Control": "no-store", "Content-Type": contentType });
+        response.end(body);
+      },
+    );
   });
   server.listen(port);
   return server;

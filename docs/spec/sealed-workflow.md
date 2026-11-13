@@ -53,7 +53,7 @@ The owner reads the list in the script's rules.
 ### Shared (`shared/dev/fake-site`)
 
 - A server on `localhost:8787`.
-- Answers GET only (405 otherwise). Sends `no-store`.
+- Answers GET. Another method gets a 405, unless the script's fake site handles it, such as a PUT that adds a reviewer. Sends `no-store`.
 - Logs requests at `/__dev/requests`.
 - Loads fixtures from the script's `fixtures/`, with an error that names any missing file.
 - Includes the fixture-to-DOM helper.

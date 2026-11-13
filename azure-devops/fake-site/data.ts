@@ -58,11 +58,26 @@ const TOKEN = /^text-\d+$/u;
 const readFixture = fixtureReader(SCRIPT_DIRECTORY);
 /** The capture behind each page, where it is not named after the page. */
 const PAGE_FIXTURES: Partial<Record<Page, string>> = { "pr-detail": "pr-detail-warnings" };
+const DEFAULT_PULL_REQUEST_CAPTURE = "warnings";
 
 function fixtureOfPage(page: Page): string {
   return PAGE_FIXTURES[page] ?? page;
 }
-const labelCache = new Map<Page, { changedAt: number; labels: Map<string, string> }>();
+
+/** Shows another capture as the pull request page, such as "reviewers" for pr-detail-reviewers. */
+function showPullRequestCapture(name: string): string {
+  const fixture = `pr-detail-${name === "" ? DEFAULT_PULL_REQUEST_CAPTURE : name}`;
+  readFixture(`${fixture}.html`);
+  PAGE_FIXTURES["pr-detail"] = fixture;
+  return fixture;
+}
+
+/** The site's CSS the capture saved for a page, or null when it saved none. */
+function pageCss(page: Page): string | null {
+  const file = path.join(SCRIPT_DIRECTORY, "fixtures", `${fixtureOfPage(page)}.css`);
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+}
+const labelCache = new Map<string, { changedAt: number; labels: Map<string, string> }>();
 
 /** Tokens that stand for names: display names in the JSON, then avatar labels on the page. */
 function nameTokens(page: Page): string[] {
@@ -83,12 +98,12 @@ function labelsOf(page: Page): Map<string, string> {
   const changedAt = fs.statSync(
     path.join(SCRIPT_DIRECTORY, "fixtures", `${fixtureOfPage(page)}.html`),
   ).mtimeMs;
-  const cached = labelCache.get(page);
+  const cached = labelCache.get(fixtureOfPage(page));
   if (cached?.changedAt === changedAt) {
     return cached.labels;
   }
   const labels = standInLabels(nameTokens(page));
-  labelCache.set(page, { changedAt, labels });
+  labelCache.set(fixtureOfPage(page), { changedAt, labels });
   return labels;
 }
 
@@ -135,9 +150,11 @@ function pullRequestListPath(): string | null {
 export type { CapturedEvaluations, Page, PullRequestPageData };
 export {
   boardData,
+  pageCss,
   pageHtml,
   pullRequestDetailData,
   pullRequestDetailPath,
   pullRequestListPath,
   pullRequestPageData,
+  showPullRequestCapture,
 };

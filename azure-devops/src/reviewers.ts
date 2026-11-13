@@ -86,4 +86,4 @@ function findReviewerByLabel(avatarLabel: string, reviewers: Reviewer[]): Review
 }
 
 export type { Reviewer };
-export { findReviewerByLabel, hueOf, initialsOf };
+export { findReviewerByLabel, hueOf, initialsOf, personOrTeamName };

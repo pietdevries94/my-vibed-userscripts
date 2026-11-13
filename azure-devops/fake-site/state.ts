@@ -1,11 +1,12 @@
 // What the fake site's actions change, on top of the captured pages: build statuses,
 // pull request changes, required reviewers and work item changes.
+import { boardData, showPullRequestCapture } from "./data.ts";
 import { BUILD_POLICY_TYPE_ID } from "../src/pipeline-status.ts";
 import type { BoardWorkItem } from "../src/board.ts";
 import type { FakeSiteAction } from "../../shared/dev/fake-site/server.ts";
 import type { ListedPullRequest } from "../src/pr-list-changes.ts";
 import type { PolicyEvaluation } from "../src/pipeline-status.ts";
-import { boardData } from "./data.ts";
+import { addedReviewers } from "./reviewers.ts";
 
 /** Build statuses the set-build-status action takes, besides "reset". */
 const BUILD_STATUSES = [
@@ -133,6 +134,8 @@ function reset(): unknown {
   for (const changes of [buildStatuses, pullRequestRevisions, requiredReviewers, workItemChanges]) {
     changes.clear();
   }
+  addedReviewers.length = 0;
+  showPullRequestCapture("");
   return "reset";
 }
 
@@ -166,6 +169,19 @@ function actions(): FakeSiteAction[] {
       example: `id=${firstWorkItemId()}&by=other`,
       name: "change-work-item",
       run: changeWorkItem,
+    },
+    {
+      description:
+        "Shows another capture as the pull request page: reviewers, reviewers-add, reviewers-search, split-menu, or warnings (the default).",
+      example: "name=reviewers",
+      name: "show-pull-request-capture",
+      run: (query) => showPullRequestCapture(query.get("name") ?? ""),
+    },
+    {
+      description: "The reviewers the script added, with required or optional.",
+      example: "",
+      name: "added-reviewers",
+      run: () => addedReviewers,
     },
     { description: "Undoes every action.", example: "", name: "reset", run: reset },
   ];

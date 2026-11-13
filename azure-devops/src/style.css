@@ -448,3 +448,71 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 .fix-ado-issue-count[data-kind="warning"] {
   background: var(--component-status-warning, rgb(214, 119, 48));
 }
+
+/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
+.repos-reviewer > .fix-ado-star {
+  visibility: hidden;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  padding: 4px;
+}
+.repos-reviewer:hover > .fix-ado-star,
+.repos-reviewer.focused > .fix-ado-star,
+.repos-reviewer > .fix-ado-star:focus-visible,
+.repos-reviewer > .fix-ado-star[aria-pressed="true"] {
+  visibility: visible;
+}
+.fix-ado-star svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.fix-ado-star[aria-pressed="true"] {
+  color: var(--communication-foreground, rgba(0, 90, 158, 1));
+}
+.fix-ado-star[aria-pressed="true"] svg path {
+  fill: currentColor;
+}
+
+.fix-ado-starred-reviewers {
+  margin-top: 16px;
+}
+/* The + split button sits where Azure DevOps shows the vote icon, so it stays small. */
+.fix-ado-add-reviewer .bolt-split-button-main {
+  padding: 3px 5px;
+}
+.fix-ado-add-reviewer .bolt-split-button-option {
+  padding: 3px 3px;
+}
+.fix-ado-starred-empty {
+  margin-bottom: 8px;
+}
+.fix-ado-star-someone {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 6px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+.fix-ado-star-someone[hidden] {
+  display: none;
+}
+.fix-ado-star-someone .bolt-button-text {
+  padding-left: 4px;
+}
+.fix-ado-star-picker {
+  position: relative;
+}
+.fix-ado-star-picker-callout {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+.fix-ado-star-picker-callout .bolt-suggestions-container {
+  max-height: 320px;
+}
+.fix-ado-add-menu {
+  position: absolute;
+  z-index: 1000000;
+}

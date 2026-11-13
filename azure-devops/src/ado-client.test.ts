@@ -111,8 +111,16 @@ test("the script source has one fetch call and no write methods", () => {
   );
   assert.deepEqual(
     writes,
-    ["ado-request.ts PATCH"],
-    "only the re-queue of a build check and the cancel of a run write",
+    [
+      "ado-client.ts PATCH",
+      "ado-client.ts PATCH",
+      "ado-request.ts PATCH",
+      "ado-request.ts POST",
+      "ado-request.ts PUT",
+      "reviewer-requests.ts PUT",
+      "reviewer-requests.ts POST",
+    ],
+    "only the re-queue of a build check, the cancel of a run, adding a reviewer and the identity search (a POST that reads) write",
   );
   assert.doesNotMatch(source, /XMLHttpRequest|sendBeacon|WebSocket/u);
 });

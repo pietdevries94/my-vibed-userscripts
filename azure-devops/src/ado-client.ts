@@ -2,11 +2,13 @@ import type { PullRequestListPage, PullRequestRef } from "./pull-request-link.ts
 import { getJson, sendRequest } from "./ado-request.ts";
 import type { AdoClientOptions } from "./ado-request.ts";
 import type { BoardWorkItem } from "./board.ts";
+import type { Identity } from "./reviewer-requests.ts";
 import type { ListedPullRequest } from "./pr-list-changes.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
 import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { TimelineRecord } from "./pipeline-timeline.ts";
 import type { WorkItemUpdate } from "./days-in-column.ts";
+import { createReviewerRequests } from "./reviewer-requests.ts";
 
 interface PolicyEvaluationsResponse {
   evaluations: PolicyEvaluation[];
@@ -64,6 +66,13 @@ interface AdoClient {
   cancelBuild: (project: string, buildId: number) => Promise<void>;
   /** Starts a new run of a build check, as Azure DevOps's own Queue button does. */
   requeuePolicyEvaluation: (project: string, evaluationId: string) => Promise<void>;
+  getPullRequestReviewers: (pullRequest: PullRequestRef) => Promise<Identity[]>;
+  addPullRequestReviewer: (
+    pullRequest: PullRequestRef,
+    reviewer: { reviewerId: string; isRequired: boolean },
+  ) => Promise<void>;
+  /** People and groups whose name or address matches the query. */
+  searchIdentities: (query: string) => Promise<Identity[]>;
 }
 
 /** A work item from the work items API. With errorPolicy=Omit, null for one that was deleted or is not readable. */
@@ -178,7 +187,7 @@ async function cancelBuild(
   await sendRequest(
     options,
     `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`,
-    { status: "cancelling" },
+    { body: { status: "cancelling" }, method: "PATCH" },
   );
 }
 
@@ -190,7 +199,7 @@ async function requeuePolicyEvaluation(
   await sendRequest(
     options,
     `/${projectId}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}?api-version=7.1-preview.1`,
-    { status: "queued" },
+    { body: { status: "queued" }, method: "PATCH" },
   );
 }
 
@@ -208,7 +217,10 @@ async function getPullRequestBuilds(
   return { builds: (body.value ?? []) as PullRequestBuild[], retryAfterSeconds };
 }
 
-/** Client with the page's session cookie. Every request is a GET, but the re-queue of a build check and the cancel of a run. */
+/**
+ * Client with the page's session cookie. Every request is a GET, but the re-queue of a
+ * build check, the cancel of a run, adding a reviewer and the identity search.
+ */
 function createAdoClient(options: AdoClientOptions): AdoClient {
   const getProjectId = createProjectIdCache(options);
   let authenticatedUserIdRequest: Promise<string | null> | null = null;
@@ -254,6 +266,8 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
 
     requeuePolicyEvaluation: async (project, evaluationId) =>
       requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
+
+    ...createReviewerRequests(options),
   };
 }
 

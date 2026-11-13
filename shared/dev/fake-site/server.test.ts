@@ -18,8 +18,14 @@ async function testSite(): Promise<{ origin: string; server: Server }> {
     {
       actions: () => [{ description: "Counts up.", example: "by=1", name: "count", run: countUp }],
       pages: () => [{ label: "Home", path: "/home" }],
-      respond: ({ url, refererPath }) =>
-        url.pathname === "/home" ? htmlResponse(`count ${count}, from ${refererPath}`) : null,
+      respond: ({ url, refererPath, method, body }) => {
+        if (method === "PUT" && url.pathname === "/note") {
+          return htmlResponse(`noted ${body}`);
+        }
+        return method === "GET" && url.pathname === "/home"
+          ? htmlResponse(`count ${count}, from ${refererPath}`)
+          : null;
+      },
     },
     0,
   );
@@ -34,13 +40,15 @@ async function textOf(url: string, init?: RequestInit): Promise<string> {
   return response.text();
 }
 
-test("answers GET with no-store, and refuses other methods", async () => {
+test("answers GET with no-store, and refuses other methods the site does not handle", async () => {
   const { origin, server } = await testSite();
   const page = await fetch(`${origin}/home`, { headers: { Referer: `${origin}/list` } });
   assert.equal(page.headers.get("cache-control"), "no-store");
   assert.equal(await page.text(), "count 0, from /list");
   const post = await fetch(`${origin}/home`, { method: "POST" });
   assert.equal(post.status, 405);
+  const put = await fetch(`${origin}/note`, { body: "hello", method: "PUT" });
+  assert.equal(await put.text(), "noted hello");
   server.close();
 });
 

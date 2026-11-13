@@ -52,6 +52,7 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     shown: new Map<number, PipelineStatus | null>(),
   };
   const client: AdoClient = {
+    addPullRequestReviewer: notUsedByThePoller,
     cancelBuild: notUsedByThePoller,
     getAuthenticatedUserId: notUsedByThePoller,
     async getPolicyEvaluations({ pullRequestId }) {
@@ -59,11 +60,13 @@ function pollerOnFakeList(pullRequestIds: number[]): {
       return list.respond(pullRequestId);
     },
     getPullRequestBuilds: notUsedByThePoller,
+    getPullRequestReviewers: notUsedByThePoller,
     getPullRequests: notUsedByThePoller,
     getTimeline: notUsedByThePoller,
     getWorkItemUpdates: notUsedByThePoller,
     getWorkItems: notUsedByThePoller,
     requeuePolicyEvaluation: notUsedByThePoller,
+    searchIdentities: notUsedByThePoller,
   };
   const poller = createPipelineStatusPoller<number>({
     client,

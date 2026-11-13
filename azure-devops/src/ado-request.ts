@@ -37,21 +37,27 @@ function retryAfterSecondsOf(response: Response): number | null {
   return response.headers.has("Retry-After") && Number.isFinite(retryAfter) ? retryAfter : null;
 }
 
-/** A GET, or with a body the PATCH of a re-queue. Throws when Azure DevOps refuses. */
+/** A request that changes something, with its JSON body. */
+interface WriteRequest {
+  method: "PATCH" | "POST" | "PUT";
+  body: unknown;
+}
+
+/** A GET, or with `write` a request that changes something. Throws when Azure DevOps refuses. */
 async function sendRequest(
   options: AdoClientOptions,
   path: string,
-  patchBody?: unknown,
+  write?: WriteRequest,
 ): Promise<Response> {
   const accept = { Accept: "application/json" };
   const response = await options.fetch(options.origin + options.apiBasePath + path, {
     credentials: "same-origin",
-    ...(patchBody === undefined
+    ...(write === undefined
       ? { headers: accept, method: "GET" }
       : {
-          body: JSON.stringify(patchBody),
+          body: JSON.stringify(write.body),
           headers: { ...accept, "Content-Type": "application/json" },
-          method: "PATCH",
+          method: write.method,
         }),
   });
   if (!response.ok) {
@@ -68,5 +74,5 @@ async function getJson(options: AdoClientOptions, path: string): Promise<JsonRes
   return { body: ((await response.json()) as ResponseBody | null) ?? {}, retryAfterSeconds };
 }
 
-export type { AdoClientOptions, JsonResponse };
+export type { AdoClientOptions, JsonResponse, WriteRequest };
 export { AdoRequestError, getJson, sendRequest };
