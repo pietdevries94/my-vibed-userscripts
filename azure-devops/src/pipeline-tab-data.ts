@@ -164,7 +164,10 @@ async function sendRunAction(
       : sources.cancelRun(data.pullRequest.project, Number(key)));
     data.runsLoadedAt = Number.NEGATIVE_INFINITY;
     data.fastRunsRefreshUntil = sources.now() + ACTED_RUNS_REFRESH_WINDOW_MS;
-    log(`Pipeline tab: run action ${action} sent`);
+    log(
+      `Pipeline tab: run action ${action} sent`,
+      action === "cancel" ? { buildId: Number(key) } : {},
+    );
     return "idle";
   } catch (error) {
     log(`Pipeline tab: Azure DevOps refused run action ${action}`, {

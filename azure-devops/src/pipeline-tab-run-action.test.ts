@@ -12,6 +12,7 @@ import {
 } from "./pipeline-tab.test-page.ts";
 import type { PullRequestBuild } from "./pipeline-checks.ts";
 import assert from "node:assert/strict";
+import { logEntries } from "../../shared/runtime/script-log.ts";
 import { test } from "node:test";
 
 const ACTION_BUTTON = ".fix-ado-pipeline-run-action";
@@ -156,6 +157,8 @@ test("while a run is busy, the button is a red Cancel current run that cancels i
   click(button);
   await settle();
   assert.deepEqual(cancelled, [7]);
+  const sent = logEntries().findLast((entry) => entry.message.includes("cancel sent"));
+  assert.deepEqual(sent?.data, { buildId: 7 });
 });
 
 test("with several busy runs, the button opens a list to pick the run to cancel", async () => {
