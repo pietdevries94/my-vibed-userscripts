@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.7.1
+// @version      1.7.2
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -316,7 +316,9 @@
   display: none;
 }
 
-/* The days-in-column toggle in a column header. It shows while the header is hovered or focused. */
+/* The days-in-column toggle in a column header. It shows while the header is hovered, or
+   while something in it has keyboard focus. A click also focuses the toggle; that focus must
+   not keep it showing once the pointer leaves. */
 .fix-ado-days-toggle {
   display: inline-flex;
   align-items: center;
@@ -330,7 +332,7 @@
   opacity: 0;
 }
 
-.kanban-board-column-header:is(:hover, :focus-within) .fix-ado-days-toggle {
+.kanban-board-column-header:is(:hover, :has(:focus-visible)) .fix-ado-days-toggle {
   opacity: 1;
 }
 
