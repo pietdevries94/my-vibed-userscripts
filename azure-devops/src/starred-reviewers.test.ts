@@ -165,7 +165,7 @@ test("lists starred reviewers that are not on the pull request yet, each with a 
   assert.deepEqual(starredNames(document), ["Marren Tolk"]);
   const row = section(document).querySelector(".fix-ado-starred-reviewer");
   assert.ok(row?.querySelector('.bolt-split-button [data-fix-ado-add="optional"]'));
-  assert.ok(row?.querySelector('[data-fix-ado-add="menu"]'));
+  assert.ok(row?.querySelector('[data-fix-ado-add="required"]'));
   assert.equal(document.querySelector(".repos-pr-no-items-well"), null);
 });
 
@@ -229,15 +229,15 @@ test("no reload when Azure DevOps shows the added reviewer", async () => {
   assert.equal(harness.reloads, 0);
 });
 
-test("the arrow's menu adds the reviewer as required", async () => {
+test("the required button adds the reviewer as required, and says so in its tooltip", async () => {
   const harness = setUp([MARREN]);
-  section(harness.document).querySelector<HTMLElement>('[data-fix-ado-add="menu"]')?.click();
-  const item = harness.document.querySelector<HTMLElement>(".fix-ado-add-menu [role=menuitem]");
-  assert.equal(item?.textContent, "Add as required reviewer");
-  item?.click();
+  const required = section(harness.document).querySelector<HTMLElement>(
+    '[data-fix-ado-add="required"]',
+  );
+  assert.equal(required?.title, "Add as required reviewer");
+  required?.click();
   await settle();
   assert.deepEqual(harness.added, [{ isRequired: true, reviewerId: "id-marren" }]);
-  assert.equal(harness.document.querySelector(".fix-ado-add-menu"), null, "the menu closed");
 });
 
 test("a failed add keeps the row and says why", async () => {

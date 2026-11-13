@@ -1,12 +1,13 @@
 // The elements of starred reviewers. They copy Azure DevOps's own markup for reviewer
-// rows, split buttons, menus and the "nothing here" well, so its styles apply.
+// rows, split buttons and the "nothing here" well, so its styles apply.
 import type { Identity } from "./reviewer-requests.ts";
-import { wrapIn } from "./pipeline-issue-list.ts";
 
 const STARRED_SECTION_CLASS = "fix-ado-starred-reviewers";
 const STAR_BUTTON_CLASS = "fix-ado-star";
 const STAR_PATH =
   "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z";
+const REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z";
+const PLUS_PATH = "M8 5v6M5 8h6";
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 interface ElementOptions {
@@ -48,15 +49,24 @@ function fontIcon(document: Document, name: string, size: "small" | "medium"): H
   });
 }
 
-function starIcon(document: Document): SVGSVGElement {
+/** A 16px line icon, styled in style.css, from path data. */
+function svgIcon(document: Document, className: string, pathData: string[]): SVGSVGElement {
   const svg = document.createElementNS(SVG_NAMESPACE, "svg");
-  svg.setAttribute("viewBox", "0 0 16 16");
-  svg.setAttribute("width", "16");
-  svg.setAttribute("height", "16");
-  svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS(SVG_NAMESPACE, "path");
-  path.setAttribute("d", STAR_PATH);
-  svg.append(path);
+  const attributes = {
+    "aria-hidden": "true",
+    class: className,
+    height: "16",
+    viewBox: "0 0 16 16",
+    width: "16",
+  };
+  for (const [name, value] of Object.entries(attributes)) {
+    svg.setAttribute(name, value);
+  }
+  for (const data of pathData) {
+    const path = document.createElementNS(SVG_NAMESPACE, "path");
+    path.setAttribute("d", data);
+    svg.append(path);
+  }
   return svg;
 }
 
@@ -64,7 +74,7 @@ function starIcon(document: Document): SVGSVGElement {
 function createStarButton(document: Document): HTMLButtonElement {
   const button = element(document, "button", {
     attributes: { "aria-pressed": "false", type: "button" },
-    children: [starIcon(document)],
+    children: [svgIcon(document, "fix-ado-star-icon", [STAR_PATH])],
     className: `${STAR_BUTTON_CLASS} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`,
   });
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- created as a button above
@@ -84,17 +94,19 @@ function detailOf(identity: Identity): string {
   return identity.isGroup ? "Group" : identity.signInAddress;
 }
 
-/** The arrow of the + button, which opens "Add as required reviewer". */
-function createMenuArrow(document: Document): HTMLElement {
+/**
+ * The second half of the + button: adds the reviewer as required. Its icon is a +
+ * in a ring, the ring the script also draws around required reviewers in lists.
+ */
+function createRequiredButton(document: Document, identity: Identity): HTMLElement {
   return element(document, "button", {
     attributes: {
-      "aria-expanded": "false",
-      "aria-haspopup": "true",
-      "aria-label": "More ways to add",
-      "data-fix-ado-add": "menu",
+      "aria-label": `Add ${identity.displayName} as required reviewer`,
+      "data-fix-ado-add": "required",
+      title: "Add as required reviewer",
       type: "button",
     },
-    children: [fontIcon(document, "ChevronDownMed", "small")],
+    children: [svgIcon(document, "fix-ado-required-icon", [REQUIRED_RING_PATH, PLUS_PATH])],
     className:
       "bolt-split-button-option flex-self-stretch body-s bolt-button bolt-icon-button enabled icon-only bolt-focus-treatment",
   });
@@ -116,7 +128,7 @@ function createNameColumn(document: Document, identity: Identity): HTMLElement {
   });
 }
 
-/** The + button that adds the reviewer as optional, and its arrow for "Add as required". */
+/** The + button that adds the reviewer as optional, joined to the button that adds as required. */
 function createAddSplitButton(document: Document, identity: Identity): HTMLElement {
   return element(document, "div", {
     children: [
@@ -133,7 +145,7 @@ function createAddSplitButton(document: Document, identity: Identity): HTMLEleme
       }),
       element(document, "div", { className: "bolt-split-button-divider flex-noshrink" }),
       element(document, "div", {
-        children: [createMenuArrow(document)],
+        children: [createRequiredButton(document, identity)],
         className: "inline-flex-row",
       }),
     ],
@@ -215,71 +227,12 @@ function createStarredSection(document: Document): HTMLElement {
   });
 }
 
-function menuCell(document: Document, content?: HTMLElement): HTMLElement {
-  return element(document, "td", {
-    children: content === undefined ? [] : [content],
-    className: "bolt-menuitem-cell bolt-list-cell",
-  });
-}
-
-function createMenuItem(document: Document, itemText: string): HTMLElement {
-  const emptyContent = (): HTMLElement =>
-    element(document, "div", { className: "bolt-menuitem-cell-content flex-row" });
-  const text = element(document, "div", {
-    className: "bolt-menuitem-cell-content bolt-menuitem-cell-text flex-row",
-    text: itemText,
-  });
-  return element(document, "tr", {
-    attributes: { role: "menuitem", tabindex: "0" },
-    children: [
-      menuCell(document, emptyContent()),
-      menuCell(document),
-      menuCell(document),
-      menuCell(document, text),
-      menuCell(document),
-      menuCell(document),
-      menuCell(document, emptyContent()),
-    ],
-    className: "bolt-menuitem-row bolt-list-row bolt-menuitem-row-normal cursor-pointer",
-  });
-}
-
-/** A one-item menu, as Azure DevOps's contextual menus look. */
-function createMenu(
-  document: Document,
-  itemText: string,
-): { menu: HTMLElement; item: HTMLElement } {
-  const item = createMenuItem(document, itemText);
-  const body = element(document, "tbody", { children: [item], className: "relative" });
-  const table = element(document, "table", {
-    attributes: { role: "menu" },
-    children: [body],
-    className: "bolt-menu bolt-list body-m relative scroll-hidden",
-  });
-  const container = element(document, "div", {
-    children: [element(document, "div", { className: "bolt-menu-spacer" }), table],
-    className: "bolt-menu-container no-outline",
-  });
-  const menu = wrapIn(document, container, [
-    { className: "bolt-contextualmenu-container", tag: "div" },
-    {
-      className:
-        "bolt-contextual-menu flex-column custom-scrollbar depth-8 bolt-callout-content bolt-callout-shadow",
-      role: "dialog",
-      tag: "div",
-    },
-    { className: "fix-ado-add-menu bolt-callout flex-row", tag: "div" },
-  ]);
-  return { item, menu };
-}
-
 export type { ElementOptions };
 export {
   STARRED_SECTION_CLASS,
   STAR_BUTTON_CLASS,
   createAvatar,
   createEmptyWell,
-  createMenu,
   createStarButton,
   createStarredRow,
   createStarredSection,

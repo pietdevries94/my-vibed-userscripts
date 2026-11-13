@@ -19,4 +19,4 @@ function closestHtmlElement(target: EventTarget | null, selector: string): HTMLE
   return found !== null && isHtmlElement(found) ? found : null;
 }
 
-export { closestElement, closestHtmlElement, isElement };
+export { closestElement, closestHtmlElement };

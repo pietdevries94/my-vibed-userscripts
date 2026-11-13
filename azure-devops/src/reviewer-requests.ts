@@ -3,6 +3,7 @@
 import type { AdoClient } from "./ado-client.ts";
 import type { AdoClientOptions } from "./ado-request.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
+import { log } from "../../shared/runtime/script-log.ts";
 import { sendRequest } from "./ado-request.ts";
 
 /** A person or group, as starred reviewers keep them. `id` is the id a reviewer has on a pull request. */
@@ -29,6 +30,8 @@ interface PickerIdentityBody {
   signInAddress?: string | null;
   mail?: string | null;
   entityType?: string;
+  /** Where the identity comes from, such as "vsd" for Azure DevOps or "aad" for Entra ID. */
+  originDirectory?: string;
 }
 
 const MAX_FOUND_IDENTITIES = 20;
@@ -107,9 +110,21 @@ async function searchIdentities(options: AdoClientOptions, query: string): Promi
   );
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
   const body = (await response.json()) as { results?: { identities?: PickerIdentityBody[] }[] };
-  return (body.results ?? []).flatMap(({ identities }) =>
-    (identities ?? []).flatMap((identity) => identityOf(identity)),
-  );
+  const found = (body.results ?? []).flatMap(({ identities }) => identities ?? []);
+  logFound(found);
+  return found.flatMap((identity) => identityOf(identity));
+}
+
+/** What kinds of identities a search found, without their names, for a capture's log. */
+function logFound(found: PickerIdentityBody[]): void {
+  log("Starred reviewers: search answered", {
+    found: found.map(({ entityType, originDirectory, localId }) => ({
+      entityType,
+      hasLocalId: localId !== undefined && localId !== null && localId !== "",
+      originDirectory,
+    })),
+    foundCount: found.length,
+  });
 }
 
 /** The client's reviewer requests, for `createAdoClient`. */

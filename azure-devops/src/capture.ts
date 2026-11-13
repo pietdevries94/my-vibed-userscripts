@@ -62,6 +62,9 @@ const rules: ScrubRules = {
     { path: /(?:^|\.)builds\.body\.value\.result$/u, value: /^[A-Za-z]{1,30}$/u },
     // The order of a record within its parent. A stand-in would lose it.
     { path: /records\.order$/u, value: /^\d{1,4}$/u },
+    // What kinds of identities a starred reviewer search found, in the script log.
+    { path: /(?:^|\.)found\.(?:entityType|originDirectory)$/u, value: /^[A-Za-z]{1,20}$/u },
+    { path: /(?:^|\.)foundCount$/u, value: /^\d{1,4}$/u },
     // Counts the Pipeline tab notes in the script log.
     { path: /(?:^|\.)(?:checkCount|runCount)$/u, value: /^\d{1,4}$/u },
     // Response status, Retry-After and work item revisions.

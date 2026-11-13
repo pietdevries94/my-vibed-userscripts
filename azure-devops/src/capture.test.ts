@@ -1,7 +1,9 @@
 import { BUILD_POLICY_TYPE_ID } from "./pipeline-status.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
+import { createPseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
 import { findPullRequestRows } from "./pr-list.ts";
+import { scrubJson } from "../../shared/dev/scrub/scrub-json.ts";
 import { test } from "node:test";
 
 // Invented values that play the real ones. None of them may reach a capture file.
@@ -221,4 +223,18 @@ test("a pipeline log capture keeps the job and step of its links as stand-ins", 
     files.get("azure-devops--pipeline-log.html") ?? "",
     /buildId=\d+&amp;view=logs&amp;j=0{8}-[\d-]+&amp;t=0{8}-[\d-]+/u,
   );
+});
+
+test("the capture keeps the kinds of identities a search found, and drops their names", async () => {
+  const { captureDefinition } = await import("./capture.ts");
+  const logged = {
+    found: [{ displayName: PERSON, entityType: "User", hasLocalId: false, originDirectory: "aad" }],
+    foundCount: 1,
+  };
+  const scrubbed = JSON.stringify(scrubJson(logged, captureDefinition.rules, createPseudonyms()));
+  assert.match(scrubbed, /"entityType":"User"/u);
+  assert.match(scrubbed, /"originDirectory":"aad"/u);
+  assert.match(scrubbed, /"hasLocalId":false/u);
+  assert.match(scrubbed, /"foundCount":1/u);
+  assert.ok(!scrubbed.includes(PERSON));
 });

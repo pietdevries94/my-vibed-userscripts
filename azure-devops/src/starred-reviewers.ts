@@ -1,7 +1,7 @@
 // Starred reviewers on a pull request's Overview. A star on each reviewer row keeps
 // that person or group in the owner's starred list. Under Optional, "Add starred as
 // reviewer" lists the starred ones not on the pull request yet, each with a + button
-// that adds them as optional, and an arrow for "Add as required reviewer".
+// that adds them as optional, joined to a button that adds them as required.
 import {
   STARRED_SECTION_CLASS,
   STAR_BUTTON_CLASS,
@@ -17,7 +17,6 @@ import type { StarredReviewersStore } from "./starred-reviewers-store.ts";
 import { closestHtmlElement } from "./closest-element.ts";
 import { createStarPicker } from "./star-picker.ts";
 import { isNameOf } from "./starred-reviewers-store.ts";
-import { openAddReviewerMenu } from "./add-reviewer-menu.ts";
 
 /** How long Azure DevOps gets to show an added reviewer before the page reloads to show it. */
 const ADDED_REVIEWER_WAIT_MS = 4000;
@@ -49,7 +48,6 @@ interface StarredState {
   /** Being added right now. */
   busyIds: Set<string>;
   errorsById: Map<string, string>;
-  closeMenu: (() => void) | null;
 }
 
 function messageOf(error: unknown): string {
@@ -150,18 +148,13 @@ function identityOfRow(state: StarredState, target: EventTarget | null): Identit
   return state.options.store.list().find((identity) => identity.id === id) ?? null;
 }
 
-/** A click on a starred row's star, + button or arrow. */
+/** A click on a starred row's star, + button or required button. */
 function onRowButton(state: StarredState, button: HTMLElement, identity: Identity): void {
   if (button.classList.contains(STAR_BUTTON_CLASS)) {
     state.options.store.unstar(identity.id);
     sync(state);
-  } else if (button.dataset.fixAdoAdd === "menu") {
-    state.closeMenu?.();
-    state.closeMenu = openAddReviewerMenu(state.options.document, button, () => {
-      void addReviewer(state, identity, true);
-    });
   } else {
-    void addReviewer(state, identity, false);
+    void addReviewer(state, identity, button.dataset.fixAdoAdd === "required");
   }
 }
 
@@ -247,8 +240,6 @@ function fillList(state: StarredState, section: HTMLElement): void {
     return;
   }
   list.dataset.fixAdoSignature = signature;
-  state.closeMenu?.();
-  state.closeMenu = null;
   list.replaceChildren(
     ...(starred.length === 0
       ? [createEmptyWell(state.options.document)]
@@ -274,7 +265,6 @@ function createStarredReviewers(options: StarredReviewersOptions): StarredReview
   const state: StarredState = {
     addedIds: new Set(),
     busyIds: new Set(),
-    closeMenu: null,
     errorsById: new Map(),
     options,
     pullRequest: null,
