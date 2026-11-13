@@ -66,10 +66,9 @@ function pageWithBody(rootStyle: string, bodyAttributes: string): FakePage {
   return page;
 }
 
-function follow(page: FakePage, isOn = true): ReturnType<typeof createSystemTheme> {
+function follow(page: FakePage): ReturnType<typeof createSystemTheme> {
   return createSystemTheme({
     document: page.document,
-    isOn: () => isOn,
     looks: {
       load: () => page.stored,
       save: (looks) => {

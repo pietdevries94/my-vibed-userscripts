@@ -1,4 +1,4 @@
-import { avatarName, hideInitialsOnAvatars, showInitialsOnAvatars } from "./avatars.ts";
+import { avatarName, showInitialsOnAvatars } from "./avatars.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -81,19 +81,4 @@ test("board avatars get initials, the project picture does not", () => {
   `);
   showInitialsOnAvatars(page.document);
   assert.deepEqual(page.initials(), [null, "MH"]);
-});
-
-test("hiding initials gives every avatar its ADO picture back", () => {
-  const page = pageWith(`
-    <div class="bolt-coin" aria-label="Elst, Tomas van"></div>
-    <div class="vss-Persona" aria-label="Holt, Mira"></div>
-  `);
-  showInitialsOnAvatars(page.document);
-  hideInitialsOnAvatars(page.document);
-  assert.deepEqual(page.initials(), [null, null]);
-  assert.deepEqual(page.hues(), ["", ""]);
-  assert.deepEqual(
-    page.avatars.map((avatar) => avatar.style.getPropertyValue("--fix-ado-avatar-size")),
-    ["", ""],
-  );
 });

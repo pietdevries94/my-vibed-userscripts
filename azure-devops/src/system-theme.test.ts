@@ -102,15 +102,6 @@ test("a high contrast theme is the user's choice and stays", async () => {
   assert.deepEqual(page.stored, { [LIGHT]: LIGHT_LOOK });
 });
 
-test("switched off, the page keeps its theme", async () => {
-  const page = pageIn(DARK, DARK_LOOK);
-  page.stored = { [LIGHT]: LIGHT_LOOK };
-  await follow(page, false).start();
-
-  assert.deepEqual(page.saved, []);
-  assert.equal(page.document.body.dataset.theme, DARK);
-});
-
 test("a theme picked in Azure DevOps's own panel is remembered on the next check", async () => {
   const page = pageIn(DARK, DARK_LOOK);
   page.prefersDark.matches = true;

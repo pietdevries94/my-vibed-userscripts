@@ -44,13 +44,4 @@ function showInitialsOnAvatars(root: ParentNode): void {
   }
 }
 
-/** Removes what showInitialsOnAvatars added, so every avatar shows ADO's picture again. */
-function hideInitialsOnAvatars(root: ParentNode): void {
-  for (const avatar of root.querySelectorAll<HTMLElement>("[data-fix-ado-initials]")) {
-    delete avatar.dataset.fixAdoInitials;
-    avatar.style.removeProperty("--fix-ado-hue");
-    avatar.style.removeProperty("--fix-ado-avatar-size");
-  }
-}
-
-export { AVATAR_SELECTOR, avatarName, hideInitialsOnAvatars, showInitialsOnAvatars };
+export { AVATAR_SELECTOR, avatarName, showInitialsOnAvatars };

@@ -23,7 +23,6 @@ type ThemeLooks = Record<string, ThemeLook>;
 
 interface SystemThemeOptions {
   document: Document;
-  isOn: () => boolean;
   looks: { load: () => ThemeLooks; save: (looks: ThemeLooks) => void };
   onSystemThemeChange: (listener: () => void) => void;
   prefersDark: () => boolean;
@@ -118,11 +117,11 @@ function rememberLook({ document, looks }: SystemThemeOptions): void {
   }
 }
 
-/** The theme to switch to, or null when the page shows it already or is not followed. */
+/** The theme to switch to, or null when the page shows it already or shows a theme the script leaves alone. */
 function themeToSwitchTo(options: SystemThemeOptions): string | null {
   const current = currentThemeId(options.document);
   const wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
-  return options.isOn() && isFollowedTheme(current) && current !== wanted ? wanted : null;
+  return isFollowedTheme(current) && current !== wanted ? wanted : null;
 }
 
 async function trySaveTheme(options: SystemThemeOptions, themeId: string): Promise<boolean> {
@@ -145,7 +144,6 @@ async function switchToSystemTheme(
   const wanted = themeToSwitchTo(options);
   log("System theme: checked", {
     current: currentThemeId(options.document) ?? null,
-    isOn: options.isOn(),
     isPageLoad,
     prefersDark: options.prefersDark(),
     rememberedThemes: Object.keys(options.looks.load()),
