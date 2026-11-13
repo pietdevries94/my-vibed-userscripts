@@ -46,7 +46,20 @@ function respond(url: string): Response {
   if (url.includes("/timeline")) {
     const step = { id: STEP_GUID, name: `Test ${PROJECT}`, order: 3, parentId: JOB_GUID };
     return Response.json({
-      records: [{ ...step, result: "failed", state: "completed", type: "Task" }],
+      records: [
+        {
+          ...step,
+          errorCount: 1,
+          issues: [
+            { category: "General", message: `Lint ${PROJECT} failed`, type: "error" },
+            { category: "General", message: `${PERSON} left a TODO`, type: "warning" },
+          ],
+          result: "failed",
+          state: "completed",
+          type: "Task",
+          warningCount: 12,
+        },
+      ],
     });
   }
   if (url.includes("/_apis/projects/")) {
@@ -165,6 +178,9 @@ test("a pull request page capture keeps its tabs, its run links and its evaluati
   assert.match(json, /"type": "Task"/u);
   assert.match(json, /"result": "failed"/u);
   assert.match(json, /"order": 3/u);
+  assert.match(json, /"type": "error"[^}]*\}[^}]*"type": "warning"/u);
+  assert.match(json, /"warningCount": 12/u);
+  assert.match(json, /"errorCount": 1\b/u);
   assert.match(
     json,
     /"result": "failed",\s*"status": "completed"|"status": "completed"[^}]*"result": "failed"/u,
