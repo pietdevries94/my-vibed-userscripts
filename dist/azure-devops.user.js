@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.5.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, avatar initials (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.
+// @version      1.6.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -184,9 +184,9 @@
     running: [SPINNER],
     succeeded: [DISC, line("M4.5 8.3l2.3 2.3 4.7-5", "#fff")]
   };
-  function setAttributes(element, attributes) {
+  function setAttributes(element2, attributes) {
     for (let [name, value] of Object.entries(attributes))
-      element.setAttribute(name, value);
+      element2.setAttribute(name, value);
   }
   function createShape(document2, [tag, attributes]) {
     let shape = document2.createElementNS(SVG_NAMESPACE, tag);
@@ -246,13 +246,13 @@
     let retryAfter = Number(response.headers.get("Retry-After"));
     return response.headers.has("Retry-After") && Number.isFinite(retryAfter) ? retryAfter : null;
   }
-  async function sendRequest(options, path, patchBody) {
+  async function sendRequest(options, path, write) {
     let accept = { Accept: "application/json" }, response = await options.fetch(options.origin + options.apiBasePath + path, {
       credentials: "same-origin",
-      ...patchBody === void 0 ? { headers: accept, method: "GET" } : {
-        body: JSON.stringify(patchBody),
+      ...write === void 0 ? { headers: accept, method: "GET" } : {
+        body: JSON.stringify(write.body),
         headers: { ...accept, "Content-Type": "application/json" },
-        method: "PATCH"
+        method: write.method
       }
     });
     if (!response.ok)
@@ -262,6 +262,98 @@
   async function getJson(options, path) {
     let response = await sendRequest(options, path), retryAfterSeconds = retryAfterSecondsOf(response);
     return { body: await response.json() ?? {}, retryAfterSeconds };
+  }
+
+  // shared/runtime/script-log.ts
+  var entries = [];
+  function log(message2, data) {
+    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
+  }
+
+  // azure-devops/src/reviewer-requests.ts
+  var SEARCH_OPTIONS = { MaxResults: 40, MinResults: 5 }, SEARCH_PROPERTIES = [
+    "DisplayName",
+    "IsMru",
+    "ScopeName",
+    "SamAccountName",
+    "Active",
+    "SubjectDescriptor",
+    "Mail",
+    "MailNickname",
+    "SignInAddress",
+    "Guest"
+  ];
+  function reviewersPath({ project, repository, pullRequestId }) {
+    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/reviewers`;
+  }
+  async function getPullRequestReviewers(options, pullRequest) {
+    return ((await (await sendRequest(options, `${reviewersPath(pullRequest)}?api-version=7.1`)).json()).value ?? []).flatMap(
+      ({ id, displayName, uniqueName, isContainer }) => id === void 0 ? [] : [
+        {
+          displayName: displayName ?? "",
+          id,
+          isGroup: isContainer === !0,
+          signInAddress: isContainer === !0 ? "" : uniqueName ?? ""
+        }
+      ]
+    );
+  }
+  async function addPullRequestReviewer(options, pullRequest, { reviewerId, isRequired }) {
+    await sendRequest(
+      options,
+      `${reviewersPath(pullRequest)}/${encodeURIComponent(reviewerId)}?api-version=7.1`,
+      { body: { isRequired, vote: 0 }, method: "PUT" }
+    );
+  }
+  function identityOf(body) {
+    let { localId, displayName, signInAddress, mail, entityType } = body;
+    if (localId == null || localId === "")
+      return [];
+    let isGroup = entityType?.toLowerCase() === "group";
+    return [
+      {
+        displayName: displayName ?? "",
+        id: localId,
+        isGroup,
+        signInAddress: isGroup ? "" : signInAddress ?? mail ?? ""
+      }
+    ];
+  }
+  async function searchIdentities(options, query) {
+    let found = ((await (await sendRequest(
+      options,
+      "/_apis/IdentityPicker/Identities?api-version=5.0-preview.1",
+      {
+        body: {
+          identityTypes: ["user", "group"],
+          operationScopes: ["ims", "source"],
+          options: SEARCH_OPTIONS,
+          properties: SEARCH_PROPERTIES,
+          query
+        },
+        method: "POST"
+      }
+    )).json()).results ?? []).flatMap(({ identities }) => identities ?? []);
+    return logFound(found), found.flatMap((identity) => identityOf(identity));
+  }
+  function logFound(found) {
+    log("Starred reviewers: search answered", {
+      found: found.map((identity) => ({
+        entityType: identity.entityType,
+        // Field names only: each one maps to true, so the capture keeps them and no value.
+        fields: Object.fromEntries(Object.keys(identity).map((key) => [key, !0])),
+        hasLocalId: identityOf(identity).length > 0,
+        originDirectory: identity.originDirectory
+      })),
+      foundCount: found.length
+    });
+  }
+  function createReviewerRequests(options) {
+    return {
+      addPullRequestReviewer: async (pullRequest, reviewer) => addPullRequestReviewer(options, pullRequest, reviewer),
+      getPullRequestReviewers: async (pullRequest) => getPullRequestReviewers(options, pullRequest),
+      searchIdentities: async (query) => searchIdentities(options, query)
+    };
   }
 
   // azure-devops/src/ado-client.ts
@@ -322,14 +414,14 @@
     await sendRequest(
       options,
       `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`,
-      { status: "cancelling" }
+      { body: { status: "cancelling" }, method: "PATCH" }
     );
   }
   async function requeuePolicyEvaluation(options, projectId, evaluationId) {
     await sendRequest(
       options,
       `/${projectId}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}?api-version=7.1-preview.1`,
-      { status: "queued" }
+      { body: { status: "queued" }, method: "PATCH" }
     );
   }
   async function getPullRequestBuilds(options, { project, pullRequestId }) {
@@ -364,7 +456,8 @@
       },
       getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
       getWorkItems: async (ids) => getWorkItems(options, ids),
-      requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId)
+      requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
+      ...createReviewerRequests(options)
     };
   }
 
@@ -416,8 +509,8 @@
     return card.closest(COLUMN_SELECTOR)?.dataset.column ?? null;
   }
   function noteMoves(tracker, cards) {
-    for (let [id, [element]] of cards) {
-      let columnId = columnIdOf(element), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
+    for (let [id, [element2]] of cards) {
+      let columnId = columnIdOf(element2), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
       lastColumnId !== void 0 && lastColumnId !== columnId && entry !== void 0 && (entry.enteredAt = new Date(tracker.now()).toISOString()), tracker.columnIds.set(id, columnId);
     }
   }
@@ -426,8 +519,8 @@
     for (let [id, elements] of cards) {
       let entry = tracker.entries.get(id), enteredAt = entry?.enteredAt ?? null, days = null;
       entry !== void 0 && (days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now()));
-      for (let element of elements)
-        showDaysInColumn(element, days);
+      for (let element2 of elements)
+        showDaysInColumn(element2, days);
     }
   }
   function pauseIfAsked(tracker, retryAfterSeconds) {
@@ -501,9 +594,9 @@
   function createDaysInColumnToggles(options) {
     let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
     function flip(columnId) {
-      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync2();
+      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync3();
     }
-    function sync2() {
+    function sync3() {
       let headers = [...document2.querySelectorAll(HEADER_SELECTOR)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
       if (headers.length === columns.length)
         for (let [index, header] of headers.entries()) {
@@ -516,7 +609,7 @@
           }
         }
     }
-    return { sync: sync2 };
+    return { sync: sync3 };
   }
 
   // azure-devops/src/on-off-setting.ts
@@ -676,9 +769,9 @@ ${issue.message ?? ""}`;
     }
     return wrapped;
   }
-  function setAttributes2(element, attributes) {
+  function setAttributes2(element2, attributes) {
     for (let [name, value] of Object.entries(attributes))
-      element.setAttribute(name, value);
+      element2.setAttribute(name, value);
   }
   function createKindIcon(document2, kind, size) {
     let { className, drawing, pixels } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE2, "svg");
@@ -1202,12 +1295,19 @@ ${issue.message ?? ""}`;
   function closestElement(target, selector) {
     return isElement(target) ? target.closest(selector) : null;
   }
+  function isHtmlElement(element2) {
+    return "dataset" in element2;
+  }
+  function closestHtmlElement(target, selector) {
+    let found = closestElement(target, selector);
+    return found !== null && isHtmlElement(found) ? found : null;
+  }
 
   // azure-devops/src/pipeline-tab-tree.ts
   var DATE_FORMAT = { dateStyle: "short", timeStyle: "short" }, NAME_CLASS = "fix-ado-pipeline-item-name";
   function textElement(document2, className, text) {
-    let element = document2.createElement("span");
-    return element.className = className, element.textContent = text, element;
+    let element2 = document2.createElement("span");
+    return element2.className = className, element2.textContent = text, element2;
   }
   function createItemText(document2, item) {
     let text = textElement(document2, "fix-ado-pipeline-item-text", "");
@@ -1236,8 +1336,8 @@ ${issue.message ?? ""}`;
     return [...run.status?.status === "cancelling" ? ["Cancelling"] : [], kind, ...started].join(" · ");
   }
   function group(document2, className, children) {
-    let element = document2.createElement("div");
-    return element.className = className, element.append(...children), element;
+    let element2 = document2.createElement("div");
+    return element2.className = className, element2.append(...children), element2;
   }
   function createJobSteps(context, job) {
     let { run, stage, step } = context.shown, steps = job.steps.map(
@@ -1344,8 +1444,8 @@ ${issue.message ?? ""}`;
     start: { failed: "Could not start the run.", idle: "Start new run", waiting: "Starting…" }
   }, LOOKS = { cancel: "danger", start: "primary" };
   function textElement2(document2, className, text) {
-    let element = document2.createElement("span");
-    return element.className = className, element.textContent = text, element;
+    let element2 = document2.createElement("span");
+    return element2.className = className, element2.textContent = text, element2;
   }
   function createChoice(context, choice) {
     let { document: document2 } = context, row = document2.createElement("button");
@@ -1552,12 +1652,6 @@ ${issue.message ?? ""}`;
   function createPanel(document2) {
     let panel = document2.createElement("div");
     return panel.className = PANEL_CLASS, panel.setAttribute("role", "tabpanel"), panel;
-  }
-
-  // shared/runtime/script-log.ts
-  var entries = [];
-  function log(message2, data) {
-    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
   }
 
   // azure-devops/src/pipeline-runs.ts
@@ -1908,6 +2002,487 @@ ${issue.message ?? ""}`;
       },
       async syncInbox() {
         await inboxReviewerFetcher.sync(), markAll();
+      }
+    };
+  }
+
+  // azure-devops/src/starred-reviewers-markup.ts
+  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE3 = "http://www.w3.org/2000/svg";
+  function element(document2, tag, { className, text, attributes = {}, children = [] } = {}) {
+    let created = document2.createElement(tag);
+    className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text);
+    for (let [name, value] of Object.entries(attributes))
+      created.setAttribute(name, value);
+    return created.append(...children), created;
+  }
+  function fontIcon(document2, name, size) {
+    return element(document2, "span", {
+      children: [
+        element(document2, "span", {
+          attributes: { "aria-hidden": "true" },
+          className: `left-icon flex-noshrink fabric-icon ms-Icon--${name} ${size}`
+        })
+      ],
+      className: "fluent-icons-enabled"
+    });
+  }
+  function svgIcon(document2, className, pathData) {
+    let svg = document2.createElementNS(SVG_NAMESPACE3, "svg"), attributes = {
+      "aria-hidden": "true",
+      class: className,
+      height: "16",
+      viewBox: "0 0 16 16",
+      width: "16"
+    };
+    for (let [name, value] of Object.entries(attributes))
+      svg.setAttribute(name, value);
+    for (let data of pathData) {
+      let path = document2.createElementNS(SVG_NAMESPACE3, "path");
+      path.setAttribute("d", data), svg.append(path);
+    }
+    return svg;
+  }
+  function createStarButton(document2) {
+    return element(document2, "button", {
+      attributes: { "aria-pressed": "false", type: "button" },
+      children: [svgIcon(document2, "fix-ado-star-icon", [STAR_PATH])],
+      className: `${STAR_BUTTON_CLASS} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`
+    });
+  }
+  function updateStarButton(button, isStarred) {
+    button.getAttribute("aria-pressed") !== String(isStarred) && (button.setAttribute("aria-pressed", String(isStarred)), button.setAttribute("aria-label", isStarred ? "Remove from starred" : "Add to starred"), button.setAttribute("title", isStarred ? "Remove from starred" : "Add to starred"));
+  }
+  function detailOf(identity) {
+    return identity.isGroup ? "Group" : identity.signInAddress;
+  }
+  function createRequiredButton(document2, identity) {
+    return element(document2, "button", {
+      attributes: {
+        "aria-label": `Add ${identity.displayName} as required reviewer`,
+        "data-fix-ado-add": "required",
+        title: "Add as required reviewer",
+        type: "button"
+      },
+      children: [svgIcon(document2, "fix-ado-required-icon", [REQUIRED_RING_PATH, PLUS_PATH])],
+      className: "bolt-split-button-option flex-self-stretch body-s bolt-button bolt-icon-button enabled icon-only bolt-focus-treatment"
+    });
+  }
+  function createNameColumn(document2, identity) {
+    let name = element(document2, "div", {
+      className: "body-m flex-grow text-ellipsis",
+      text: identity.displayName
+    }), detail = element(document2, "div", {
+      className: "fix-ado-starred-detail body-s secondary-text text-ellipsis",
+      text: detailOf(identity)
+    });
+    return element(document2, "div", {
+      children: [name, detail],
+      className: "flex-column flex-grow text-ellipsis icon-large-margin"
+    });
+  }
+  function createAddSplitButton(document2, identity) {
+    return element(document2, "div", {
+      children: [
+        element(document2, "button", {
+          attributes: {
+            "aria-label": `Add ${identity.displayName} as optional reviewer`,
+            "data-fix-ado-add": "optional",
+            title: "Add as optional reviewer",
+            type: "button"
+          },
+          children: [fontIcon(document2, "Add", "small")],
+          className: "bolt-split-button-main bolt-button bolt-icon-button enabled icon-only bolt-focus-treatment"
+        }),
+        element(document2, "div", { className: "bolt-split-button-divider flex-noshrink" }),
+        element(document2, "div", {
+          children: [createRequiredButton(document2, identity)],
+          className: "inline-flex-row"
+        })
+      ],
+      className: "fix-ado-add-reviewer bolt-split-button inline-flex-row flex-noshrink icon-large-margin"
+    });
+  }
+  function createAvatar(document2, identity, imageUrl) {
+    return element(document2, "div", {
+      children: [
+        element(document2, "div", {
+          attributes: { "aria-label": identity.displayName },
+          children: [
+            element(document2, "img", {
+              attributes: { alt: "", src: imageUrl },
+              className: "bolt-coin-content using-image size24"
+            })
+          ],
+          className: "bolt-coin flex-noshrink icon-large-margin size24"
+        })
+      ]
+    });
+  }
+  function createStarredRow(document2, identity, imageUrl) {
+    let star = createStarButton(document2);
+    return updateStarButton(star, !0), element(document2, "div", {
+      attributes: { "data-fix-ado-identity": identity.id },
+      children: [
+        createAddSplitButton(document2, identity),
+        createAvatar(document2, identity, imageUrl),
+        createNameColumn(document2, identity),
+        star
+      ],
+      className: "repos-reviewer flex-row flex-center fix-ado-starred-reviewer"
+    });
+  }
+  var EMPTY_TEXT = "Put people/groups here you often add as pull requests, to add them more easily as optional reviewer";
+  function createEmptyWell(document2) {
+    return element(document2, "div", {
+      className: "repos-pr-no-items-well fix-ado-starred-empty",
+      text: EMPTY_TEXT
+    });
+  }
+  function createStarSomeoneButton(document2) {
+    return element(document2, "button", {
+      attributes: { type: "button" },
+      children: [
+        fontIcon(document2, "Add", "small"),
+        element(document2, "span", {
+          className: "bolt-button-text body-s",
+          text: "Add person/group to starred"
+        })
+      ],
+      className: "fix-ado-star-someone bolt-button subtle enabled bolt-focus-treatment"
+    });
+  }
+  function createStarredSection(document2) {
+    return element(document2, "div", {
+      children: [
+        element(document2, "div", {
+          className: "margin-bottom-8 body-s secondary-text font-weight-semibold",
+          text: "Add starred as reviewer"
+        }),
+        element(document2, "div", { className: "fix-ado-starred-list flex-column" }),
+        createStarSomeoneButton(document2)
+      ],
+      className: `flex-grow flex-column ${STARRED_SECTION_CLASS}`
+    });
+  }
+
+  // azure-devops/src/starred-reviewers-store.ts
+  function isIdentity(value) {
+    return typeof value == "object" && value !== null && "id" in value && typeof value.id == "string" && "displayName" in value && typeof value.displayName == "string" && "signInAddress" in value && typeof value.signInAddress == "string" && "isGroup" in value && typeof value.isGroup == "boolean";
+  }
+  function isNameOf(identity, name) {
+    let wanted = name.trim().toLowerCase();
+    return [identity.displayName, personOrTeamName(identity.displayName)].some(
+      (candidate) => candidate.trim().toLowerCase() === wanted
+    );
+  }
+  function createStarredReviewersStore(storage) {
+    function list() {
+      let stored = storage.load();
+      return Array.isArray(stored) ? stored.filter((value) => isIdentity(value)) : [];
+    }
+    return {
+      findByName: (name) => list().find((identity) => isNameOf(identity, name)) ?? null,
+      isStarred: (id) => list().some((identity) => identity.id === id),
+      list,
+      star(identity) {
+        let others = list().filter(({ id }) => id !== identity.id);
+        storage.save([...others, identity]);
+      },
+      unstar(id) {
+        storage.save(list().filter((identity) => identity.id !== id));
+      }
+    };
+  }
+
+  // azure-devops/src/reviewer-stars.ts
+  var REVIEWER_SECTION_SELECTOR = ".pr-required-reviewers-section, .pr-optional-reviewers-section, .pr-declined-reviewers-section";
+  function reviewerRowsOf(document2) {
+    let rows = [];
+    for (let section of document2.querySelectorAll(REVIEWER_SECTION_SELECTOR))
+      rows.push(...section.querySelectorAll(":scope > .repos-reviewer"));
+    return rows;
+  }
+  function nameOfRow(row) {
+    return row.querySelector(".flex-column > .body-m")?.textContent?.trim() ?? "";
+  }
+  function isOnPage(document2, identity) {
+    return reviewerRowsOf(document2).some((row) => isNameOf(identity, nameOfRow(row)));
+  }
+  function insertStar(document2, row, onClick2) {
+    let star = createStarButton(document2);
+    star.addEventListener("click", (event) => {
+      event.stopPropagation(), onClick2();
+    });
+    let reveal = row.querySelector(":scope > .repos-reviewer-reveal");
+    return reveal === null ? row.append(star) : reveal.before(star), star;
+  }
+  function addStars(document2, store, onStarClick) {
+    for (let row of reviewerRowsOf(document2)) {
+      let star = row.querySelector(`:scope > .${STAR_BUTTON_CLASS}`) ?? insertStar(document2, row, () => {
+        onStarClick(row);
+      });
+      updateStarButton(star, store.findByName(nameOfRow(row)) !== null);
+    }
+  }
+
+  // azure-devops/src/star-picker.ts
+  var SEARCH_DELAY_MS = 300, SUGGESTED_CLASS = "bolt-suggestions-isSuggested";
+  function div(className) {
+    return { className, tag: "div" };
+  }
+  function createPersonaName(document2, identity) {
+    let detail = element(document2, "div", {
+      className: "fontSize secondary-text text-ellipsis",
+      text: detailOf(identity)
+    });
+    return element(document2, "div", {
+      children: [
+        element(document2, "div", {
+          className: "fontSizeM text-ellipsis",
+          text: identity.displayName
+        }),
+        element(document2, "div", { children: [detail], className: "flex-row" })
+      ],
+      className: "bolt-picker-persona-name flex-column flex-grow"
+    });
+  }
+  function createSuggestion(options, identity) {
+    let { document: document2 } = options, text = element(document2, "div", {
+      children: [
+        createAvatar(document2, identity, options.imageUrlOf(identity)),
+        createPersonaName(document2, identity)
+      ],
+      className: "bolt-picker-suggesteditem-text flex-row flex-grow flex-center text-ellipsis"
+    }), item = wrapIn(document2, text, [
+      div("bolt-suggestions-item-button flex-row flex-grow scroll-hidden"),
+      div(
+        "bolt-identitypickerdropdown-item bolt-suggestions-item flex-row flex-grow cursor-pointer scroll-hidden"
+      )
+    ]);
+    return item.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    }), item.addEventListener("click", () => {
+      options.onPick(identity);
+    }), element(document2, "div", {
+      attributes: { role: "option" },
+      children: [item],
+      className: "flex-noshrink"
+    });
+  }
+  function createNoResults(document2) {
+    let text = element(document2, "div", {
+      className: "bolt-identitypickerdropdown-noresults flex-row flex-grow flex-center",
+      text: "No identities found"
+    });
+    return element(document2, "div", {
+      attributes: { role: "alert" },
+      children: [text],
+      className: "bolt-suggestions-none-region flex-row flex-grow"
+    });
+  }
+  function createCallout(document2) {
+    let list = element(document2, "div", {
+      attributes: { role: "listbox" },
+      className: "bolt-suggestions-container flex-column flex-grow v-scroll-auto h-scroll-hidden"
+    }), callout = wrapIn(document2, list, [
+      div("bolt-identitypickerdropdown-list bolt-suggestions flex-row flex-grow"),
+      div(
+        "bolt-identitypickerdropdown-callout-content flex-row flex-grow bolt-callout-content bolt-callout-shadow"
+      ),
+      div("fix-ado-star-picker-callout bolt-identitypickerdropdown-callout bolt-callout flex-row")
+    ]);
+    return callout.hidden = !0, { callout, list };
+  }
+  function createSearchInput(document2) {
+    let input = document2.createElement("input");
+    return input.className = "bolt-textfield-input flex-grow bolt-textfield-input-with-prefix", input.type = "text", input.placeholder = "Search people and groups", input.setAttribute("role", "combobox"), input.setAttribute("aria-label", "Search people and groups to star"), input.setAttribute("aria-autocomplete", "list"), input.setAttribute("aria-expanded", "false"), input;
+  }
+  function createField(document2) {
+    let input = createSearchInput(document2), prefix = fontIcon(document2, "Contact", "medium");
+    return prefix.firstElementChild?.classList.add("prefix", "bolt-textfield-no-text"), { field: element(document2, "div", {
+      children: [prefix, input],
+      className: "repos-reviewers-identity-picker bolt-identitypickerdropdown-textField flex-row flex-center bolt-textfield focus-treatment focused"
+    }), input };
+  }
+  function showFound(parts, found) {
+    let { options, list, callout, input } = parts, unstarred = found.filter(({ id }) => !options.isStarred(id));
+    list.replaceChildren(
+      ...unstarred.length === 0 ? [createNoResults(options.document)] : unstarred.map((identity) => createSuggestion(options, identity))
+    ), callout.hidden = !1, input.setAttribute("aria-expanded", "true");
+  }
+  async function search(parts, query) {
+    parts.searchCount += 1;
+    let thisSearch = parts.searchCount, found = await parts.options.search(query).catch(() => []);
+    thisSearch === parts.searchCount && parts.input.value.trim() === query && showFound(parts, found);
+  }
+  function stopSearch(parts) {
+    parts.searchCount += 1, parts.cancelSearch?.(), parts.cancelSearch = null;
+  }
+  function onInput(parts) {
+    stopSearch(parts);
+    let query = parts.input.value.trim();
+    if (query === "") {
+      parts.callout.hidden = !0;
+      return;
+    }
+    parts.cancelSearch = parts.options.schedule(() => {
+      search(parts, query);
+    }, SEARCH_DELAY_MS);
+  }
+  function moveSuggestion(list, step) {
+    let items = [...list.querySelectorAll(".bolt-suggestions-item")], current = items.findIndex((item) => item.classList.contains(SUGGESTED_CLASS)), next = Math.min(Math.max(current + step, 0), items.length - 1);
+    items[current]?.classList.remove(SUGGESTED_CLASS), items[next]?.classList.add(SUGGESTED_CLASS);
+  }
+  function onKeyDown(parts, event) {
+    event.key === "Escape" ? parts.options.onClose() : event.key === "ArrowDown" || event.key === "ArrowUp" ? (event.preventDefault(), moveSuggestion(parts.list, event.key === "ArrowDown" ? 1 : -1)) : event.key === "Enter" && (event.preventDefault(), parts.list.querySelector(`.${SUGGESTED_CLASS}`)?.click());
+  }
+  function createStarPicker(options) {
+    let { document: document2 } = options, { field, input } = createField(document2), { callout, list } = createCallout(document2), parts = { callout, cancelSearch: null, input, list, options, searchCount: 0 };
+    input.addEventListener("input", () => {
+      onInput(parts);
+    }), input.addEventListener("keydown", (event) => {
+      onKeyDown(parts, event);
+    }), input.addEventListener("blur", () => {
+      stopSearch(parts), options.onClose();
+    });
+    let dropdown = wrapIn(document2, field, [
+      div("flex-column bolt-identitypickerdropdown-container flex-grow"),
+      div("bolt-identitypickerdropdown flex-row flex-grow")
+    ]);
+    return { element: element(document2, "div", {
+      children: [dropdown, callout],
+      className: "fix-ado-star-picker margin-bottom-8"
+    }), input };
+  }
+
+  // azure-devops/src/starred-reviewers.ts
+  var ADDED_REVIEWER_WAIT_MS = 4e3;
+  function messageOf(error) {
+    return error instanceof Error ? error.message : "unknown error";
+  }
+  async function toggleStar(state, row) {
+    let { store, client: client2 } = state.options, name = nameOfRow(row), starred = store.findByName(name);
+    if (starred !== null)
+      store.unstar(starred.id);
+    else if (state.pullRequest !== null) {
+      let reviewer = (await client2.getPullRequestReviewers(state.pullRequest)).find((identity) => isNameOf(identity, name));
+      reviewer !== void 0 && store.star(reviewer);
+    }
+    sync(state);
+  }
+  function reloadUnlessShown(state, identity) {
+    let { document: document2, schedule, reload } = state.options;
+    schedule(() => {
+      isOnPage(document2, identity) || reload();
+    }, ADDED_REVIEWER_WAIT_MS);
+  }
+  function markBusy(state, id, isBusy2) {
+    isBusy2 ? (state.busyIds.add(id), state.errorsById.delete(id)) : state.busyIds.delete(id), sync(state);
+  }
+  async function addReviewer(state, identity, isRequired) {
+    let { pullRequest } = state;
+    if (!(pullRequest === null || state.busyIds.has(identity.id))) {
+      markBusy(state, identity.id, !0);
+      try {
+        await state.options.client.addPullRequestReviewer(pullRequest, {
+          isRequired,
+          reviewerId: identity.id
+        }), state.addedIds.add(identity.id), reloadUnlessShown(state, identity);
+      } catch (error) {
+        state.errorsById.set(identity.id, `Could not add: ${messageOf(error)}`);
+      } finally {
+        markBusy(state, identity.id, !1);
+      }
+    }
+  }
+  function openPicker(state, opener) {
+    let { document: document2, store, client: client2, imageUrlOf, schedule } = state.options, close = null, picker = createStarPicker({
+      document: document2,
+      imageUrlOf,
+      isStarred: (id) => store.isStarred(id),
+      onClose: () => {
+        close?.();
+      },
+      onPick: (identity) => {
+        store.star(identity), close?.(), sync(state);
+      },
+      schedule,
+      search: async (query) => client2.searchIdentities(query)
+    });
+    close = () => {
+      close = null, picker.element.remove(), opener.hidden = !1;
+    }, opener.hidden = !0, opener.before(picker.element), picker.input.focus();
+  }
+  function identityOfRow(state, target) {
+    let id = closestHtmlElement(target, "[data-fix-ado-identity]")?.dataset.fixAdoIdentity;
+    return state.options.store.list().find((identity) => identity.id === id) ?? null;
+  }
+  function onRowButton(state, button, identity) {
+    button.classList.contains(STAR_BUTTON_CLASS) ? (state.options.store.unstar(identity.id), sync(state)) : addReviewer(state, identity, button.dataset.fixAdoAdd === "required");
+  }
+  function onSectionClick(state, event) {
+    let opener = closestHtmlElement(event.target, ".fix-ado-star-someone");
+    if (opener !== null) {
+      openPicker(state, opener);
+      return;
+    }
+    let identity = identityOfRow(state, event.target), button = closestHtmlElement(event.target, `[data-fix-ado-add], .${STAR_BUTTON_CLASS}`);
+    identity !== null && button !== null && onRowButton(state, button, identity);
+  }
+  function placeSection(state, anchor) {
+    let { document: document2 } = state.options, section = document2.querySelector(`.${STARRED_SECTION_CLASS}`);
+    return section === null && (section = createStarredSection(document2), section.addEventListener("click", (event) => {
+      onSectionClick(state, event);
+    })), anchor.nextElementSibling !== section && anchor.after(section), section;
+  }
+  function disableAddButtons(row) {
+    for (let button of row.querySelectorAll("[data-fix-ado-add]"))
+      button.classList.replace("enabled", "disabled"), button.setAttribute("disabled", "");
+  }
+  function showError(row, error) {
+    let detail = row.querySelector(".fix-ado-starred-detail");
+    detail !== null && (detail.textContent = error, detail.classList.replace("secondary-text", "error-text"));
+  }
+  function createShownRow(state, identity) {
+    let { document: document2, imageUrlOf } = state.options, row = createStarredRow(document2, identity, imageUrlOf(identity));
+    state.busyIds.has(identity.id) && disableAddButtons(row);
+    let error = state.errorsById.get(identity.id);
+    return error !== void 0 && showError(row, error), row;
+  }
+  function shownIdentities(state, starred) {
+    let { document: document2 } = state.options;
+    for (let identity of starred)
+      state.addedIds.has(identity.id) && isOnPage(document2, identity) && state.addedIds.delete(identity.id);
+    return starred.filter(
+      (identity) => !state.addedIds.has(identity.id) && !isOnPage(document2, identity)
+    );
+  }
+  function fillList(state, section) {
+    let list = section.querySelector(".fix-ado-starred-list"), starred = state.options.store.list(), shown = shownIdentities(state, starred), signature = JSON.stringify([
+      starred.length,
+      shown.map(({ id }) => [id, state.busyIds.has(id), state.errorsById.get(id) ?? ""])
+    ]);
+    list === null || list.dataset.fixAdoSignature === signature || (list.dataset.fixAdoSignature = signature, list.replaceChildren(
+      ...starred.length === 0 ? [createEmptyWell(state.options.document)] : shown.map((identity) => createShownRow(state, identity))
+    ));
+  }
+  function sync(state) {
+    let { document: document2 } = state.options, anchor = document2.querySelector(".pr-optional-reviewers-section") ?? document2.querySelector(".pr-required-reviewers-section");
+    state.pullRequest === null || anchor === null || (addStars(document2, state.options.store, (row) => {
+      toggleStar(state, row);
+    }), fillList(state, placeSection(state, anchor)));
+  }
+  function createStarredReviewers(options) {
+    let state = {
+      addedIds: /* @__PURE__ */ new Set(),
+      busyIds: /* @__PURE__ */ new Set(),
+      errorsById: /* @__PURE__ */ new Map(),
+      options,
+      pullRequest: null
+    };
+    return {
+      sync(pullRequest) {
+        state.pullRequest = pullRequest, sync(state);
       }
     };
   }
@@ -2363,6 +2938,79 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 .fix-ado-issue-count[data-kind="warning"] {
   background: var(--component-status-warning, rgb(214, 119, 48));
 }
+
+/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
+.repos-reviewer > .fix-ado-star {
+  visibility: hidden;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  padding: 4px;
+}
+.repos-reviewer:hover > .fix-ado-star,
+.repos-reviewer.focused > .fix-ado-star,
+.repos-reviewer > .fix-ado-star:focus-visible,
+.repos-reviewer > .fix-ado-star[aria-pressed="true"] {
+  visibility: visible;
+}
+.fix-ado-star-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.fix-ado-star[aria-pressed="true"] {
+  color: var(--communication-foreground, rgba(0, 90, 158, 1));
+}
+.fix-ado-star[aria-pressed="true"] .fix-ado-star-icon path {
+  fill: currentColor;
+}
+
+.fix-ado-starred-reviewers {
+  margin-top: 16px;
+}
+/* The + split button sits where Azure DevOps shows the vote icon, so it stays small. */
+.fix-ado-add-reviewer .bolt-split-button-main {
+  padding: 3px 5px;
+}
+.fix-ado-add-reviewer .bolt-split-button-option {
+  padding: 3px 4px;
+}
+.fix-ado-required-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+.fix-ado-required-icon path:first-child {
+  stroke: var(--communication-background, rgb(0, 120, 212));
+}
+.fix-ado-starred-empty {
+  margin-bottom: 8px;
+}
+.fix-ado-star-someone {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 6px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+.fix-ado-star-someone[hidden] {
+  display: none;
+}
+.fix-ado-star-someone .bolt-button-text {
+  padding-left: 4px;
+}
+.fix-ado-star-picker {
+  position: relative;
+}
+.fix-ado-star-picker-callout {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+.fix-ado-star-picker-callout .bolt-suggestions-container {
+  max-height: 320px;
+}
 `;
 
   // azure-devops/src/pr-list-changes.ts
@@ -2472,6 +3120,25 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         GM_setValue(HIDDEN_DAYS_COLUMNS_KEY, columnIds);
       }
     }
+  }), STARRED_REVIEWERS_KEY = `starred-reviewers:${location.host}${basePath}`, starredReviewers = isInFrame ? null : createStarredReviewers({
+    client,
+    document,
+    imageUrlOf: ({ id }) => `${location.origin}${basePath}/_api/_common/identityImage?id=${encodeURIComponent(id)}`,
+    reload: () => {
+      location.reload();
+    },
+    schedule: (callback, delayMs) => {
+      let timer = setTimeout(callback, delayMs);
+      return () => {
+        clearTimeout(timer);
+      };
+    },
+    store: createStarredReviewersStore({
+      load: () => GM_getValue(STARRED_REVIEWERS_KEY, []),
+      save: (starred) => {
+        GM_setValue(STARRED_REVIEWERS_KEY, starred);
+      }
+    })
   }), requiredReviewers = createRequiredReviewerMarker({
     client,
     findRows: () => findPullRequestRows(document, basePath),
@@ -2523,18 +3190,18 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
   function syncPullRequestFeatures() {
     let pullRequest = parsePullRequestHref(location.pathname, basePath);
-    pipelineTab?.sync(pullRequest), overviewPipelineIssues?.sync(pullRequest, isTabActive());
+    pipelineTab?.sync(pullRequest), starredReviewers?.sync(pullRequest), overviewPipelineIssues?.sync(pullRequest, isTabActive());
   }
-  function sync() {
+  function sync2() {
     pipelineRunFrame?.sync(), syncPullRequestFeatures(), avatarInitials.isOn() && showInitialsOnAvatars(document), requiredReviewers.markAll(), isBoardLocation(location) && daysInColumnToggles.sync(), isTabActive() && syncFetchingFeatures(), reloader.check();
   }
   var settleTimer = null;
   new MutationObserver(() => {
-    settleTimer !== null && clearTimeout(settleTimer), settleTimer = setTimeout(sync, DOM_SETTLE_MS);
+    settleTimer !== null && clearTimeout(settleTimer), settleTimer = setTimeout(sync2, DOM_SETTLE_MS);
   }).observe(document.body, { childList: !0, subtree: !0 });
-  setInterval(sync, TIMER_INTERVAL_MS);
+  setInterval(sync2, TIMER_INTERVAL_MS);
   document.addEventListener("visibilitychange", () => {
     isTabActive() && (poller.sync(), reloader.check({ immediately: !0 }));
   });
-  sync();
+  sync2();
 })();
