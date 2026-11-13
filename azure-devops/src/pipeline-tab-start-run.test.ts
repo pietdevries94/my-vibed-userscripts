@@ -31,6 +31,16 @@ test("a Start new run button sits at the top of the runs", async () => {
   assert.equal(button?.textContent, "Start new run");
 });
 
+test("the button is built like Azure DevOps's primary buttons, such as Publish", async () => {
+  const { document } = await openTab();
+  const button = document.querySelector(START_BUTTON);
+  assert.deepEqual(
+    ["bolt-button", "primary", "enabled"].map((name) => button?.classList.contains(name)),
+    [true, true, true],
+  );
+  assert.equal(button?.querySelector(".bolt-button-text")?.textContent, "Start new run");
+});
+
 test("with one build check, the button re-queues it and the runs load again", async () => {
   const [check] = EVALUATIONS;
   const { document, requests, requeued } = await openTab([check]);
@@ -73,6 +83,7 @@ test("while the run starts, the button waits; a refused start says so", async ()
   const button = document.querySelector<HTMLButtonElement>(START_BUTTON);
   assert.equal(button?.textContent, "Starting…");
   assert.equal(button?.disabled, true);
+  assert.equal(button?.classList.contains("disabled"), true);
   refusal.reject(new Error("refused"));
   await settle();
   assert.equal(document.querySelector(START_BUTTON)?.textContent, "Start new run");

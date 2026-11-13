@@ -51,23 +51,32 @@ function createChoices(context: StartRunContext): HTMLElement {
   return list;
 }
 
+/** One check starts at once; several open or close the list to pick from. */
+function onButtonClick({ checks, onStart, onToggleList, state }: StartRunContext): void {
+  const [onlyCheck] = checks;
+  if (checks.length === 1 && onlyCheck !== undefined) {
+    onStart(onlyCheck.evaluationId);
+  } else {
+    onToggleList(state !== "choosing");
+  }
+}
+
 function createButton(context: StartRunContext): HTMLButtonElement {
   const { checks, document, state } = context;
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "fix-ado-pipeline-start";
-  button.disabled = state === "starting";
-  button.textContent = state === "starting" ? "Starting…" : BUTTON_LABEL;
+  const isStarting = state === "starting";
+  // Azure DevOps's primary button, as Publish on a draft pull request; its page styles it.
+  const button = Object.assign(document.createElement("button"), {
+    className: `bolt-button primary bolt-focus-treatment ${isStarting ? "disabled" : "enabled"} fix-ado-pipeline-start`,
+    disabled: isStarting,
+    type: "button",
+  });
+  const label = isStarting ? "Starting…" : BUTTON_LABEL;
+  button.append(textElement(document, "bolt-button-text body-m", label));
   if (checks.length > 1) {
     button.setAttribute("aria-expanded", String(state === "choosing"));
   }
   button.addEventListener("click", () => {
-    const [onlyCheck] = checks;
-    if (checks.length === 1 && onlyCheck !== undefined) {
-      context.onStart(onlyCheck.evaluationId);
-    } else {
-      context.onToggleList(state !== "choosing");
-    }
+    onButtonClick(context);
   });
   return button;
 }

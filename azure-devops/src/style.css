@@ -178,27 +178,10 @@
   border-radius: 0;
 }
 
-/* "Start new run" above the runs, styled like Azure DevOps's secondary buttons. */
+/* "Start new run" above the runs. Azure DevOps's primary button classes give its look. */
 .fix-ado-pipeline-start {
   align-self: flex-start;
   margin: 0 0 4px 12px;
-  padding: 6px 12px;
-  border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
-  border-radius: 2px;
-  background: var(--background-color, #fff);
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.fix-ado-pipeline-start:hover:not(:disabled) {
-  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
-}
-
-.fix-ado-pipeline-start:disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 .fix-ado-pipeline-start-choices {
