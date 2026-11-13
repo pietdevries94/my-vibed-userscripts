@@ -1,40 +1,17 @@
-import { JSDOM } from "jsdom";
-import type { PolicyEvaluation } from "./pipeline-status.ts";
-import type { PullRequestBuild } from "./pipeline-checks.ts";
-import type { TimelineRecord } from "./pipeline-timeline.ts";
+import {
+  fixtures,
+  issueKindsAndPlaces,
+  loadCapturedPullRequest,
+  timelineOf,
+} from "./captured-pull-request.test-page.ts";
 import assert from "node:assert/strict";
-import { buildFixtureDom } from "../../shared/dev/fake-site/fixture-dom.ts";
 import { createPipelineTab } from "./pipeline-tab.ts";
 import { parsePullRequestHref } from "./pull-request-link.ts";
-import { scriptFixtures } from "../../shared/dev/fixtures.ts";
 import { test } from "node:test";
-
-const fixtures = scriptFixtures(import.meta.dirname);
-
-interface CapturedPullRequest {
-  data: {
-    evaluations: { body: { value: PolicyEvaluation[] } | null };
-    builds?: { body: { value: PullRequestBuild[] } | null };
-    timelinesByBuildId: Record<string, { body: { records: TimelineRecord[] } | null }>;
-  };
-}
 
 /** A captured pull request page with the Pipeline tab on it, answered from the capture. */
 function capturedPullRequestPage(page: string): Document {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the capture writes this shape
-  const { data } = JSON.parse(fixtures.read(`${page}.json`)) as CapturedPullRequest;
-  const html = fixtures
-    .read(`${page}.html`)
-    .replace(/^<body\b/u, "<div")
-    .replace(/<\/body>\s*$/u, "</div>");
-  const tabLink = /href="(?<path>\/fake-org\/[^"]+\/pullrequest\/\d+)"/u.exec(html)?.groups?.path;
-  assert.ok(tabLink !== undefined, "the capture links to its pull request");
-  const { document } = new JSDOM("<!doctype html><body></body>", {
-    url: `https://dev.azure.com${tabLink}`,
-  }).window;
-  const root = buildFixtureDom(document, html);
-  assert.ok(root);
-  document.body.append(root);
+  const { data, document, pullRequestPath } = loadCapturedPullRequest(page);
   const tab = createPipelineTab({
     apiBasePath: "/fake-org",
     cancelRun: async () => {
@@ -43,14 +20,13 @@ function capturedPullRequestPage(page: string): Document {
     document,
     getEvaluations: async () => data.evaluations.body?.value ?? [],
     getPullRequestBuilds: async () => data.builds?.body?.value ?? [],
-    getTimeline: async (_project, buildId) =>
-      data.timelinesByBuildId[String(buildId)]?.body?.records ?? [],
+    getTimeline: async (_project, buildId) => timelineOf(data, buildId),
     now: () => 0,
     requeueCheck: async () => {
       assert.fail("the fixture tests start no run");
     },
   });
-  tab.sync(parsePullRequestHref(tabLink, "/fake-org"));
+  tab.sync(parsePullRequestHref(pullRequestPath, "/fake-org"));
   return document;
 }
 
@@ -156,17 +132,23 @@ test(
 );
 
 test(
-  "the captured cancelling pull request opens its cancelling run on the step still running",
+  "the captured failed run lists its error, then its warning, and counts them on its stage",
   {
     skip: fixtures.skip,
   },
   async () => {
-    const document = capturedPullRequestPage("pr-detail");
+    const document = capturedPullRequestPage("pr-detail-warnings");
     await openPipelineTab(document);
-    const label = (selector: string): string | null | undefined =>
-      document.querySelector(`${selector}[aria-current=true] svg`)?.getAttribute("aria-label");
-    assert.equal(document.querySelectorAll(".fix-ado-pipeline-run").length, 5);
-    assert.equal(label(".fix-ado-pipeline-run"), "Cancelling");
-    assert.equal(label(".fix-ado-pipeline-step"), "Running");
+    assert.deepEqual(issueKindsAndPlaces(document, ".fix-ado-pipeline-panel"), [
+      "error: place",
+      "warning: place",
+    ]);
+    const stageCounts = [
+      ...document.querySelectorAll(".fix-ado-pipeline-stage .fix-ado-issue-count"),
+    ].map((count) => count.getAttribute("aria-label"));
+    assert.deepEqual(
+      stageCounts.toSorted((first, second) => (first ?? "").localeCompare(second ?? "")),
+      ["1 error", "1 warning"],
+    );
   },
 );

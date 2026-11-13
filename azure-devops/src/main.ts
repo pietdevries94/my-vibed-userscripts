@@ -8,12 +8,15 @@ import {
 import { findBoardCardIds, isBoardLocation, watchBoard } from "./board.ts";
 import { findPullRequestRows, showPipelineStatus } from "./pr-list.ts";
 import { hideInitialsOnAvatars, showInitialsOnAvatars } from "./avatars.ts";
+import type { PolicyEvaluation } from "./pipeline-status.ts";
 import type { PullRequestsResponse } from "./ado-client.ts";
+import type { TimelineRecord } from "./pipeline-timeline.ts";
 import type { WatchedPage } from "./page-reloader.ts";
 import { createAdoClient } from "./ado-client.ts";
 import { createDaysInColumn } from "./days-in-column.ts";
 import { createDaysInColumnToggles } from "./days-in-column-toggle.ts";
 import { createOnOffSetting } from "./on-off-setting.ts";
+import { createOverviewPipelineIssues } from "./overview-pipeline-issues.ts";
 import { createPageReloader } from "./page-reloader.ts";
 import { createPipelineRunFrame } from "./pipeline-run-frame.ts";
 import { createPipelineStatusPoller } from "./pipeline-status-poller.ts";
@@ -67,6 +70,17 @@ const avatarInitials = createOnOffSetting({
   },
 });
 
+const getEvaluations = async (
+  pullRequest: Parameters<typeof client.getPolicyEvaluations>[0],
+): Promise<PolicyEvaluation[]> => {
+  const { evaluations } = await client.getPolicyEvaluations(pullRequest);
+  return evaluations;
+};
+const getTimeline = async (project: string, buildId: number): Promise<TimelineRecord[]> => {
+  const { records } = await client.getTimeline(project, buildId);
+  return records;
+};
+
 const pipelineRunFrame = isInFrame ? createPipelineRunFrame(document) : null;
 const pipelineTab = isInFrame
   ? null
@@ -76,22 +90,26 @@ const pipelineTab = isInFrame
         await client.cancelBuild(project, buildId);
       },
       document,
-      getEvaluations: async (pullRequest) => {
-        const { evaluations } = await client.getPolicyEvaluations(pullRequest);
-        return evaluations;
-      },
+      getEvaluations,
       getPullRequestBuilds: async ({ project, pullRequestId }) => {
         const { builds } = await client.getPullRequestBuilds(project, pullRequestId);
         return builds;
       },
-      getTimeline: async (project, buildId) => {
-        const { records } = await client.getTimeline(project, buildId);
-        return records;
-      },
+      getTimeline,
       now: () => Date.now(),
       requeueCheck: async ({ project }, evaluationId) => {
         await client.requeuePolicyEvaluation(project, evaluationId);
       },
+    });
+
+const overviewPipelineIssues = isInFrame
+  ? null
+  : createOverviewPipelineIssues({
+      apiBasePath: basePath,
+      document,
+      getEvaluations,
+      getTimeline,
+      now: () => Date.now(),
     });
 
 const poller = createPipelineStatusPoller<HTMLElement>({
@@ -193,9 +211,16 @@ function syncFetchingFeatures(): void {
   }
 }
 
+/** The Pipeline tab and the Overview's warnings, on a pull request page. */
+function syncPullRequestFeatures(): void {
+  const pullRequest = parsePullRequestHref(location.pathname, basePath);
+  pipelineTab?.sync(pullRequest);
+  overviewPipelineIssues?.sync(pullRequest, isTabActive());
+}
+
 function sync(): void {
   pipelineRunFrame?.sync();
-  pipelineTab?.sync(parsePullRequestHref(location.pathname, basePath));
+  syncPullRequestFeatures();
   if (avatarInitials.isOn()) {
     showInitialsOnAvatars(document);
   }

@@ -92,16 +92,37 @@
 /* The pull request page is a column that fills the window; the panel takes what the
    header and tabs leave, so the log reaches the bottom. */
 .fix-ado-pipeline-panel {
-  display: flex;
+  display: grid;
   flex: 1 0 0;
+  grid-template-columns: 400px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
   min-height: 400px;
   padding-top: 16px;
 }
 
+/* The tree runs down the left. The warnings and errors sit above the log on the right. */
+.fix-ado-pipeline-panel > .fix-ado-pipeline-message {
+  grid-column: 1 / -1;
+}
+
+.fix-ado-pipeline-panel > .fix-ado-issue-box {
+  grid-column: 2;
+  grid-row: 1;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.fix-ado-pipeline-panel > .fix-ado-pipeline-frame,
+.fix-ado-pipeline-panel > .fix-ado-pipeline-log-note {
+  grid-column: 2;
+  grid-row: 2;
+}
+
 .fix-ado-pipeline-tree {
   display: flex;
-  flex: 0 0 400px;
+  grid-column: 1;
+  grid-row: 1 / -1;
   flex-direction: column;
   gap: 4px;
   overflow-y: auto;
@@ -216,7 +237,8 @@
 }
 
 .fix-ado-pipeline-frame {
-  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
   border-radius: 4px;
@@ -328,4 +350,101 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 .fix-ado-days-toggle[aria-pressed="false"] > span {
   background: transparent;
   box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
+}
+
+/* A run's warnings and errors, in a box like Azure DevOps's check list on a pull
+   request's Overview. Azure DevOps's own classes on it style it there; these rules keep
+   the look where they do not reach, such as the Pipeline tab. */
+.fix-ado-issue-box {
+  border: 1px solid rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+  border-radius: 4px;
+  background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+.fix-ado-issue-box > table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fix-ado-issue-box td {
+  padding: 0;
+  border: 0;
+}
+
+.fix-ado-issue-box-header {
+  min-height: 48px;
+}
+
+.fix-ado-issue {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fix-ado-issue:hover {
+  background: var(--component-grid-row-hover-color, rgba(0, 0, 0, 0.02));
+}
+
+.fix-ado-issue-output {
+  padding: 8px 0;
+  background: rgb(30, 30, 30);
+  color: rgb(212, 212, 212);
+}
+
+.fix-ado-issue-output > .line-number {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* A long message wraps, and keeps its own line breaks. */
+.fix-ado-issue-message {
+  min-width: 0;
+  padding-right: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Without a line number, the message keeps the line number's left padding. */
+.fix-ado-issue-message:first-child {
+  padding-left: 16px;
+}
+
+.fix-ado-issue-output > .error-text {
+  color: rgb(241, 112, 112);
+}
+
+.fix-ado-warning-text {
+  color: rgb(240, 190, 90);
+}
+
+.fix-ado-kind-icon[data-kind="error"] {
+  fill: var(--component-status-error, rgb(205, 74, 69));
+}
+
+.fix-ado-kind-icon[data-kind="warning"] {
+  fill: var(--component-status-warning, rgb(214, 127, 60));
+}
+
+/* The counts of warnings and errors on a stage, job or step in the run tree. */
+.fix-ado-issue-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.fix-ado-issue-count + .fix-ado-issue-count {
+  margin-left: 0;
+}
+
+.fix-ado-issue-count[data-kind="error"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
+}
+
+.fix-ado-issue-count[data-kind="warning"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
 }

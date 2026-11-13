@@ -56,14 +56,22 @@ interface BoardData {
 const SCRIPT_DIRECTORY = path.join(import.meta.dirname, "..");
 const TOKEN = /^text-\d+$/u;
 const readFixture = fixtureReader(SCRIPT_DIRECTORY);
+/** The capture behind each page, where it is not named after the page. */
+const PAGE_FIXTURES: Partial<Record<Page, string>> = { "pr-detail": "pr-detail-warnings" };
+
+function fixtureOfPage(page: Page): string {
+  return PAGE_FIXTURES[page] ?? page;
+}
 const labelCache = new Map<Page, { changedAt: number; labels: Map<string, string> }>();
 
 /** Tokens that stand for names: display names in the JSON, then avatar labels on the page. */
 function nameTokens(page: Page): string[] {
-  const fromJson = [...readFixture(`${page}.json`).matchAll(/"displayName": "(?<token>[^"]*)"/gu)]
+  const fromJson = [
+    ...readFixture(`${fixtureOfPage(page)}.json`).matchAll(/"displayName": "(?<token>[^"]*)"/gu),
+  ]
     .map((match) => match.groups?.token ?? "")
     .filter((token) => TOKEN.test(token));
-  const { document } = new JSDOM(readFixture(`${page}.html`)).window;
+  const { document } = new JSDOM(readFixture(`${fixtureOfPage(page)}.html`)).window;
   const fromAvatars = [...document.querySelectorAll(AVATAR_SELECTOR)]
     .map((avatar) => avatarName(avatar).trim())
     .filter((token) => TOKEN.test(token));
@@ -72,7 +80,9 @@ function nameTokens(page: Page): string[] {
 
 /** The invented name per name token of a page. Worked out again when the fixture changes. */
 function labelsOf(page: Page): Map<string, string> {
-  const changedAt = fs.statSync(path.join(SCRIPT_DIRECTORY, "fixtures", `${page}.html`)).mtimeMs;
+  const changedAt = fs.statSync(
+    path.join(SCRIPT_DIRECTORY, "fixtures", `${fixtureOfPage(page)}.html`),
+  ).mtimeMs;
   const cached = labelCache.get(page);
   if (cached?.changedAt === changedAt) {
     return cached.labels;
@@ -83,11 +93,12 @@ function labelsOf(page: Page): Map<string, string> {
 }
 
 function pageHtml(page: Page): string {
-  return withStandInLabels(readFixture(`${page}.html`), labelsOf(page));
+  return withStandInLabels(readFixture(`${fixtureOfPage(page)}.html`), labelsOf(page));
 }
 
 function pageJson(page: Page): unknown {
-  return JSON.parse(withStandInLabels(readFixture(`${page}.json`), labelsOf(page)));
+  const json = readFixture(`${fixtureOfPage(page)}.json`);
+  return JSON.parse(withStandInLabels(json, labelsOf(page)));
 }
 
 function pullRequestPageData(page: "pr-list" | "pr-inbox"): PullRequestPageData {
@@ -103,7 +114,7 @@ function pullRequestDetailData(): PullRequestDetailData {
 /** The pull request page's path, from the link of its first tab. Null when there is none. */
 function pullRequestDetailPath(): string | null {
   const match = /href="(?<path>\/fake-org\/[^/"]+\/_git\/[^/"]+\/pullrequest\/\d+)"/u.exec(
-    readFixture("pr-detail.html"),
+    readFixture(`${fixtureOfPage("pr-detail")}.html`),
   );
   return match?.groups?.path ?? null;
 }

@@ -48,11 +48,13 @@ test("stages, their jobs and their steps come in run order", () => {
 test("a step keeps its state, result and job", () => {
   const [step] = stagesOf(RECORDS)[1]?.jobs[0]?.steps.slice(1) ?? [];
   assert.deepEqual(step, {
+    errorCount: 0,
     id: "lint-2",
     jobId: "test-unit",
     name: "lint-2",
     result: "failed",
     state: "completed",
+    warningCount: 0,
   });
 });
 

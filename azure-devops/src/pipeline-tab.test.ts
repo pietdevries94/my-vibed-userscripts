@@ -58,6 +58,18 @@ test("a run link on the pull request opens that run in the tab", async () => {
   assert.match(frameSource(document) ?? "", /buildId=502&/u);
 });
 
+test("a link to a step's log on the pull request opens the tab on that step", async () => {
+  const { document } = setUp();
+  const link = document.createElement("a");
+  link.href =
+    "/quillfield/Ledger%20Works/_build/results?buildId=502&view=logs&j=build-job&t=checkout";
+  document.querySelector(".page-content")?.append(link);
+  click(link);
+  await settle();
+  assert.deepEqual(treeNames(document, "step"), ["checkout*", "compile"]);
+  assert.match(frameSource(document) ?? "", /buildId=502&view=logs&j=build-job&t=checkout$/u);
+});
+
 test("a button inside a run link, such as re-queue, works as Azure DevOps made it", async () => {
   const { document } = setUp();
   let requeueClicks = 0;

@@ -1,4 +1,5 @@
 import type { RunStage, RunStep } from "./pipeline-timeline.ts";
+import { NO_ISSUES } from "./pipeline-issues.ts";
 import type { PipelineRun } from "./pipeline-runs.ts";
 import assert from "node:assert/strict";
 import { shownRunOf } from "./pipeline-tab-selection.ts";
@@ -17,12 +18,19 @@ function run(buildId: number): PipelineRun {
 }
 
 function step(id: string, result = "succeeded"): RunStep {
-  return { id, jobId: `job-of-${id}`, name: id, result, state: "completed" };
+  return { ...NO_ISSUES, id, jobId: `job-of-${id}`, name: id, result, state: "completed" };
 }
 
 function stage(id: string, steps: RunStep[]): RunStage {
-  const job = { id: `${id}-job`, name: "job", result: null, state: "completed", steps };
-  return { id, jobs: [job], name: id, result: null, state: "completed" };
+  const job = {
+    ...NO_ISSUES,
+    id: `${id}-job`,
+    name: "job",
+    result: null,
+    state: "completed",
+    steps,
+  };
+  return { ...NO_ISSUES, id, issues: [], jobs: [job], name: id, result: null, state: "completed" };
 }
 
 const RUNS = [run(2), run(1)];

@@ -2,18 +2,22 @@
 // on the right, as the run page in a frame.
 import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
 import type { RunAction, RunActionChoice, RunActionState } from "./pipeline-tab-run-action.ts";
+import type { RunStage, RunStep } from "./pipeline-timeline.ts";
+import { createIssueBox, fillIssueLink, issueSummary } from "./pipeline-issue-list.ts";
 import { createRunTree, runDetails } from "./pipeline-tab-tree.ts";
 import type { PipelineRun } from "./pipeline-runs.ts";
-import type { RunStep } from "./pipeline-timeline.ts";
+import type { RunIssue } from "./pipeline-issues.ts";
 import type { StartableCheck } from "./pipeline-checks.ts";
 import type { StepLog } from "./pipeline-log-frame.ts";
 import { createRunAction } from "./pipeline-tab-run-action.ts";
+import { runIssuesOf } from "./pipeline-issues.ts";
 import { showStepLog } from "./pipeline-log-frame.ts";
 
 const PANEL_CLASS = "fix-ado-pipeline-panel";
 const TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree";
 const FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame";
 const LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note";
+const ISSUES_SELECTOR = ":scope > .fix-ado-issue-box";
 
 type RunsState =
   | { kind: "loading" }
@@ -89,8 +93,54 @@ function showLog(panel: HTMLElement, shown: ShownRun, content: PanelContent): vo
   showStepLog(frame, stepLogOf(shown, step, content));
 }
 
-/** Puts the tree first in the panel, in place of the old one. */
+function stepOf(stages: RunStage[], stepId: string | null): RunStep | undefined {
+  const steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
+  return steps.find((step) => step.id === stepId);
+}
+
+/**
+ * An issue's link. A click shows the issue's step in the tab, or its job or stage when
+ * it has no step; the link itself goes to the step's log, for a new browser tab.
+ */
+function createIssueLink(
+  { document, shown }: { document: Document; shown: ShownRun },
+  issue: RunIssue,
+  content: PanelContent,
+): HTMLAnchorElement {
+  const { buildId } = shown.run;
+  const link = document.createElement("a");
+  const step = stepOf(shown.stages ?? [], issue.stepId);
+  link.href = step === undefined ? "#" : content.logPathOf(buildId, step);
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    const { jobId, stageId, stepId } = issue;
+    content.onPick({ buildId, folded: null, jobId, stageId, stepId });
+  });
+  return fillIssueLink(link, issue);
+}
+
+/** The shown run's errors and warnings, above the log, after the tree. None without issues. */
+function showIssues(panel: HTMLElement, tree: HTMLElement, content: PanelContent): void {
+  panel.querySelector(ISSUES_SELECTOR)?.remove();
+  const { shown } = content;
+  const stages = shown?.stages ?? [];
+  const issues = runIssuesOf(stages);
+  if (shown === null || issues.length === 0) {
+    return;
+  }
+  const context = { document: panel.ownerDocument, shown };
+  const box = createIssueBox(context.document, {
+    createLink: (issue) => createIssueLink(context, issue, content),
+    details: null,
+    issues,
+    title: issueSummary(stages),
+  });
+  tree.after(box);
+}
+
+/** Puts the tree first in the panel, in place of the old one or the message. */
 function placeTree(panel: HTMLElement, tree: HTMLElement): void {
+  panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
   const oldTree = panel.querySelector(TREE_SELECTOR);
   if (oldTree === null) {
     panel.prepend(tree);
@@ -152,7 +202,6 @@ function showRun(
     panel.prepend(...runActionElements(panel, loaded, content));
     return;
   }
-  panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
   const tree = createRunTree({
     document: panel.ownerDocument,
     onPick: content.onPick,
@@ -162,6 +211,7 @@ function showRun(
   });
   tree.prepend(...runActionElements(panel, loaded, content));
   placeTree(panel, tree);
+  showIssues(panel, tree, content);
   showLog(panel, shown, content);
 }
 

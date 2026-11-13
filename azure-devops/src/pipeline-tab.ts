@@ -15,6 +15,7 @@ import {
   shownRunOfData,
 } from "./pipeline-tab-data.ts";
 import { parsePipelineRunLocation, pipelineLogPath } from "./pipeline-run-link.ts";
+import type { PipelineRunLocation } from "./pipeline-run-link.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import { closestElement } from "./closest-element.ts";
 import { watchShownStep } from "./pipeline-log-frame.ts";
@@ -181,10 +182,12 @@ function selectTab(state: TabState): void {
   }
 }
 
-function openTab(state: TabState, buildId: number | null): void {
+/** Opens the tab on a run, and on its step when the link opened a step's log. */
+function openTab(state: TabState, run: PipelineRunLocation | null): void {
   state.isOpen = true;
-  if (buildId !== null && state.data !== null) {
-    state.data.pick = { buildId, folded: null, jobId: null, stageId: null, stepId: null };
+  if (run !== null && state.data !== null) {
+    const { buildId, jobId, stepId } = run;
+    state.data.pick = { buildId, folded: null, jobId, stageId: null, stepId };
   }
   selectTab(state);
   update(state);
@@ -213,8 +216,8 @@ function closeChecksPanel(target: EventTarget | null): void {
   closeButton?.click();
 }
 
-/** The run a plain click on a run link of the pull request opens, or null. */
-function clickedRunBuildId(event: MouseEvent, document: Document): number | null {
+/** The run, and maybe step, a plain click on a run link of the pull request opens, or null. */
+function clickedRun(event: MouseEvent, document: Document): PipelineRunLocation | null {
   const link = closestElement(event.target, RUN_LINK_SELECTOR);
   const isPlainClick = event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey;
   // A button inside the link, such as re-queue, belongs to Azure DevOps.
@@ -229,7 +232,7 @@ function clickedRunBuildId(event: MouseEvent, document: Document): number | null
     return null;
   }
   const url = new URL(link.getAttribute("href") ?? "", document.location.href);
-  return parsePipelineRunLocation(url)?.buildId ?? null;
+  return parsePipelineRunLocation(url);
 }
 
 function onClick(state: TabState, event: MouseEvent): void {
@@ -237,11 +240,11 @@ function onClick(state: TabState, event: MouseEvent): void {
     return;
   }
   const isPipelineTab = closestElement(event.target, `.${TAB_CLASS}`) !== null;
-  const runBuildId = clickedRunBuildId(event, state.options.document);
-  if (isPipelineTab || runBuildId !== null) {
+  const run = clickedRun(event, state.options.document);
+  if (isPipelineTab || run !== null) {
     event.preventDefault();
     event.stopPropagation();
-    openTab(state, runBuildId);
+    openTab(state, run);
     closeChecksPanel(event.target);
   } else if (state.isOpen && closestElement(event.target, "[role=tablist] [role=tab]") !== null) {
     closeTab(state);

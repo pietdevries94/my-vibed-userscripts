@@ -1,15 +1,15 @@
 // The left column of the Pipeline tab: the runs, the shown run's stages, and the
 // shown stage's jobs with their steps. Clicking the current run, stage or job folds
 // it; clicking it again opens it.
+import { DEFAULT_STAGE_NAME, recordStatusOf } from "./pipeline-timeline.ts";
 import type { PipelineRun, RunStatus } from "./pipeline-runs.ts";
 import type { PipelineTabPick, ShownRun, TreeLevel } from "./pipeline-tab-selection.ts";
 import type { RunJob, RunStage } from "./pipeline-timeline.ts";
+import type { IssueCounts } from "./pipeline-issues.ts";
 import { closestElement } from "./closest-element.ts";
+import { createIssueCounts } from "./pipeline-issue-list.ts";
 import { createStatusIcon } from "./pipeline-status-icon.ts";
-import { recordStatusOf } from "./pipeline-timeline.ts";
 
-/** Azure DevOps's name for the one stage of a pipeline without stages. */
-const DEFAULT_STAGE_NAME = "__default";
 const DATE_FORMAT: Intl.DateTimeFormatOptions = { dateStyle: "short", timeStyle: "short" };
 const NAME_CLASS = "fix-ado-pipeline-item-name";
 
@@ -23,6 +23,8 @@ interface TreeItem {
   pick: PipelineTabPick;
   /** The level a click on the current item folds, or null for a step. */
   level: TreeLevel | null;
+  /** The warnings and errors a stage, job or step holds. */
+  issueCounts?: IssueCounts;
 }
 
 /** What every part of the tree needs. */
@@ -50,6 +52,15 @@ function createItemText(document: Document, item: TreeItem): HTMLElement {
   return text;
 }
 
+/** An item's status icon, name and details, and its error and warning counts. */
+function createItemParts(document: Document, item: TreeItem): Element[] {
+  const icon =
+    item.status === null ? [] : [createStatusIcon(document, item.status.status, item.status.label)];
+  const counts =
+    item.issueCounts === undefined ? [] : createIssueCounts(document, item.issueCounts);
+  return [...icon, createItemText(document, item), ...counts];
+}
+
 /** The pick of a click on the current item: the same pick, folded or opened at its level. */
 function foldPick(context: TreeContext, level: TreeLevel): PipelineTabPick {
   const { pick } = context;
@@ -62,10 +73,7 @@ function createItem(context: TreeContext, item: TreeItem): HTMLButtonElement {
   button.type = "button";
   button.className = `fix-ado-pipeline-item ${item.className}`;
   button.setAttribute("aria-current", String(item.isCurrent));
-  const text = createItemText(document, item);
-  const icon =
-    item.status === null ? [] : [createStatusIcon(document, item.status.status, item.status.label)];
-  button.append(...icon, text);
+  button.append(...createItemParts(document, item));
   button.addEventListener("click", () => {
     const { level } = item;
     context.onPick(item.isCurrent && level !== null ? foldPick(context, level) : item.pick);
@@ -103,6 +111,7 @@ function createJobSteps(context: TreeContext, job: RunJob): HTMLElement {
     createItem(context, {
       className: "fix-ado-pipeline-step",
       isCurrent: candidate.id === step?.id,
+      issueCounts: candidate,
       level: null,
       name: candidate.name,
       pick: {
@@ -125,6 +134,7 @@ function createJob(context: TreeContext, job: RunJob): HTMLElement[] {
   const item = createItem(context, {
     className: "fix-ado-pipeline-job",
     isCurrent,
+    issueCounts: job,
     level: "job",
     name: job.name,
     pick: {
@@ -156,6 +166,7 @@ function createStage(context: TreeContext, stage: RunStage): HTMLElement[] {
   const item = createItem(context, {
     className: "fix-ado-pipeline-stage",
     isCurrent,
+    issueCounts: stage,
     level: "stage",
     name: stageName(stage),
     pick: {
