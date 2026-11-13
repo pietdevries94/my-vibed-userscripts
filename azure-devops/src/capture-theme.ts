@@ -6,6 +6,8 @@ import type { CapturePage } from "../../shared/dev/capture/capture.ts";
 import { apiBasePath } from "./pull-request-link.ts";
 import { withoutScriptMarks } from "./capture-script-marks.ts";
 
+/** Where the page keeps the palette of each theme, in `sharedData`. */
+const THEMES_KEY = "_themes";
 const SETTINGS_API_VERSION = "7.1-preview.1";
 const THEME_REQUEST = /setting|theme|contribution/iu;
 
@@ -40,6 +42,19 @@ function themeDataProviders(document: Document): Record<string, unknown> {
     return {};
   }
   return Object.fromEntries(Object.entries(data).filter(([key]) => /theme/iu.test(key)));
+}
+
+/** The palettes of every theme the page carries, by theme id. */
+function pageThemes(document: Document): unknown {
+  const script = document.querySelector("script#dataProviders");
+  const parsed: unknown = JSON.parse(script?.textContent ?? "{}");
+  if (typeof parsed !== "object" || parsed === null || !("sharedData" in parsed)) {
+    return null;
+  }
+  const { sharedData } = parsed;
+  return typeof sharedData === "object" && sharedData !== null
+    ? (Reflect.get(sharedData, THEMES_KEY) ?? null)
+    : null;
 }
 
 function marksOf(element: Element): Record<string, unknown> {
@@ -78,6 +93,7 @@ function themeSettingsPage(document: Document, location: Location): CapturePage 
         data: {
           dataProviders: themeDataProviders(document),
           settings,
+          themes: pageThemes(document),
         },
         meta: themeMarks(document),
       };

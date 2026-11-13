@@ -39,6 +39,8 @@ const rules: ScrubRules = {
     { path: /(?:^|\.)(?:checkCount|runCount)$/u, value: /^\d{1,4}$/u },
     // Theme contribution ids, such as "ms.vss-web.vsts-theme-dark". Microsoft's own, never the organisation's.
     { path: /./u, value: /^ms\.vss-[\w.-]{1,80}$/u },
+    // The palettes in the page's theme data: Microsoft's colours and theme names.
+    { path: /^themes\./u, value: /^[\w#(),.%/ -]{1,120}$/u },
     // Theme names and their colours.
     { path: /theme.*\.(?:name|displayName)$/iu, value: /^[\w ]{1,40}$/u },
     {

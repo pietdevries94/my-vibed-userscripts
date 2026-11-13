@@ -18,7 +18,20 @@ const KEPT_SEGMENT =
   /^(?:_\w+|apis|Settings|Entries|me|Contribution|HierarchyQuery|dataProviders|query|ms\.vss-[\w.-]+|[\w.-]*theme[\w.-]*)$/iu;
 const KEPT_QUERY_VALUE = /^(?:ms\.vss-[\w.-]+|[\d.-]+(?:preview[\d.]*)?)$/iu;
 
+/** After `_apis`, segments made of letters are API route names, such as `Settings` or `me`. */
+const API_ROUTE_WORD = /^[A-Za-z.-]{1,40}$/u;
+const THEMED_STYLES_ATTRIBUTE = "data-load-themed-styles";
+const DIFF_CONTEXT = 30;
+const MAX_DIFF_LENGTH = 300;
+const SAFE_DIFF_TEXT = /^[\w#(),.:;% \n-]*$/u;
+
 type Report = Record<string, unknown>;
+
+function isKeptSegment(segment: string, isApiRoute: boolean): boolean {
+  return (
+    segment === "" || KEPT_SEGMENT.test(segment) || (isApiRoute && API_ROUTE_WORD.test(segment))
+  );
+}
 
 const events: Report[] = [];
 let panelOpenedAt: number | null = null;
@@ -27,9 +40,12 @@ let panelOpenedAt: number | null = null;
 function urlShape(url: string): string {
   const parsed = new URL(url, location.href);
   const host = parsed.origin === location.origin ? "page-origin" : "other-origin";
-  const path = parsed.pathname
-    .split("/")
-    .map((segment) => (segment === "" || KEPT_SEGMENT.test(segment) ? segment : "x"))
+  const segments = parsed.pathname.split("/");
+  const apisAt = segments.indexOf("_apis");
+  const path = segments
+    .map((segment, index) =>
+      isKeptSegment(segment, apisAt !== -1 && index > apisAt) ? segment : "x",
+    )
     .join("/");
   const query = [...parsed.searchParams]
     .map(([name, value]) => `${name}=${KEPT_QUERY_VALUE.test(value) ? value : "x"}`)
@@ -96,7 +112,52 @@ function recordStyleText(node: Node): void {
   }
 }
 
+let removedThemedStyles: string | null = null;
+
+function shownDiffText(text: string): string {
+  const shown = text.slice(0, MAX_DIFF_LENGTH);
+  return SAFE_DIFF_TEXT.test(shown) ? shown : `(${String(text.length)} characters, not shown)`;
+}
+
+/** Where two texts differ, with a little context, in characters that identify nothing. */
+function textDiff(before: string, after: string): Report {
+  let start = 0;
+  while (start < before.length && before[start] === after[start]) {
+    start += 1;
+  }
+  let end = 0;
+  while (end < before.length - start && before.at(-1 - end) === after.at(-1 - end)) {
+    end += 1;
+  }
+  const from = Math.max(0, start - DIFF_CONTEXT);
+  return {
+    after: shownDiffText(after.slice(from, after.length - end + DIFF_CONTEXT)),
+    before: shownDiffText(before.slice(from, before.length - end + DIFF_CONTEXT)),
+    start,
+  };
+}
+
+/** The themed styles Azure DevOps replaces on a theme change: what changed in them. */
+function recordThemedStyles(mutation: MutationRecord): void {
+  for (const node of mutation.removedNodes) {
+    if (node instanceof HTMLStyleElement && node.hasAttribute(THEMED_STYLES_ATTRIBUTE)) {
+      removedThemedStyles = node.textContent;
+    }
+  }
+  for (const node of mutation.addedNodes) {
+    if (
+      node instanceof HTMLStyleElement &&
+      node.hasAttribute(THEMED_STYLES_ATTRIBUTE) &&
+      removedThemedStyles !== null
+    ) {
+      record({ kind: "themed styles diff", ...textDiff(removedThemedStyles, node.textContent) });
+      removedThemedStyles = null;
+    }
+  }
+}
+
 function recordChildren(mutation: MutationRecord): void {
+  recordThemedStyles(mutation);
   const added = describeNodes(mutation.addedNodes);
   const removed = describeNodes(mutation.removedNodes);
   const touchesStyles = [...added, ...removed].some(({ tag }) => tag === "style" || tag === "link");
