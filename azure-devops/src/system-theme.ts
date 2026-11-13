@@ -36,6 +36,8 @@ interface SystemTheme {
   start: () => Promise<void>;
   /** Remembers the look of the theme the page shows, such as one picked in the theme panel. */
   remember: () => void;
+  /** Switches when the system's theme changed since the last look, even if no event said so. */
+  checkSystemTheme: () => void;
   /** Resolves when the last switch has finished. */
   settled: () => Promise<void>;
 }
@@ -164,16 +166,29 @@ async function switchToSystemTheme(
 
 function createSystemTheme(options: SystemThemeOptions): SystemTheme {
   let lastSwitch = Promise.resolve();
+  let seenPrefersDark = options.prefersDark();
+
+  function checkSystemTheme(): void {
+    const prefersDark = options.prefersDark();
+    if (prefersDark !== seenPrefersDark) {
+      seenPrefersDark = prefersDark;
+      lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, false));
+    }
+  }
+
   options.onSystemThemeChange(() => {
-    lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, false));
+    log("System theme: the system's theme changed");
+    checkSystemTheme();
   });
 
   return {
+    checkSystemTheme,
     remember: () => {
       rememberLook(options);
     },
     settled: async () => lastSwitch,
     async start() {
+      seenPrefersDark = options.prefersDark();
       rememberLook(options);
       lastSwitch = switchToSystemTheme(options, true);
       await lastSwitch;

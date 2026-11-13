@@ -9,6 +9,9 @@ import { createSystemTheme } from "./system-theme.ts";
 const THEME_LOOKS_KEY = "system-theme-looks";
 const SETTING_KEY = "follow-system-theme";
 const IS_ON_BY_DEFAULT = true;
+const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
+/** How often the script reads the system's theme, for browsers that send no change event to it. */
+const SYSTEM_THEME_CHECK_INTERVAL_MS = 2000;
 
 interface FollowSystemThemeOptions {
   client: Pick<AdoClient, "saveTheme">;
@@ -25,7 +28,7 @@ function followSystemTheme({
   reload,
   storage,
 }: FollowSystemThemeOptions): void {
-  const systemDark = globalThis.matchMedia("(prefers-color-scheme: dark)");
+  const systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY);
   const systemTheme = createSystemTheme({
     document,
     // The menu setting stores every flip, so the stored value is the current one.
@@ -39,7 +42,8 @@ function followSystemTheme({
     onSystemThemeChange: (listener) => {
       systemDark.addEventListener("change", listener);
     },
-    prefersDark: () => systemDark.matches,
+    // A fresh query each time: a kept one may not update where its event does not arrive.
+    prefersDark: () => globalThis.matchMedia(SYSTEM_DARK_QUERY).matches,
     reload,
     saveTheme: async (themeId) => client.saveTheme(themeId),
   });
@@ -59,6 +63,9 @@ function followSystemTheme({
   new MutationObserver(() => {
     systemTheme.remember();
   }).observe(document.body, { attributeFilter: ["data-theme"], attributes: true });
+  setInterval(() => {
+    systemTheme.checkSystemTheme();
+  }, SYSTEM_THEME_CHECK_INTERVAL_MS);
   void systemTheme.start();
 }
 

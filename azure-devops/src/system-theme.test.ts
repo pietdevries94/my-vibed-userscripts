@@ -150,6 +150,46 @@ test("a change of the system's theme switches the open page in place", async () 
   assert.deepEqual([...page.document.body.classList], ["lwp", ...DARK_LOOK.bodyClasses]);
 });
 
+test("a change the event never reports is found by the next check", async () => {
+  const page = pageIn(LIGHT, LIGHT_LOOK);
+  page.stored = { [DARK]: DARK_LOOK };
+  const systemTheme = follow(page);
+  await systemTheme.start();
+
+  page.prefersDark.matches = true;
+  systemTheme.checkSystemTheme();
+  await systemTheme.settled();
+
+  assert.deepEqual(page.saved, [DARK]);
+  assert.equal(rootStyleOf(page.document), DARK_ROOT);
+});
+
+test("the event and the next check switch once for one change", async () => {
+  const page = pageIn(LIGHT, LIGHT_LOOK);
+  page.stored = { [DARK]: DARK_LOOK };
+  const systemTheme = follow(page);
+  await systemTheme.start();
+
+  page.prefersDark.change(true);
+  systemTheme.checkSystemTheme();
+  await systemTheme.settled();
+
+  assert.deepEqual(page.saved, [DARK]);
+});
+
+test("a check without a change of the system's theme sends nothing", async () => {
+  const page = pageIn(DARK, DARK_LOOK);
+  page.saveFails = true;
+  const systemTheme = follow(page);
+  await systemTheme.start();
+  page.saveFails = false;
+
+  systemTheme.checkSystemTheme();
+  await systemTheme.settled();
+
+  assert.deepEqual(page.saved, []);
+});
+
 test("a change of the system's theme without a known look saves it, and never reloads an open page", async () => {
   const page = pageIn(LIGHT, LIGHT_LOOK);
   const systemTheme = follow(page);
