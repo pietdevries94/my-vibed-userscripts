@@ -1,7 +1,7 @@
+import { pipelineChecksOf, startableChecksOf } from "./pipeline-checks.ts";
 import { BUILD_POLICY_TYPE_ID } from "./pipeline-status.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
 import assert from "node:assert/strict";
-import { pipelineChecksOf } from "./pipeline-checks.ts";
 import { test } from "node:test";
 
 interface BuildOptions {
@@ -10,6 +10,7 @@ interface BuildOptions {
   displayName?: string | null;
   startedAt?: string;
   isBlocking?: boolean;
+  evaluationId?: string;
 }
 
 function buildEvaluation(status: string, options: BuildOptions = {}): PolicyEvaluation {
@@ -24,6 +25,7 @@ function buildEvaluation(status: string, options: BuildOptions = {}): PolicyEval
       buildId: options.buildId === undefined ? 501 : options.buildId,
       buildStartedUtc: options.startedAt ?? "2031-04-02T09:00:00Z",
     },
+    evaluationId: options.evaluationId ?? "evaluation-1",
     status,
   };
 }
@@ -74,6 +76,25 @@ test("the newest run comes first", () => {
       { buildId: 2, isRequired: false, status: "failed" },
       { buildId: 3, isRequired: true, status: "running" },
       { buildId: 1, isRequired: true, status: "succeeded" },
+    ],
+  );
+});
+
+test("every build check can start a new run, also one without a run yet", () => {
+  assert.deepEqual(
+    startableChecksOf([
+      reviewerEvaluation,
+      buildEvaluation("approved", { evaluationId: "evaluation-1" }),
+      buildEvaluation("queued", {
+        buildId: null,
+        displayName: "Unit tests",
+        evaluationId: "evaluation-2",
+        isBlocking: false,
+      }),
+    ]),
+    [
+      { evaluationId: "evaluation-1", isRequired: true, name: "ledger-ci" },
+      { evaluationId: "evaluation-2", isRequired: false, name: "Unit tests" },
     ],
   );
 });

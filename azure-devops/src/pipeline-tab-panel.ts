@@ -1,10 +1,13 @@
 // The content of the Pipeline tab: the run tree on the left, the shown step's log
 // on the right, as the run page in a frame.
 import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
+import type { StartRunContext, StartRunState } from "./pipeline-tab-start-run.ts";
 import type { PipelineRun } from "./pipeline-runs.ts";
 import type { RunStep } from "./pipeline-timeline.ts";
+import type { StartableCheck } from "./pipeline-checks.ts";
 import type { StepLog } from "./pipeline-log-frame.ts";
 import { createRunTree } from "./pipeline-tab-tree.ts";
+import { createStartRun } from "./pipeline-tab-start-run.ts";
 import { showStepLog } from "./pipeline-log-frame.ts";
 
 const PANEL_CLASS = "fix-ado-pipeline-panel";
@@ -12,7 +15,10 @@ const TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree";
 const FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame";
 const LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note";
 
-type RunsState = { kind: "loading" } | { kind: "failed" } | { kind: "loaded"; runs: PipelineRun[] };
+type RunsState =
+  | { kind: "loading" }
+  | { kind: "failed" }
+  | { kind: "loaded"; runs: PipelineRun[]; startableChecks: StartableCheck[] };
 
 interface PanelContent {
   runs: RunsState;
@@ -21,6 +27,9 @@ interface PanelContent {
   pick: PipelineTabPick;
   logPathOf: (buildId: number, step: RunStep) => string;
   onPick: (pick: PipelineTabPick) => void;
+  startRun: StartRunState;
+  onStartRunListToggle: StartRunContext["onToggleList"];
+  onStartRun: StartRunContext["onStart"];
 }
 
 function message(panel: HTMLElement, text: string): void {
@@ -90,10 +99,31 @@ function placeTree(panel: HTMLElement, tree: HTMLElement): void {
   }
 }
 
-function showRun(panel: HTMLElement, runs: PipelineRun[], content: PanelContent): void {
+function startRunElements(
+  panel: HTMLElement,
+  checks: StartableCheck[],
+  content: PanelContent,
+): HTMLElement[] {
+  return (
+    createStartRun({
+      checks,
+      document: panel.ownerDocument,
+      onStart: content.onStartRun,
+      onToggleList: content.onStartRunListToggle,
+      state: content.startRun,
+    }) ?? []
+  );
+}
+
+function showRun(
+  panel: HTMLElement,
+  { runs, startableChecks }: { runs: PipelineRun[]; startableChecks: StartableCheck[] },
+  content: PanelContent,
+): void {
   const { shown } = content;
   if (shown === null) {
     message(panel, "This pull request has no pipeline runs.");
+    panel.prepend(...startRunElements(panel, startableChecks, content));
     return;
   }
   panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
@@ -104,13 +134,14 @@ function showRun(panel: HTMLElement, runs: PipelineRun[], content: PanelContent)
     runs,
     shown,
   });
+  tree.prepend(...startRunElements(panel, startableChecks, content));
   placeTree(panel, tree);
   showLog(panel, shown, content);
 }
 
 /** What the panel shows. A render with the same key leaves the page alone. */
-function renderKey({ pick, runs, shown }: PanelContent): string {
-  return JSON.stringify([runs, shown, pick]);
+function renderKey({ pick, runs, shown, startRun }: PanelContent): string {
+  return JSON.stringify([runs, shown, pick, startRun]);
 }
 
 function renderPanel(panel: HTMLElement, content: PanelContent): void {
@@ -124,7 +155,7 @@ function renderPanel(panel: HTMLElement, content: PanelContent): void {
   } else if (content.runs.kind === "failed") {
     message(panel, "Could not load the pipeline runs.");
   } else {
-    showRun(panel, content.runs.runs, content);
+    showRun(panel, content.runs, content);
   }
 }
 

@@ -2,13 +2,14 @@
 // the runs it opened, and what the owner picked. Loads and refreshes them.
 import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
 import type { RunStage, TimelineRecord } from "./pipeline-timeline.ts";
+import { pipelineChecksOf, startableChecksOf } from "./pipeline-checks.ts";
 import { AdoRequestError } from "./ado-client.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
 import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import type { RunsState } from "./pipeline-tab-panel.ts";
+import type { StartRunState } from "./pipeline-tab-start-run.ts";
 import { log } from "../../shared/runtime/script-log.ts";
-import { pipelineChecksOf } from "./pipeline-checks.ts";
 import { pipelineRunsOf } from "./pipeline-runs.ts";
 import { shownRunOf } from "./pipeline-tab-selection.ts";
 import { stagesOf } from "./pipeline-timeline.ts";
@@ -23,6 +24,8 @@ interface PipelineTabSources {
   getPullRequestBuilds: (pullRequest: PullRequestRef) => Promise<PullRequestBuild[]>;
   getTimeline: (project: string, buildId: number) => Promise<TimelineRecord[]>;
   now: () => number;
+  /** Starts a new run of a build check. */
+  requeueCheck: (pullRequest: PullRequestRef, evaluationId: string) => Promise<void>;
 }
 
 interface PipelineTabData {
@@ -33,6 +36,7 @@ interface PipelineTabData {
   stagesByBuildId: Map<number, RunStage[]>;
   timelineLoadedAt: Map<number, number>;
   pick: PipelineTabPick;
+  startRun: StartRunState;
 }
 
 /** Loads into one pull request's data, and says when something came in. */
@@ -57,6 +61,7 @@ function createTabData(pullRequest: PullRequestRef): PipelineTabData {
     runs: { kind: "loading" },
     runsLoadedAt: Number.NEGATIVE_INFINITY,
     stagesByBuildId: new Map(),
+    startRun: "idle",
     timelineLoadedAt: new Map(),
   };
 }
@@ -87,7 +92,11 @@ async function loadRuns({ data, onChange, sources }: PipelineTabLoader): Promise
     ]);
     const checks = pipelineChecksOf(evaluations);
     log("Pipeline tab: runs loaded", { checkCount: checks.length, runCount: builds.length });
-    data.runs = { kind: "loaded", runs: pipelineRunsOf(checks, builds) };
+    data.runs = {
+      kind: "loaded",
+      runs: pipelineRunsOf(checks, builds),
+      startableChecks: startableChecksOf(evaluations),
+    };
   } catch {
     // Keep the runs already shown; a later refresh tries again.
     data.runs = data.runs.kind === "loaded" ? data.runs : { kind: "failed" };
@@ -133,10 +142,41 @@ function loadWhatIsDue(loader: PipelineTabLoader): void {
   }
 }
 
+function logStartFailure(error: unknown): void {
+  log("Pipeline tab: Azure DevOps did not start the run", {
+    httpStatus: error instanceof AdoRequestError ? error.httpStatus : null,
+  });
+}
+
+/** Re-queues the build check. On success the runs are due again, to show the new run. */
+async function requeueAndExpireRuns(
+  loader: PipelineTabLoader,
+  evaluationId: string,
+): Promise<StartRunState> {
+  const { data, sources } = loader;
+  try {
+    await sources.requeueCheck(data.pullRequest, evaluationId);
+    data.runsLoadedAt = Number.NEGATIVE_INFINITY;
+    log("Pipeline tab: started a new run");
+    return "idle";
+  } catch (error) {
+    logStartFailure(error);
+    return "failed";
+  }
+}
+
+/** Starts a new run of a build check, and shows the button wait meanwhile. */
+async function startNewRun(loader: PipelineTabLoader, evaluationId: string): Promise<void> {
+  loader.data.startRun = "starting";
+  loader.onChange();
+  loader.data.startRun = await requeueAndExpireRuns(loader, evaluationId);
+  loader.onChange();
+}
+
 /** Makes the run's timeline due now, so the next load fetches it. */
 function expireTimeline(data: PipelineTabData, buildId: number): void {
   data.timelineLoadedAt.delete(buildId);
 }
 
 export type { PipelineTabData, PipelineTabLoader, PipelineTabSources };
-export { createTabData, expireTimeline, loadWhatIsDue, shownRunOfData };
+export { createTabData, expireTimeline, loadWhatIsDue, shownRunOfData, startNewRun };

@@ -24,6 +24,21 @@ interface PipelineCheck {
   startedAt: string | null;
 }
 
+/** A build check that "Start new run" can re-queue. */
+interface StartableCheck {
+  evaluationId: string;
+  name: string;
+  isRequired: boolean;
+}
+
+function checkNameOf(evaluation: PolicyEvaluation, fallback: string): string {
+  return (
+    evaluation.configuration.settings?.displayName ??
+    evaluation.context?.buildDefinitionName ??
+    fallback
+  );
+}
+
 function pipelineCheckOf(evaluation: PolicyEvaluation): PipelineCheck | null {
   const buildId = evaluation.context?.buildId ?? null;
   if (evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId === null) {
@@ -32,10 +47,7 @@ function pipelineCheckOf(evaluation: PolicyEvaluation): PipelineCheck | null {
   return {
     buildId,
     isRequired: evaluation.configuration.isBlocking,
-    name:
-      evaluation.configuration.settings?.displayName ??
-      evaluation.context?.buildDefinitionName ??
-      `Run ${buildId}`,
+    name: checkNameOf(evaluation, `Run ${buildId}`),
     startedAt: evaluation.context?.buildStartedUtc ?? null,
     status: pipelineStatusOf([evaluation]),
   };
@@ -53,5 +65,20 @@ function pipelineChecksOf(evaluations: PolicyEvaluation[]): PipelineCheck[] {
     .toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
 }
 
-export type { PipelineCheck, PullRequestBuild };
-export { pipelineChecksOf };
+/** Every build check of the pull request, with or without a run, in Azure DevOps's order. */
+function startableChecksOf(evaluations: PolicyEvaluation[]): StartableCheck[] {
+  return evaluations.flatMap(({ evaluationId, ...evaluation }) =>
+    evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && evaluationId !== undefined
+      ? [
+          {
+            evaluationId,
+            isRequired: evaluation.configuration.isBlocking,
+            name: checkNameOf(evaluation, "Build check"),
+          },
+        ]
+      : [],
+  );
+}
+
+export type { PipelineCheck, PullRequestBuild, StartableCheck };
+export { pipelineChecksOf, startableChecksOf };

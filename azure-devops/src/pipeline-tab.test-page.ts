@@ -38,6 +38,7 @@ function buildEvaluation(buildId: number, name: string, startedAt: string): Poli
   return {
     configuration: { isBlocking: true, type: { id: BUILD_POLICY_TYPE_ID } },
     context: { buildDefinitionName: name, buildId, buildStartedUtc: startedAt },
+    evaluationId: `evaluation-${buildId}`,
     status: "approved",
   };
 }
@@ -86,10 +87,15 @@ interface Setup {
   document: Document;
   tab: ReturnType<typeof createPipelineTab>;
   requests: PullRequestRef[];
+  /** The evaluation ids of the build checks the tab re-queued. */
+  requeued: string[];
 }
 
 /** The run list's answer: none by default, so the checks' runs are the list. */
 type RunListAnswer = () => Promise<PullRequestBuild[]>;
+
+/** Azure DevOps's answer to a re-queue. Each setUp makes it accept; a test may change it. */
+const requeue = { answer: async (): Promise<unknown> => null };
 
 /** The tab's clock. Each setUp starts it at 0; a test moves it to let refreshes come due. */
 const clock = { nowMs: 0 };
@@ -100,8 +106,10 @@ function setUp(
   runList: RunListAnswer = async () => [],
 ): Setup {
   clock.nowMs = 0;
+  requeue.answer = async (): Promise<unknown> => null;
   const { document } = new JSDOM(PAGE, { url: `https://dev.azure.com${PULL_REQUEST_PATH}` }).window;
   const requests: PullRequestRef[] = [];
+  const requeued: string[] = [];
   const tab = createPipelineTab({
     apiBasePath: "/quillfield",
     document,
@@ -112,9 +120,14 @@ function setUp(
     getPullRequestBuilds: runList,
     getTimeline: async (_project, buildId) => timelines[buildId] ?? [],
     now: () => clock.nowMs,
+    requeueCheck: async (pullRequest, evaluationId) => {
+      assert.deepEqual(pullRequest, PULL_REQUEST);
+      requeued.push(evaluationId);
+      await requeue.answer();
+    },
   });
   tab.sync(PULL_REQUEST);
-  return { document, requests, tab };
+  return { document, requests, requeued, tab };
 }
 
 function click(element: Element | null): void {
@@ -165,6 +178,7 @@ export {
   isOpen,
   pickItem,
   pipelineTab,
+  requeue,
   settle,
   setUp,
   timelineRecord,

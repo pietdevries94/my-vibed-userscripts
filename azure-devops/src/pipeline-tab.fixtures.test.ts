@@ -43,6 +43,9 @@ function capturedPullRequestPage(page: string): Document {
     getTimeline: async (_project, buildId) =>
       data.timelinesByBuildId[String(buildId)]?.body?.records ?? [],
     now: () => 0,
+    requeueCheck: async () => {
+      assert.fail("the fixture tests start no run");
+    },
   });
   tab.sync(parsePullRequestHref(tabLink, "/fake-org"));
   return document;

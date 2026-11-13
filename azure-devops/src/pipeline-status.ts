@@ -1,6 +1,8 @@
 const BUILD_POLICY_TYPE_ID = "0609b952-1397-4640-95ec-e00a01b2c241";
 
 interface PolicyEvaluation {
+  /** The id a re-queue of the evaluation needs. */
+  evaluationId?: string;
   status: string;
   configuration: {
     isBlocking: boolean;

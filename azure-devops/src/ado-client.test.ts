@@ -82,7 +82,7 @@ test("reports Retry-After on success and on failure", async () => {
   );
 });
 
-test("sends GET requests only", async () => {
+test("reads with GET requests", async () => {
   const { client, requests } = fakeAdo(respondWithEvaluations);
   await client.getPolicyEvaluations(PULL_REQUEST);
   assert.deepEqual([...new Set(requests.map((request) => request.init.method))], ["GET"]);
@@ -100,10 +100,49 @@ test("the script source has one fetch call and no write methods", () => {
   assert.equal(
     source.match(/\bfetch\(/gu)?.length,
     2,
-    "one call in ado-client.ts and the browser fetch passed in by main.ts",
+    "one call in ado-request.ts and the browser fetch passed in by main.ts",
   );
-  assert.doesNotMatch(source, /["'`](?<method>POST|PUT|PATCH|DELETE)["'`]/iu);
+  const writes = sourceFiles.flatMap((name) =>
+    [
+      ...readFileSync(new URL(name, sourceDirectory), "utf8").matchAll(
+        /["'`](?<method>POST|PUT|PATCH|DELETE)["'`]/giu,
+      ),
+    ].map((match) => `${name} ${match.groups?.method ?? ""}`),
+  );
+  assert.deepEqual(writes, ["ado-request.ts PATCH"], "only the re-queue of a build check writes");
   assert.doesNotMatch(source, /XMLHttpRequest|sendBeacon|WebSocket/u);
+});
+
+test("re-queues a build check of a pull request with one PATCH", async () => {
+  const { client, requests } = fakeAdo((url) =>
+    url.includes("/_apis/projects/")
+      ? Response.json({ id: "project-guid" })
+      : Response.json({ status: "queued" }),
+  );
+  await client.requeuePolicyEvaluation("my project", "evaluation-guid");
+
+  const requeue = requests.at(-1);
+  assert.equal(
+    `${requeue?.init.method} ${requeue?.url}`,
+    "PATCH https://dev.azure.com/my-org/project-guid/_apis/policy/evaluations/evaluation-guid?api-version=7.1-preview.1",
+  );
+  assert.equal(requeue?.init.body, JSON.stringify({ status: "queued" }));
+  assert.deepEqual(requeue?.init.headers, {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  });
+});
+
+test("a refused re-queue throws", async () => {
+  const { client } = fakeAdo((url) =>
+    url.includes("/_apis/projects/")
+      ? Response.json({ id: "project-guid" })
+      : new Response("", { status: 403 }),
+  );
+  await assert.rejects(
+    client.requeuePolicyEvaluation("my project", "evaluation-guid"),
+    AdoRequestError,
+  );
 });
 
 test("fetches the pull requests of a repository list", async () => {

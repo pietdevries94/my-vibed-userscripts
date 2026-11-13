@@ -2,12 +2,17 @@
 // stages and steps, and a step's log, in the pull request itself. Run links on the
 // pull request and in its checks panel open there too.
 import { PANEL_CLASS, createPanel, renderPanel } from "./pipeline-tab-panel.ts";
-import type { PipelineTabData, PipelineTabSources } from "./pipeline-tab-data.ts";
+import type {
+  PipelineTabData,
+  PipelineTabLoader,
+  PipelineTabSources,
+} from "./pipeline-tab-data.ts";
 import {
   createTabData,
   expireTimeline,
   loadWhatIsDue,
   shownRunOfData,
+  startNewRun,
 } from "./pipeline-tab-data.ts";
 import { parsePipelineRunLocation, pipelineLogPath } from "./pipeline-run-link.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
@@ -94,9 +99,17 @@ function render(state: TabState): void {
       data.pick = pick;
       update(state);
     },
+    onStartRun: (evaluationId) => {
+      void startNewRun(loaderOf(state, data), evaluationId);
+    },
+    onStartRunListToggle: (isOpen) => {
+      data.startRun = isOpen ? "choosing" : "idle";
+      update(state);
+    },
     pick: data.pick,
     runs: data.runs,
     shown: shownRunOfData(data),
+    startRun: data.startRun,
   });
   watchLog(state, panel);
 }
@@ -130,14 +143,9 @@ function watchLog(state: TabState, panel: Element): void {
   }
 }
 
-/** Shows what came in, and loads what that makes due, such as a picked run's timeline. */
-function update(state: TabState): void {
-  const { data } = state;
-  if (!state.isOpen || data === null) {
-    return;
-  }
-  render(state);
-  loadWhatIsDue({
+/** Loads into one pull request's data, and shows what comes in while the page stays on it. */
+function loaderOf(state: TabState, data: PipelineTabData): PipelineTabLoader {
+  return {
     data,
     onChange: () => {
       // An answer for a pull request the page has left changes nothing.
@@ -146,7 +154,17 @@ function update(state: TabState): void {
       }
     },
     sources: state.options,
-  });
+  };
+}
+
+/** Shows what came in, and loads what that makes due, such as a picked run's timeline. */
+function update(state: TabState): void {
+  const { data } = state;
+  if (!state.isOpen || data === null) {
+    return;
+  }
+  render(state);
+  loadWhatIsDue(loaderOf(state, data));
 }
 
 function selectTab(state: TabState): void {

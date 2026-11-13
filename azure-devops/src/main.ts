@@ -86,6 +86,9 @@ const pipelineTab = isInFrame
         return records;
       },
       now: () => Date.now(),
+      requeueCheck: async ({ project }, evaluationId) => {
+        await client.requeuePolicyEvaluation(project, evaluationId);
+      },
     });
 
 const poller = createPipelineStatusPoller<HTMLElement>({

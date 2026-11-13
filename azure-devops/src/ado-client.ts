@@ -1,4 +1,6 @@
 import type { PullRequestListPage, PullRequestRef } from "./pull-request-link.ts";
+import { getJson, sendRequest } from "./ado-request.ts";
+import type { AdoClientOptions } from "./ado-request.ts";
 import type { BoardWorkItem } from "./board.ts";
 import type { ListedPullRequest } from "./pr-list-changes.ts";
 import type { PolicyEvaluation } from "./pipeline-status.ts";
@@ -58,22 +60,8 @@ interface AdoClient {
   getWorkItemUpdates: (id: number) => Promise<WorkItemUpdatesResponse>;
   /** The id of the signed-in user, or null when Azure DevOps does not tell. */
   getAuthenticatedUserId: () => Promise<string | null>;
-}
-
-type Fetch = (url: string, init: RequestInit) => Promise<Response>;
-
-interface AdoClientOptions {
-  origin: string;
-  apiBasePath: string;
-  fetch: Fetch;
-}
-
-/** The fields the client reads from Azure DevOps responses. */
-interface ResponseBody {
-  id?: string;
-  authenticatedUser?: { id?: string };
-  value?: unknown[];
-  records?: unknown[];
+  /** Starts a new run of a build check, as Azure DevOps's own Queue button does. */
+  requeuePolicyEvaluation: (project: string, evaluationId: string) => Promise<void>;
 }
 
 /** A work item from the work items API. With errorPolicy=Omit, null for one that was deleted or is not readable. */
@@ -82,11 +70,6 @@ type WorkItemBody = {
   rev: number;
   fields?: { "System.ChangedBy"?: { id?: string } };
 } | null;
-
-interface JsonResponse {
-  body: ResponseBody;
-  retryAfterSeconds: number | null;
-}
 
 /** The work items API accepts at most this many ids per request. */
 const MAX_WORK_ITEMS_PER_REQUEST = 200;
@@ -99,38 +82,6 @@ const MAX_PULL_REQUEST_BUILDS = 50;
 
 /** Enough to detect an added or removed pull request in any realistic list. */
 const MAX_LISTED_PULL_REQUESTS = 200;
-
-class AdoRequestError extends Error {
-  public readonly httpStatus: number;
-  public readonly retryAfterSeconds: number | null;
-
-  public constructor(httpStatus: number, retryAfterSeconds: number | null) {
-    super(`Azure DevOps request failed with HTTP ${httpStatus}`);
-    this.name = "AdoRequestError";
-    this.httpStatus = httpStatus;
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-function retryAfterSecondsOf(response: Response): number | null {
-  const retryAfter = Number(response.headers.get("Retry-After"));
-  return response.headers.has("Retry-After") && Number.isFinite(retryAfter) ? retryAfter : null;
-}
-
-async function getJson(options: AdoClientOptions, path: string): Promise<JsonResponse> {
-  const response = await options.fetch(options.origin + options.apiBasePath + path, {
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
-    method: "GET",
-  });
-  const retryAfterSeconds = retryAfterSecondsOf(response);
-  if (!response.ok) {
-    throw new AdoRequestError(response.status, retryAfterSeconds);
-  }
-  // A run that has not started has no timeline; Azure DevOps answers `null`.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
-  return { body: ((await response.json()) as ResponseBody | null) ?? {}, retryAfterSeconds };
-}
 
 /** Looks up a project id once per project. A failed lookup is retried on the next call. */
 function createProjectIdCache(options: AdoClientOptions): (project: string) => Promise<string> {
@@ -203,6 +154,32 @@ async function getWorkItemUpdates(
   }
 }
 
+async function getPolicyEvaluations(
+  options: AdoClientOptions,
+  projectId: string,
+  { pullRequestId }: PullRequestRef,
+): Promise<PolicyEvaluationsResponse> {
+  const artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`;
+  const { body, retryAfterSeconds } = await getJson(
+    options,
+    `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`,
+  );
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
+  return { evaluations: body.value as PolicyEvaluation[], retryAfterSeconds };
+}
+
+async function requeuePolicyEvaluation(
+  options: AdoClientOptions,
+  projectId: string,
+  evaluationId: string,
+): Promise<void> {
+  await sendRequest(
+    options,
+    `/${projectId}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}?api-version=7.1-preview.1`,
+    { status: "queued" },
+  );
+}
+
 async function getPullRequestBuilds(
   options: AdoClientOptions,
   { project, pullRequestId }: { project: string; pullRequestId: number },
@@ -217,7 +194,7 @@ async function getPullRequestBuilds(
   return { builds: (body.value ?? []) as PullRequestBuild[], retryAfterSeconds };
 }
 
-/** Read-only client. Every request is a GET with the page's session cookie. */
+/** Client with the page's session cookie. Every request is a GET, but the re-queue of a build check. */
 function createAdoClient(options: AdoClientOptions): AdoClient {
   const getProjectId = createProjectIdCache(options);
   let authenticatedUserIdRequest: Promise<string | null> | null = null;
@@ -230,16 +207,8 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
       return authenticatedUserIdRequest;
     },
 
-    async getPolicyEvaluations(pullRequest) {
-      const projectId = await getProjectId(pullRequest.project);
-      const artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequest.pullRequestId}`;
-      const { body, retryAfterSeconds } = await getJson(
-        options,
-        `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`,
-      );
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
-      return { evaluations: body.value as PolicyEvaluation[], retryAfterSeconds };
-    },
+    getPolicyEvaluations: async (pullRequest) =>
+      getPolicyEvaluations(options, await getProjectId(pullRequest.project), pullRequest),
 
     getPullRequestBuilds: async (project, pullRequestId) =>
       getPullRequestBuilds(options, { project, pullRequestId }),
@@ -266,6 +235,9 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
     getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
 
     getWorkItems: async (ids) => getWorkItems(options, ids),
+
+    requeuePolicyEvaluation: async (project, evaluationId) =>
+      requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
   };
 }
 
@@ -278,4 +250,5 @@ export type {
   WorkItemUpdatesResponse,
   WorkItemsResponse,
 };
-export { AdoRequestError, createAdoClient };
+export { AdoRequestError } from "./ado-request.ts";
+export { createAdoClient };
