@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.3.1
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs, required reviewers first, avatar initials (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.
+// @version      1.4.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps and logs and a button to start or cancel a run, required reviewers first, avatar initials (a menu setting, on by default), days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -143,6 +143,7 @@
 
   // azure-devops/src/pipeline-status-icon.ts
   var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE = "http://www.w3.org/2000/svg", LABELS = {
+    cancelling: "Pipeline cancelling",
     expired: "Pipeline result expired",
     failed: "Pipeline failed",
     notStarted: "Pipeline not started",
@@ -175,6 +176,7 @@
     } }];
   }
   var SHAPES = {
+    cancelling: [RING, line("M5 11l6-6", "currentColor")],
     expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
     failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
     notStarted: [RING],
@@ -232,7 +234,7 @@
     }
   }
 
-  // azure-devops/src/ado-client.ts
+  // azure-devops/src/ado-request.ts
   var AdoRequestError = class extends Error {
     httpStatus;
     retryAfterSeconds;
@@ -244,16 +246,26 @@
     let retryAfter = Number(response.headers.get("Retry-After"));
     return response.headers.has("Retry-After") && Number.isFinite(retryAfter) ? retryAfter : null;
   }
-  async function getJson(options, path) {
-    let response = await options.fetch(options.origin + options.apiBasePath + path, {
+  async function sendRequest(options, path, patchBody) {
+    let accept = { Accept: "application/json" }, response = await options.fetch(options.origin + options.apiBasePath + path, {
       credentials: "same-origin",
-      headers: { Accept: "application/json" },
-      method: "GET"
-    }), retryAfterSeconds = retryAfterSecondsOf(response);
+      ...patchBody === void 0 ? { headers: accept, method: "GET" } : {
+        body: JSON.stringify(patchBody),
+        headers: { ...accept, "Content-Type": "application/json" },
+        method: "PATCH"
+      }
+    });
     if (!response.ok)
-      throw new AdoRequestError(response.status, retryAfterSeconds);
+      throw new AdoRequestError(response.status, retryAfterSecondsOf(response));
+    return response;
+  }
+  async function getJson(options, path) {
+    let response = await sendRequest(options, path), retryAfterSeconds = retryAfterSecondsOf(response);
     return { body: await response.json() ?? {}, retryAfterSeconds };
   }
+
+  // azure-devops/src/ado-client.ts
+  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200, MAX_PULL_REQUEST_BUILDS = 50, MAX_LISTED_PULL_REQUESTS = 200;
   function createProjectIdCache(options) {
     let projectIdRequests = /* @__PURE__ */ new Map();
     return async (project) => {
@@ -277,8 +289,8 @@
   }
   async function getWorkItems(options, ids) {
     let workItems = [], retryAfterSeconds = null;
-    for (let start = 0; start < ids.length; start += 200) {
-      let idsInRequest = ids.slice(start, start + 200), response = await getJson(
+    for (let start = 0; start < ids.length; start += MAX_WORK_ITEMS_PER_REQUEST) {
+      let idsInRequest = ids.slice(start, start + MAX_WORK_ITEMS_PER_REQUEST), response = await getJson(
         options,
         `/_apis/wit/workitems?ids=${idsInRequest.join(",")}&fields=System.Rev,System.ChangedBy&errorPolicy=Omit&api-version=7.1`
       );
@@ -288,42 +300,58 @@
   }
   async function getWorkItemUpdates(options, id) {
     let updates = [], retryAfterSeconds = null;
-    for (let skip = 0; ; skip += 200) {
+    for (let skip = 0; ; skip += MAX_UPDATES_PER_REQUEST) {
       let response = await getJson(
         options,
-        `/_apis/wit/workItems/${id}/updates?$top=200&$skip=${skip}&api-version=7.1`
+        `/_apis/wit/workItems/${id}/updates?$top=${MAX_UPDATES_PER_REQUEST}&$skip=${skip}&api-version=7.1`
       );
       retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
       let page = response.body.value ?? [];
-      if (updates.push(...page), page.length < 200)
+      if (updates.push(...page), page.length < MAX_UPDATES_PER_REQUEST)
         return { retryAfterSeconds, updates };
     }
+  }
+  async function getPolicyEvaluations(options, projectId, { pullRequestId }) {
+    let artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`, { body, retryAfterSeconds } = await getJson(
+      options,
+      `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`
+    );
+    return { evaluations: body.value, retryAfterSeconds };
+  }
+  async function cancelBuild(options, project, buildId) {
+    await sendRequest(
+      options,
+      `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`,
+      { status: "cancelling" }
+    );
+  }
+  async function requeuePolicyEvaluation(options, projectId, evaluationId) {
+    await sendRequest(
+      options,
+      `/${projectId}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}?api-version=7.1-preview.1`,
+      { status: "queued" }
+    );
   }
   async function getPullRequestBuilds(options, { project, pullRequestId }) {
     let branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`), { body, retryAfterSeconds } = await getJson(
       options,
-      `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}&queryOrder=queueTimeDescending&$top=50&api-version=7.1`
+      `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}&queryOrder=queueTimeDescending&$top=${MAX_PULL_REQUEST_BUILDS}&api-version=7.1`
     );
     return { builds: body.value ?? [], retryAfterSeconds };
   }
   function createAdoClient(options) {
     let getProjectId = createProjectIdCache(options), authenticatedUserIdRequest = null;
     return {
+      cancelBuild: async (project, buildId) => cancelBuild(options, project, buildId),
       async getAuthenticatedUserId() {
         return authenticatedUserIdRequest ??= getJson(options, "/_apis/connectionData").then(({ body }) => body.authenticatedUser?.id ?? null).catch(() => null), authenticatedUserIdRequest;
       },
-      async getPolicyEvaluations(pullRequest) {
-        let projectId = await getProjectId(pullRequest.project), artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequest.pullRequestId}`, { body, retryAfterSeconds } = await getJson(
-          options,
-          `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`
-        );
-        return { evaluations: body.value, retryAfterSeconds };
-      },
+      getPolicyEvaluations: async (pullRequest) => getPolicyEvaluations(options, await getProjectId(pullRequest.project), pullRequest),
       getPullRequestBuilds: async (project, pullRequestId) => getPullRequestBuilds(options, { project, pullRequestId }),
       async getPullRequests({ project, repository, status }) {
         let { body, retryAfterSeconds } = await getJson(
           options,
-          `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullrequests?searchCriteria.status=${status}&$top=200&api-version=7.1`
+          `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullrequests?searchCriteria.status=${status}&$top=${MAX_LISTED_PULL_REQUESTS}&api-version=7.1`
         );
         return { pullRequests: body.value, retryAfterSeconds };
       },
@@ -335,7 +363,8 @@
         return { records: body.records ?? [], retryAfterSeconds };
       },
       getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
-      getWorkItems: async (ids) => getWorkItems(options, ids)
+      getWorkItems: async (ids) => getWorkItems(options, ids),
+      requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId)
     };
   }
 
@@ -753,8 +782,8 @@
     return isRequired ? "Required" : "Optional";
   }
   function runDetails(run) {
-    let kind = run.isRequired === null ? `#${run.buildNumber ?? run.buildId}` : requiredLabel(run.isRequired);
-    return run.startedAt === null ? kind : `${kind} · ${new Date(run.startedAt).toLocaleString([], DATE_FORMAT)}`;
+    let kind = run.isRequired === null ? `#${run.buildNumber ?? run.buildId}` : requiredLabel(run.isRequired), started = run.startedAt === null ? [] : [new Date(run.startedAt).toLocaleString([], DATE_FORMAT)];
+    return [...run.status?.status === "cancelling" ? ["Cancelling"] : [], kind, ...started].join(" · ");
   }
   function group(document2, className, children) {
     let element = document2.createElement("div");
@@ -852,6 +881,56 @@
     return tree.setAttribute("role", "navigation"), tree.setAttribute("aria-label", "Pipeline runs"), showCutOffNames(tree), tree;
   }
 
+  // azure-devops/src/pipeline-tab-run-action.ts
+  var LABELS2 = {
+    cancel: {
+      failed: "Could not cancel the run.",
+      idle: "Cancel current run",
+      waiting: "Cancelling…"
+    },
+    start: { failed: "Could not start the run.", idle: "Start new run", waiting: "Starting…" }
+  }, LOOKS = { cancel: "danger", start: "primary" };
+  function textElement2(document2, className, text) {
+    let element = document2.createElement("span");
+    return element.className = className, element.textContent = text, element;
+  }
+  function createChoice(context, choice) {
+    let { document: document2 } = context, row = document2.createElement("button");
+    row.type = "button", row.className = "fix-ado-pipeline-item fix-ado-pipeline-run-action-choice";
+    let text = textElement2(document2, "fix-ado-pipeline-item-text", "");
+    return text.append(
+      textElement2(document2, "fix-ado-pipeline-item-name", choice.name),
+      textElement2(document2, "fix-ado-pipeline-item-details", choice.details)
+    ), row.append(text), row.addEventListener("click", () => {
+      context.onPick(context.action, choice.key);
+    }), row;
+  }
+  function createChoices(context) {
+    let list = context.document.createElement("div");
+    return list.className = "fix-ado-pipeline-run-action-choices", list.append(...context.choices.map((choice) => createChoice(context, choice))), list;
+  }
+  function onButtonClick({ action, choices, onPick, onToggleList, state }) {
+    let [onlyChoice] = choices;
+    choices.length === 1 && onlyChoice !== void 0 ? onPick(action, onlyChoice.key) : onToggleList(state !== "choosing");
+  }
+  function createButton(context) {
+    let { action, choices, document: document2, state } = context, isWaiting = state === "waiting", button = Object.assign(document2.createElement("button"), {
+      className: `bolt-button ${LOOKS[action]} bolt-focus-treatment ${isWaiting ? "disabled" : "enabled"} fix-ado-pipeline-run-action`,
+      disabled: isWaiting,
+      type: "button"
+    }), label = LABELS2[action][isWaiting ? "waiting" : "idle"];
+    return button.append(textElement2(document2, "bolt-button-text body-m", label)), choices.length > 1 && button.setAttribute("aria-expanded", String(state === "choosing")), button.addEventListener("click", () => {
+      onButtonClick(context);
+    }), button;
+  }
+  function createRunAction(context) {
+    let { action, choices, document: document2, state } = context;
+    if (choices.length === 0)
+      return null;
+    let button = createButton(context);
+    return state === "choosing" ? [button, createChoices(context)] : state === "failed" ? [button, textElement2(document2, "fix-ado-pipeline-note", LABELS2[action].failed)] : [button];
+  }
+
   // azure-devops/src/pipeline-log-frame.ts
   var LOG_TITLE_SELECTOR = ".logs-view .log-header .job-header .title-m", TREE_ROW_SELECTOR = ".run-logs-tree .bolt-tree-row", ROW_NAME_SELECTOR = ".job-name-area [role=button]";
   function load(frame, log2) {
@@ -943,10 +1022,37 @@
     let oldTree = panel.querySelector(TREE_SELECTOR);
     oldTree === null ? panel.prepend(tree) : oldTree.replaceWith(tree);
   }
-  function showRun(panel, runs, content) {
+  function runActionOf(runs, checks) {
+    let busyRuns = runs.filter((run) => run.isBusy);
+    return busyRuns.length > 0 ? {
+      action: "cancel",
+      choices: busyRuns.map((run) => ({
+        details: runDetails(run),
+        key: String(run.buildId),
+        name: run.name
+      }))
+    } : {
+      action: "start",
+      choices: checks.map((check2) => ({
+        details: check2.isRequired ? "Required" : "Optional",
+        key: check2.evaluationId,
+        name: check2.name
+      }))
+    };
+  }
+  function runActionElements(panel, { runs, startableChecks }, content) {
+    return createRunAction({
+      ...runActionOf(runs, startableChecks),
+      document: panel.ownerDocument,
+      onPick: content.onRunAction,
+      onToggleList: content.onRunActionListToggle,
+      state: content.runActionState
+    }) ?? [];
+  }
+  function showRun(panel, loaded, content) {
     let { shown } = content;
     if (shown === null) {
-      message(panel, "This pull request has no pipeline runs.");
+      message(panel, "This pull request has no pipeline runs."), panel.prepend(...runActionElements(panel, loaded, content));
       return;
     }
     panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
@@ -954,36 +1060,33 @@
       document: panel.ownerDocument,
       onPick: content.onPick,
       pick: content.pick,
-      runs,
+      runs: loaded.runs,
       shown
     });
-    placeTree(panel, tree), showLog(panel, shown, content);
+    tree.prepend(...runActionElements(panel, loaded, content)), placeTree(panel, tree), showLog(panel, shown, content);
   }
-  function renderKey({ pick, runs, shown }) {
-    return JSON.stringify([runs, shown, pick]);
+  function renderKey({ pick, runActionState, runs, shown }) {
+    return JSON.stringify([runs, shown, pick, runActionState]);
   }
   function renderPanel(panel, content) {
     let key = renderKey(content);
-    panel.dataset.fixAdoRendered !== key && (panel.dataset.fixAdoRendered = key, content.runs.kind === "loading" ? message(panel, "Loading pipeline runs…") : content.runs.kind === "failed" ? message(panel, "Could not load the pipeline runs.") : showRun(panel, content.runs.runs, content));
+    panel.dataset.fixAdoRendered !== key && (panel.dataset.fixAdoRendered = key, content.runs.kind === "loading" ? message(panel, "Loading pipeline runs…") : content.runs.kind === "failed" ? message(panel, "Could not load the pipeline runs.") : showRun(panel, content.runs, content));
   }
   function createPanel(document2) {
     let panel = document2.createElement("div");
     return panel.className = PANEL_CLASS, panel.setAttribute("role", "tabpanel"), panel;
   }
 
-  // shared/runtime/script-log.ts
-  var entries = [];
-  function log(message2, data) {
-    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
-  }
-
   // azure-devops/src/pipeline-checks.ts
+  function checkNameOf(evaluation, fallback) {
+    return evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? fallback;
+  }
   function pipelineCheckOf(evaluation) {
-    let buildId = evaluation.context?.buildId ?? null;
-    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId === null ? null : {
+    let buildId = evaluation.context?.buildId ?? 0;
+    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId <= 0 ? null : {
       buildId,
       isRequired: evaluation.configuration.isBlocking,
-      name: evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? `Run ${buildId}`,
+      name: checkNameOf(evaluation, `Run ${buildId}`),
       startedAt: evaluation.context?.buildStartedUtc ?? null,
       status: pipelineStatusOf([evaluation])
     };
@@ -994,6 +1097,23 @@
   function pipelineChecksOf(evaluations) {
     return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check2) => check2 !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
   }
+  function startableChecksOf(evaluations) {
+    return evaluations.flatMap(
+      ({ evaluationId, ...evaluation }) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && evaluationId !== void 0 ? [
+        {
+          evaluationId,
+          isRequired: evaluation.configuration.isBlocking,
+          name: checkNameOf(evaluation, "Build check")
+        }
+      ] : []
+    );
+  }
+
+  // shared/runtime/script-log.ts
+  var entries = [];
+  function log(message2, data) {
+    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
+  }
 
   // azure-devops/src/pipeline-runs.ts
   var RESULT_STATUSES2 = {
@@ -1002,27 +1122,32 @@
     partiallySucceeded: { label: "Partly succeeded", status: "expired" },
     succeeded: { label: "Succeeded", status: "succeeded" }
   }, PROGRESS_STATUSES = {
-    cancelling: { label: "Canceling", status: "running" },
+    cancelling: { label: "Cancelling", status: "cancelling" },
     inProgress: { label: "Running", status: "running" },
     notStarted: { label: "Queued", status: "queued" },
     postponed: { label: "Queued", status: "queued" }
-  };
+  }, BUSY_BUILD_STATUSES = /* @__PURE__ */ new Set(["inProgress", "notStarted", "postponed"]);
   function buildStatusOf(build) {
     return (build.result === void 0 ? void 0 : RESULT_STATUSES2[build.result]) ?? PROGRESS_STATUSES[build.status] ?? null;
+  }
+  function runStatusOf(build, check2) {
+    let isCancelling = build.status === "cancelling";
+    return check2?.status === null || check2 === void 0 || isCancelling ? buildStatusOf(build) : { status: check2.status };
   }
   function runOfBuild(build, check2) {
     return {
       buildId: build.id,
       buildNumber: build.buildNumber,
+      isBusy: BUSY_BUILD_STATUSES.has(build.status),
       isRequired: check2?.isRequired ?? null,
       name: check2?.name ?? build.definition?.name ?? `Run ${build.buildNumber}`,
       startedAt: build.startTime ?? build.queueTime ?? check2?.startedAt ?? null,
-      status: check2?.status === null || check2 === void 0 ? buildStatusOf(build) : { status: check2.status }
+      status: runStatusOf(build, check2)
     };
   }
   function runOfCheck(check2) {
-    let status = check2.status === null ? null : { status: check2.status };
-    return { ...check2, buildNumber: null, status };
+    let status = check2.status === null ? null : { status: check2.status }, isBusy = check2.status === "running" || check2.status === "queued";
+    return { ...check2, buildNumber: null, isBusy, status };
   }
   function pipelineRunsOf(checks, builds) {
     let listed = new Set(builds.map((build) => build.id));
@@ -1063,7 +1188,7 @@
   }
 
   // azure-devops/src/pipeline-tab-data.ts
-  var RUNS_REFRESH_MS = 3e4, RUNNING_TIMELINE_REFRESH_MS = 5e3, NO_PICK = {
+  var RUNS_REFRESH_MS = 3e4, ACTED_RUNS_REFRESH_MS = 5e3, ACTED_RUNS_REFRESH_WINDOW_MS = 6e4, RUNNING_TIMELINE_REFRESH_MS = 5e3, NO_PICK = {
     buildId: null,
     folded: null,
     jobId: null,
@@ -1072,8 +1197,10 @@
   };
   function createTabData(pullRequest) {
     return {
+      fastRunsRefreshUntil: Number.NEGATIVE_INFINITY,
       pick: NO_PICK,
       pullRequest,
+      runActionState: "idle",
       runs: { kind: "loading" },
       runsLoadedAt: Number.NEGATIVE_INFINITY,
       stagesByBuildId: /* @__PURE__ */ new Map(),
@@ -1093,7 +1220,11 @@
         sources.getEvaluations(data.pullRequest),
         sources.getPullRequestBuilds(data.pullRequest).catch(logRunListFailure)
       ]), checks = pipelineChecksOf(evaluations);
-      log("Pipeline tab: runs loaded", { checkCount: checks.length, runCount: builds.length }), data.runs = { kind: "loaded", runs: pipelineRunsOf(checks, builds) };
+      log("Pipeline tab: runs loaded", { checkCount: checks.length, runCount: builds.length }), data.runs = {
+        kind: "loaded",
+        runs: pipelineRunsOf(checks, builds),
+        startableChecks: startableChecksOf(evaluations)
+      };
     } catch {
       data.runs = data.runs.kind === "loaded" ? data.runs : { kind: "failed" };
     }
@@ -1117,10 +1248,26 @@
     return (status === "running" || status === "queued" || (shown.stages ?? []).some((stage) => stage.state !== "completed") || shown.stages === null) && now - loadedAt >= RUNNING_TIMELINE_REFRESH_MS;
   }
   function loadWhatIsDue(loader) {
-    let { data, sources } = loader, now = sources.now();
-    now - data.runsLoadedAt >= RUNS_REFRESH_MS && loadRuns(loader);
+    let { data, sources } = loader, now = sources.now(), runsRefreshMs = now < data.fastRunsRefreshUntil ? ACTED_RUNS_REFRESH_MS : RUNS_REFRESH_MS;
+    now - data.runsLoadedAt >= runsRefreshMs && loadRuns(loader);
     let shown = shownRunOfData(data);
     shown !== null && isTimelineDue(data, shown, now) && loadTimeline(loader, shown.run.buildId);
+  }
+  async function sendRunAction(loader, action, key) {
+    let { data, sources } = loader;
+    try {
+      return await (action === "start" ? sources.requeueCheck(data.pullRequest, key) : sources.cancelRun(data.pullRequest.project, Number(key))), data.runsLoadedAt = Number.NEGATIVE_INFINITY, data.fastRunsRefreshUntil = sources.now() + ACTED_RUNS_REFRESH_WINDOW_MS, log(
+        `Pipeline tab: run action ${action} sent`,
+        action === "cancel" ? { buildId: Number(key) } : {}
+      ), "idle";
+    } catch (error) {
+      return log(`Pipeline tab: Azure DevOps refused run action ${action}`, {
+        httpStatus: error instanceof AdoRequestError ? error.httpStatus : null
+      }), "failed";
+    }
+  }
+  async function performRunAction(loader, action, key) {
+    loader.data.runActionState = "waiting", loader.onChange(), loader.data.runActionState = await sendRunAction(loader, action, key), loader.onChange();
   }
   function expireTimeline(data, buildId) {
     data.timelineLoadedAt.delete(buildId);
@@ -1156,7 +1303,14 @@
       onPick: (pick) => {
         data.pick = pick, update(state);
       },
+      onRunAction: (action, key) => {
+        performRunAction(loaderOf(state, data), action, key);
+      },
+      onRunActionListToggle: (isOpen) => {
+        data.runActionState = isOpen ? "choosing" : "idle", update(state);
+      },
       pick: data.pick,
+      runActionState: data.runActionState,
       runs: data.runs,
       shown: shownRunOfData(data)
     }), watchLog(state, panel);
@@ -1171,15 +1325,18 @@
       onLogStep(state, stepName);
     });
   }
-  function update(state) {
-    let { data } = state;
-    !state.isOpen || data === null || (render(state), loadWhatIsDue({
+  function loaderOf(state, data) {
+    return {
       data,
       onChange: () => {
         state.data === data && update(state);
       },
       sources: state.options
-    }));
+    };
+  }
+  function update(state) {
+    let { data } = state;
+    !state.isOpen || data === null || (render(state), loadWhatIsDue(loaderOf(state, data)));
   }
   function selectTab(state) {
     let { document: document2 } = state.options, tab = document2.querySelector(`.${TAB_CLASS}`);
@@ -1319,7 +1476,8 @@
 .fix-ado-pipeline-status[data-status="failed"] {
   color: var(--component-status-error, rgb(205, 74, 69));
 }
-.fix-ado-pipeline-status[data-status="expired"] {
+.fix-ado-pipeline-status[data-status="expired"],
+.fix-ado-pipeline-status[data-status="cancelling"] {
   color: var(--component-status-warning, rgb(214, 119, 48));
 }
 .fix-ado-pipeline-status[data-status="running"] {
@@ -1485,6 +1643,27 @@
   padding-top: 12px;
   border-top: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
   border-radius: 0;
+}
+
+/* "Start new run" or "Cancel current run" above the runs. Azure DevOps's button
+   classes give its look. */
+.fix-ado-pipeline-run-action {
+  align-self: flex-start;
+  margin: 0 0 4px 12px;
+}
+
+/* Red, in case the page has no style for Azure DevOps's danger button. */
+.fix-ado-pipeline-run-action.danger {
+  background: var(--component-status-error, rgb(205, 74, 69));
+  border-color: var(--component-status-error, rgb(205, 74, 69));
+  color: #fff;
+}
+
+.fix-ado-pipeline-run-action-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
 }
 
 .fix-ado-pipeline-note {
@@ -1686,6 +1865,9 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     }
   }), pipelineRunFrame = isInFrame ? createPipelineRunFrame(document) : null, pipelineTab = isInFrame ? null : createPipelineTab({
     apiBasePath: basePath,
+    cancelRun: async (project, buildId) => {
+      await client.cancelBuild(project, buildId);
+    },
     document,
     getEvaluations: async (pullRequest) => {
       let { evaluations } = await client.getPolicyEvaluations(pullRequest);
@@ -1699,7 +1881,10 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       let { records } = await client.getTimeline(project, buildId);
       return records;
     },
-    now: () => Date.now()
+    now: () => Date.now(),
+    requeueCheck: async ({ project }, evaluationId) => {
+      await client.requeuePolicyEvaluation(project, evaluationId);
+    }
   }), poller = createPipelineStatusPoller({
     client,
     findRows: () => findPullRequestRows(document, basePath),
