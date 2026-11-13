@@ -1,5 +1,5 @@
-import assert from "node:assert/strict";
 import { fixtureNameOf, repeatedFixtureNames } from "./fixtures-import.ts";
+import assert from "node:assert/strict";
 import { test } from "node:test";
 
 test("a capture loses its script prefix and a browser's repeat suffix", () => {

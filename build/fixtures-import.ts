@@ -73,6 +73,17 @@ function moveCaptures(
   console.log("Skim these files before Claude reads them.");
 }
 
+/** Two captures of one page would replace each other, so nothing is imported. */
+function stopOnRepeatedNames(downloads: string, repeated: string[]): void {
+  if (repeated.length > 0) {
+    console.error(
+      `More than one capture would become ${repeated.join(", ")}. Nothing was imported.\n` +
+        `Import after each capture, or move the extra ones out of ${downloads}.`,
+    );
+    process.exit(1);
+  }
+}
+
 function importCaptures(script: Script, captureName: string): void {
   const downloads = process.env.DOWNLOADS_DIR ?? path.join(os.homedir(), "Downloads");
   const prefix = `${script.id}--`;
@@ -81,14 +92,7 @@ function importCaptures(script: Script, captureName: string): void {
     console.log(`No files starting with ${prefix} in ${downloads}.`);
     process.exit(0);
   }
-  const repeated = repeatedFixtureNames(captures, prefix, captureName);
-  if (repeated.length > 0) {
-    console.error(
-      `More than one capture would become ${repeated.join(", ")}. Nothing was imported.\n` +
-        `Import after each capture, or move the extra ones out of ${downloads}.`,
-    );
-    process.exit(1);
-  }
+  stopOnRepeatedNames(downloads, repeatedFixtureNames(captures, prefix, captureName));
   const folders = { downloads, fixtures: path.join(script.directory, "fixtures") };
   moveCaptures(folders, script.id, { captureName, captures, prefix });
 }
