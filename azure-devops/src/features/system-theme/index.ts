@@ -5,7 +5,7 @@ import { createSystemTheme } from "./system-theme.ts";
 const THEME_LOOKS_KEY = "system-theme-looks";
 const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
 
-const systemTheme: Feature = {
+const followSystemTheme: Feature = {
   description: "Azure DevOps shows Light or Dark to match the system.",
   // The key of the earlier menu setting, so the owner's choice stays.
   id: "follow-system-theme",
@@ -43,4 +43,4 @@ const systemTheme: Feature = {
   styles: [],
 };
 
-export { systemTheme };
+export { followSystemTheme };

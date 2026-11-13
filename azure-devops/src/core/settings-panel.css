@@ -1,0 +1,107 @@
+/* The settings button in Azure DevOps's top bar: a puzzle piece in a colour Azure DevOps
+   does not use, so it reads as the script's own and not as one of Azure DevOps's icons. */
+.fix-ado-settings-icon {
+  width: 16px;
+  height: 16px;
+  fill: #c239b3;
+}
+
+/* The settings panel: a dialog over the page, in Azure DevOps's own theme colours. */
+.fix-ado-settings {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  padding: 24px;
+  border: none;
+  border-radius: 8px;
+  background: var(--callout-background-color, rgb(255, 255, 255));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  box-shadow:
+    0 25.6px 57.6px rgba(0, 0, 0, 0.22),
+    0 4.8px 14.4px rgba(0, 0, 0, 0.18);
+}
+
+.fix-ado-settings::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.fix-ado-settings-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.fix-ado-settings-features {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fix-ado-settings-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.fix-ado-settings-feature:hover {
+  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+}
+
+.fix-ado-settings-checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-settings-feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fix-ado-settings-feature-name {
+  font-weight: 600;
+}
+
+.fix-ado-settings-feature-description {
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+
+/* Big on purpose: saving reloads the page and loses what the owner typed. */
+.fix-ado-settings-warning {
+  margin: 20px 0 0;
+  padding: 16px 20px;
+  border: 2px solid var(--status-warning-foreground, rgb(214, 127, 60));
+  border-radius: 6px;
+  background: var(--status-warning-background, rgb(251, 242, 236));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.fix-ado-settings-warning::before {
+  content: "⚠";
+  margin-right: 8px;
+  font-size: 22px;
+  vertical-align: -2px;
+}
+
+.fix-ado-settings-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.fix-ado-settings-buttons .bolt-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

@@ -22,7 +22,7 @@ The repo is public. Real values from a site stay out of code, tests, comments, c
 
 ## Commits and pushes
 
-- Run `npm run precommit` before every commit. Never use `--no-verify`.
+- Run `npm run precommit` before every commit, and commit only when it exits 0. A pipe such as `| tail` hides its exit code. Never use `--no-verify`.
 - Push only when the owner says "push" or "release".
 - In a new worktree, run `npm ci` and `npm run fixtures:link` first.
 

@@ -1,9 +1,10 @@
 // Turns a captured page fixture into DOM nodes.
 //
 // Azure DevOps renders each row as an <a> directly inside <tbody>. An HTML parser moves
-// such an <a> out of the table, so the fixture cannot be parsed as it is. This parses
-// the table tags under placeholder names and renames them afterwards.
-const TABLE_TAGS = ["table", "colgroup", "col", "tbody", "tr", "td"];
+// such an <a> out of the table, so the fixture cannot be parsed as it is. A parser also
+// drops a <body> tag inside other content, which a capture of a whole page starts with.
+// This parses those tags under placeholder names and renames them afterwards.
+const PARSER_MOVED_TAGS = ["body", "table", "colgroup", "col", "tbody", "tr", "td"];
 const PLACEHOLDER_PREFIX = "fixture-";
 
 function withPlaceholderTags(fixtureHtml: string): string {
@@ -13,7 +14,7 @@ function withPlaceholderTags(fixtureHtml: string): string {
       `<${PLACEHOLDER_PREFIX}col$<attributes>></${PLACEHOLDER_PREFIX}col>`,
     )
     .replaceAll(
-      new RegExp(`<(?<slash>/?)(?<tag>${TABLE_TAGS.join("|")})(?=[\\s>])`, "gu"),
+      new RegExp(`<(?<slash>/?)(?<tag>${PARSER_MOVED_TAGS.join("|")})(?=[\\s>])`, "gu"),
       `<$<slash>${PLACEHOLDER_PREFIX}$<tag>`,
     );
 }

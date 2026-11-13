@@ -3,7 +3,7 @@ import type { Feature } from "../../core/feature.ts";
 import { createPipelineStatusPoller } from "./pipeline-status-poller.ts";
 import statusIconStyle from "../../pipeline/pipeline-status-icon.css";
 
-const pipelineStatus: Feature = {
+const pipelineStatusOnPullRequests: Feature = {
   description: "A pipeline status icon on each pull request in a list.",
   id: "pipeline-status",
   name: "Pipeline status on pull requests",
@@ -25,4 +25,4 @@ const pipelineStatus: Feature = {
   styles: [statusIconStyle],
 };
 
-export { pipelineStatus };
+export { pipelineStatusOnPullRequests };

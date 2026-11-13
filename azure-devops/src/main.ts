@@ -1,10 +1,12 @@
+import type { Feature, SyncReason } from "./core/feature.ts";
 import { FEATURES } from "./features/index.ts";
-import type { SyncReason } from "./core/feature.ts";
 import { apiBasePath } from "./pull-requests/pull-request-link.ts";
 import { createAdoClient } from "./core/ado-client.ts";
 import { createFeatureRunner } from "./core/feature-runner.ts";
+import { createSettingsPanel } from "./core/settings-panel.ts";
 import { parsePage } from "./core/page.ts";
 import { reloadWhenIdle } from "./core/reload-when-idle.ts";
+import settingsPanelStyle from "./core/settings-panel.css";
 
 const DOM_SETTLE_MS = 200;
 const TIMER_INTERVAL_MS = 5000;
@@ -12,6 +14,30 @@ const IS_ON_BY_DEFAULT = true;
 
 const basePath = apiBasePath(location);
 const isTabActive = (): boolean => document.visibilityState === "visible";
+const isInFrame = globalThis.top !== globalThis.self;
+const isOn = ({ id }: Feature): boolean => GM_getValue(id, IS_ON_BY_DEFAULT);
+
+// A frame shows a run page inside the Pipeline tab. Only the top page gets the settings.
+const settingsPanel = isInFrame
+  ? null
+  : createSettingsPanel({
+      document,
+      features: FEATURES,
+      isOn,
+      reload: () => {
+        location.reload();
+      },
+      save: (choices) => {
+        for (const [id, isChosenOn] of choices) {
+          GM_setValue(id, isChosenOn);
+        }
+      },
+    });
+if (settingsPanel) {
+  GM_addStyle(settingsPanelStyle);
+  // A way in when Azure DevOps changes its top bar and the button is gone.
+  GM_registerMenuCommand("Settings", settingsPanel.open);
+}
 const runner = createFeatureRunner({
   addStyle: (css) => {
     GM_addStyle(css);
@@ -24,7 +50,7 @@ const runner = createFeatureRunner({
       origin: location.origin,
     }),
     document,
-    isInFrame: globalThis.top !== globalThis.self,
+    isInFrame,
     now: () => Date.now(),
     reloadWhenIdle: () => {
       reloadWhenIdle(document);
@@ -32,7 +58,7 @@ const runner = createFeatureRunner({
   },
   currentPage: () => parsePage(location, basePath),
   features: FEATURES,
-  isOn: ({ id }) => GM_getValue(id, IS_ON_BY_DEFAULT),
+  isOn,
   isTabActive,
   // Throw again outside the loop, so the browser reports it and the other features run on.
   onError: (_feature, error) => {
@@ -42,6 +68,7 @@ const runner = createFeatureRunner({
   },
 });
 const sync = (reason: SyncReason): void => {
+  settingsPanel?.sync();
   runner.sync(reason);
 };
 
