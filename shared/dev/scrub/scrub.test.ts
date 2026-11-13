@@ -94,6 +94,38 @@ test("JSON keeps keys, booleans, null and kept paths", () => {
   });
 });
 
+test("JSON keys that are field names stay; keys that hold values get stand-ins", () => {
+  const pseudonyms = createPseudonyms();
+  const team = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
+  // Entries, not an object literal, to keep the order the stand-in numbers depend on.
+  const input: Record<string, unknown> = Object.fromEntries<unknown>([
+    ["4711", false],
+    [`Backlogs/${team}/Ledger Stories/preference`, ["a"]],
+    ["ms.vss-web.theme-data", { requestedThemeId: "x" }],
+    ["WebPlatform/Theme", "y"],
+    [team, true],
+    ["Quill Barrow", null],
+  ]);
+  const scrubbed = scrubJson(input, RULES, pseudonyms);
+  assert.deepEqual(
+    Object.keys(typeof scrubbed === "object" && scrubbed !== null ? scrubbed : {}).toSorted(),
+    [
+      "00000000-0000-4000-8000-000000000001",
+      "1001",
+      "Backlogs/00000000-0000-4000-8000-000000000001/text-1/preference",
+      "WebPlatform/Theme",
+      "ms.vss-web.theme-data",
+      "text-5",
+    ].toSorted(),
+  );
+});
+
+test("a JSON key that is already a stand-in stays as it is", () => {
+  const pseudonyms = createPseudonyms();
+  const standIn = pseudonyms.number(4711, "pull request id");
+  assert.deepEqual(scrubJson({ [standIn]: true }, RULES, pseudonyms), { [standIn]: true });
+});
+
 test("GUIDs become numbered stand-in GUIDs, the same one in any case", () => {
   const pseudonyms = createPseudonyms();
   const guid = "6F9619FF-8B86-D011-B42D-00C04FC964FF";

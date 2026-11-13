@@ -13,7 +13,8 @@ Claude never sees the site of a sealed script. The owner captures fixtures and d
 
 ### Shared (`shared/dev/scrub`)
 
-- An allowlist. It keeps tag names, class names, structural attributes, SVG geometry and JSON keys.
+- An allowlist. It keeps tag names, class names, structural attributes, SVG geometry and JSON keys that are field names.
+- A JSON key that holds a value, such as a GUID, a number or a name with a space, gets a stand-in like a value. A key made of slash-separated parts, such as a settings path, is scrubbed part by part. A key that looks like a field name stays, so a one-word name used as a key is not caught.
 - It drops `script`, `style`, `iframe` and similar elements.
 - A page can also save its CSS as `<script>--<page>.css`, for the fake site's styling. Only rules that match an element in the page are kept. Every `url()` becomes `none`; `@font-face` and `@import` are dropped.
 - Numbers, GUIDs, dates and links become consistent pseudonyms.
