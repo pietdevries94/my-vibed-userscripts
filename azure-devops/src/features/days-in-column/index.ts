@@ -1,6 +1,7 @@
 import type { Feature } from "../../core/feature.ts";
-import { createDaysInColumn } from "../../days-in-column.ts";
-import { createDaysInColumnToggles } from "../../days-in-column-toggle.ts";
+import { createDaysInColumn } from "./days-in-column.ts";
+import { createDaysInColumnToggles } from "./days-in-column-toggle.ts";
+import style from "./style.css";
 
 const HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns";
 
@@ -31,6 +32,7 @@ const daysInColumn: Feature = {
       },
     };
   },
+  styles: [style],
 };
 
 export { daysInColumn };

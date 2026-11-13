@@ -1,0 +1,18 @@
+/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+
+/* A glow that spills outside the circle, so the circle keeps its full size. */
+.pr-reviewer[data-fix-ado-required] .bolt-coin {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--communication-background, rgb(0, 120, 212)),
+    0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
+}
+
+/* Required reviewers first. Even spacing whatever the visual order. */
+[data-fix-ado-reviewers] > .pr-reviewer {
+  margin: 0 8px 0 0 !important;
+}
+
+[data-fix-ado-reviewers] > .pr-reviewer[data-fix-ado-required] {
+  order: -1;
+}

@@ -1,10 +1,10 @@
-import type { PullRequestListPage, PullRequestRef } from "../pull-request-link.ts";
+import type { PullRequestListPage, PullRequestRef } from "../pull-requests/pull-request-link.ts";
 import {
   isPullRequestInboxLocation,
   parsePullRequestHref,
   parsePullRequestListLocation,
-} from "../pull-request-link.ts";
-import { isBoardLocation } from "../board.ts";
+} from "../pull-requests/pull-request-link.ts";
+import { isBoardLocation } from "../boards/board.ts";
 
 /** The Azure DevOps page the browser shows, as far as the features care. */
 type Page =

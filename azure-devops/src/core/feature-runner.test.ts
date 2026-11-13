@@ -8,16 +8,23 @@ import { test } from "node:test";
 const context = {} as FeatureContext;
 const board: Page = { kind: "board" };
 
+function ignoreStyle(): void {
+  // These tests check starting and syncing, not styles.
+}
+
 interface Recorder {
   events: string[];
-  feature: (id: string, behaviour?: { throwsOn?: "start" | "sync"; skips?: boolean }) => Feature;
+  feature: (
+    id: string,
+    behaviour?: { throwsOn?: "start" | "sync"; skips?: boolean; styles?: string[] },
+  ) => Feature;
 }
 
 function recorder(): Recorder {
   const events: string[] = [];
   return {
     events,
-    feature: (id, { throwsOn, skips = false } = {}) => ({
+    feature: (id, { throwsOn, skips = false, styles = [] } = {}) => ({
       description: "",
       id,
       name: id,
@@ -38,6 +45,7 @@ function recorder(): Recorder {
           },
         };
       },
+      styles,
     }),
   };
 }
@@ -45,6 +53,7 @@ function recorder(): Recorder {
 test("starts and syncs only the features that are on, in list order", () => {
   const { events, feature } = recorder();
   const runner = createFeatureRunner({
+    addStyle: ignoreStyle,
     context,
     currentPage: () => board,
     features: [feature("a"), feature("b"), feature("c")],
@@ -66,6 +75,7 @@ test("starts and syncs only the features that are on, in list order", () => {
 test("a feature that starts with nothing to sync is skipped", () => {
   const { events, feature } = recorder();
   const runner = createFeatureRunner({
+    addStyle: ignoreStyle,
     context,
     currentPage: () => board,
     features: [feature("a", { skips: true })],
@@ -83,6 +93,7 @@ test("a feature that throws leaves the others running", () => {
   const { events, feature } = recorder();
   const failed: string[] = [];
   const runner = createFeatureRunner({
+    addStyle: ignoreStyle,
     context,
     currentPage: () => board,
     features: [
@@ -99,4 +110,27 @@ test("a feature that throws leaves the others running", () => {
   runner.sync("tab-shown");
   assert.deepEqual(failed, ["a", "b"]);
   assert.deepEqual(events.at(-1), "sync c board tab-shown false");
+});
+
+test("adds the styles of the features that are on, each once", () => {
+  const { feature } = recorder();
+  const added: string[] = [];
+  createFeatureRunner({
+    addStyle: (css) => {
+      added.push(css);
+    },
+    context,
+    currentPage: () => board,
+    features: [
+      feature("a", { styles: ["shared", "a"] }),
+      feature("b", { styles: ["b"] }),
+      feature("c", { styles: ["shared", "c"] }),
+    ],
+    isOn: ({ id }) => id !== "b",
+    isTabActive: () => true,
+    onError: () => {
+      throw new Error("no feature fails");
+    },
+  });
+  assert.deepEqual(added, ["shared", "a", "c"]);
 });

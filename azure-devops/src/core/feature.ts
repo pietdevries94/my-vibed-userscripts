@@ -1,4 +1,4 @@
-import type { AdoClient } from "../ado-client.ts";
+import type { AdoClient } from "./ado-client.ts";
 import type { Page } from "./page.ts";
 
 /** What a feature gets when it starts. */
@@ -36,6 +36,8 @@ interface Feature {
   name: string;
   /** One line in the settings panel on what it does. */
   description: string;
+  /** Its stylesheets. A stylesheet that several features list is added once. */
+  styles: string[];
   /** Null when there is nothing to sync, such as in a frame the feature skips. */
   start: (context: FeatureContext) => FeatureRun | null;
 }

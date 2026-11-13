@@ -32,8 +32,9 @@ Name: `my-vibed-userscripts`. Public, on GitHub.
 my-vibed-userscripts/
   azure-devops/            one folder per script, named after the website in kebab-case
     script.json            name, description, @match, @grant, version, mode (open | sealed)
-    src/main.ts, *.ts, *.test.ts, style.css
+    src/main.ts            the entry point; may sit next to *.ts, *.test.ts and style.css
     src/capture.ts         exports captureDefinition: capture rules and page naming; dev only
+    src/**/                a script may group its source in folders, such as one per feature
     fixtures/              gitignored, may be a symlink
     fake-site/             optional
   shared/

@@ -19,7 +19,7 @@ import { htmlResponse, jsonResponse, startFakeSite } from "../../shared/dev/fake
 import { FAKE_SITE_PORT } from "../../build/bundle.ts";
 import type { Page } from "./data.ts";
 import { fixturePage } from "../../shared/dev/fake-site/fixture-page.ts";
-import { parsePipelineRunLocation } from "../src/pipeline-run-link.ts";
+import { parsePipelineRunLocation } from "../src/pipeline/pipeline-run-link.ts";
 import { reviewerResponse } from "./reviewers.ts";
 
 const HTTP_OK = 200;

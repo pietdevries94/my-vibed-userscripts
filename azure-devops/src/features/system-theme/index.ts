@@ -1,6 +1,6 @@
 import type { Feature } from "../../core/feature.ts";
-import type { ThemeLooks } from "../../system-theme.ts";
-import { createSystemTheme } from "../../system-theme.ts";
+import type { ThemeLooks } from "./system-theme.ts";
+import { createSystemTheme } from "./system-theme.ts";
 
 const THEME_LOOKS_KEY = "system-theme-looks";
 const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
@@ -40,6 +40,7 @@ const systemTheme: Feature = {
     // The theme has its own observer and listener. It needs no sync.
     return null;
   },
+  styles: [],
 };
 
 export { systemTheme };

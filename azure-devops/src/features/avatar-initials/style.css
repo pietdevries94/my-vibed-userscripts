@@ -1,0 +1,25 @@
+/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+[data-fix-ado-initials] {
+  position: relative;
+  border-radius: 50%;
+  background: hsl(var(--fix-ado-hue, 210) 45% 38%);
+}
+
+[data-fix-ado-initials] > .bolt-coin-content,
+[data-fix-ado-initials] > .vss-Persona-content {
+  visibility: hidden;
+}
+
+[data-fix-ado-initials]::after {
+  content: attr(data-fix-ado-initials);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: calc(var(--fix-ado-avatar-size, 24px) * 0.42);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}

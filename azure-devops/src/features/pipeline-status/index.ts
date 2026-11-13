@@ -1,6 +1,7 @@
-import { findPullRequestRows, showPipelineStatus } from "../../pr-list.ts";
+import { findPullRequestRows, showPipelineStatus } from "../../pull-requests/pr-list.ts";
 import type { Feature } from "../../core/feature.ts";
-import { createPipelineStatusPoller } from "../../pipeline-status-poller.ts";
+import { createPipelineStatusPoller } from "./pipeline-status-poller.ts";
+import statusIconStyle from "../../pipeline/pipeline-status-icon.css";
 
 const pipelineStatus: Feature = {
   description: "A pipeline status icon on each pull request in a list.",
@@ -21,6 +22,7 @@ const pipelineStatus: Feature = {
       },
     };
   },
+  styles: [statusIconStyle],
 };
 
 export { pipelineStatus };

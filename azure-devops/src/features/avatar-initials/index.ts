@@ -1,5 +1,6 @@
 import type { Feature } from "../../core/feature.ts";
-import { showInitialsOnAvatars } from "../../avatars.ts";
+import { showInitialsOnAvatars } from "../../pull-requests/avatars.ts";
+import style from "./style.css";
 
 const avatarInitials: Feature = {
   description: "Initials on avatars, in a colour per person.",
@@ -11,6 +12,7 @@ const avatarInitials: Feature = {
       showInitialsOnAvatars(document);
     },
   }),
+  styles: [style],
 };
 
 export { avatarInitials };

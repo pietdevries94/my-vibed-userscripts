@@ -1,7 +1,10 @@
 import type { Feature } from "../../core/feature.ts";
-import { createPipelineRunFrame } from "../../pipeline-run-frame.ts";
-import { createPipelineTab } from "../../pipeline-tab.ts";
+import { createPipelineRunFrame } from "./pipeline-run-frame.ts";
+import { createPipelineTab } from "./pipeline-tab.ts";
+import issueListStyle from "../../pipeline/pipeline-issue-list.css";
 import { pullRequestOf } from "../../core/page.ts";
+import statusIconStyle from "../../pipeline/pipeline-status-icon.css";
+import style from "./style.css";
 
 const pipelineTab: Feature = {
   description:
@@ -49,6 +52,7 @@ const pipelineTab: Feature = {
       },
     };
   },
+  styles: [issueListStyle, statusIconStyle, style],
 };
 
 export { pipelineTab };

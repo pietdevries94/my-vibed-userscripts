@@ -1,11 +1,11 @@
 // What the fake site's actions change, on top of the captured pages: build statuses,
 // pull request changes, required reviewers and work item changes.
 import { boardData, showPullRequestCapture } from "./data.ts";
-import { BUILD_POLICY_TYPE_ID } from "../src/pipeline-status.ts";
-import type { BoardWorkItem } from "../src/board.ts";
+import { BUILD_POLICY_TYPE_ID } from "../src/pipeline/pipeline-status.ts";
+import type { BoardWorkItem } from "../src/boards/board.ts";
 import type { FakeSiteAction } from "../../shared/dev/fake-site/server.ts";
-import type { ListedPullRequest } from "../src/pr-list-changes.ts";
-import type { PolicyEvaluation } from "../src/pipeline-status.ts";
+import type { ListedPullRequest } from "../src/features/reload-on-changes/pr-list-changes.ts";
+import type { PolicyEvaluation } from "../src/pipeline/pipeline-status.ts";
 import { addedReviewers } from "./reviewers.ts";
 
 /** Build statuses the set-build-status action takes, besides "reset". */

@@ -1,10 +1,10 @@
-import { findBoardCardIds, watchBoard } from "../../board.ts";
+import { findBoardCardIds, watchBoard } from "../../boards/board.ts";
 import type { Feature } from "../../core/feature.ts";
 import type { Page } from "../../core/page.ts";
-import type { WatchedPage } from "../../page-reloader.ts";
-import { createPageReloader } from "../../page-reloader.ts";
-import { findPullRequestRows } from "../../pr-list.ts";
-import { watchPullRequestList } from "../../pr-list-watch.ts";
+import type { WatchedPage } from "./page-reloader.ts";
+import { createPageReloader } from "./page-reloader.ts";
+import { findPullRequestRows } from "../../pull-requests/pr-list.ts";
+import { watchPullRequestList } from "./pr-list-watch.ts";
 
 const reloadOnChanges: Feature = {
   description: "Pull request lists and boards reload when their content changes on the server.",
@@ -42,6 +42,7 @@ const reloadOnChanges: Feature = {
       },
     };
   },
+  styles: [],
 };
 
 export { reloadOnChanges };

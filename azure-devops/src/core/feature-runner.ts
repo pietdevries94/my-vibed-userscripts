@@ -7,6 +7,7 @@ interface FeatureRunnerOptions {
   context: FeatureContext;
   currentPage: () => Page;
   isTabActive: () => boolean;
+  addStyle: (css: string) => void;
   /** Called when a feature throws, so one broken feature leaves the others running. */
   onError: (feature: Feature, error: unknown) => void;
 }
@@ -20,9 +21,15 @@ interface StartedFeature {
   run: FeatureRun;
 }
 
-function startEach(options: FeatureRunnerOptions): StartedFeature[] {
+function addStyles(features: Feature[], addStyle: (css: string) => void): void {
+  for (const style of new Set(features.flatMap(({ styles }) => styles))) {
+    addStyle(style);
+  }
+}
+
+function startEach(options: FeatureRunnerOptions, features: Feature[]): StartedFeature[] {
   const started: StartedFeature[] = [];
-  for (const feature of options.features.filter(options.isOn)) {
+  for (const feature of features) {
     try {
       const run = feature.start(options.context);
       if (run) {
@@ -35,9 +42,11 @@ function startEach(options: FeatureRunnerOptions): StartedFeature[] {
   return started;
 }
 
-/** Starts the features that are on, in list order, and syncs them in that order. */
+/** Adds the styles of the features that are on, starts them in list order, and syncs them in that order. */
 function createFeatureRunner(options: FeatureRunnerOptions): FeatureRunner {
-  const started = startEach(options);
+  const features = options.features.filter(options.isOn);
+  addStyles(features, options.addStyle);
+  const started = startEach(options, features);
   return {
     sync(reason) {
       const tick = { isTabActive: options.isTabActive(), page: options.currentPage(), reason };

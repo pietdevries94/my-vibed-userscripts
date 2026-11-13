@@ -1,7 +1,8 @@
 import type { Feature } from "../../core/feature.ts";
 import type { Page } from "../../core/page.ts";
-import { createRequiredReviewerMarker } from "../../required-reviewers.ts";
-import { findPullRequestRows } from "../../pr-list.ts";
+import { createRequiredReviewerMarker } from "./required-reviewers.ts";
+import { findPullRequestRows } from "../../pull-requests/pr-list.ts";
+import style from "./style.css";
 
 const requiredReviewers: Feature = {
   description: "Required reviewers come first in pull request lists, with a glow.",
@@ -27,6 +28,7 @@ const requiredReviewers: Feature = {
       },
     };
   },
+  styles: [style],
 };
 
 export { requiredReviewers };

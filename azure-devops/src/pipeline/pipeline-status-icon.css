@@ -1,0 +1,39 @@
+.fix-ado-pipeline-status {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: 8px;
+}
+
+.fix-ado-pipeline-status[data-status="succeeded"] {
+  color: var(--component-status-success, rgb(85, 163, 98));
+}
+.fix-ado-pipeline-status[data-status="failed"] {
+  color: var(--component-status-error, rgb(205, 74, 69));
+}
+.fix-ado-pipeline-status[data-status="expired"],
+.fix-ado-pipeline-status[data-status="cancelling"] {
+  color: var(--component-status-warning, rgb(214, 119, 48));
+}
+.fix-ado-pipeline-status[data-status="running"] {
+  color: var(--component-status-info, rgb(0, 120, 212));
+}
+.fix-ado-pipeline-status[data-status="queued"],
+.fix-ado-pipeline-status[data-status="notStarted"] {
+  color: var(--component-status-neutral, rgb(102, 102, 102));
+}
+
+.fix-ado-pipeline-status[data-status="running"] {
+  animation: fix-ado-spin 1.5s linear infinite;
+}
+
+@keyframes fix-ado-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-pipeline-status[data-status="running"] {
+    animation: none;
+  }
+}

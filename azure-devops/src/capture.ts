@@ -9,18 +9,18 @@ import {
   apiBasePath,
   isPullRequestInboxLocation,
   parsePullRequestListLocation,
-} from "./pull-request-link.ts";
-import { evaluationsOf, pullRequestOrRunPage } from "./capture-pipeline.ts";
-import { findBoardCardIds, isBoardLocation } from "./board.ts";
-import { isThemePanelOpen, themeSettingsPage } from "./capture-theme.ts";
-import type { AdoClient } from "./ado-client.ts";
-import type { BoardWorkItem } from "./board.ts";
+} from "./pull-requests/pull-request-link.ts";
+import { evaluationsOf, pullRequestOrRunPage } from "./capture/capture-pipeline.ts";
+import { findBoardCardIds, isBoardLocation } from "./boards/board.ts";
+import { isThemePanelOpen, themeSettingsPage } from "./capture/capture-theme.ts";
+import type { AdoClient } from "./core/ado-client.ts";
+import type { BoardWorkItem } from "./boards/board.ts";
 import type { Pseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
-import type { PullRequestListPage } from "./pull-request-link.ts";
-import { createAdoClient } from "./ado-client.ts";
-import { findPullRequestRows } from "./pr-list.ts";
-import { rules } from "./capture-rules.ts";
-import { withoutScriptMarks } from "./capture-script-marks.ts";
+import type { PullRequestListPage } from "./pull-requests/pull-request-link.ts";
+import { createAdoClient } from "./core/ado-client.ts";
+import { findPullRequestRows } from "./pull-requests/pr-list.ts";
+import { rules } from "./capture/capture-rules.ts";
+import { withoutScriptMarks } from "./capture/capture-script-marks.ts";
 
 const STATUS_COLOR_VARIABLES = [
   "--component-status-success",

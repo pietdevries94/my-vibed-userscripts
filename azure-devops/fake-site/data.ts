@@ -1,11 +1,11 @@
 // The captured pages behind the fake site, with invented names for the capture's
 // name tokens. Read from the fixtures on every request, so a new capture shows at once.
-import { AVATAR_SELECTOR, avatarName } from "../src/avatars.ts";
+import { AVATAR_SELECTOR, avatarName } from "../src/pull-requests/avatars.ts";
 import { standInLabels, withStandInLabels } from "../../shared/dev/fake-site/stand-in-labels.ts";
-import type { BoardWorkItem } from "../src/board.ts";
+import type { BoardWorkItem } from "../src/boards/board.ts";
 import { JSDOM } from "jsdom";
-import type { ListedPullRequest } from "../src/pr-list-changes.ts";
-import type { PolicyEvaluation } from "../src/pipeline-status.ts";
+import type { ListedPullRequest } from "../src/features/reload-on-changes/pr-list-changes.ts";
+import type { PolicyEvaluation } from "../src/pipeline/pipeline-status.ts";
 import { fixtureReader } from "../../shared/dev/fake-site/server.ts";
 import fs from "node:fs";
 import path from "node:path";

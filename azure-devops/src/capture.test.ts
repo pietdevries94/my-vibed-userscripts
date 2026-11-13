@@ -1,8 +1,8 @@
-import { BUILD_POLICY_TYPE_ID } from "./pipeline-status.ts";
+import { BUILD_POLICY_TYPE_ID } from "./pipeline/pipeline-status.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
 import { createPseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
-import { findPullRequestRows } from "./pr-list.ts";
+import { findPullRequestRows } from "./pull-requests/pr-list.ts";
 import { scrubJson } from "../../shared/dev/scrub/scrub-json.ts";
 import { test } from "node:test";
 

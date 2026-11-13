@@ -1,5 +1,6 @@
 import type { Feature } from "../../core/feature.ts";
-import { createOverviewPipelineIssues } from "../../overview-pipeline-issues.ts";
+import { createOverviewPipelineIssues } from "./overview-pipeline-issues.ts";
+import issueListStyle from "../../pipeline/pipeline-issue-list.css";
 import { pullRequestOf } from "../../core/page.ts";
 
 const overviewPipelineIssues: Feature = {
@@ -30,6 +31,7 @@ const overviewPipelineIssues: Feature = {
       },
     };
   },
+  styles: [issueListStyle],
 };
 
 export { overviewPipelineIssues };

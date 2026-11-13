@@ -1,7 +1,8 @@
 import type { Feature } from "../../core/feature.ts";
-import { createStarredReviewers } from "../../starred-reviewers.ts";
-import { createStarredReviewersStore } from "../../starred-reviewers-store.ts";
+import { createStarredReviewers } from "./starred-reviewers.ts";
+import { createStarredReviewersStore } from "./starred-reviewers-store.ts";
 import { pullRequestOf } from "../../core/page.ts";
+import style from "./style.css";
 
 const starredReviewers: Feature = {
   description:
@@ -41,6 +42,7 @@ const starredReviewers: Feature = {
       },
     };
   },
+  styles: [style],
 };
 
 export { starredReviewers };

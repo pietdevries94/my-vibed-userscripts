@@ -1,0 +1,175 @@
+/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+.repos-pr-details-page[data-fix-ado-pipeline-tab-open]
+  > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
+  display: none !important;
+}
+
+/* The pull request page is a column that fills the window; the panel takes what the
+   header and tabs leave, so the log reaches the bottom. */
+.fix-ado-pipeline-panel {
+  display: grid;
+  flex: 1 0 0;
+  grid-template-columns: 400px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  min-height: 400px;
+  padding-top: 16px;
+}
+
+/* The tree runs down the left. The warnings and errors sit above the log on the right. */
+.fix-ado-pipeline-panel > .fix-ado-pipeline-message {
+  grid-column: 1 / -1;
+}
+
+.fix-ado-pipeline-panel > .fix-ado-issue-box {
+  grid-column: 2;
+  grid-row: 1;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.fix-ado-pipeline-panel > .fix-ado-pipeline-frame,
+.fix-ado-pipeline-panel > .fix-ado-pipeline-log-note {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.fix-ado-pipeline-tree {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.fix-ado-pipeline-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0 4px 4px 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fix-ado-pipeline-item:hover {
+  background: var(--palette-black-alpha-4, rgba(0, 0, 0, 0.04));
+}
+
+/* The picked run, stage, job and step get a bar on the left, as in Azure DevOps's own lists. */
+.fix-ado-pipeline-item[aria-current="true"] {
+  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+  box-shadow: inset 3px 0 0 var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-pipeline-item:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.fix-ado-pipeline-item .fix-ado-pipeline-status {
+  margin-left: 0;
+}
+
+.fix-ado-pipeline-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fix-ado-pipeline-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fix-ado-pipeline-run .fix-ado-pipeline-item-name {
+  font-weight: 600;
+}
+
+.fix-ado-pipeline-item-details {
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-size: 12px;
+}
+
+/* Stages sit under their run, jobs under their stage, steps under their job. */
+.fix-ado-pipeline-stages,
+.fix-ado-pipeline-jobs,
+.fix-ado-pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+}
+
+/* A line above each run but the first, so the runs stand apart. */
+.fix-ado-pipeline-run:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 0;
+}
+
+/* "Start new run" or "Cancel current run" above the runs. Azure DevOps's button
+   classes give its look. */
+.fix-ado-pipeline-run-action {
+  align-self: flex-start;
+  margin: 0 0 4px 12px;
+}
+
+/* Red, in case the page has no style for Azure DevOps's danger button. */
+.fix-ado-pipeline-run-action.danger {
+  background: var(--component-status-error, rgb(205, 74, 69));
+  border-color: var(--component-status-error, rgb(205, 74, 69));
+  color: #fff;
+}
+
+.fix-ado-pipeline-run-action-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+}
+
+.fix-ado-pipeline-note {
+  padding: 6px 10px 2px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-size: 12px;
+}
+
+.fix-ado-pipeline-log-note {
+  flex: 1 1 auto;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+
+.fix-ado-pipeline-frame[hidden] {
+  display: none;
+}
+
+.fix-ado-pipeline-frame {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+}
+
+/* The run page inside the Pipeline tab. pipeline-run-frame.ts marks it; only the log stays. */
+html[data-fix-ado-run-frame] .project-header,
+html[data-fix-ado-run-frame] .navigation-container,
+html[data-fix-ado-run-frame] .region-content-header,
+html[data-fix-ado-run-frame] .region-content-footer,
+html[data-fix-ado-run-frame] .region-footer,
+html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
+  display: none !important;
+}
+
+/* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */
+.fix-ado-pipeline-tab:focus:not(:focus-visible) {
+  outline: none;
+}

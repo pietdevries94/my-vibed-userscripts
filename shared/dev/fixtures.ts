@@ -10,10 +10,24 @@ interface ScriptFixtures {
   read: (name: string) => string;
 }
 
-/** The fixtures of the script whose source folder is `sourceDirectory` (pass `import.meta.dirname`). */
+/** The script folder: the nearest folder above `directory` that holds a `script.json`. */
+function scriptDirectoryOf(directory: string): string {
+  let current = directory;
+  while (!fs.existsSync(path.join(current, "script.json"))) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      throw new Error(`no script.json above ${directory}`);
+    }
+    current = parent;
+  }
+  return current;
+}
+
+/** The fixtures of the script that holds `sourceDirectory`, at any depth (pass `import.meta.dirname`). */
 function scriptFixtures(sourceDirectory: string): ScriptFixtures {
-  const directory = path.join(sourceDirectory, "..", "fixtures");
-  const scriptId = path.basename(path.dirname(directory));
+  const scriptDirectory = scriptDirectoryOf(sourceDirectory);
+  const directory = path.join(scriptDirectory, "fixtures");
+  const scriptId = path.basename(scriptDirectory);
   const isPresent = fs.existsSync(directory);
   return {
     read: (name) => fs.readFileSync(path.join(directory, name), "utf8"),
