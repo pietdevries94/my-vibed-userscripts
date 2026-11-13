@@ -16,6 +16,9 @@ import { stagesOf } from "./pipeline-timeline.ts";
 
 /** The runs are fetched again after this long. */
 const RUNS_REFRESH_MS = 30_000;
+/** After a start, the runs are fetched this often for a while, to show the new run soon. */
+const STARTED_RUNS_REFRESH_MS = 5000;
+const STARTED_RUNS_REFRESH_WINDOW_MS = 60_000;
 /** The timeline of a run in progress is fetched again after this long, to follow its steps. */
 const RUNNING_TIMELINE_REFRESH_MS = 5000;
 
@@ -32,6 +35,8 @@ interface PipelineTabData {
   pullRequest: PullRequestRef;
   runs: RunsState;
   runsLoadedAt: number;
+  /** Until when the runs refresh fast, after a start. */
+  fastRunsRefreshUntil: number;
   /** The stages of each run whose timeline came in, by build id. */
   stagesByBuildId: Map<number, RunStage[]>;
   timelineLoadedAt: Map<number, number>;
@@ -56,6 +61,7 @@ const NO_PICK: PipelineTabPick = {
 
 function createTabData(pullRequest: PullRequestRef): PipelineTabData {
   return {
+    fastRunsRefreshUntil: Number.NEGATIVE_INFINITY,
     pick: NO_PICK,
     pullRequest,
     runs: { kind: "loading" },
@@ -133,7 +139,8 @@ function isTimelineDue(data: PipelineTabData, shown: ShownRun, now: number): boo
 function loadWhatIsDue(loader: PipelineTabLoader): void {
   const { data, sources } = loader;
   const now = sources.now();
-  if (now - data.runsLoadedAt >= RUNS_REFRESH_MS) {
+  const runsRefreshMs = now < data.fastRunsRefreshUntil ? STARTED_RUNS_REFRESH_MS : RUNS_REFRESH_MS;
+  if (now - data.runsLoadedAt >= runsRefreshMs) {
     void loadRuns(loader);
   }
   const shown = shownRunOfData(data);
@@ -157,6 +164,7 @@ async function requeueAndExpireRuns(
   try {
     await sources.requeueCheck(data.pullRequest, evaluationId);
     data.runsLoadedAt = Number.NEGATIVE_INFINITY;
+    data.fastRunsRefreshUntil = sources.now() + STARTED_RUNS_REFRESH_WINDOW_MS;
     log("Pipeline tab: started a new run");
     return "idle";
   } catch (error) {

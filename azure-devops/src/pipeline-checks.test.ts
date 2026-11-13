@@ -60,6 +60,10 @@ test("a check without a run is left out, as there is nothing to show", () => {
   assert.deepEqual(pipelineChecksOf([buildEvaluation("queued", { buildId: null })]), []);
 });
 
+test("a re-queued check whose run is not made yet, with build id 0, is left out", () => {
+  assert.deepEqual(pipelineChecksOf([buildEvaluation("queued", { buildId: 0 })]), []);
+});
+
 test("the newest run comes first", () => {
   const checks = pipelineChecksOf([
     buildEvaluation("approved", { buildId: 1, startedAt: "2031-04-02T09:00:00Z" }),

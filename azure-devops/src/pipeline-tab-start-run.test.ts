@@ -1,10 +1,13 @@
 import {
   EVALUATIONS,
+  PULL_REQUEST,
   click,
+  clock,
   pipelineTab,
   requeue,
   setUp,
   settle,
+  treeNames,
 } from "./pipeline-tab.test-page.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -109,4 +112,24 @@ test("a build check without a run yet can still be started", async () => {
   click(document.querySelector(START_BUTTON));
   await settle();
   assert.deepEqual(requeued, ["evaluation-501"]);
+});
+
+test("after a start, the runs load every 5 seconds for a minute, without a run for build id 0", async () => {
+  const [check] = EVALUATIONS;
+  const evaluations = [check];
+  const { document, requests, tab } = await openTab(evaluations);
+  click(document.querySelector(START_BUTTON));
+  await settle();
+  evaluations[0] = { ...check, context: { ...check.context, buildId: 0 }, status: "queued" };
+  const loadsAt = async (nowMs: number): Promise<number> => {
+    clock.nowMs = nowMs;
+    const before = requests.length;
+    tab.sync(PULL_REQUEST);
+    await settle();
+    return requests.length - before;
+  };
+  assert.equal(await loadsAt(5000), 1);
+  assert.deepEqual(treeNames(document, "run"), []);
+  assert.equal(await loadsAt(60_000), 1);
+  assert.equal(await loadsAt(65_000), 0);
 });

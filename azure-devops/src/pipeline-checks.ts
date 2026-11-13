@@ -40,8 +40,9 @@ function checkNameOf(evaluation: PolicyEvaluation, fallback: string): string {
 }
 
 function pipelineCheckOf(evaluation: PolicyEvaluation): PipelineCheck | null {
-  const buildId = evaluation.context?.buildId ?? null;
-  if (evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId === null) {
+  const buildId = evaluation.context?.buildId ?? 0;
+  // Right after a re-queue, the check has build id 0 until its run is made.
+  if (evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId <= 0) {
     return null;
   }
   return {
