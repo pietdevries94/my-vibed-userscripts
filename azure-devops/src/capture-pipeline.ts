@@ -120,6 +120,8 @@ function pullRequestPage(pullRequest: PullRequestRef): CapturePage {
     },
     name: "pr-detail",
     root: withoutScriptMarks(document.body),
+    // The reviewer section, its add dropdown and split buttons need the site's own styling.
+    styleRoot: document.body,
   };
 }
 

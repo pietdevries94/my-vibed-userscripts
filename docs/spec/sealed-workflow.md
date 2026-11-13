@@ -4,7 +4,7 @@ Claude never sees the site of a sealed script. The owner captures fixtures and d
 
 ## Capture
 
-- The dev file of a script has a Violentmonkey menu command, "Capture fixtures".
+- The dev file of a script has two Violentmonkey menu commands: "Capture fixtures", and "Capture fixtures in 5 seconds" to open a dropdown or menu first.
 - The code lives in `<script>/src/capture.ts`. It goes into the dev file only, never the release file. No console paste, no separate install.
 - API responses are captured actively. The script's capture lists the GET requests it sends and reuses the feature's own API client. The shared part allows GET only.
 - Files are named `<script>--<page>.<ext>`. `<page>` comes from a per-script function.
@@ -15,6 +15,7 @@ Claude never sees the site of a sealed script. The owner captures fixtures and d
 
 - An allowlist. It keeps tag names, class names, structural attributes, SVG geometry and JSON keys.
 - It drops `script`, `style`, `iframe` and similar elements.
+- A page can also save its CSS as `<script>--<page>.css`, for the fake site's styling. Only rules that match an element in the page are kept. Every `url()` becomes `none`; `@font-face` and `@import` are dropped.
 - Numbers, GUIDs, dates and links become consistent pseudonyms.
 - Each distinct text becomes a consistent token such as `text-17`. The same value gets the same token everywhere. Length, case and word shape are gone.
 

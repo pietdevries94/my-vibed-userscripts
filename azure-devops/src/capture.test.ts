@@ -159,6 +159,19 @@ function assertNoRealValue(files: Map<string, string>): void {
   }
 }
 
+test("a pull request page capture saves the CSS that applies to it, without links", async () => {
+  const page = `<!doctype html><head><style>
+    .check:hover { color: red; } .absent { color: blue; }
+    .bolt-coin { background: url(/${ORGANISATION}/_apis/avatar) no-repeat; }
+  </style></head><body><div class="bolt-coin"></div><a class="check">${PROJECT}</a></body>`;
+  const { files } = await runCapture(page, `https://dev.azure.com${ROW_LINK}`);
+  assertNoRealValue(files);
+  const css = files.get("azure-devops--pr-detail.css") ?? "";
+  assert.match(css, /\.check:hover/u);
+  assert.match(css, /\.bolt-coin \{ background: none no-repeat/u);
+  assert.doesNotMatch(css, /\.absent/u);
+});
+
 test("a pull request page capture keeps its tabs, its run links and its evaluations", async () => {
   const runLink = `/${ORGANISATION}/${encodeURIComponent(PROJECT)}/_build/results?buildId=${BUILD_ID}`;
   const page = `<!doctype html><body>
@@ -170,7 +183,7 @@ test("a pull request page capture keeps its tabs, its run links and its evaluati
   assert.deepEqual(alerts, []);
   assert.deepEqual(
     [...files.keys()],
-    ["azure-devops--pr-detail.html", "azure-devops--pr-detail.json"],
+    ["azure-devops--pr-detail.html", "azure-devops--pr-detail.json", "azure-devops--pr-detail.css"],
   );
   assertNoRealValue(files);
   const html = files.get("azure-devops--pr-detail.html") ?? "";

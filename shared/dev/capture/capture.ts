@@ -1,12 +1,14 @@
 // "Capture fixtures": the dev file's Violentmonkey menu command. It scrubs the page and
-// the script's GET responses, and downloads two files:
-// <script>--<page>.html and <script>--<page>.json.
+// the script's GET responses, and downloads <script>--<page>.html and <script>--<page>.json,
+// plus <script>--<page>.css for a page that captures its styles.
+// "Capture fixtures in 5 seconds" waits first, so the owner can open a dropdown.
 // `npm run capture:bundle` packs `captureFiles` for the real-site browser instead.
 // Dev only; the release build never includes it.
 import type { Pseudonyms } from "../scrub/pseudonyms.ts";
 import type { ScrubRules } from "../scrub/rules.ts";
 import { createPseudonyms } from "../scrub/pseudonyms.ts";
 import { logEntries } from "../../runtime/script-log.ts";
+import { matchedCss } from "../scrub/scrub-css.ts";
 import { redact } from "../scrub/redact.ts";
 import { scrubElement } from "../scrub/scrub-dom.ts";
 import { scrubJson } from "../scrub/scrub-json.ts";
@@ -19,6 +21,11 @@ interface CapturePage {
   name: string;
   /** The part of the page to keep. */
   root: Element;
+  /**
+   * The live element whose CSS to save, for the fake site's styling. `root` is often a
+   * detached copy, which ancestor selectors would not match. Leave out to save no CSS.
+   */
+  styleRoot?: Element;
   /**
    * Sends the page's GET requests through `fetch`, which refuses anything else.
    * `data` is scrubbed. `meta` is written as it is, so it may hold only stand-ins
@@ -42,6 +49,8 @@ interface CapturedFiles {
   baseName: string;
   html: string;
   json: string;
+  /** The CSS that applies to the page, when the page captures its styles. */
+  css?: string;
 }
 
 interface RecordedError {
@@ -50,6 +59,7 @@ interface RecordedError {
 }
 
 const recordedErrors: RecordedError[] = [];
+const CAPTURE_DELAY_MS = 5000;
 
 /** Tells the owner, in the page, what the capture did. */
 function notifyOwner(message: string): void {
@@ -94,7 +104,7 @@ function download(fileName: string, text: string, type: string): void {
 async function buildFiles(
   definition: CaptureDefinition,
   page: CapturePage,
-): Promise<{ html: string; json: string }> {
+): Promise<Omit<CapturedFiles, "baseName">> {
   const pseudonyms = createPseudonyms();
   const { data, meta } = await page.collect(getOnlyFetch, pseudonyms);
   const html = scrubElement(page.root, definition.rules, pseudonyms).outerHTML;
@@ -109,13 +119,18 @@ async function buildFiles(
     stack: redact(stack, pseudonyms),
   }));
   const json = JSON.stringify({ data: scrubbedData, errors, log, meta }, null, 2);
-  return { html, json };
+  return page.styleRoot === undefined
+    ? { html, json }
+    : { css: matchedCss(page.styleRoot), html, json };
 }
 
-/** Downloads `<baseName>.html` and `<baseName>.json`. */
-function saveFiles(baseName: string, html: string, json: string): void {
+/** Downloads `<baseName>.html`, `<baseName>.json` and, when there is CSS, `<baseName>.css`. */
+function saveFiles({ baseName, html, json, css }: CapturedFiles): void {
   download(`${baseName}.html`, html, "text/html");
   download(`${baseName}.json`, json, "application/json");
+  if (css !== undefined) {
+    download(`${baseName}.css`, css, "text/css");
+  }
 }
 
 /** The scrubbed files of the page at this location, or null when it is not on the capture list. */
@@ -124,8 +139,8 @@ async function captureFiles(definition: CaptureDefinition): Promise<CapturedFile
   if (page === null) {
     return null;
   }
-  const { html, json } = await buildFiles(definition, page);
-  return { baseName: `${definition.scriptId}--${page.name}`, html, json };
+  const files = await buildFiles(definition, page);
+  return { baseName: `${definition.scriptId}--${page.name}`, ...files };
 }
 
 async function capture(definition: CaptureDefinition): Promise<void> {
@@ -134,17 +149,29 @@ async function capture(definition: CaptureDefinition): Promise<void> {
     notifyOwner("Capture fixtures: this page is not on the capture list. Nothing was saved.");
     return;
   }
-  saveFiles(files.baseName, files.html, files.json);
+  saveFiles(files);
 }
 
-/** Adds the "Capture fixtures" menu command. The dev entry calls it with the script's capture definition. */
+function captureOrReportFailure(definition: CaptureDefinition): void {
+  capture(definition).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "unknown error";
+    notifyOwner(`Capture fixtures failed: ${message}. Nothing was saved.`);
+  });
+}
+
+/**
+ * Adds the "Capture fixtures" menu commands, one now and one after a delay.
+ * The dev entry calls it with the script's capture definition.
+ */
 function registerCapture(definition: CaptureDefinition): void {
   recordScriptErrors(definition.scriptId);
   GM_registerMenuCommand("Capture fixtures", () => {
-    capture(definition).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : "unknown error";
-      notifyOwner(`Capture fixtures failed: ${message}. Nothing was saved.`);
-    });
+    captureOrReportFailure(definition);
+  });
+  GM_registerMenuCommand("Capture fixtures in 5 seconds", () => {
+    setTimeout(() => {
+      captureOrReportFailure(definition);
+    }, CAPTURE_DELAY_MS);
   });
 }
 

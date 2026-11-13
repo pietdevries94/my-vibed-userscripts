@@ -1,6 +1,6 @@
 // Usage: npm run capture:save <script> <result-file>
 // Reads what the capture bundle returned in browser_evaluate, saved to <result-file>,
-// and writes <script>/fixtures/<page>.html and <page>.json. In a worktree the files go
+// and writes <script>/fixtures/<page>.html and <page>.json, and <page>.css when captured. In a worktree the files go
 // to the main checkout and the worktree gets a symlink, as `fixtures:link` makes.
 import { REPO_ROOT, selectScripts } from "./scripts.ts";
 import type { CapturedFiles } from "../shared/dev/capture/capture.ts";
@@ -52,5 +52,10 @@ const page = result.baseName.slice(prefix.length);
 const directory = prepareFixturesDirectory(script.id);
 fs.writeFileSync(path.join(directory, `${page}.html`), result.html);
 fs.writeFileSync(path.join(directory, `${page}.json`), result.json);
+if (typeof result.css === "string") {
+  fs.writeFileSync(path.join(directory, `${page}.css`), result.css);
+}
 fs.rmSync(resultFile);
-console.log(`Saved ${script.id}/fixtures/${page}.html and ${page}.json`);
+console.log(
+  `Saved ${script.id}/fixtures/${page}.html, .json${typeof result.css === "string" ? " and .css" : ""}`,
+);

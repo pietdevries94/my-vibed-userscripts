@@ -76,6 +76,11 @@ const rules: ScrubRules = {
     "Files",
     "Updates",
     "Commits",
+    // The reviewer section and its add dropdown.
+    "Reviewers",
+    "Required",
+    "Optional",
+    "Add",
     // Pipeline run tabs and sections.
     "Summary",
     "Logs",
