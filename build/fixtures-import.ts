@@ -1,9 +1,9 @@
 // Usage: npm run fixtures:import <script> [name]
 // Moves <script>--<page>.<ext> from the download folder into <script>/fixtures/<page>.<ext>,
 // or <page>-<name>.<ext> with a name, so a capture keeps the fixture of the same page.
-// Overwrites files with the same name. There is no fixture history. A browser
-// suffix for a repeated download, such as "board(1).html", is dropped; the newest
-// download wins.
+// Overwrites a fixture with the same name. There is no fixture history. A browser
+// suffix for a repeated download, such as "board(1).html", is dropped. When two
+// downloads would get the same fixture name, nothing is imported.
 // The download folder is ~/Downloads, or DOWNLOADS_DIR when set.
 import type { Script } from "./scripts.ts";
 import fs from "node:fs";
@@ -28,6 +28,12 @@ function moveFile(from: string, to: string): void {
 function fixtureNameOf(capture: string, prefix: string, captureName: string): string {
   const fileName = capture.slice(prefix.length).replace(/\s?\(\d+\)(?=\.[^.]+$)/u, "");
   return captureName === "" ? fileName : fileName.replace(/(?=\.[^.]+$)/u, `-${captureName}`);
+}
+
+/** Fixture names that more than one capture in the download folder would get. */
+function repeatedFixtureNames(captures: string[], prefix: string, captureName: string): string[] {
+  const names = captures.map((capture) => fixtureNameOf(capture, prefix, captureName));
+  return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
 }
 
 /** The script's captures in the download folder, oldest first, so the newest wins. */
@@ -75,6 +81,14 @@ function importCaptures(script: Script, captureName: string): void {
     console.log(`No files starting with ${prefix} in ${downloads}.`);
     process.exit(0);
   }
+  const repeated = repeatedFixtureNames(captures, prefix, captureName);
+  if (repeated.length > 0) {
+    console.error(
+      `More than one capture would become ${repeated.join(", ")}. Nothing was imported.\n` +
+        `Import after each capture, or move the extra ones out of ${downloads}.`,
+    );
+    process.exit(1);
+  }
   const folders = { downloads, fixtures: path.join(script.directory, "fixtures") };
   moveCaptures(folders, script.id, { captureName, captures, prefix });
 }
@@ -88,4 +102,4 @@ if (import.meta.main) {
   importCaptures(script, captureName);
 }
 
-export { fixtureNameOf };
+export { fixtureNameOf, repeatedFixtureNames };
