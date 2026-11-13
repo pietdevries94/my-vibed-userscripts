@@ -8,6 +8,7 @@ function run(buildId: number): PipelineRun {
   return {
     buildId,
     buildNumber: String(buildId),
+    isBusy: false,
     isRequired: true,
     name: `run ${buildId}`,
     startedAt: null,

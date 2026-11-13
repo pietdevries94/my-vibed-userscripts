@@ -72,6 +72,9 @@ const pipelineTab = isInFrame
   ? null
   : createPipelineTab({
       apiBasePath: basePath,
+      cancelRun: async (project, buildId) => {
+        await client.cancelBuild(project, buildId);
+      },
       document,
       getEvaluations: async (pullRequest) => {
         const { evaluations } = await client.getPolicyEvaluations(pullRequest);

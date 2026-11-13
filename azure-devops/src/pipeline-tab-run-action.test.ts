@@ -1,18 +1,20 @@
 import {
   EVALUATIONS,
   PULL_REQUEST,
+  answerRuns,
   click,
   clock,
   pipelineTab,
-  requeue,
   setUp,
   settle,
   treeNames,
+  writeAnswer,
 } from "./pipeline-tab.test-page.ts";
+import type { PullRequestBuild } from "./pipeline-checks.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const START_BUTTON = ".fix-ado-pipeline-start";
+const ACTION_BUTTON = ".fix-ado-pipeline-run-action";
 
 /** Opens the Pipeline tab and lets its runs come in. */
 async function openTab(...options: Parameters<typeof setUp>): Promise<ReturnType<typeof setUp>> {
@@ -23,20 +25,20 @@ async function openTab(...options: Parameters<typeof setUp>): Promise<ReturnType
 }
 
 const menuNames = (document: Document): string[] =>
-  [...document.querySelectorAll(".fix-ado-pipeline-start-choice")].map(
+  [...document.querySelectorAll(".fix-ado-pipeline-run-action-choice")].map(
     (choice) => choice.querySelector(".fix-ado-pipeline-item-name")?.textContent ?? "",
   );
 
 test("a Start new run button sits at the top of the runs", async () => {
   const { document } = await openTab();
   const button = document.querySelector(".fix-ado-pipeline-tree")?.firstElementChild ?? null;
-  assert.equal(button?.matches(START_BUTTON), true);
+  assert.equal(button?.matches(ACTION_BUTTON), true);
   assert.equal(button?.textContent, "Start new run");
 });
 
 test("the button is built like Azure DevOps's primary buttons, such as Publish", async () => {
   const { document } = await openTab();
-  const button = document.querySelector(START_BUTTON);
+  const button = document.querySelector(ACTION_BUTTON);
   assert.deepEqual(
     ["bolt-button", "primary", "enabled"].map((name) => button?.classList.contains(name)),
     [true, true, true],
@@ -48,20 +50,20 @@ test("with one build check, the button re-queues it and the runs load again", as
   const [check] = EVALUATIONS;
   const { document, requests, requeued } = await openTab([check]);
   const loadsBefore = requests.length;
-  click(document.querySelector(START_BUTTON));
+  click(document.querySelector(ACTION_BUTTON));
   await settle();
   assert.deepEqual(requeued, ["evaluation-501"]);
   assert.equal(requests.length, loadsBefore + 1);
-  assert.equal(document.querySelector(START_BUTTON)?.textContent, "Start new run");
+  assert.equal(document.querySelector(ACTION_BUTTON)?.textContent, "Start new run");
 });
 
 test("with several build checks, the button opens a list to pick the one to start", async () => {
   const { document, requeued } = await openTab();
-  click(document.querySelector(START_BUTTON));
+  click(document.querySelector(ACTION_BUTTON));
   await settle();
   assert.deepEqual(requeued, []);
   assert.deepEqual(menuNames(document), ["ledger-ci", "ledger-lint"]);
-  const [, lint] = document.querySelectorAll(".fix-ado-pipeline-start-choice");
+  const [, lint] = document.querySelectorAll(".fix-ado-pipeline-run-action-choice");
   click(lint ?? null);
   await settle();
   assert.deepEqual(requeued, ["evaluation-502"]);
@@ -70,8 +72,8 @@ test("with several build checks, the button opens a list to pick the one to star
 
 test("a second click on the button closes the list", async () => {
   const { document } = await openTab();
-  click(document.querySelector(START_BUTTON));
-  click(document.querySelector(START_BUTTON));
+  click(document.querySelector(ACTION_BUTTON));
+  click(document.querySelector(ACTION_BUTTON));
   await settle();
   assert.deepEqual(menuNames(document), []);
 });
@@ -80,16 +82,16 @@ test("while the run starts, the button waits; a refused start says so", async ()
   const [check] = EVALUATIONS;
   const { document } = await openTab([check]);
   const refusal = Promise.withResolvers<undefined>();
-  requeue.answer = async (): Promise<unknown> => refusal.promise;
-  click(document.querySelector(START_BUTTON));
+  writeAnswer.answer = async (): Promise<unknown> => refusal.promise;
+  click(document.querySelector(ACTION_BUTTON));
   await settle();
-  const button = document.querySelector<HTMLButtonElement>(START_BUTTON);
+  const button = document.querySelector<HTMLButtonElement>(ACTION_BUTTON);
   assert.equal(button?.textContent, "Starting…");
   assert.equal(button?.disabled, true);
   assert.equal(button?.classList.contains("disabled"), true);
   refusal.reject(new Error("refused"));
   await settle();
-  assert.equal(document.querySelector(START_BUTTON)?.textContent, "Start new run");
+  assert.equal(document.querySelector(ACTION_BUTTON)?.textContent, "Start new run");
   assert.match(
     document.querySelector(".fix-ado-pipeline-tree")?.textContent ?? "",
     /Could not start the run\./u,
@@ -98,7 +100,7 @@ test("while the run starts, the button waits; a refused start says so", async ()
 
 test("a pull request without build checks has no Start new run button", async () => {
   const { document } = await openTab([]);
-  assert.equal(document.querySelector(START_BUTTON), null);
+  assert.equal(document.querySelector(ACTION_BUTTON), null);
 });
 
 test("a build check without a run yet can still be started", async () => {
@@ -109,7 +111,7 @@ test("a build check without a run yet can still be started", async () => {
     document.querySelector(".fix-ado-pipeline-panel")?.textContent ?? "",
     /no pipeline runs/u,
   );
-  click(document.querySelector(START_BUTTON));
+  click(document.querySelector(ACTION_BUTTON));
   await settle();
   assert.deepEqual(requeued, ["evaluation-501"]);
 });
@@ -118,7 +120,7 @@ test("after a start, the runs load every 5 seconds for a minute, without a run f
   const [check] = EVALUATIONS;
   const evaluations = [check];
   const { document, requests, tab } = await openTab(evaluations);
-  click(document.querySelector(START_BUTTON));
+  click(document.querySelector(ACTION_BUTTON));
   await settle();
   evaluations[0] = { ...check, context: { ...check.context, buildId: 0 }, status: "queued" };
   const loadsAt = async (nowMs: number): Promise<number> => {
@@ -132,4 +134,50 @@ test("after a start, the runs load every 5 seconds for a minute, without a run f
   assert.deepEqual(treeNames(document, "run"), []);
   assert.equal(await loadsAt(60_000), 1);
   assert.equal(await loadsAt(65_000), 0);
+});
+
+/** A run of the run list, newest first as Azure DevOps gives them. */
+const busyBuild = (id: number, status: string): PullRequestBuild => ({
+  buildNumber: `20310402.${id}`,
+  definition: { name: `ledger-${id}` },
+  id,
+  status,
+});
+
+test("while a run is busy, the button is a red Cancel current run that cancels it", async () => {
+  const { cancelled, document } = await openTab(
+    [],
+    undefined,
+    answerRuns([busyBuild(7, "inProgress")]),
+  );
+  const button = document.querySelector(ACTION_BUTTON);
+  assert.equal(button?.textContent, "Cancel current run");
+  assert.equal(button?.classList.contains("danger"), true);
+  click(button);
+  await settle();
+  assert.deepEqual(cancelled, [7]);
+});
+
+test("with several busy runs, the button opens a list to pick the run to cancel", async () => {
+  const { cancelled, document } = await openTab(
+    [],
+    undefined,
+    answerRuns([busyBuild(8, "notStarted"), busyBuild(7, "inProgress")]),
+  );
+  click(document.querySelector(ACTION_BUTTON));
+  await settle();
+  assert.deepEqual(menuNames(document), ["ledger-8", "ledger-7"]);
+  const [, older] = document.querySelectorAll(".fix-ado-pipeline-run-action-choice");
+  click(older ?? null);
+  await settle();
+  assert.deepEqual(cancelled, [7]);
+});
+
+test("a cancelling run is not busy, so the button starts a new run again", async () => {
+  const { document } = await openTab(
+    EVALUATIONS,
+    undefined,
+    answerRuns([busyBuild(7, "cancelling")]),
+  );
+  assert.equal(document.querySelector(ACTION_BUTTON)?.textContent, "Start new run");
 });

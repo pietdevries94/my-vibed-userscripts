@@ -89,13 +89,21 @@ interface Setup {
   requests: PullRequestRef[];
   /** The evaluation ids of the build checks the tab re-queued. */
   requeued: string[];
+  /** The build ids of the runs the tab cancelled. */
+  cancelled: number[];
 }
 
 /** The run list's answer: none by default, so the checks' runs are the list. */
 type RunListAnswer = () => Promise<PullRequestBuild[]>;
 
-/** Azure DevOps's answer to a re-queue. Each setUp makes it accept; a test may change it. */
-const requeue = { answer: async (): Promise<unknown> => null };
+/** A run list that answers these runs. */
+const answerRuns =
+  (builds: PullRequestBuild[]): RunListAnswer =>
+  async () =>
+    builds;
+
+/** Azure DevOps's answer to a re-queue or a cancel. Each setUp makes it accept; a test may change it. */
+const writeAnswer = { answer: async (): Promise<unknown> => null };
 
 /** The tab's clock. Each setUp starts it at 0; a test moves it to let refreshes come due. */
 const clock = { nowMs: 0 };
@@ -106,12 +114,18 @@ function setUp(
   runList: RunListAnswer = async () => [],
 ): Setup {
   clock.nowMs = 0;
-  requeue.answer = async (): Promise<unknown> => null;
+  writeAnswer.answer = async (): Promise<unknown> => null;
   const { document } = new JSDOM(PAGE, { url: `https://dev.azure.com${PULL_REQUEST_PATH}` }).window;
   const requests: PullRequestRef[] = [];
   const requeued: string[] = [];
+  const cancelled: number[] = [];
   const tab = createPipelineTab({
     apiBasePath: "/quillfield",
+    cancelRun: async (project, buildId) => {
+      assert.equal(project, PULL_REQUEST.project);
+      cancelled.push(buildId);
+      await writeAnswer.answer();
+    },
     document,
     getEvaluations: async (pullRequest) => {
       requests.push(pullRequest);
@@ -123,11 +137,11 @@ function setUp(
     requeueCheck: async (pullRequest, evaluationId) => {
       assert.deepEqual(pullRequest, PULL_REQUEST);
       requeued.push(evaluationId);
-      await requeue.answer();
+      await writeAnswer.answer();
     },
   });
   tab.sync(PULL_REQUEST);
-  return { document, requests, requeued, tab };
+  return { cancelled, document, requests, requeued, tab };
 }
 
 function click(element: Element | null): void {
@@ -172,15 +186,16 @@ export {
   LOG_PATH,
   PULL_REQUEST,
   TIMELINES,
+  answerRuns,
   click,
   clock,
   frameSource,
   isOpen,
   pickItem,
   pipelineTab,
-  requeue,
   settle,
   setUp,
   timelineRecord,
   treeNames,
+  writeAnswer,
 };

@@ -178,13 +178,21 @@
   border-radius: 0;
 }
 
-/* "Start new run" above the runs. Azure DevOps's primary button classes give its look. */
-.fix-ado-pipeline-start {
+/* "Start new run" or "Cancel current run" above the runs. Azure DevOps's button
+   classes give its look. */
+.fix-ado-pipeline-run-action {
   align-self: flex-start;
   margin: 0 0 4px 12px;
 }
 
-.fix-ado-pipeline-start-choices {
+/* Red, in case the page has no style for Azure DevOps's danger button. */
+.fix-ado-pipeline-run-action.danger {
+  background: var(--component-status-error, rgb(205, 74, 69));
+  border-color: var(--component-status-error, rgb(205, 74, 69));
+  color: #fff;
+}
+
+.fix-ado-pipeline-run-action-choices {
   display: flex;
   flex-direction: column;
   gap: 4px;

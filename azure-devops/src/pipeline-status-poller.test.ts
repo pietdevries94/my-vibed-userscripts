@@ -52,6 +52,7 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     shown: new Map<number, PipelineStatus | null>(),
   };
   const client: AdoClient = {
+    cancelBuild: notUsedByThePoller,
     getAuthenticatedUserId: notUsedByThePoller,
     async getPolicyEvaluations({ pullRequestId }) {
       list.fetchedIds.push(pullRequestId);

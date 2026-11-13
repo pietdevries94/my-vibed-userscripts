@@ -1,6 +1,7 @@
 // What the Pipeline tab shows for one pull request: its runs, the timelines of
 // the runs it opened, and what the owner picked. Loads and refreshes them.
 import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
+import type { RunAction, RunActionState } from "./pipeline-tab-run-action.ts";
 import type { RunStage, TimelineRecord } from "./pipeline-timeline.ts";
 import { pipelineChecksOf, startableChecksOf } from "./pipeline-checks.ts";
 import { AdoRequestError } from "./ado-client.ts";
@@ -8,7 +9,6 @@ import type { PolicyEvaluation } from "./pipeline-status.ts";
 import type { PullRequestBuild } from "./pipeline-checks.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import type { RunsState } from "./pipeline-tab-panel.ts";
-import type { StartRunState } from "./pipeline-tab-start-run.ts";
 import { log } from "../../shared/runtime/script-log.ts";
 import { pipelineRunsOf } from "./pipeline-runs.ts";
 import { shownRunOf } from "./pipeline-tab-selection.ts";
@@ -16,9 +16,9 @@ import { stagesOf } from "./pipeline-timeline.ts";
 
 /** The runs are fetched again after this long. */
 const RUNS_REFRESH_MS = 30_000;
-/** After a start, the runs are fetched this often for a while, to show the new run soon. */
-const STARTED_RUNS_REFRESH_MS = 5000;
-const STARTED_RUNS_REFRESH_WINDOW_MS = 60_000;
+/** After a start or cancel, the runs are fetched this often for a while, to show the new run soon. */
+const ACTED_RUNS_REFRESH_MS = 5000;
+const ACTED_RUNS_REFRESH_WINDOW_MS = 60_000;
 /** The timeline of a run in progress is fetched again after this long, to follow its steps. */
 const RUNNING_TIMELINE_REFRESH_MS = 5000;
 
@@ -27,6 +27,8 @@ interface PipelineTabSources {
   getPullRequestBuilds: (pullRequest: PullRequestRef) => Promise<PullRequestBuild[]>;
   getTimeline: (project: string, buildId: number) => Promise<TimelineRecord[]>;
   now: () => number;
+  /** Cancels a queued or running run. */
+  cancelRun: (project: string, buildId: number) => Promise<void>;
   /** Starts a new run of a build check. */
   requeueCheck: (pullRequest: PullRequestRef, evaluationId: string) => Promise<void>;
 }
@@ -35,13 +37,13 @@ interface PipelineTabData {
   pullRequest: PullRequestRef;
   runs: RunsState;
   runsLoadedAt: number;
-  /** Until when the runs refresh fast, after a start. */
+  /** Until when the runs refresh fast, after a start or cancel. */
   fastRunsRefreshUntil: number;
   /** The stages of each run whose timeline came in, by build id. */
   stagesByBuildId: Map<number, RunStage[]>;
   timelineLoadedAt: Map<number, number>;
   pick: PipelineTabPick;
-  startRun: StartRunState;
+  runActionState: RunActionState;
 }
 
 /** Loads into one pull request's data, and says when something came in. */
@@ -64,10 +66,10 @@ function createTabData(pullRequest: PullRequestRef): PipelineTabData {
     fastRunsRefreshUntil: Number.NEGATIVE_INFINITY,
     pick: NO_PICK,
     pullRequest,
+    runActionState: "idle",
     runs: { kind: "loading" },
     runsLoadedAt: Number.NEGATIVE_INFINITY,
     stagesByBuildId: new Map(),
-    startRun: "idle",
     timelineLoadedAt: new Map(),
   };
 }
@@ -139,7 +141,7 @@ function isTimelineDue(data: PipelineTabData, shown: ShownRun, now: number): boo
 function loadWhatIsDue(loader: PipelineTabLoader): void {
   const { data, sources } = loader;
   const now = sources.now();
-  const runsRefreshMs = now < data.fastRunsRefreshUntil ? STARTED_RUNS_REFRESH_MS : RUNS_REFRESH_MS;
+  const runsRefreshMs = now < data.fastRunsRefreshUntil ? ACTED_RUNS_REFRESH_MS : RUNS_REFRESH_MS;
   if (now - data.runsLoadedAt >= runsRefreshMs) {
     void loadRuns(loader);
   }
@@ -149,35 +151,38 @@ function loadWhatIsDue(loader: PipelineTabLoader): void {
   }
 }
 
-function logStartFailure(error: unknown): void {
-  log("Pipeline tab: Azure DevOps did not start the run", {
-    httpStatus: error instanceof AdoRequestError ? error.httpStatus : null,
-  });
-}
-
-/** Re-queues the build check. On success the runs are due again, to show the new run. */
-async function requeueAndExpireRuns(
+/** Sends the start or cancel. On success the runs are due again, to show the change soon. */
+async function sendRunAction(
   loader: PipelineTabLoader,
-  evaluationId: string,
-): Promise<StartRunState> {
+  action: RunAction,
+  key: string,
+): Promise<RunActionState> {
   const { data, sources } = loader;
   try {
-    await sources.requeueCheck(data.pullRequest, evaluationId);
+    await (action === "start"
+      ? sources.requeueCheck(data.pullRequest, key)
+      : sources.cancelRun(data.pullRequest.project, Number(key)));
     data.runsLoadedAt = Number.NEGATIVE_INFINITY;
-    data.fastRunsRefreshUntil = sources.now() + STARTED_RUNS_REFRESH_WINDOW_MS;
-    log("Pipeline tab: started a new run");
+    data.fastRunsRefreshUntil = sources.now() + ACTED_RUNS_REFRESH_WINDOW_MS;
+    log(`Pipeline tab: run action ${action} sent`);
     return "idle";
   } catch (error) {
-    logStartFailure(error);
+    log(`Pipeline tab: Azure DevOps refused run action ${action}`, {
+      httpStatus: error instanceof AdoRequestError ? error.httpStatus : null,
+    });
     return "failed";
   }
 }
 
-/** Starts a new run of a build check, and shows the button wait meanwhile. */
-async function startNewRun(loader: PipelineTabLoader, evaluationId: string): Promise<void> {
-  loader.data.startRun = "starting";
+/** Starts a new run of a build check, or cancels a run, and shows the button wait meanwhile. */
+async function performRunAction(
+  loader: PipelineTabLoader,
+  action: RunAction,
+  key: string,
+): Promise<void> {
+  loader.data.runActionState = "waiting";
   loader.onChange();
-  loader.data.startRun = await requeueAndExpireRuns(loader, evaluationId);
+  loader.data.runActionState = await sendRunAction(loader, action, key);
   loader.onChange();
 }
 
@@ -187,4 +192,4 @@ function expireTimeline(data: PipelineTabData, buildId: number): void {
 }
 
 export type { PipelineTabData, PipelineTabLoader, PipelineTabSources };
-export { createTabData, expireTimeline, loadWhatIsDue, shownRunOfData, startNewRun };
+export { createTabData, expireTimeline, loadWhatIsDue, performRunAction, shownRunOfData };

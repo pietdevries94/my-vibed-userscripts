@@ -11,8 +11,8 @@ import {
   createTabData,
   expireTimeline,
   loadWhatIsDue,
+  performRunAction,
   shownRunOfData,
-  startNewRun,
 } from "./pipeline-tab-data.ts";
 import { parsePipelineRunLocation, pipelineLogPath } from "./pipeline-run-link.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
@@ -99,17 +99,17 @@ function render(state: TabState): void {
       data.pick = pick;
       update(state);
     },
-    onStartRun: (evaluationId) => {
-      void startNewRun(loaderOf(state, data), evaluationId);
+    onRunAction: (action, key) => {
+      void performRunAction(loaderOf(state, data), action, key);
     },
-    onStartRunListToggle: (isOpen) => {
-      data.startRun = isOpen ? "choosing" : "idle";
+    onRunActionListToggle: (isOpen) => {
+      data.runActionState = isOpen ? "choosing" : "idle";
       update(state);
     },
     pick: data.pick,
+    runActionState: data.runActionState,
     runs: data.runs,
     shown: shownRunOfData(data),
-    startRun: data.startRun,
   });
   watchLog(state, panel);
 }

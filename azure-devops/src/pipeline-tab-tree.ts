@@ -220,4 +220,4 @@ function createRunTree(context: TreeContext & { runs: PipelineRun[] }): HTMLElem
 }
 
 export type { TreeContext };
-export { createRunTree };
+export { createRunTree, runDetails };

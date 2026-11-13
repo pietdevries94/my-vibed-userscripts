@@ -37,6 +37,7 @@ test("a run that is a current check keeps the check's name and label", () => {
   assert.deepEqual(newest, {
     buildId: 3,
     buildNumber: "20310402.3",
+    isBusy: false,
     isRequired: true,
     name: "Ledger CI",
     startedAt: "2031-04-02T03:01:00Z",
@@ -65,4 +66,20 @@ test("a check whose run is not in the run list is still listed, first", () => {
     pipelineRunsOf([CHECK], [build(1)]).map((run) => run.buildId),
     [3, 1],
   );
+});
+
+/** Whether one older run, without a result unless given, is busy. */
+const isBusy = (extra: Partial<PullRequestBuild>): boolean | undefined =>
+  pipelineRunsOf([], [build(1, { result: undefined, ...extra })])[0]?.isBusy;
+
+test("a queued or running run is busy; a cancelling or finished one is not", () => {
+  assert.equal(isBusy({ status: "inProgress" }), true);
+  assert.equal(isBusy({ status: "notStarted" }), true);
+  assert.equal(isBusy({ status: "cancelling" }), false);
+  assert.equal(isBusy({ result: "succeeded", status: "completed" }), false);
+});
+
+test("a check's run that is not in the run list is busy while the check runs", () => {
+  const [run] = pipelineRunsOf([{ ...CHECK, status: "running" }], []);
+  assert.equal(run?.isBusy, true);
 });

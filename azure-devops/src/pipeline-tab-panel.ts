@@ -1,13 +1,13 @@
 // The content of the Pipeline tab: the run tree on the left, the shown step's log
 // on the right, as the run page in a frame.
 import type { PipelineTabPick, ShownRun } from "./pipeline-tab-selection.ts";
-import type { StartRunContext, StartRunState } from "./pipeline-tab-start-run.ts";
+import type { RunAction, RunActionChoice, RunActionState } from "./pipeline-tab-run-action.ts";
+import { createRunTree, runDetails } from "./pipeline-tab-tree.ts";
 import type { PipelineRun } from "./pipeline-runs.ts";
 import type { RunStep } from "./pipeline-timeline.ts";
 import type { StartableCheck } from "./pipeline-checks.ts";
 import type { StepLog } from "./pipeline-log-frame.ts";
-import { createRunTree } from "./pipeline-tab-tree.ts";
-import { createStartRun } from "./pipeline-tab-start-run.ts";
+import { createRunAction } from "./pipeline-tab-run-action.ts";
 import { showStepLog } from "./pipeline-log-frame.ts";
 
 const PANEL_CLASS = "fix-ado-pipeline-panel";
@@ -27,9 +27,9 @@ interface PanelContent {
   pick: PipelineTabPick;
   logPathOf: (buildId: number, step: RunStep) => string;
   onPick: (pick: PipelineTabPick) => void;
-  startRun: StartRunState;
-  onStartRunListToggle: StartRunContext["onToggleList"];
-  onStartRun: StartRunContext["onStart"];
+  runActionState: RunActionState;
+  onRunActionListToggle: (isOpen: boolean) => void;
+  onRunAction: (action: RunAction, key: string) => void;
 }
 
 function message(panel: HTMLElement, text: string): void {
@@ -99,31 +99,57 @@ function placeTree(panel: HTMLElement, tree: HTMLElement): void {
   }
 }
 
-function startRunElements(
-  panel: HTMLElement,
+/** Cancel while a run is busy, with the busy runs; else start, with the build checks. */
+function runActionOf(
+  runs: PipelineRun[],
   checks: StartableCheck[],
+): { action: RunAction; choices: RunActionChoice[] } {
+  const busyRuns = runs.filter((run) => run.isBusy);
+  if (busyRuns.length > 0) {
+    return {
+      action: "cancel",
+      choices: busyRuns.map((run) => ({
+        details: runDetails(run),
+        key: String(run.buildId),
+        name: run.name,
+      })),
+    };
+  }
+  return {
+    action: "start",
+    choices: checks.map((check) => ({
+      details: check.isRequired ? "Required" : "Optional",
+      key: check.evaluationId,
+      name: check.name,
+    })),
+  };
+}
+
+function runActionElements(
+  panel: HTMLElement,
+  { runs, startableChecks }: { runs: PipelineRun[]; startableChecks: StartableCheck[] },
   content: PanelContent,
 ): HTMLElement[] {
   return (
-    createStartRun({
-      checks,
+    createRunAction({
+      ...runActionOf(runs, startableChecks),
       document: panel.ownerDocument,
-      onStart: content.onStartRun,
-      onToggleList: content.onStartRunListToggle,
-      state: content.startRun,
+      onPick: content.onRunAction,
+      onToggleList: content.onRunActionListToggle,
+      state: content.runActionState,
     }) ?? []
   );
 }
 
 function showRun(
   panel: HTMLElement,
-  { runs, startableChecks }: { runs: PipelineRun[]; startableChecks: StartableCheck[] },
+  loaded: { runs: PipelineRun[]; startableChecks: StartableCheck[] },
   content: PanelContent,
 ): void {
   const { shown } = content;
   if (shown === null) {
     message(panel, "This pull request has no pipeline runs.");
-    panel.prepend(...startRunElements(panel, startableChecks, content));
+    panel.prepend(...runActionElements(panel, loaded, content));
     return;
   }
   panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
@@ -131,17 +157,17 @@ function showRun(
     document: panel.ownerDocument,
     onPick: content.onPick,
     pick: content.pick,
-    runs,
+    runs: loaded.runs,
     shown,
   });
-  tree.prepend(...startRunElements(panel, startableChecks, content));
+  tree.prepend(...runActionElements(panel, loaded, content));
   placeTree(panel, tree);
   showLog(panel, shown, content);
 }
 
 /** What the panel shows. A render with the same key leaves the page alone. */
-function renderKey({ pick, runs, shown, startRun }: PanelContent): string {
-  return JSON.stringify([runs, shown, pick, startRun]);
+function renderKey({ pick, runActionState, runs, shown }: PanelContent): string {
+  return JSON.stringify([runs, shown, pick, runActionState]);
 }
 
 function renderPanel(panel: HTMLElement, content: PanelContent): void {

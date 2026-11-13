@@ -37,6 +37,9 @@ function capturedPullRequestPage(page: string): Document {
   document.body.append(root);
   const tab = createPipelineTab({
     apiBasePath: "/fake-org",
+    cancelRun: async () => {
+      assert.fail("the fixture tests cancel no run");
+    },
     document,
     getEvaluations: async () => data.evaluations.body?.value ?? [],
     getPullRequestBuilds: async () => data.builds?.body?.value ?? [],

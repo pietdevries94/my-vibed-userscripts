@@ -109,7 +109,11 @@ test("the script source has one fetch call and no write methods", () => {
       ),
     ].map((match) => `${name} ${match.groups?.method ?? ""}`),
   );
-  assert.deepEqual(writes, ["ado-request.ts PATCH"], "only the re-queue of a build check writes");
+  assert.deepEqual(
+    writes,
+    ["ado-request.ts PATCH"],
+    "only the re-queue of a build check and the cancel of a run write",
+  );
   assert.doesNotMatch(source, /XMLHttpRequest|sendBeacon|WebSocket/u);
 });
 
@@ -131,6 +135,18 @@ test("re-queues a build check of a pull request with one PATCH", async () => {
     Accept: "application/json",
     "Content-Type": "application/json",
   });
+});
+
+test("cancels a run with one PATCH", async () => {
+  const { client, requests } = fakeAdo(() => Response.json({ status: "cancelling" }));
+  await client.cancelBuild("my project", 812);
+
+  const [cancel] = requests;
+  assert.equal(
+    `${cancel?.init.method} ${cancel?.url}`,
+    "PATCH https://dev.azure.com/my-org/my%20project/_apis/build/builds/812?api-version=7.1",
+  );
+  assert.equal(cancel?.init.body, JSON.stringify({ status: "cancelling" }));
 });
 
 test("a refused re-queue throws", async () => {

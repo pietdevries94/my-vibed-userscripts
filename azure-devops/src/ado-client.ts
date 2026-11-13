@@ -60,6 +60,8 @@ interface AdoClient {
   getWorkItemUpdates: (id: number) => Promise<WorkItemUpdatesResponse>;
   /** The id of the signed-in user, or null when Azure DevOps does not tell. */
   getAuthenticatedUserId: () => Promise<string | null>;
+  /** Cancels a queued or running run. */
+  cancelBuild: (project: string, buildId: number) => Promise<void>;
   /** Starts a new run of a build check, as Azure DevOps's own Queue button does. */
   requeuePolicyEvaluation: (project: string, evaluationId: string) => Promise<void>;
 }
@@ -168,6 +170,18 @@ async function getPolicyEvaluations(
   return { evaluations: body.value as PolicyEvaluation[], retryAfterSeconds };
 }
 
+async function cancelBuild(
+  options: AdoClientOptions,
+  project: string,
+  buildId: number,
+): Promise<void> {
+  await sendRequest(
+    options,
+    `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`,
+    { status: "cancelling" },
+  );
+}
+
 async function requeuePolicyEvaluation(
   options: AdoClientOptions,
   projectId: string,
@@ -194,12 +208,14 @@ async function getPullRequestBuilds(
   return { builds: (body.value ?? []) as PullRequestBuild[], retryAfterSeconds };
 }
 
-/** Client with the page's session cookie. Every request is a GET, but the re-queue of a build check. */
+/** Client with the page's session cookie. Every request is a GET, but the re-queue of a build check and the cancel of a run. */
 function createAdoClient(options: AdoClientOptions): AdoClient {
   const getProjectId = createProjectIdCache(options);
   let authenticatedUserIdRequest: Promise<string | null> | null = null;
 
   return {
+    cancelBuild: async (project, buildId) => cancelBuild(options, project, buildId),
+
     async getAuthenticatedUserId() {
       authenticatedUserIdRequest ??= getJson(options, "/_apis/connectionData")
         .then(({ body }) => body.authenticatedUser?.id ?? null)
