@@ -26,8 +26,8 @@ import { log } from "../../../../shared/runtime/script-log.ts";
 import { personOrTeamName } from "../../pull-requests/reviewers.ts";
 
 const SUGGESTION_POLL_MS = 250;
-/** How long the field gets to show the reviewer among its suggestions: 5 seconds. */
-const SUGGESTION_POLLS = 20;
+/** A pick that has not finished by then ends as failed, whatever held it up. */
+const PICK_TIMEOUT_MS = 5000;
 /** On the body while a chip picks: style.css hides the field's dropdown and typed text then. */
 const PICKING_CLASS = "fix-ado-starred-picking";
 const NOT_FOUND_TITLE = "Not found in the reviewer field's suggestions. Pick them there.";
@@ -48,8 +48,10 @@ interface StarredReviewerChips {
 interface ChipsState {
   options: StarredReviewerChipsOptions;
   isCreatePage: boolean;
-  /** Being typed into a field right now. */
-  busyIds: Set<string>;
+  /** The one pick going on, if any. Other chips wait for it. */
+  activePick: { identityId: string; pickId: number } | null;
+  /** The number the next pick gets, so a poll of an ended pick knows to stop. */
+  nextPickId: number;
   notFoundIds: Set<string>;
 }
 
@@ -68,16 +70,39 @@ interface PendingPick {
   field: ReviewerField;
   identity: Identity;
   step: "waiting" | "clicked" | "entered";
-  pollsLeft: number;
+  pickId: number;
 }
 
-function finishPick(state: ChipsState, { identity }: PendingPick, isPicked: boolean): void {
+function isActive(state: ChipsState, { pickId }: PendingPick): boolean {
+  return state.activePick?.pickId === pickId;
+}
+
+/** Ends the pick, once: the chip and the field's dropdown show again. */
+function finishPick(state: ChipsState, pendingPick: PendingPick, isPicked: boolean): void {
+  if (!isActive(state, pendingPick)) {
+    return;
+  }
   log("Starred reviewers: chip pick finished", { isPicked });
   if (!isPicked) {
-    state.notFoundIds.add(identity.id);
+    state.notFoundIds.add(pendingPick.identity.id);
   }
-  state.busyIds.delete(identity.id);
+  state.activePick = null;
   sync(state);
+}
+
+/** Runs one step of the pick. An error ends the pick as failed. */
+function runStep(state: ChipsState, pendingPick: PendingPick, step: () => void): void {
+  if (!isActive(state, pendingPick)) {
+    return;
+  }
+  try {
+    step();
+  } catch (error) {
+    log("Starred reviewers: chip pick failed", {
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    finishPick(state, pendingPick, false);
+  }
 }
 
 /** The next step once the suggestion is there: click it, then press Enter on it, then give up. */
@@ -100,7 +125,7 @@ function nextStep(pendingPick: PendingPick, suggestion: Element): PendingPick["s
 /** Looks for the suggestion and takes the next step, until the reviewer is in the field or it gives up. */
 function pickSuggestion(state: ChipsState, pendingPick: PendingPick): void {
   const { document, schedule } = state.options;
-  const { field, identity, pollsLeft } = pendingPick;
+  const { field, identity } = pendingPick;
   const suggestion = isInField(document, identity)
     ? null
     : findSuggestion(document, field.input, identity);
@@ -110,26 +135,41 @@ function pickSuggestion(state: ChipsState, pendingPick: PendingPick): void {
     hasSuggestion: suggestion !== null,
     to: step,
   });
-  if (step === null || pollsLeft <= 0 || isInField(document, identity)) {
+  if (step === null || isInField(document, identity)) {
     finishPick(state, pendingPick, isInField(document, identity));
     return;
   }
   schedule(() => {
-    pickSuggestion(state, { ...pendingPick, pollsLeft: pollsLeft - 1, step });
+    runStep(state, pendingPick, () => {
+      pickSuggestion(state, { ...pendingPick, step });
+    });
   }, SUGGESTION_POLL_MS);
 }
 
 function addThroughField(state: ChipsState, field: ReviewerField, identity: Identity): void {
-  if (state.busyIds.has(identity.id)) {
+  if (state.activePick !== null) {
     return;
   }
-  state.busyIds.add(identity.id);
+  const { schedule } = state.options;
+  const pendingPick: PendingPick = { field, identity, pickId: state.nextPickId, step: "waiting" };
+  state.nextPickId += 1;
+  state.activePick = { identityId: identity.id, pickId: pendingPick.pickId };
   state.notFoundIds.delete(identity.id);
   sync(state);
-  typeInto(field.input, searchTextOf(identity));
-  state.options.schedule(() => {
-    pickSuggestion(state, { field, identity, pollsLeft: SUGGESTION_POLLS, step: "waiting" });
-  }, SUGGESTION_POLL_MS);
+  schedule(() => {
+    if (isActive(state, pendingPick)) {
+      log("Starred reviewers: chip pick timed out");
+      finishPick(state, pendingPick, false);
+    }
+  }, PICK_TIMEOUT_MS);
+  runStep(state, pendingPick, () => {
+    typeInto(field.input, searchTextOf(identity));
+    schedule(() => {
+      runStep(state, pendingPick, () => {
+        pickSuggestion(state, pendingPick);
+      });
+    }, SUGGESTION_POLL_MS);
+  });
 }
 
 function onRowClick(state: ChipsState, field: ReviewerField, event: Event): void {
@@ -143,9 +183,11 @@ function onRowClick(state: ChipsState, field: ReviewerField, event: Event): void
 function createChip(state: ChipsState, identity: Identity): HTMLElement {
   const { document, imageUrlOf } = state.options;
   const chip = createStarredChip(document, identity, imageUrlOf(identity));
-  if (state.busyIds.has(identity.id)) {
+  if (state.activePick !== null) {
     chip.setAttribute("disabled", "");
     chip.classList.remove("clickable");
+  }
+  if (state.activePick?.identityId === identity.id) {
     showChipSpinner(document, chip);
   }
   if (state.notFoundIds.has(identity.id)) {
@@ -176,9 +218,10 @@ function fillRow(state: ChipsState, field: ReviewerField, shown: Identity[]): vo
     return;
   }
   const list = placeRow(state, field).querySelector<HTMLElement>(".fix-ado-starred-chip-list");
-  const signature = JSON.stringify(
-    shown.map(({ id }) => [id, state.busyIds.has(id), state.notFoundIds.has(id)]),
-  );
+  const signature = JSON.stringify([
+    state.activePick?.identityId,
+    shown.map(({ id }) => [id, state.notFoundIds.has(id)]),
+  ]);
   if (list !== null && list.dataset.fixAdoSignature !== signature) {
     list.dataset.fixAdoSignature = signature;
     list.replaceChildren(...shown.map((identity) => createChip(state, identity)));
@@ -194,7 +237,7 @@ function removeChipRows(document: Document): void {
 function sync(state: ChipsState): void {
   const { document, store } = state.options;
   const fields = reviewerFields(document);
-  document.body.classList.toggle(PICKING_CLASS, state.isCreatePage && state.busyIds.size > 0);
+  document.body.classList.toggle(PICKING_CLASS, state.isCreatePage && state.activePick !== null);
   if (!state.isCreatePage) {
     removeChipRows(document);
     return;
@@ -208,8 +251,9 @@ function sync(state: ChipsState): void {
 
 function createStarredReviewerChips(options: StarredReviewerChipsOptions): StarredReviewerChips {
   const state: ChipsState = {
-    busyIds: new Set(),
+    activePick: null,
     isCreatePage: false,
+    nextPickId: 1,
     notFoundIds: new Set(),
     options,
   };

@@ -28,20 +28,25 @@ const MARREN: Identity = {
 interface Harness {
   document: Document;
   sync: () => void;
-  runScheduled: () => void;
+  /** Moves the clock one poll (250 ms) on, and runs what is due. */
+  passPoll: () => void;
 }
+
+const POLL_MS = 250;
 
 function setUp(starred: Identity[], html: string, isCreatePage = true): Harness {
   const { document } = new JSDOM(html).window;
-  const scheduled: (() => void)[] = [];
+  let now = 0;
+  const scheduled: { callback: () => void; dueAt: number }[] = [];
   let saved = [...starred];
   const chips = createStarredReviewerChips({
     document,
     imageUrlOf: ({ id }) => `/avatars/${id}`,
-    schedule: (callback): (() => void) => {
-      scheduled.push(callback);
+    schedule: (callback, delayMs): (() => void) => {
+      const entry = { callback, dueAt: now + delayMs };
+      scheduled.push(entry);
       return () => {
-        scheduled.splice(scheduled.indexOf(callback), 1);
+        scheduled.splice(scheduled.indexOf(entry), 1);
       };
     },
     store: createStarredReviewersStore({
@@ -53,9 +58,14 @@ function setUp(starred: Identity[], html: string, isCreatePage = true): Harness 
   });
   const harness: Harness = {
     document,
-    runScheduled: () => {
-      for (const callback of scheduled.splice(0)) {
-        callback();
+    passPoll: () => {
+      now += POLL_MS;
+      const due = scheduled
+        .filter(({ dueAt }) => dueAt <= now)
+        .toSorted((earlier, later) => earlier.dueAt - later.dueAt);
+      for (const entry of due) {
+        scheduled.splice(scheduled.indexOf(entry), 1);
+        entry.callback();
       }
     },
     sync: () => {
@@ -166,7 +176,7 @@ test("a click searches the field by sign-in address and picks that person", asyn
     "the page hides the field's dropdown while the chip picks",
   );
   await settle();
-  harness.runScheduled();
+  harness.passPoll();
   assert.deepEqual(pillNames(harness.document, REQUIRED), ["Quill Barrow"]);
   assert.equal(harness.document.body.classList.contains("fix-ado-starred-picking"), false);
   assert.deepEqual(pillNames(harness.document, OPTIONAL), []);
@@ -181,7 +191,7 @@ test("a team is searched by its own name", async () => {
   attachPicker(harness.document, OPTIONAL);
   chip(chipRows(harness.document)[0], "Ledger Team").click();
   await settle();
-  harness.runScheduled();
+  harness.passPoll();
   assert.deepEqual(pillNames(harness.document, OPTIONAL), ["Ledger Team"]);
   assert.equal(chipRows(harness.document).length, 0);
 });
@@ -192,10 +202,10 @@ test("the chip waits for the suggestions, and gives up when its reviewer is not 
     found: [{ detail: "quill.b@example.com", name: "Quill Barrows" }],
   });
   chip(chipRows(harness.document)[0], "Quill Barrow").click();
-  harness.runScheduled();
+  harness.passPoll();
   await settle();
   for (let tries = 0; tries < 40; tries += 1) {
-    harness.runScheduled();
+    harness.passPoll();
   }
   assert.deepEqual(pillNames(harness.document, OPTIONAL), []);
   const button = chip(chipRows(harness.document)[0], "Quill Barrow");
@@ -209,8 +219,8 @@ test("a field that takes only the highlighted suggestion on Enter gets it on Ent
   attachPicker(harness.document, OPTIONAL, { selectOn: "enter" });
   chip(chipRows(harness.document)[0], "Marren Tolk").click();
   await settle();
-  harness.runScheduled();
-  harness.runScheduled();
+  harness.passPoll();
+  harness.passPoll();
   assert.deepEqual(pillNames(harness.document, OPTIONAL), ["Marren Tolk"]);
 });
 
@@ -226,7 +236,54 @@ test("Enter is not pressed when another suggestion is highlighted", async () => 
   chip(chipRows(harness.document)[0], "Quill Barrow").click();
   await settle();
   for (let tries = 0; tries < 40; tries += 1) {
-    harness.runScheduled();
+    harness.passPoll();
   }
   assert.deepEqual(pillNames(harness.document, OPTIONAL), []);
+});
+
+test("while one chip picks, the other chips are disabled and take no click", async () => {
+  const harness = setUp([QUILL, MARREN], page([], null));
+  attachPicker(harness.document, OPTIONAL);
+  const input = harness.document.querySelector<HTMLInputElement>(
+    `input[aria-labelledby="${OPTIONAL}"]`,
+  );
+  chip(chipRows(harness.document)[0], "Quill Barrow").click();
+  const other = chip(chipRows(harness.document)[0], "Marren Tolk");
+  assert.equal(other.disabled, true);
+  assert.equal(other.querySelector(".fix-ado-chip-spinner"), null, "only the picking chip spins");
+  other.click();
+  assert.equal(input?.value, "quill@example.com");
+  await settle();
+  harness.passPoll();
+  assert.deepEqual(pillNames(harness.document, OPTIONAL), ["Quill Barrow"]);
+  assert.equal(chip(chipRows(harness.document)[0], "Marren Tolk").disabled, false);
+});
+
+test("a pick still going after 5 seconds ends, and the page shows the field again", () => {
+  const harness = setUp([QUILL], page([], null));
+  chip(chipRows(harness.document)[0], "Quill Barrow").click();
+  for (let polls = 0; polls < 19; polls += 1) {
+    harness.passPoll();
+  }
+  assert.equal(harness.document.body.classList.contains("fix-ado-starred-picking"), true);
+  harness.passPoll();
+  assert.equal(harness.document.body.classList.contains("fix-ado-starred-picking"), false);
+  const button = chip(chipRows(harness.document)[0], "Quill Barrow");
+  assert.equal(button.disabled, false);
+  assert.match(button.title, /not found/iu);
+});
+
+test("an error while picking ends the pick at once", () => {
+  const harness = setUp([QUILL], page([], null));
+  const input = harness.document.querySelector<HTMLInputElement>(
+    `input[aria-labelledby="${OPTIONAL}"]`,
+  );
+  assert.ok(input);
+  input.getAttribute = (): string => {
+    throw new Error("the field changed");
+  };
+  chip(chipRows(harness.document)[0], "Quill Barrow").click();
+  harness.passPoll();
+  assert.equal(harness.document.body.classList.contains("fix-ado-starred-picking"), false);
+  assert.equal(chip(chipRows(harness.document)[0], "Quill Barrow").disabled, false);
 });
