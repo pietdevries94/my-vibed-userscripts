@@ -62,7 +62,7 @@ function svgElement(document: Document, tag: string, attributes: Record<string, 
   return created;
 }
 
-/** A puzzle piece: the script's own mark, in a colour Azure DevOps does not use. */
+/** A puzzle piece outline: the script's own mark, drawn like the line icons next to it. */
 function puzzleIcon(document: Document): Element {
   const svg = svgElement(document, "svg", {
     "aria-hidden": "true",
@@ -70,9 +70,9 @@ function puzzleIcon(document: Document): Element {
     viewBox: "0 0 16 16",
   });
   svg.append(
-    svgElement(document, "rect", { height: "10.5", rx: "1", width: "10", x: "1.5", y: "4" }),
-    svgElement(document, "circle", { cx: "6.5", cy: "3.25", r: "2.25" }),
-    svgElement(document, "circle", { cx: "12.25", cy: "9.25", r: "2.25" }),
+    svgElement(document, "path", {
+      d: "M1.5 4H4.6A2.1 2.1 0 1 1 8.4 4H11.5V7.35A2.1 2.1 0 1 1 11.5 11.15V14.5H1.5Z",
+    }),
   );
   return svg;
 }

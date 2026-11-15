@@ -1,9 +1,12 @@
-/* The settings button in Azure DevOps's top bar: a puzzle piece in a colour Azure DevOps
-   does not use, so it reads as the script's own and not as one of Azure DevOps's icons. */
+/* The settings button in Azure DevOps's top bar: a puzzle piece outline in the text colour,
+   like Azure DevOps's own line icons next to it. */
 .fix-ado-settings-icon {
   width: 16px;
   height: 16px;
-  fill: #c239b3;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+  stroke-linejoin: round;
 }
 
 /* The number of feature changes the owner has not seen, on the button's top right corner. */
