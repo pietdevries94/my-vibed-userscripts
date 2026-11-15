@@ -1,6 +1,6 @@
 // The elements of the starred reviewer chips on the create pull request page. They copy
 // Azure DevOps's own reviewer pill, so its styles apply.
-import { STAR_PATH, element, svgIcon } from "./starred-reviewers-markup.ts";
+import { STAR_PATH, createSpinner, element, svgIcon } from "./starred-reviewers-markup.ts";
 import type { Identity } from "../../pull-requests/reviewer-requests.ts";
 import { personOrTeamName } from "../../pull-requests/reviewers.ts";
 
@@ -40,12 +40,7 @@ function createStarredChip(document: Document, identity: Identity, imageUrl: str
 
 /** Puts a spinner in place of the chip's avatar while it picks its reviewer. */
 function showChipSpinner(document: Document, chip: Element): void {
-  chip.querySelector(".bolt-pill-filled-visual")?.replaceChildren(
-    element(document, "span", {
-      attributes: { "aria-hidden": "true" },
-      className: "fix-ado-chip-spinner",
-    }),
-  );
+  chip.querySelector(".bolt-pill-filled-visual")?.replaceChildren(createSpinner(document));
 }
 
 /** The row of chips under a reviewer field: a star, then the chips the caller adds. */

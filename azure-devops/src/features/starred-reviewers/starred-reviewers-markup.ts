@@ -70,6 +70,14 @@ function svgIcon(document: Document, className: string, pathData: string[]): SVG
   return svg;
 }
 
+/** A small spinner, styled in style.css, for a button that is adding a reviewer. */
+function createSpinner(document: Document): HTMLElement {
+  return element(document, "span", {
+    attributes: { "aria-hidden": "true" },
+    className: "fix-ado-spinner",
+  });
+}
+
 /** The star on a reviewer row. Filled when the reviewer is starred. */
 function createStarButton(document: Document): HTMLButtonElement {
   const button = element(document, "button", {
@@ -233,6 +241,7 @@ export {
   STAR_BUTTON_CLASS,
   createAvatar,
   createEmptyWell,
+  createSpinner,
   createStarButton,
   createStarredRow,
   createStarredSection,

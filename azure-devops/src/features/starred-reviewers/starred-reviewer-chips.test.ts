@@ -169,7 +169,7 @@ test("a click searches the field by sign-in address and picks that person", asyn
   assert.equal(input?.value, "quill@example.com");
   const busyChip = chip(chipRows(harness.document)[1], "Quill Barrow");
   assert.equal(busyChip.disabled, true);
-  assert.ok(busyChip.querySelector(".fix-ado-chip-spinner"), "the busy chip spins");
+  assert.ok(busyChip.querySelector(".fix-ado-spinner"), "the busy chip spins");
   assert.equal(busyChip.querySelector("img"), null, "in place of its avatar");
   assert.ok(
     harness.document.body.classList.contains("fix-ado-starred-picking"),
@@ -250,7 +250,7 @@ test("while one chip picks, the other chips are disabled and take no click", asy
   chip(chipRows(harness.document)[0], "Quill Barrow").click();
   const other = chip(chipRows(harness.document)[0], "Marren Tolk");
   assert.equal(other.disabled, true);
-  assert.equal(other.querySelector(".fix-ado-chip-spinner"), null, "only the picking chip spins");
+  assert.equal(other.querySelector(".fix-ado-spinner"), null, "only the picking chip spins");
   other.click();
   assert.equal(input?.value, "quill@example.com");
   await settle();

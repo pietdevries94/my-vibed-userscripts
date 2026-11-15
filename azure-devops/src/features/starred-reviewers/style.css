@@ -33,6 +33,20 @@
 .fix-ado-add-reviewer .bolt-split-button-option {
   padding: 3px 4px;
 }
+/* While a + button adds its reviewer: a spinner on top, the buttons hidden but in place, so the row keeps its size. */
+.fix-ado-add-reviewer.fix-ado-adding {
+  position: relative;
+}
+.fix-ado-adding > :not(.fix-ado-spinner) {
+  visibility: hidden;
+}
+.fix-ado-adding > .fix-ado-spinner {
+  position: absolute;
+  inset: 0;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+}
 .fix-ado-required-icon path {
   fill: none;
   stroke: currentColor;
@@ -87,7 +101,7 @@
 .fix-ado-starred-chip[disabled] {
   cursor: progress;
 }
-.fix-ado-chip-spinner {
+.fix-ado-spinner {
   display: block;
   box-sizing: border-box;
   width: 20px;
@@ -95,9 +109,9 @@
   border: 2px solid var(--palette-black-alpha-10, rgba(128, 128, 128, 0.3));
   border-top-color: var(--communication-foreground, rgba(0, 90, 158, 1));
   border-radius: 50%;
-  animation: fix-ado-chip-spin 0.8s linear infinite;
+  animation: fix-ado-spin 0.8s linear infinite;
 }
-@keyframes fix-ado-chip-spin {
+@keyframes fix-ado-spin {
   to {
     transform: rotate(360deg);
   }

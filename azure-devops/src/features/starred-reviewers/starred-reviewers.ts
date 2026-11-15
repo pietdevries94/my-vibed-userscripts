@@ -6,6 +6,7 @@ import {
   STARRED_SECTION_CLASS,
   STAR_BUTTON_CLASS,
   createEmptyWell,
+  createSpinner,
   createStarredRow,
   createStarredSection,
 } from "./starred-reviewers-markup.ts";
@@ -43,7 +44,7 @@ interface StarredReviewers {
 interface StarredState {
   options: StarredReviewersOptions;
   pullRequest: PullRequestRef | null;
-  /** Added by the + button. Hidden from the starred list until Azure DevOps shows them. */
+  /** Added by the + button. Their row spins until Azure DevOps shows them. */
   addedIds: Set<string>;
   /** Being added right now. */
   busyIds: Set<string>;
@@ -186,11 +187,15 @@ function placeSection(state: StarredState, anchor: Element): HTMLElement {
   return section;
 }
 
-function disableAddButtons(row: HTMLElement): void {
+/** Puts a spinner on the row's + button, which stays in place, hidden and disabled. */
+function showAdding(document: Document, row: HTMLElement): void {
   for (const button of row.querySelectorAll("[data-fix-ado-add]")) {
     button.classList.replace("enabled", "disabled");
     button.setAttribute("disabled", "");
   }
+  const addButton = row.querySelector(".fix-ado-add-reviewer");
+  addButton?.classList.add("fix-ado-adding");
+  addButton?.append(createSpinner(document));
 }
 
 function showError(row: HTMLElement, error: string): void {
@@ -204,8 +209,8 @@ function showError(row: HTMLElement, error: string): void {
 function createShownRow(state: StarredState, identity: Identity): HTMLElement {
   const { document, imageUrlOf } = state.options;
   const row = createStarredRow(document, identity, imageUrlOf(identity));
-  if (state.busyIds.has(identity.id)) {
-    disableAddButtons(row);
+  if (state.busyIds.has(identity.id) || state.addedIds.has(identity.id)) {
+    showAdding(document, row);
   }
   const error = state.errorsById.get(identity.id);
   if (error !== undefined) {
@@ -214,7 +219,7 @@ function createShownRow(state: StarredState, identity: Identity): HTMLElement {
   return row;
 }
 
-/** The starred reviewers the list shows: those not on the pull request and not just added. */
+/** The starred reviewers the list shows: those Azure DevOps does not show as reviewer yet. */
 function shownIdentities(state: StarredState, starred: Identity[]): Identity[] {
   const { document } = state.options;
   for (const identity of starred) {
@@ -222,9 +227,7 @@ function shownIdentities(state: StarredState, starred: Identity[]): Identity[] {
       state.addedIds.delete(identity.id);
     }
   }
-  return starred.filter(
-    (identity) => !state.addedIds.has(identity.id) && !isOnPage(document, identity),
-  );
+  return starred.filter((identity) => !isOnPage(document, identity));
 }
 
 /** Fills the list. Only when what it shows changed, so the page's own changes do not loop. */
@@ -234,7 +237,11 @@ function fillList(state: StarredState, section: HTMLElement): void {
   const shown = shownIdentities(state, starred);
   const signature = JSON.stringify([
     starred.length,
-    shown.map(({ id }) => [id, state.busyIds.has(id), state.errorsById.get(id) ?? ""]),
+    shown.map(({ id }) => [
+      id,
+      state.busyIds.has(id) || state.addedIds.has(id),
+      state.errorsById.get(id) ?? "",
+    ]),
   ]);
   if (list === null || list.dataset.fixAdoSignature === signature) {
     return;
