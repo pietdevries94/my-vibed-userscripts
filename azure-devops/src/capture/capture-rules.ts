@@ -35,6 +35,8 @@ const rules: ScrubRules = {
     // What kinds of identities a starred reviewer search found, in the script log.
     { path: /(?:^|\.)found\.(?:entityType|originDirectory)$/u, value: /^[A-Za-z]{1,20}$/u },
     { path: /(?:^|\.)foundCount$/u, value: /^\d{1,4}$/u },
+    // How far a starred reviewer chip got in picking its suggestion, in the script log.
+    { path: /(?:^|\.)(?:from|to)$/u, value: /^(?:waiting|clicked|entered)$/u },
     // Counts the Pipeline tab notes in the script log.
     { path: /(?:^|\.)(?:checkCount|runCount)$/u, value: /^\d{1,4}$/u },
     // Theme contribution ids, such as "ms.vss-web.vsts-theme-dark". Microsoft's own, never the organisation's.

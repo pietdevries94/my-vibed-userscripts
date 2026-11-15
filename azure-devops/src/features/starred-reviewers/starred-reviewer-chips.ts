@@ -11,6 +11,7 @@ import type { Identity } from "../../pull-requests/reviewer-requests.ts";
 import type { StarredReviewersStore } from "./starred-reviewers-store.ts";
 import { closestHtmlElement } from "../../core/closest-element.ts";
 import { isNameOf } from "./starred-reviewers-store.ts";
+import { log } from "../../../../shared/runtime/script-log.ts";
 import { personOrTeamName } from "../../pull-requests/reviewers.ts";
 
 /** Azure DevOps's reviewer fields, by the id of their label. Required shows after its toggle. */
@@ -93,43 +94,102 @@ function isSuggestionOf(option: Element, identity: Identity): boolean {
   return address === "" ? isNameOf(identity, name) : detail?.trim().toLowerCase() === address;
 }
 
-/** The suggestion of this identity in the field's listbox, or null while it is not there. */
+/** The suggestion row of this identity in the field's listbox, or null while it is not there. */
 function findSuggestion(
   document: Document,
   input: HTMLInputElement,
   identity: Identity,
-): HTMLElement | null {
+): Element | null {
   const listboxId = input.getAttribute("aria-controls");
   const listbox = listboxId === null ? null : document.querySelector(`[id="${listboxId}"]`);
-  const option = [...(listbox?.querySelectorAll('[role="option"]') ?? [])].find((candidate) =>
-    isSuggestionOf(candidate, identity),
+  return (
+    [...(listbox?.querySelectorAll('[role="option"]') ?? [])].find((candidate) =>
+      isSuggestionOf(candidate, identity),
+    ) ?? null
   );
-  return option?.querySelector<HTMLElement>(".bolt-suggestions-item") ?? null;
 }
 
-/** A reviewer typed into a field, waiting for their suggestion: how often to look again. */
+function isInField(document: Document, identity: Identity): boolean {
+  return namesInFields(document).some((name) => isNameOf(identity, name));
+}
+
+/** Presses and releases the mouse on the element, as a real click does. Some fields pick on mouse down. */
+function pressMouseOn(element: Element): void {
+  const pageWindow = element.ownerDocument.defaultView;
+  const MouseEventOfPage = pageWindow?.MouseEvent ?? MouseEvent;
+  const PointerEventOfPage = pageWindow?.PointerEvent ?? MouseEventOfPage;
+  const init = { bubbles: true, button: 0, cancelable: true, composed: true };
+  element.dispatchEvent(new PointerEventOfPage("pointerdown", init));
+  element.dispatchEvent(new MouseEventOfPage("mousedown", init));
+  element.dispatchEvent(new PointerEventOfPage("pointerup", init));
+  element.dispatchEvent(new MouseEventOfPage("mouseup", init));
+  element.dispatchEvent(new MouseEventOfPage("click", init));
+}
+
+function pressEnterIn(input: HTMLInputElement): void {
+  const KeyboardEventOfPage = input.ownerDocument.defaultView?.KeyboardEvent ?? KeyboardEvent;
+  const init = { bubbles: true, cancelable: true, code: "Enter", key: "Enter", keyCode: 13 };
+  input.dispatchEvent(new KeyboardEventOfPage("keydown", init));
+  input.dispatchEvent(new KeyboardEventOfPage("keyup", init));
+}
+
+/**
+ * A reviewer typed into a field. `waiting` for their suggestion, `clicked` it, or
+ * `entered`: pressed Enter while it was the highlighted one.
+ */
 interface PendingPick {
   field: ReviewerField;
   identity: Identity;
+  step: "waiting" | "clicked" | "entered";
   pollsLeft: number;
 }
 
-function pickSuggestion(state: ChipsState, pendingPick: PendingPick): void {
-  const { document, schedule } = state.options;
-  const { field, identity, pollsLeft } = pendingPick;
-  const suggestion = findSuggestion(document, field.input, identity);
-  if (suggestion !== null) {
-    suggestion.click();
-  } else if (pollsLeft > 0) {
-    schedule(() => {
-      pickSuggestion(state, { ...pendingPick, pollsLeft: pollsLeft - 1 });
-    }, SUGGESTION_POLL_MS);
-    return;
-  } else {
+function finishPick(state: ChipsState, { identity }: PendingPick, isPicked: boolean): void {
+  log("Starred reviewers: chip pick finished", { isPicked });
+  if (!isPicked) {
     state.notFoundIds.add(identity.id);
   }
   state.busyIds.delete(identity.id);
   sync(state);
+}
+
+/** The next step once the suggestion is there: click it, then press Enter on it, then give up. */
+function nextStep(pendingPick: PendingPick, suggestion: Element): PendingPick["step"] | null {
+  if (pendingPick.step === "waiting") {
+    pressMouseOn(suggestion.querySelector(".bolt-suggestions-item") ?? suggestion);
+    return "clicked";
+  }
+  const { input } = pendingPick.field;
+  if (
+    pendingPick.step === "clicked" &&
+    input.getAttribute("aria-activedescendant") === suggestion.id
+  ) {
+    pressEnterIn(input);
+    return "entered";
+  }
+  return null;
+}
+
+/** Looks for the suggestion and takes the next step, until the reviewer is in the field or it gives up. */
+function pickSuggestion(state: ChipsState, pendingPick: PendingPick): void {
+  const { document, schedule } = state.options;
+  const { field, identity, pollsLeft } = pendingPick;
+  const suggestion = isInField(document, identity)
+    ? null
+    : findSuggestion(document, field.input, identity);
+  const step = suggestion === null ? pendingPick.step : nextStep(pendingPick, suggestion);
+  log("Starred reviewers: chip pick", {
+    from: pendingPick.step,
+    hasSuggestion: suggestion !== null,
+    to: step,
+  });
+  if (step === null || pollsLeft <= 0 || isInField(document, identity)) {
+    finishPick(state, pendingPick, isInField(document, identity));
+    return;
+  }
+  schedule(() => {
+    pickSuggestion(state, { ...pendingPick, pollsLeft: pollsLeft - 1, step });
+  }, SUGGESTION_POLL_MS);
 }
 
 function addThroughField(state: ChipsState, field: ReviewerField, identity: Identity): void {
@@ -141,7 +201,7 @@ function addThroughField(state: ChipsState, field: ReviewerField, identity: Iden
   sync(state);
   typeInto(field.input, searchTextOf(identity));
   state.options.schedule(() => {
-    pickSuggestion(state, { field, identity, pollsLeft: SUGGESTION_POLLS });
+    pickSuggestion(state, { field, identity, pollsLeft: SUGGESTION_POLLS, step: "waiting" });
   }, SUGGESTION_POLL_MS);
 }
 

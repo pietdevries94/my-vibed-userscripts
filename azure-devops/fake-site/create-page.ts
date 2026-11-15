@@ -1,6 +1,6 @@
 // The create pull request page's reviewer field on the fake site. The capture holds the
 // field but not Azure DevOps's code, so this script stands in for it: typing searches the
-// fake identity API and shows suggestions, a click on one adds it as a pill, and the
+// fake identity API and shows suggestions, pressing on one adds it as a pill, and the
 // required reviewers toggle adds a required field.
 
 /** The page's script, as text for the fixture page. */
@@ -37,7 +37,8 @@ const CREATE_PAGE_SCRIPT = String.raw`
       '<div class="flex-row"><div class="fontSize secondary-text text-ellipsis"></div></div></div></div>';
     option.querySelector(".fontSizeM").textContent = name;
     option.querySelector(".secondary-text").textContent = identity.signInAddress ?? "";
-    option.querySelector(".bolt-suggestions-item").addEventListener("click", () => {
+    // Azure DevOps's field picks on mouse down, not on click.
+    option.querySelector(".bolt-suggestions-item").addEventListener("mousedown", () => {
       addPill(input, name);
     });
     return option;

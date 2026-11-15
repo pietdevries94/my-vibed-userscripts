@@ -1,3 +1,4 @@
+import { attachPicker, page, pill } from "./starred-reviewer-chips.test-page.ts";
 import type { Identity } from "../../pull-requests/reviewer-requests.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
@@ -23,77 +24,6 @@ const MARREN: Identity = {
   isGroup: false,
   signInAddress: "marren@example.com",
 };
-/** Who the stand-in picker finds, with the second line it shows. */
-const DIRECTORY = [
-  { detail: "quill@example.com", name: "Quill Barrow" },
-  { detail: "quill.b@example.com", name: "Quill Barrows" },
-  { detail: "marren@example.com", name: "Marren Tolk" },
-  { detail: "", name: "Ledger Team" },
-];
-
-function pill(name: string): string {
-  return `<div class="bolt-identity-picker-pill bolt-pill" role="listitem">
-    <div class="bolt-pill-content text-ellipsis">${name}</div></div>`;
-}
-
-function reviewerField(labelId: string, label: string, pills: string[]): string {
-  return `<div class="flex-column rhythm-vertical-8">
-    <div class="flex-row flex-center"><label class="body-m" id="${labelId}">${label}</label></div>
-    <div><div class="bolt-tag-picker"><div class="bolt-tag-picker-group">
-      <div role="list" aria-labelledby="${labelId}">${pills.join("")}</div>
-      <div class="bolt-tag-picker-add-icon-div">
-        <input role="combobox" aria-labelledby="${labelId}" class="bolt-tag-picker-input" value="">
-      </div>
-    </div></div><div class="bolt-identity-picker-error"></div></div>
-  </div>`;
-}
-
-function page(optional: string[], required: string[] | null): string {
-  return `<!doctype html><body><div class="flex-column">
-    ${reviewerField("__bolt-pr-optional-reviewers-label", "Reviewers", optional)}
-    ${required === null ? "" : reviewerField("__bolt-pr-required-reviewers-label", "Required reviewers", required)}
-  </div><div class="bolt-portal-host"></div></body>`;
-}
-
-/**
- * Azure DevOps's reviewer field, as far as the chips use it: typing shows suggestions
- * in a listbox after a moment, and a click on one adds it as a pill.
- */
-function attachPicker(document: Document, labelId: string, found = DIRECTORY): void {
-  const input = document.querySelector<HTMLInputElement>(`input[aria-labelledby="${labelId}"]`);
-  const list = document.querySelector(`[role="list"][aria-labelledby="${labelId}"]`);
-  if (input === null || list === null) {
-    return;
-  }
-  input.setAttribute("aria-controls", `suggestions-${labelId}`);
-  input.addEventListener("input", () => {
-    const query = input.value.toLowerCase();
-    setImmediate(() => {
-      document.querySelector(`#suggestions-${labelId}`)?.remove();
-      const listbox = document.createElement("div");
-      listbox.id = `suggestions-${labelId}`;
-      listbox.setAttribute("role", "listbox");
-      const matches = found.filter(
-        ({ name, detail }) =>
-          name.toLowerCase().includes(query) || detail.toLowerCase().includes(query),
-      );
-      for (const { name, detail } of matches) {
-        const option = document.createElement("div");
-        option.setAttribute("role", "option");
-        option.innerHTML = `<div class="bolt-suggestions-item"><div class="bolt-picker-persona-name">
-          <div class="fontSizeM text-ellipsis">${name}</div>
-          <div class="flex-row"><div class="fontSize secondary-text">${detail}</div></div></div></div>`;
-        option.querySelector(".bolt-suggestions-item")?.addEventListener("click", () => {
-          list.insertAdjacentHTML("beforeend", pill(name));
-          input.value = "";
-          listbox.remove();
-        });
-        listbox.append(option);
-      }
-      document.querySelector(".bolt-portal-host")?.append(listbox);
-    });
-  });
-}
 
 interface Harness {
   document: Document;
@@ -250,9 +180,9 @@ test("a team is searched by its own name", async () => {
 
 test("the chip waits for the suggestions, and gives up when its reviewer is not among them", async () => {
   const harness = setUp([QUILL], page([], null));
-  attachPicker(harness.document, OPTIONAL, [
-    { detail: "quill.b@example.com", name: "Quill Barrows" },
-  ]);
+  attachPicker(harness.document, OPTIONAL, {
+    found: [{ detail: "quill.b@example.com", name: "Quill Barrows" }],
+  });
   chip(chipRows(harness.document)[0], "Quill Barrow").click();
   harness.runScheduled();
   await settle();
@@ -263,4 +193,31 @@ test("the chip waits for the suggestions, and gives up when its reviewer is not 
   const button = chip(chipRows(harness.document)[0], "Quill Barrow");
   assert.equal(button.disabled, false);
   assert.match(button.title, /not found/iu);
+});
+
+test("a field that takes only the highlighted suggestion on Enter gets it on Enter", async () => {
+  const harness = setUp([MARREN], page([], null));
+  attachPicker(harness.document, OPTIONAL, { selectOn: "enter" });
+  chip(chipRows(harness.document)[0], "Marren Tolk").click();
+  await settle();
+  harness.runScheduled();
+  harness.runScheduled();
+  assert.deepEqual(pillNames(harness.document, OPTIONAL), ["Marren Tolk"]);
+});
+
+test("Enter is not pressed when another suggestion is highlighted", async () => {
+  const harness = setUp([QUILL], page([], null));
+  attachPicker(harness.document, OPTIONAL, {
+    found: [
+      { detail: "team-quill@example.com", name: "Quill Barrows" },
+      { detail: "quill@example.com", name: "Quill Barrow" },
+    ],
+    selectOn: "enter",
+  });
+  chip(chipRows(harness.document)[0], "Quill Barrow").click();
+  await settle();
+  for (let tries = 0; tries < 40; tries += 1) {
+    harness.runScheduled();
+  }
+  assert.deepEqual(pillNames(harness.document, OPTIONAL), []);
 });
