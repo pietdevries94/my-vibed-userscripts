@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.8.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.9.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -240,9 +240,9 @@
   function createDaysInColumnToggles(options) {
     let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
     function flip(columnId) {
-      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync3();
+      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync4();
     }
-    function sync3() {
+    function sync4() {
       let headers = [...document2.querySelectorAll(HEADER_SELECTOR)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
       if (headers.length === columns.length)
         for (let [index, header] of headers.entries()) {
@@ -255,7 +255,7 @@
           }
         }
     }
-    return { sync: sync3 };
+    return { sync: sync4 };
   }
 
   // azure-devops/src/features/days-in-column/style.css
@@ -1210,6 +1210,10 @@ ${issue.message ?? ""}`;
   function isPullRequestInboxLocation(location2) {
     return pathSegments(location2.pathname).at(-1) === "_pulls";
   }
+  function isPullRequestCreateLocation(location2) {
+    let segments = pathSegments(location2.pathname);
+    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
+  }
 
   // azure-devops/src/boards/board.ts
   var CARD_SELECTOR2 = ".wit-card[data-itemid]";
@@ -1258,16 +1262,17 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/core/page.ts
+  function parsePullRequestPage(location2, basePath2) {
+    if (isPullRequestCreateLocation(location2))
+      return { kind: "pull-request-create" };
+    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
+    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
+  }
   function parsePage(location2, basePath2) {
     if (isBoardLocation(location2))
       return { kind: "board" };
     let listPage = parsePullRequestListLocation(location2, basePath2);
-    if (listPage)
-      return { kind: "pull-request-list", listPage };
-    if (isPullRequestInboxLocation(location2))
-      return { kind: "pull-request-inbox" };
-    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
-    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
+    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
   }
   function pullRequestOf(page) {
     return page.kind === "pull-request" ? page.pullRequest : null;
@@ -1948,17 +1953,17 @@ ${issue.message ?? ""}`;
     let names = [...document2.querySelectorAll(TREE_ROW_SELECTOR)].map((row) => row.querySelector(ROW_NAME_SELECTOR)).filter((name) => name !== null), jobIndex = names.findIndex((name) => name.textContent.trim() === log2.jobName), isStep = (name) => name.textContent.trim() === log2.stepName;
     return names.slice(jobIndex + 1).find((name) => isStep(name)) ?? names.find((name) => isStep(name)) ?? null;
   }
-  function waitForSwitch(frame, log2, schedule) {
+  function waitForSwitch(frame, log2, schedule2) {
     let checksLeft = 15, check2 = () => {
-      frame.dataset.fixAdoLogPath !== log2.path || showsStep(frame, log2.stepName) || (checksLeft -= 1, checksLeft > 0 ? schedule(check2, 100) : load(frame, log2));
+      frame.dataset.fixAdoLogPath !== log2.path || showsStep(frame, log2.stepName) || (checksLeft -= 1, checksLeft > 0 ? schedule2(check2, 100) : load(frame, log2));
     };
-    schedule(check2, 100);
+    schedule2(check2, 100);
   }
   function stepInFrame(frame, log2) {
     let isSameRun = frame.dataset.fixAdoBuildId === String(log2.buildId), document2 = frame.contentDocument;
     return isSameRun && document2 !== null ? stepInTree(document2, log2) : null;
   }
-  function showStepLog(frame, log2, schedule = setTimeout) {
+  function showStepLog(frame, log2, schedule2 = setTimeout) {
     if (frame.dataset.fixAdoLogPath === log2.path)
       return;
     let step = stepInFrame(frame, log2);
@@ -1966,7 +1971,7 @@ ${issue.message ?? ""}`;
       load(frame, log2);
       return;
     }
-    step.click(), waitForSwitch(frame, log2, schedule);
+    step.click(), waitForSwitch(frame, log2, schedule2);
   }
   function watchShownStep(frame, onStep) {
     if (frame.dataset.fixAdoWatched !== void 0)
@@ -2879,6 +2884,12 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     }
     return svg;
   }
+  function createSpinner(document2) {
+    return element(document2, "span", {
+      attributes: { "aria-hidden": "true" },
+      className: "fix-ado-spinner"
+    });
+  }
   function createStarButton(document2) {
     return element(document2, "button", {
       attributes: { "aria-pressed": "false", type: "button" },
@@ -3002,6 +3013,50 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     });
   }
 
+  // azure-devops/src/features/starred-reviewers/starred-reviewer-chips-markup.ts
+  var STARRED_CHIP_ROW_CLASS = "fix-ado-starred-chips", STARRED_CHIP_CLASS = "fix-ado-starred-chip";
+  function createStarredChip(document2, identity, imageUrl) {
+    let name = personOrTeamName(identity.displayName), image = element(document2, "img", {
+      attributes: { alt: "", src: imageUrl },
+      className: "bolt-coin-content using-image size20"
+    });
+    return element(document2, "button", {
+      attributes: {
+        "aria-label": `Add ${name} as reviewer`,
+        "data-fix-ado-identity": identity.id,
+        title: "Add as reviewer",
+        type: "button"
+      },
+      children: [
+        element(document2, "div", {
+          children: [
+            element(document2, "div", {
+              attributes: { "aria-hidden": "true" },
+              children: [image],
+              className: "bolt-coin flex-noshrink flex-row flex-center size20"
+            })
+          ],
+          className: "bolt-pill-filled-visual flex-noshrink"
+        }),
+        element(document2, "div", { className: "bolt-pill-content text-ellipsis", text: name })
+      ],
+      className: `${STARRED_CHIP_CLASS} bolt-pill flex-row flex-center standard regular clickable has-filled-visual`
+    });
+  }
+  function showChipSpinner(document2, chip) {
+    chip.querySelector(".bolt-pill-filled-visual")?.replaceChildren(createSpinner(document2));
+  }
+  function createStarredChipRow(document2) {
+    return element(document2, "div", {
+      attributes: { "aria-label": "Starred reviewers", role: "group" },
+      children: [
+        svgIcon(document2, "fix-ado-starred-chips-icon fix-ado-star-icon", [STAR_PATH]),
+        element(document2, "div", { className: "fix-ado-starred-chip-list flex-row flex-wrap" })
+      ],
+      className: `${STARRED_CHIP_ROW_CLASS} flex-row flex-center`
+    });
+  }
+
   // azure-devops/src/features/starred-reviewers/starred-reviewers-store.ts
   function isIdentity(value) {
     return typeof value == "object" && value !== null && "id" in value && typeof value.id == "string" && "displayName" in value && typeof value.displayName == "string" && "signInAddress" in value && typeof value.signInAddress == "string" && "isGroup" in value && typeof value.isGroup == "boolean";
@@ -3031,6 +3086,164 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     };
   }
 
+  // azure-devops/src/features/starred-reviewers/reviewer-field.ts
+  var FIELD_LABEL_IDS = [
+    "__bolt-pr-optional-reviewers-label",
+    "__bolt-pr-required-reviewers-label"
+  ];
+  function reviewerFields(document2) {
+    let fields = [];
+    for (let labelId of FIELD_LABEL_IDS) {
+      let column = document2.querySelector(`#${labelId}`)?.parentElement?.parentElement, input = column?.querySelector(`input[aria-labelledby="${labelId}"]`);
+      column != null && input !== null && input !== void 0 && fields.push({ column, input });
+    }
+    return fields;
+  }
+  function namesInFields(document2) {
+    return [...document2.querySelectorAll(".bolt-identity-picker-pill .bolt-pill-content")].map(
+      (pill) => pill.textContent?.trim() ?? ""
+    );
+  }
+  function typeInto(input, text) {
+    input.focus();
+    let pageWindow = input.ownerDocument.defaultView;
+    Reflect.set((pageWindow?.HTMLInputElement ?? HTMLInputElement).prototype, "value", text, input);
+    let EventOfPage = pageWindow?.Event ?? Event;
+    input.dispatchEvent(new EventOfPage("input", { bubbles: !0 }));
+  }
+  function isSuggestionOf(option, identity) {
+    let name = option.querySelector(".bolt-picker-persona-name > :first-child")?.textContent ?? "", detail = option.querySelector(".bolt-picker-persona-name .secondary-text")?.textContent, address = identity.signInAddress.toLowerCase();
+    return address === "" ? isNameOf(identity, name) : detail?.trim().toLowerCase() === address;
+  }
+  function findSuggestion(document2, input, identity) {
+    let listboxId = input.getAttribute("aria-controls");
+    return [...(listboxId === null ? null : document2.querySelector(`[id="${listboxId}"]`))?.querySelectorAll('[role="option"]') ?? []].find(
+      (candidate) => isSuggestionOf(candidate, identity)
+    ) ?? null;
+  }
+  function isInField(document2, identity) {
+    return namesInFields(document2).some((name) => isNameOf(identity, name));
+  }
+  function pressMouseOn(element3) {
+    let pageWindow = element3.ownerDocument.defaultView, MouseEventOfPage = pageWindow?.MouseEvent ?? MouseEvent, PointerEventOfPage = pageWindow?.PointerEvent ?? MouseEventOfPage, init = { bubbles: !0, button: 0, cancelable: !0, composed: !0 };
+    element3.dispatchEvent(new PointerEventOfPage("pointerdown", init)), element3.dispatchEvent(new MouseEventOfPage("mousedown", init)), element3.dispatchEvent(new PointerEventOfPage("pointerup", init)), element3.dispatchEvent(new MouseEventOfPage("mouseup", init)), element3.dispatchEvent(new MouseEventOfPage("click", init));
+  }
+  function pressEnterIn(input) {
+    let KeyboardEventOfPage = input.ownerDocument.defaultView?.KeyboardEvent ?? KeyboardEvent, init = { bubbles: !0, cancelable: !0, code: "Enter", key: "Enter", keyCode: 13 };
+    input.dispatchEvent(new KeyboardEventOfPage("keydown", init)), input.dispatchEvent(new KeyboardEventOfPage("keyup", init));
+  }
+
+  // azure-devops/src/features/starred-reviewers/starred-reviewer-chips.ts
+  var SUGGESTION_POLL_MS = 250, PICK_TIMEOUT_MS = 5e3, PICKING_CLASS = "fix-ado-starred-picking", NOT_FOUND_TITLE = "Not found in the reviewer field's suggestions. Pick them there.";
+  function searchTextOf(identity) {
+    return identity.signInAddress === "" ? personOrTeamName(identity.displayName) : identity.signInAddress;
+  }
+  function isActive(state, { pickId }) {
+    return state.activePick?.pickId === pickId;
+  }
+  function finishPick(state, pendingPick, isPicked) {
+    isActive(state, pendingPick) && (log("Starred reviewers: chip pick finished", { isPicked }), isPicked || state.notFoundIds.add(pendingPick.identity.id), state.activePick = null, sync(state));
+  }
+  function runStep(state, pendingPick, step) {
+    if (isActive(state, pendingPick))
+      try {
+        step();
+      } catch (error) {
+        log("Starred reviewers: chip pick failed", {
+          message: error instanceof Error ? error.message : "unknown error"
+        }), finishPick(state, pendingPick, !1);
+      }
+  }
+  function nextStep(pendingPick, suggestion) {
+    if (pendingPick.step === "waiting")
+      return pressMouseOn(suggestion.querySelector(".bolt-suggestions-item") ?? suggestion), "clicked";
+    let { input } = pendingPick.field;
+    return pendingPick.step === "clicked" && input.getAttribute("aria-activedescendant") === suggestion.id ? (pressEnterIn(input), "entered") : null;
+  }
+  function pickSuggestion(state, pendingPick) {
+    let { document: document2, schedule: schedule2 } = state.options, { field, identity } = pendingPick, suggestion = isInField(document2, identity) ? null : findSuggestion(document2, field.input, identity), step = suggestion === null ? pendingPick.step : nextStep(pendingPick, suggestion);
+    if (log("Starred reviewers: chip pick", {
+      from: pendingPick.step,
+      hasSuggestion: suggestion !== null,
+      to: step
+    }), step === null || isInField(document2, identity)) {
+      finishPick(state, pendingPick, isInField(document2, identity));
+      return;
+    }
+    schedule2(() => {
+      runStep(state, pendingPick, () => {
+        pickSuggestion(state, { ...pendingPick, step });
+      });
+    }, SUGGESTION_POLL_MS);
+  }
+  function addThroughField(state, field, identity) {
+    if (state.activePick !== null)
+      return;
+    let { schedule: schedule2 } = state.options, pendingPick = { field, identity, pickId: state.nextPickId, step: "waiting" };
+    state.nextPickId += 1, state.activePick = { identityId: identity.id, pickId: pendingPick.pickId }, state.notFoundIds.delete(identity.id), sync(state), schedule2(() => {
+      isActive(state, pendingPick) && (log("Starred reviewers: chip pick timed out"), finishPick(state, pendingPick, !1));
+    }, PICK_TIMEOUT_MS), runStep(state, pendingPick, () => {
+      typeInto(field.input, searchTextOf(identity)), schedule2(() => {
+        runStep(state, pendingPick, () => {
+          pickSuggestion(state, pendingPick);
+        });
+      }, SUGGESTION_POLL_MS);
+    });
+  }
+  function onRowClick(state, field, event) {
+    let id = closestHtmlElement(event.target, `.${STARRED_CHIP_CLASS}`)?.dataset.fixAdoIdentity, identity = state.options.store.list().find((starred) => starred.id === id);
+    identity !== void 0 && addThroughField(state, field, identity);
+  }
+  function createChip(state, identity) {
+    let { document: document2, imageUrlOf } = state.options, chip = createStarredChip(document2, identity, imageUrlOf(identity));
+    return state.activePick !== null && (chip.setAttribute("disabled", ""), chip.classList.remove("clickable")), state.activePick?.identityId === identity.id && showChipSpinner(document2, chip), state.notFoundIds.has(identity.id) && (chip.title = NOT_FOUND_TITLE), chip;
+  }
+  function placeRow(state, field) {
+    let row = field.column.querySelector(`:scope > .${STARRED_CHIP_ROW_CLASS}`);
+    return row === null && (row = createStarredChipRow(state.options.document), row.addEventListener("click", (event) => {
+      onRowClick(state, field, event);
+    })), field.column.lastElementChild !== row && field.column.append(row), row;
+  }
+  function fillRow(state, field, shown) {
+    if (shown.length === 0) {
+      field.column.querySelector(`:scope > .${STARRED_CHIP_ROW_CLASS}`)?.remove();
+      return;
+    }
+    let list = placeRow(state, field).querySelector(".fix-ado-starred-chip-list"), signature = JSON.stringify([
+      state.activePick?.identityId,
+      shown.map(({ id }) => [id, state.notFoundIds.has(id)])
+    ]);
+    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip(state, identity))));
+  }
+  function removeChipRows(document2) {
+    for (let row of document2.querySelectorAll(`.${STARRED_CHIP_ROW_CLASS}`))
+      row.remove();
+  }
+  function sync(state) {
+    let { document: document2, store } = state.options, fields = reviewerFields(document2);
+    if (document2.body.classList.toggle(PICKING_CLASS, state.isCreatePage && state.activePick !== null), !state.isCreatePage) {
+      removeChipRows(document2);
+      return;
+    }
+    let names = namesInFields(document2), shown = store.list().filter((identity) => !names.some((name) => isNameOf(identity, name)));
+    for (let field of fields)
+      fillRow(state, field, shown);
+  }
+  function createStarredReviewerChips(options) {
+    let state = {
+      activePick: null,
+      isCreatePage: !1,
+      nextPickId: 1,
+      notFoundIds: /* @__PURE__ */ new Set(),
+      options
+    };
+    return {
+      sync(isCreatePage) {
+        state.isCreatePage = isCreatePage, sync(state);
+      }
+    };
+  }
+
   // azure-devops/src/features/starred-reviewers/reviewer-stars.ts
   var REVIEWER_SECTION_SELECTOR = ".pr-required-reviewers-section, .pr-optional-reviewers-section, .pr-declined-reviewers-section";
   function reviewerRowsOf(document2) {
@@ -3042,8 +3255,18 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   function nameOfRow(row) {
     return row.querySelector(".flex-column > .body-m")?.textContent?.trim() ?? "";
   }
+  function reviewerRowOf(document2, identity) {
+    return reviewerRowsOf(document2).find((row) => isNameOf(identity, nameOfRow(row)));
+  }
   function isOnPage(document2, identity) {
-    return reviewerRowsOf(document2).some((row) => isNameOf(identity, nameOfRow(row)));
+    return reviewerRowOf(document2, identity) !== void 0;
+  }
+  function logShown(row) {
+    log("Starred reviewers: added reviewer shown", {
+      hasBox: row.getClientRects().length > 0,
+      isHidden: row.closest("[hidden], [aria-hidden='true']") !== null,
+      section: row.parentElement?.className ?? ""
+    });
   }
   function insertStar(document2, row, onClick2) {
     let star = createStarButton(document2);
@@ -3205,16 +3428,16 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       let reviewer = (await client.getPullRequestReviewers(state.pullRequest)).find((identity) => isNameOf(identity, name));
       reviewer !== void 0 && store.star(reviewer);
     }
-    sync(state);
+    sync2(state);
   }
-  function reloadUnlessShown(state, identity) {
-    let { document: document2, schedule, reload } = state.options;
-    schedule(() => {
+  function waitUntilShown(state, identity) {
+    let { document: document2, schedule: schedule2, reload } = state.options;
+    log("Starred reviewers: reviewer added, waiting for Azure DevOps to show them"), state.addedIds.add(identity.id), schedule2(() => {
       isOnPage(document2, identity) || reload();
     }, ADDED_REVIEWER_WAIT_MS);
   }
   function markBusy(state, id, isBusy2) {
-    isBusy2 ? (state.busyIds.add(id), state.errorsById.delete(id)) : state.busyIds.delete(id), sync(state);
+    isBusy2 ? (state.busyIds.add(id), state.errorsById.delete(id)) : state.busyIds.delete(id), sync2(state);
   }
   async function addReviewer(state, identity, isRequired) {
     let { pullRequest } = state;
@@ -3224,7 +3447,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         await state.options.client.addPullRequestReviewer(pullRequest, {
           isRequired,
           reviewerId: identity.id
-        }), state.addedIds.add(identity.id), reloadUnlessShown(state, identity);
+        }), waitUntilShown(state, identity);
       } catch (error) {
         state.errorsById.set(identity.id, `Could not add: ${messageOf(error)}`);
       } finally {
@@ -3233,7 +3456,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     }
   }
   function openPicker(state, opener) {
-    let { document: document2, store, client, imageUrlOf, schedule } = state.options, close = null, picker = createStarPicker({
+    let { document: document2, store, client, imageUrlOf, schedule: schedule2 } = state.options, close = null, picker = createStarPicker({
       document: document2,
       imageUrlOf,
       isStarred: (id) => store.isStarred(id),
@@ -3241,9 +3464,9 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         close?.();
       },
       onPick: (identity) => {
-        store.star(identity), close?.(), sync(state);
+        store.star(identity), close?.(), sync2(state);
       },
-      schedule,
+      schedule: schedule2,
       search: async (query) => client.searchIdentities(query)
     });
     close = () => {
@@ -3255,7 +3478,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     return state.options.store.list().find((identity) => identity.id === id) ?? null;
   }
   function onRowButton(state, button2, identity) {
-    button2.classList.contains(STAR_BUTTON_CLASS) ? (state.options.store.unstar(identity.id), sync(state)) : addReviewer(state, identity, button2.dataset.fixAdoAdd === "required");
+    button2.classList.contains(STAR_BUTTON_CLASS) ? (state.options.store.unstar(identity.id), sync2(state)) : addReviewer(state, identity, button2.dataset.fixAdoAdd === "required");
   }
   function onSectionClick(state, event) {
     let opener = closestHtmlElement(event.target, ".fix-ado-star-someone");
@@ -3272,9 +3495,11 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       onSectionClick(state, event);
     })), anchor.nextElementSibling !== section && anchor.after(section), section;
   }
-  function disableAddButtons(row) {
+  function showAdding(document2, row) {
     for (let button2 of row.querySelectorAll("[data-fix-ado-add]"))
       button2.classList.replace("enabled", "disabled"), button2.setAttribute("disabled", "");
+    let addButton = row.querySelector(".fix-ado-add-reviewer");
+    addButton?.classList.add("fix-ado-adding"), addButton?.append(createSpinner(document2));
   }
   function showError(row, error) {
     let detail = row.querySelector(".fix-ado-starred-detail");
@@ -3282,28 +3507,32 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
   function createShownRow(state, identity) {
     let { document: document2, imageUrlOf } = state.options, row = createStarredRow(document2, identity, imageUrlOf(identity));
-    state.busyIds.has(identity.id) && disableAddButtons(row);
+    (state.busyIds.has(identity.id) || state.addedIds.has(identity.id)) && showAdding(document2, row);
     let error = state.errorsById.get(identity.id);
     return error !== void 0 && showError(row, error), row;
   }
   function shownIdentities(state, starred) {
     let { document: document2 } = state.options;
-    for (let identity of starred)
-      state.addedIds.has(identity.id) && isOnPage(document2, identity) && state.addedIds.delete(identity.id);
-    return starred.filter(
-      (identity) => !state.addedIds.has(identity.id) && !isOnPage(document2, identity)
-    );
+    for (let identity of starred) {
+      let row = state.addedIds.has(identity.id) ? reviewerRowOf(document2, identity) : void 0;
+      row !== void 0 && (logShown(row), state.addedIds.delete(identity.id));
+    }
+    return starred.filter((identity) => !isOnPage(document2, identity));
   }
   function fillList(state, section) {
     let list = section.querySelector(".fix-ado-starred-list"), starred = state.options.store.list(), shown = shownIdentities(state, starred), signature = JSON.stringify([
       starred.length,
-      shown.map(({ id }) => [id, state.busyIds.has(id), state.errorsById.get(id) ?? ""])
+      shown.map(({ id }) => [
+        id,
+        state.busyIds.has(id) || state.addedIds.has(id),
+        state.errorsById.get(id) ?? ""
+      ])
     ]);
     list === null || list.dataset.fixAdoSignature === signature || (list.dataset.fixAdoSignature = signature, list.replaceChildren(
       ...starred.length === 0 ? [createEmptyWell(state.options.document)] : shown.map((identity) => createShownRow(state, identity))
     ));
   }
-  function sync(state) {
+  function sync2(state) {
     let { document: document2 } = state.options, anchor = document2.querySelector(".pr-optional-reviewers-section") ?? document2.querySelector(".pr-required-reviewers-section");
     state.pullRequest === null || anchor === null || (addStars(document2, state.options.store, (row) => {
       toggleStar(state, row);
@@ -3319,7 +3548,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     };
     return {
       sync(pullRequest) {
-        state.pullRequest = pullRequest, sync(state);
+        state.pullRequest = pullRequest, sync2(state);
       }
     };
   }
@@ -3360,6 +3589,20 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 .fix-ado-add-reviewer .bolt-split-button-option {
   padding: 3px 4px;
 }
+/* While a + button adds its reviewer: a spinner on top, the buttons hidden but in place, so the row keeps its size. */
+.fix-ado-add-reviewer.fix-ado-adding {
+  position: relative;
+}
+.fix-ado-adding > :not(.fix-ado-spinner) {
+  visibility: hidden;
+}
+.fix-ado-adding > .fix-ado-spinner {
+  position: absolute;
+  inset: 0;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+}
 .fix-ado-required-icon path {
   fill: none;
   stroke: currentColor;
@@ -3397,40 +3640,82 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 .fix-ado-star-picker-callout .bolt-suggestions-container {
   max-height: 320px;
 }
+
+/* On the create pull request page: a chip per starred reviewer under each reviewer field. */
+.fix-ado-starred-chips {
+  gap: 8px;
+  align-items: flex-start;
+}
+.fix-ado-starred-chips-icon {
+  flex-shrink: 0;
+  margin-top: 6px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+.fix-ado-starred-chip-list {
+  gap: 4px;
+}
+.fix-ado-starred-chip[disabled] {
+  cursor: progress;
+}
+.fix-ado-spinner {
+  display: block;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--palette-black-alpha-10, rgba(128, 128, 128, 0.3));
+  border-top-color: var(--communication-foreground, rgba(0, 90, 158, 1));
+  border-radius: 50%;
+  animation: fix-ado-spin 0.8s linear infinite;
+}
+@keyframes fix-ado-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* While a chip picks its reviewer: the field's dropdown and typed text stay out of sight.
+   Hidden, not removed, so the chip can still press the suggestion; the field keeps its focus. */
+.fix-ado-starred-picking #__bolt-tag-picker-callout {
+  visibility: hidden;
+}
+.fix-ado-starred-picking .bolt-tag-picker-input {
+  color: transparent;
+  caret-color: transparent;
+}
 `;
 
   // azure-devops/src/features/starred-reviewers/index.ts
+  function schedule(callback, delayMs) {
+    let timer = setTimeout(callback, delayMs);
+    return () => {
+      clearTimeout(timer);
+    };
+  }
   var starredReviewers = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "Star reviewers, then add a starred one as optional or required reviewer in one click.",
+    change: { kind: "updated", version: "1.9.0" },
+    description: "Star reviewers, then add a starred one as optional or required reviewer in one click, also on a new pull request.",
     id: "starred-reviewers",
     name: "Starred reviewers",
     start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2 }) {
       if (isInFrame2)
         return null;
-      let storageKey = `starred-reviewers:${location.host}${basePath2}`, starred = createStarredReviewers({
+      let storageKey = `starred-reviewers:${location.host}${basePath2}`, imageUrlOf = ({ id }) => `${location.origin}${basePath2}/_api/_common/identityImage?id=${encodeURIComponent(id)}`, store = createStarredReviewersStore({
+        load: () => GM_getValue(storageKey, []),
+        save: (list) => {
+          GM_setValue(storageKey, list);
+        }
+      }), starred = createStarredReviewers({
         client,
         document: document2,
-        imageUrlOf: ({ id }) => `${location.origin}${basePath2}/_api/_common/identityImage?id=${encodeURIComponent(id)}`,
+        imageUrlOf,
         reload: () => {
           location.reload();
         },
-        schedule: (callback, delayMs) => {
-          let timer = setTimeout(callback, delayMs);
-          return () => {
-            clearTimeout(timer);
-          };
-        },
-        store: createStarredReviewersStore({
-          load: () => GM_getValue(storageKey, []),
-          save: (list) => {
-            GM_setValue(storageKey, list);
-          }
-        })
-      });
+        schedule,
+        store
+      }), chips = createStarredReviewerChips({ document: document2, imageUrlOf, schedule, store });
       return {
         sync({ page }) {
-          starred.sync(pullRequestOf(page));
+          starred.sync(pullRequestOf(page)), chips.sync(page.kind === "pull-request-create");
         }
       };
     },
@@ -3855,15 +4140,15 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         throw error;
       });
     }
-  }), sync2 = (reason) => {
+  }), sync3 = (reason) => {
     settingsPanel?.sync(), runner.sync(reason);
   }, settleTimer = null;
   new MutationObserver(() => {
-    settleTimer !== null && clearTimeout(settleTimer), settleTimer = setTimeout(sync2, DOM_SETTLE_MS, "dom-change");
+    settleTimer !== null && clearTimeout(settleTimer), settleTimer = setTimeout(sync3, DOM_SETTLE_MS, "dom-change");
   }).observe(document.body, { childList: !0, subtree: !0 });
-  setInterval(sync2, TIMER_INTERVAL_MS, "timer");
+  setInterval(sync3, TIMER_INTERVAL_MS, "timer");
   document.addEventListener("visibilitychange", () => {
-    isTabActive() && sync2("tab-shown");
+    isTabActive() && sync3("tab-shown");
   });
-  sync2("dom-change");
+  sync3("dom-change");
 })();
