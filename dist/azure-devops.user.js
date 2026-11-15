@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.7.2
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off.
+// @version      1.8.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -94,6 +94,7 @@
 
   // azure-devops/src/features/avatar-initials/index.ts
   var avatarInitials = {
+    change: { kind: "new", version: "1.7.2" },
     description: "Initials on avatars, in a colour per person.",
     // The key of the earlier menu setting, so the owner's choice stays.
     id: "avatar-initials",
@@ -356,6 +357,7 @@
 
   // azure-devops/src/features/days-in-column/index.ts
   var HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns", daysInColumn = {
+    change: { kind: "new", version: "1.7.2" },
     description: "A dot per day a card has been in its board column, with a toggle per column.",
     id: "days-in-column",
     name: "Days in column",
@@ -512,6 +514,7 @@
 
   // azure-devops/src/features/system-theme/index.ts
   var THEME_LOOKS_KEY = "system-theme-looks", SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)", followSystemTheme = {
+    change: { kind: "new", version: "1.7.2" },
     description: "Azure DevOps shows Light or Dark to match the system.",
     // The key of the earlier menu setting, so the owner's choice stays.
     id: "follow-system-theme",
@@ -1272,6 +1275,7 @@ ${issue.message ?? ""}`;
 
   // azure-devops/src/features/overview-pipeline-issues/index.ts
   var overviewPipelineIssues = {
+    change: { kind: "new", version: "1.7.2" },
     description: "The warnings and errors of each check's latest run, above the pull request description.",
     id: "overview-pipeline-issues",
     name: "Warnings and errors on the Overview",
@@ -1704,6 +1708,7 @@ ${issue.message ?? ""}`;
 
   // azure-devops/src/features/pipeline-status/index.ts
   var pipelineStatusOnPullRequests = {
+    change: { kind: "new", version: "1.7.2" },
     description: "A pipeline status icon on each pull request in a list.",
     id: "pipeline-status",
     name: "Pipeline status on pull requests",
@@ -2561,6 +2566,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 
   // azure-devops/src/features/pipeline-tab/index.ts
   var pipelineTab = {
+    change: { kind: "new", version: "1.7.2" },
     description: "A Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs, and a button to start or cancel a run.",
     id: "pipeline-tab",
     name: "Pipeline tab",
@@ -2693,6 +2699,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 
   // azure-devops/src/features/reload-on-changes/index.ts
   var reloadOnChanges = {
+    change: { kind: "new", version: "1.7.2" },
     description: "Pull request lists and boards reload when their content changes on the server.",
     id: "reload-on-changes",
     name: "Reload on changes",
@@ -2816,6 +2823,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 
   // azure-devops/src/features/required-reviewers/index.ts
   var requiredReviewers = {
+    change: { kind: "new", version: "1.7.2" },
     description: "Required reviewers come first in pull request lists, with a glow.",
     id: "required-reviewers",
     name: "Required reviewers first",
@@ -3393,6 +3401,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 
   // azure-devops/src/features/starred-reviewers/index.ts
   var starredReviewers = {
+    change: { kind: "new", version: "1.7.2" },
     description: "Star reviewers, then add a starred one as optional or required reviewer in one click.",
     id: "starred-reviewers",
     name: "Starred reviewers",
@@ -3475,7 +3484,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/core/settings-panel.ts
-  var TITLE = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS = "fix-ado-settings", SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
+  var TITLE = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
   function element2(document2, tag, { className, text }) {
     let created = document2.createElement(tag);
     return created.className = className, text !== void 0 && (created.textContent = text), created;
@@ -3497,12 +3506,24 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       viewBox: "0 0 16 16"
     });
     return svg.append(
-      svgElement(document2, "rect", { height: "10.5", rx: "1", width: "10", x: "1.5", y: "4" }),
-      svgElement(document2, "circle", { cx: "6.5", cy: "3.25", r: "2.25" }),
-      svgElement(document2, "circle", { cx: "12.25", cy: "9.25", r: "2.25" })
+      svgElement(document2, "path", {
+        d: "M1.5 4H4.6A2.1 2.1 0 1 1 8.4 4H11.5V7.35A2.1 2.1 0 1 1 11.5 11.15V14.5H1.5Z"
+      })
     ), svg;
   }
-  function createButtonItem(document2, open) {
+  function featuresWithUnseenChange(options) {
+    return options.features.filter(
+      (feature) => feature.change !== void 0 && options.seenChangeVersion(feature) !== feature.change.version
+    );
+  }
+  function chipKind(feature, options) {
+    return options.seenChangeVersion(feature) === null ? "new" : feature.change?.kind ?? "new";
+  }
+  function unseenCountBadge(document2, unseenCount) {
+    let badge = element2(document2, "span", { className: BADGE_CLASS, text: String(unseenCount) });
+    return badge.setAttribute("aria-label", `${unseenCount} new or updated`), badge;
+  }
+  function createButtonItem(document2, open, unseenCount) {
     let item = element2(document2, "div", { className: `${BUTTON_ITEM_CLASS} flex-row flex-center` });
     item.setAttribute("role", "menuitem");
     let settingsButton = button(
@@ -3512,14 +3533,26 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       },
       open
     );
-    return settingsButton.title = TITLE, settingsButton.setAttribute("aria-label", TITLE), settingsButton.append(puzzleIcon(document2)), item.append(settingsButton), item;
+    return settingsButton.title = TITLE, settingsButton.setAttribute("aria-label", TITLE), settingsButton.append(puzzleIcon(document2)), unseenCount > 0 && settingsButton.append(unseenCountBadge(document2, unseenCount)), item.append(settingsButton), item;
   }
-  function featureRow(document2, feature, isOn2) {
+  function featureName(document2, feature, chip) {
+    let name = element2(document2, "span", {
+      className: "fix-ado-settings-feature-name",
+      text: feature.name
+    });
+    return chip && name.append(
+      element2(document2, "span", {
+        className: `fix-ado-settings-chip fix-ado-settings-chip-${chip}`,
+        text: CHIP_TEXT[chip]
+      })
+    ), name;
+  }
+  function featureRow(document2, { feature, isOn: isOn2, chip }) {
     let row = element2(document2, "label", { className: "fix-ado-settings-feature" }), checkbox = element2(document2, "input", { className: "fix-ado-settings-checkbox" });
     checkbox.type = "checkbox", checkbox.checked = isOn2, checkbox.dataset.featureId = feature.id;
     let text = element2(document2, "span", { className: "fix-ado-settings-feature-text" });
     return text.append(
-      element2(document2, "span", { className: "fix-ado-settings-feature-name", text: feature.name }),
+      featureName(document2, feature, chip),
       element2(document2, "span", {
         className: "fix-ado-settings-feature-description",
         text: feature.description
@@ -3554,15 +3587,19 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     let buttons = element2(document2, "div", { className: "fix-ado-settings-buttons" });
     return buttons.append(cancel, save), { buttons, save };
   }
-  function featureList(options) {
+  function featureList(options, unseen) {
     let list = element2(options.document, "div", { className: "fix-ado-settings-features" });
     return list.append(
       ...options.features.map(
-        (feature) => featureRow(options.document, feature, options.isOn(feature))
+        (feature) => featureRow(options.document, {
+          chip: unseen.includes(feature) ? chipKind(feature, options) : null,
+          feature,
+          isOn: options.isOn(feature)
+        })
       )
     ), list;
   }
-  function createDialog(options) {
+  function createDialog(options, unseen) {
     let { document: document2 } = options, dialog = element2(document2, "dialog", { className: DIALOG_CLASS });
     dialog.setAttribute("aria-label", TITLE);
     let warning = element2(document2, "p", {
@@ -3575,7 +3612,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       save.disabled = changedChoices(dialog, options).size === 0;
     }), dialog.append(
       element2(document2, "h2", { className: "fix-ado-settings-title", text: TITLE }),
-      featureList(options),
+      featureList(options, unseen),
       warning,
       buttons
     ), dialog;
@@ -3584,14 +3621,14 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     let { document: document2 } = options;
     function open() {
       document2.querySelector(`dialog.${DIALOG_CLASS}`)?.remove();
-      let dialog = createDialog(options);
-      document2.body.append(dialog), dialog.showModal();
+      let unseen = featuresWithUnseenChange(options), dialog = createDialog(options, unseen);
+      document2.body.append(dialog), dialog.showModal(), unseen.length > 0 && (options.markChangesSeen(unseen), document2.querySelector(`.${BUTTON_ITEM_CLASS} .${BADGE_CLASS}`)?.remove());
     }
     return {
       open,
       sync() {
         let topBar = document2.querySelector(TOP_BAR_SELECTOR);
-        topBar && !topBar.querySelector(`.${BUTTON_ITEM_CLASS}`) && topBar.prepend(createButtonItem(document2, open));
+        topBar && !topBar.querySelector(`.${BUTTON_ITEM_CLASS}`) && topBar.prepend(createButtonItem(document2, open, featuresWithUnseenChange(options).length));
       }
     };
   }
@@ -3615,12 +3652,38 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/core/settings-panel.css
-  var settings_panel_default = `/* The settings button in Azure DevOps's top bar: a puzzle piece in a colour Azure DevOps
-   does not use, so it reads as the script's own and not as one of Azure DevOps's icons. */
+  var settings_panel_default = `/* The settings button in Azure DevOps's top bar: a puzzle piece outline in the text colour,
+   like Azure DevOps's own line icons next to it. */
 .fix-ado-settings-icon {
   width: 16px;
   height: 16px;
-  fill: #c239b3;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+/* The number of feature changes the owner has not seen, on the button's top right corner. */
+.fix-ado-settings-button {
+  position: relative;
+}
+
+.fix-ado-settings-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background: var(--communication-background, rgb(0, 120, 212));
+  color: var(--text-on-communication-background, rgb(255, 255, 255));
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
 }
 
 /* The settings panel: a dialog over the page, in Azure DevOps's own theme colours. */
@@ -3687,6 +3750,27 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   font-weight: 600;
 }
 
+.fix-ado-settings-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+
+.fix-ado-settings-chip-new {
+  background: var(--communication-background, rgb(0, 120, 212));
+  color: var(--text-on-communication-background, rgb(255, 255, 255));
+}
+
+.fix-ado-settings-chip-updated {
+  background: var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+}
+
 .fix-ado-settings-feature-description {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
 }
@@ -3725,17 +3809,22 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 `;
 
   // azure-devops/src/main.ts
-  var DOM_SETTLE_MS = 200, TIMER_INTERVAL_MS = 5e3, IS_ON_BY_DEFAULT = !0, basePath = apiBasePath(location), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, isOn = ({ id }) => GM_getValue(id, IS_ON_BY_DEFAULT), settingsPanel = isInFrame ? null : createSettingsPanel({
+  var DOM_SETTLE_MS = 200, TIMER_INTERVAL_MS = 5e3, IS_ON_BY_DEFAULT = !0, basePath = apiBasePath(location), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, isOn = ({ id }) => GM_getValue(id, IS_ON_BY_DEFAULT), seenChangeKey = ({ id }) => `${id}-seen-change`, settingsPanel = isInFrame ? null : createSettingsPanel({
     document,
     features: FEATURES,
     isOn,
+    markChangesSeen: (features) => {
+      for (let feature of features)
+        GM_setValue(seenChangeKey(feature), feature.change?.version);
+    },
     reload: () => {
       location.reload();
     },
     save: (choices) => {
       for (let [id, isChosenOn] of choices)
         GM_setValue(id, isChosenOn);
-    }
+    },
+    seenChangeVersion: (feature) => GM_getValue(seenChangeKey(feature), null)
   });
   settingsPanel && (GM_addStyle(settings_panel_default), GM_registerMenuCommand("Settings", settingsPanel.open));
   var runner = createFeatureRunner({
