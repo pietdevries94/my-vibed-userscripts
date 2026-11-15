@@ -18,5 +18,8 @@ test("each Azure DevOps location gives its page", () => {
     kind: "pull-request",
     pullRequest: { project: "my-project", pullRequestId: 42, repository: "my-repo" },
   });
+  assert.deepEqual(pageAt("/my-org/my-project/_git/my-repo/pullrequestcreate", "?sourceRef=x"), {
+    kind: "pull-request-create",
+  });
   assert.deepEqual(pageAt("/my-org/my-project/_build/results", "?buildId=7"), { kind: "other" });
 });

@@ -71,7 +71,10 @@ function searchResponse(request: FakeRequest): FakeResponse {
   const { query } = JSON.parse(request.body) as { query?: string };
   const wanted = (query ?? "").toLowerCase();
   const identities = [...pageReviewers(), ...SEARCHABLE]
-    .filter(({ displayName }) => displayName.toLowerCase().includes(wanted))
+    .filter(
+      ({ displayName, mail }) =>
+        displayName.toLowerCase().includes(wanted) || mail.toLowerCase().includes(wanted),
+    )
     .slice(0, MAX_FOUND)
     .map(({ id, displayName, mail, isGroup }) => ({
       displayName,

@@ -1,0 +1,266 @@
+import type { Identity } from "../../pull-requests/reviewer-requests.ts";
+import { JSDOM } from "jsdom";
+import assert from "node:assert/strict";
+import { createStarredReviewerChips } from "./starred-reviewer-chips.ts";
+import { createStarredReviewersStore } from "./starred-reviewers-store.ts";
+import { test } from "node:test";
+
+const QUILL: Identity = {
+  displayName: "Quill Barrow",
+  id: "id-quill",
+  isGroup: false,
+  signInAddress: "quill@example.com",
+};
+const TEAM: Identity = {
+  displayName: String.raw`[Ledger Works]\Ledger Team`,
+  id: "id-team",
+  isGroup: true,
+  signInAddress: "",
+};
+const MARREN: Identity = {
+  displayName: "Marren Tolk",
+  id: "id-marren",
+  isGroup: false,
+  signInAddress: "marren@example.com",
+};
+/** Who the stand-in picker finds, with the second line it shows. */
+const DIRECTORY = [
+  { detail: "quill@example.com", name: "Quill Barrow" },
+  { detail: "quill.b@example.com", name: "Quill Barrows" },
+  { detail: "marren@example.com", name: "Marren Tolk" },
+  { detail: "", name: "Ledger Team" },
+];
+
+function pill(name: string): string {
+  return `<div class="bolt-identity-picker-pill bolt-pill" role="listitem">
+    <div class="bolt-pill-content text-ellipsis">${name}</div></div>`;
+}
+
+function reviewerField(labelId: string, label: string, pills: string[]): string {
+  return `<div class="flex-column rhythm-vertical-8">
+    <div class="flex-row flex-center"><label class="body-m" id="${labelId}">${label}</label></div>
+    <div><div class="bolt-tag-picker"><div class="bolt-tag-picker-group">
+      <div role="list" aria-labelledby="${labelId}">${pills.join("")}</div>
+      <div class="bolt-tag-picker-add-icon-div">
+        <input role="combobox" aria-labelledby="${labelId}" class="bolt-tag-picker-input" value="">
+      </div>
+    </div></div><div class="bolt-identity-picker-error"></div></div>
+  </div>`;
+}
+
+function page(optional: string[], required: string[] | null): string {
+  return `<!doctype html><body><div class="flex-column">
+    ${reviewerField("__bolt-pr-optional-reviewers-label", "Reviewers", optional)}
+    ${required === null ? "" : reviewerField("__bolt-pr-required-reviewers-label", "Required reviewers", required)}
+  </div><div class="bolt-portal-host"></div></body>`;
+}
+
+/**
+ * Azure DevOps's reviewer field, as far as the chips use it: typing shows suggestions
+ * in a listbox after a moment, and a click on one adds it as a pill.
+ */
+function attachPicker(document: Document, labelId: string, found = DIRECTORY): void {
+  const input = document.querySelector<HTMLInputElement>(`input[aria-labelledby="${labelId}"]`);
+  const list = document.querySelector(`[role="list"][aria-labelledby="${labelId}"]`);
+  if (input === null || list === null) {
+    return;
+  }
+  input.setAttribute("aria-controls", `suggestions-${labelId}`);
+  input.addEventListener("input", () => {
+    const query = input.value.toLowerCase();
+    setImmediate(() => {
+      document.querySelector(`#suggestions-${labelId}`)?.remove();
+      const listbox = document.createElement("div");
+      listbox.id = `suggestions-${labelId}`;
+      listbox.setAttribute("role", "listbox");
+      const matches = found.filter(
+        ({ name, detail }) =>
+          name.toLowerCase().includes(query) || detail.toLowerCase().includes(query),
+      );
+      for (const { name, detail } of matches) {
+        const option = document.createElement("div");
+        option.setAttribute("role", "option");
+        option.innerHTML = `<div class="bolt-suggestions-item"><div class="bolt-picker-persona-name">
+          <div class="fontSizeM text-ellipsis">${name}</div>
+          <div class="flex-row"><div class="fontSize secondary-text">${detail}</div></div></div></div>`;
+        option.querySelector(".bolt-suggestions-item")?.addEventListener("click", () => {
+          list.insertAdjacentHTML("beforeend", pill(name));
+          input.value = "";
+          listbox.remove();
+        });
+        listbox.append(option);
+      }
+      document.querySelector(".bolt-portal-host")?.append(listbox);
+    });
+  });
+}
+
+interface Harness {
+  document: Document;
+  sync: () => void;
+  runScheduled: () => void;
+}
+
+function setUp(starred: Identity[], html: string, isCreatePage = true): Harness {
+  const { document } = new JSDOM(html).window;
+  const scheduled: (() => void)[] = [];
+  let saved = [...starred];
+  const chips = createStarredReviewerChips({
+    document,
+    imageUrlOf: ({ id }) => `/avatars/${id}`,
+    schedule: (callback): (() => void) => {
+      scheduled.push(callback);
+      return () => {
+        scheduled.splice(scheduled.indexOf(callback), 1);
+      };
+    },
+    store: createStarredReviewersStore({
+      load: () => saved,
+      save: (list) => {
+        saved = list;
+      },
+    }),
+  });
+  const harness: Harness = {
+    document,
+    runScheduled: () => {
+      for (const callback of scheduled.splice(0)) {
+        callback();
+      }
+    },
+    sync: () => {
+      chips.sync(isCreatePage);
+    },
+  };
+  harness.sync();
+  return harness;
+}
+
+async function settle(): Promise<void> {
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+}
+
+function chipRows(document: Document): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>(".fix-ado-starred-chips")];
+}
+
+function chipNames(row: Element | undefined): string[] {
+  return [...(row?.querySelectorAll(".fix-ado-starred-chip .bolt-pill-content") ?? [])].map(
+    (name) => name.textContent ?? "",
+  );
+}
+
+function nameOfChip(button: Element): string {
+  return button.querySelector(".bolt-pill-content")?.textContent ?? "";
+}
+
+function chip(row: Element | undefined, name: string): HTMLButtonElement {
+  const buttons = [...(row?.querySelectorAll<HTMLButtonElement>(".fix-ado-starred-chip") ?? [])];
+  const found = buttons.find((button) => nameOfChip(button) === name);
+  assert.ok(found, `a chip for ${name}`);
+  return found;
+}
+
+function pillNames(document: Document, labelId: string): string[] {
+  return [
+    ...document.querySelectorAll(`[aria-labelledby="${labelId}"] .bolt-identity-picker-pill`),
+  ].map((pillElement) => pillElement.textContent?.trim() ?? "");
+}
+
+const OPTIONAL = "__bolt-pr-optional-reviewers-label";
+const REQUIRED = "__bolt-pr-required-reviewers-label";
+
+test("the starred reviewers show as chips under the Reviewers field, a team by its own name", () => {
+  const { document } = setUp([QUILL, TEAM], page([], null));
+  const rows = chipRows(document);
+  assert.equal(rows.length, 1);
+  assert.equal(
+    rows[0]?.parentElement,
+    document.querySelector(`#${OPTIONAL}`)?.closest(".flex-column"),
+  );
+  assert.deepEqual(chipNames(rows[0]), ["Quill Barrow", "Ledger Team"]);
+  assert.equal(rows[0]?.querySelector("img")?.getAttribute("src"), "/avatars/id-quill");
+});
+
+test("a starred reviewer already in a field gets no chip", () => {
+  const { document } = setUp(
+    [QUILL, TEAM, MARREN],
+    page([pill("Ledger Team")], [pill("Quill Barrow")]),
+  );
+  for (const row of chipRows(document)) {
+    assert.deepEqual(chipNames(row), ["Marren Tolk"]);
+  }
+});
+
+test("with required reviewers on, the required field gets its own chips", () => {
+  const { document } = setUp([QUILL], page([], []));
+  const rows = chipRows(document);
+  assert.equal(rows.length, 2);
+  assert.equal(
+    rows[1]?.parentElement,
+    document.querySelector(`#${REQUIRED}`)?.closest(".flex-column"),
+  );
+});
+
+test("no chips without starred reviewers, or on another page", () => {
+  const withoutStarred = setUp([], page([], null));
+  const elsewhere = setUp([QUILL], page([], null), false);
+  assert.equal(chipRows(withoutStarred.document).length, 0);
+  assert.equal(chipRows(elsewhere.document).length, 0);
+});
+
+test("syncing again leaves the same chips in place", () => {
+  const { document, sync } = setUp([QUILL], page([], null));
+  const before = chipRows(document)[0]?.querySelector(".fix-ado-starred-chip");
+  sync();
+  assert.equal(chipRows(document).length, 1);
+  assert.equal(chipRows(document)[0]?.querySelector(".fix-ado-starred-chip"), before);
+});
+
+test("a click searches the field by sign-in address and picks that person", async () => {
+  const harness = setUp([QUILL, MARREN], page([], []));
+  attachPicker(harness.document, REQUIRED);
+  const input = harness.document.querySelector<HTMLInputElement>(
+    `input[aria-labelledby="${REQUIRED}"]`,
+  );
+  chip(chipRows(harness.document)[1], "Quill Barrow").click();
+  assert.equal(input?.value, "quill@example.com");
+  assert.equal(chip(chipRows(harness.document)[1], "Quill Barrow").disabled, true);
+  await settle();
+  harness.runScheduled();
+  assert.deepEqual(pillNames(harness.document, REQUIRED), ["Quill Barrow"]);
+  assert.deepEqual(pillNames(harness.document, OPTIONAL), []);
+  harness.sync();
+  for (const row of chipRows(harness.document)) {
+    assert.deepEqual(chipNames(row), ["Marren Tolk"]);
+  }
+});
+
+test("a team is searched by its own name", async () => {
+  const harness = setUp([TEAM], page([], null));
+  attachPicker(harness.document, OPTIONAL);
+  chip(chipRows(harness.document)[0], "Ledger Team").click();
+  await settle();
+  harness.runScheduled();
+  assert.deepEqual(pillNames(harness.document, OPTIONAL), ["Ledger Team"]);
+  assert.equal(chipRows(harness.document).length, 0);
+});
+
+test("the chip waits for the suggestions, and gives up when its reviewer is not among them", async () => {
+  const harness = setUp([QUILL], page([], null));
+  attachPicker(harness.document, OPTIONAL, [
+    { detail: "quill.b@example.com", name: "Quill Barrows" },
+  ]);
+  chip(chipRows(harness.document)[0], "Quill Barrow").click();
+  harness.runScheduled();
+  await settle();
+  for (let tries = 0; tries < 40; tries += 1) {
+    harness.runScheduled();
+  }
+  assert.deepEqual(pillNames(harness.document, OPTIONAL), []);
+  const button = chip(chipRows(harness.document)[0], "Quill Barrow");
+  assert.equal(button.disabled, false);
+  assert.match(button.title, /not found/iu);
+});

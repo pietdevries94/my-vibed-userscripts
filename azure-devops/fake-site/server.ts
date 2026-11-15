@@ -16,6 +16,7 @@ import {
   pullRequestPageData,
 } from "./data.ts";
 import { htmlResponse, jsonResponse, startFakeSite } from "../../shared/dev/fake-site/server.ts";
+import { CREATE_PAGE_SCRIPT } from "./create-page.ts";
 import { FAKE_SITE_PORT } from "../../build/bundle.ts";
 import type { Page } from "./data.ts";
 import { fixturePage } from "../../shared/dev/fake-site/fixture-page.ts";
@@ -26,6 +27,7 @@ const HTTP_OK = 200;
 const HTTP_NOT_FOUND = 404;
 const BOARD_PATH = "/fake-org/text-2/_boards/board/t/text-3/Stories";
 const INBOX_PATH = "/fake-org/_pulls";
+const CREATE_PATH = "/fake-org/fake-project/_git/fake-repository/pullrequestcreate";
 const RUN_PAGES = {
   log: "pipeline-log",
   steps: "pipeline-steps",
@@ -36,6 +38,7 @@ const RUN_PAGES = {
 const PAGE_PATHS: [Page, (pathname: string) => boolean][] = [
   ["pr-detail", (pathname) => /\/_git\/[^/]+\/pullrequest\/\d+$/u.test(pathname)],
   ["pr-list", (pathname) => /\/_git\/[^/]+\/pullrequests$/u.test(pathname)],
+  ["pr-create", (pathname) => /\/_git\/[^/]+\/pullrequestcreate$/u.test(pathname)],
   ["pr-inbox", (pathname) => pathname.endsWith("/_pulls")],
   ["board", (pathname) => pathname.includes("/_boards/board/")],
 ];
@@ -64,7 +67,7 @@ function styleOf(page: Page): string {
   if (page === "pr-list" || page === "pr-inbox") {
     return `${PULL_REQUEST_STYLE}\n${statusColorStyle(page)}`;
   }
-  if (page === "pr-detail") {
+  if (page === "pr-detail" || page === "pr-create") {
     return pageCss(page) ?? PULL_REQUEST_STYLE;
   }
   return RUN_STYLE;
@@ -75,6 +78,7 @@ function pageResponse(page: Page): FakeResponse {
   return htmlResponse(
     fixturePage({
       fixtureUrl: `/fake-site/${page}.html`,
+      script: page === "pr-create" ? CREATE_PAGE_SCRIPT : "",
       style,
       title: `Fake Azure DevOps: ${page}`,
     }),
@@ -236,6 +240,7 @@ const PAGES: Page[] = [
   "pr-list",
   "pr-inbox",
   "pr-detail",
+  "pr-create",
   "pipeline-summary",
   "pipeline-steps",
   "pipeline-log",
@@ -268,6 +273,7 @@ startFakeSite(
         label: "Pull request",
         path: pullRequestDetailPath() ?? "/fake-org/text-16/_git/text-17/pullrequest/1003",
       },
+      { label: "New pull request", path: CREATE_PATH },
       { label: "Theme panel", path: THEME_PATH },
       { label: "Theme panel closed", path: `${THEME_PATH}?panel=closed` },
     ],

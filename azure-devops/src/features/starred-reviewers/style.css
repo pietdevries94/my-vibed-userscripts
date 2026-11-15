@@ -70,3 +70,20 @@
 .fix-ado-star-picker-callout .bolt-suggestions-container {
   max-height: 320px;
 }
+
+/* On the create pull request page: a chip per starred reviewer under each reviewer field. */
+.fix-ado-starred-chips {
+  gap: 8px;
+  align-items: flex-start;
+}
+.fix-ado-starred-chips-icon {
+  flex-shrink: 0;
+  margin-top: 6px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+.fix-ado-starred-chip-list {
+  gap: 4px;
+}
+.fix-ado-starred-chip[disabled] {
+  opacity: 0.5;
+}

@@ -1,5 +1,6 @@
 import type { PullRequestListPage, PullRequestRef } from "../pull-requests/pull-request-link.ts";
 import {
+  isPullRequestCreateLocation,
   isPullRequestInboxLocation,
   parsePullRequestHref,
   parsePullRequestListLocation,
@@ -11,8 +12,18 @@ type Page =
   | { kind: "board" }
   | { kind: "pull-request-list"; listPage: PullRequestListPage }
   | { kind: "pull-request-inbox" }
+  | { kind: "pull-request-create" }
   | { kind: "pull-request"; pullRequest: PullRequestRef }
   | { kind: "other" };
+
+/** A pull request, the page that creates one, or any other page. */
+function parsePullRequestPage(location: { pathname: string }, basePath: string): Page {
+  if (isPullRequestCreateLocation(location)) {
+    return { kind: "pull-request-create" };
+  }
+  const pullRequest = parsePullRequestHref(location.pathname, basePath);
+  return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
+}
 
 function parsePage(location: { pathname: string; search: string }, basePath: string): Page {
   if (isBoardLocation(location)) {
@@ -25,8 +36,7 @@ function parsePage(location: { pathname: string; search: string }, basePath: str
   if (isPullRequestInboxLocation(location)) {
     return { kind: "pull-request-inbox" };
   }
-  const pullRequest = parsePullRequestHref(location.pathname, basePath);
-  return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
+  return parsePullRequestPage(location, basePath);
 }
 
 /** The pull request the page shows, or null on any other page. */

@@ -15,6 +15,7 @@ type Page =
   | "pr-list"
   | "pr-inbox"
   | "pr-detail"
+  | "pr-create"
   | "pipeline-summary"
   | "pipeline-steps"
   | "pipeline-log";
@@ -57,7 +58,11 @@ const SCRIPT_DIRECTORY = path.join(import.meta.dirname, "..");
 const TOKEN = /^text-\d+$/u;
 const readFixture = fixtureReader(SCRIPT_DIRECTORY);
 /** The capture behind each page, where it is not named after the page. */
-const PAGE_FIXTURES: Partial<Record<Page, string>> = { "pr-detail": "pr-detail-warnings" };
+const PAGE_FIXTURES: Partial<Record<Page, string>> = {
+  // The create page once a branch is picked: the first capture with the reviewer field.
+  "pr-create": "pr-create-with-branch-selected",
+  "pr-detail": "pr-detail-warnings",
+};
 const DEFAULT_PULL_REQUEST_CAPTURE = "warnings";
 
 function fixtureOfPage(page: Page): string {

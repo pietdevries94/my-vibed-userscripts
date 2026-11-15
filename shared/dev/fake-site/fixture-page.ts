@@ -9,9 +9,11 @@ interface FixturePageOptions {
   fixtureUrl: string;
   /** CSS for the page. The site's own stylesheets are not captured. */
   style: string;
+  /** JavaScript that runs once the fixture is on the page, to stand in for the site's own behaviour. */
+  script?: string;
 }
 
-function fixturePage({ title, fixtureUrl, style }: FixturePageOptions): string {
+function fixturePage({ title, fixtureUrl, style, script = "" }: FixturePageOptions): string {
   return `<!doctype html>
 <meta charset="utf-8">
 <title>${title}</title>
@@ -25,6 +27,7 @@ function fixturePage({ title, fixtureUrl, style }: FixturePageOptions): string {
     .replace(/<\\/body>\\s*$/u, "</div>");
   const root = buildFixtureDom(document, html);
   document.body.replaceChildren(...(root === null ? [] : [root]));
+  ${script}
 </script>
 </body>`;
 }
