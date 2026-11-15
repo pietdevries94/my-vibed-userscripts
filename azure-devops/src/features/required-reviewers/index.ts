@@ -5,6 +5,7 @@ import { findPullRequestRows } from "../../pull-requests/pr-list.ts";
 import style from "./style.css";
 
 const requiredReviewers: Feature = {
+  change: { kind: "new", version: "1.7.2" },
   description: "Required reviewers come first in pull request lists, with a glow.",
   id: "required-reviewers",
   name: "Required reviewers first",

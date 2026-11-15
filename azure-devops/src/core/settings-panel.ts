@@ -5,6 +5,8 @@ const RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not
 const TOP_BAR_SELECTOR = ".region-header-menubar";
 const BUTTON_ITEM_CLASS = "fix-ado-settings-item";
 const DIALOG_CLASS = "fix-ado-settings";
+const BADGE_CLASS = "fix-ado-settings-badge";
+const CHIP_TEXT = { new: "New", updated: "Updated" } as const;
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 interface SettingsPanelOptions {
@@ -12,6 +14,10 @@ interface SettingsPanelOptions {
   /** In the order the panel lists them. */
   features: Feature[];
   isOn: (feature: Feature) => boolean;
+  /** True when the owner has seen the feature's current change. */
+  isChangeSeen: (feature: Feature) => boolean;
+  /** Stores that the owner has seen the current change of these features. */
+  markChangesSeen: (features: Feature[]) => void;
   /** Stores the changed choices, by feature id. */
   save: (choices: Map<string, boolean>) => void;
   reload: () => void;
@@ -71,8 +77,22 @@ function puzzleIcon(document: Document): Element {
   return svg;
 }
 
+/** The features with a change the owner has not seen. */
+function featuresWithUnseenChange(options: SettingsPanelOptions): Feature[] {
+  return options.features.filter(
+    (feature) => feature.change !== undefined && !options.isChangeSeen(feature),
+  );
+}
+
+/** The count of unseen feature changes, on the settings button's corner. */
+function unseenCountBadge(document: Document, unseenCount: number): HTMLElement {
+  const badge = element(document, "span", { className: BADGE_CLASS, text: String(unseenCount) });
+  badge.setAttribute("aria-label", `${unseenCount} new or updated`);
+  return badge;
+}
+
 /** The top bar item, shaped like Azure DevOps's own icon buttons next to it. */
-function createButtonItem(document: Document, open: () => void): HTMLElement {
+function createButtonItem(document: Document, open: () => void, unseenCount: number): HTMLElement {
   const item = element(document, "div", { className: `${BUTTON_ITEM_CLASS} flex-row flex-center` });
   item.setAttribute("role", "menuitem");
   const settingsButton = button(
@@ -86,11 +106,40 @@ function createButtonItem(document: Document, open: () => void): HTMLElement {
   settingsButton.title = TITLE;
   settingsButton.setAttribute("aria-label", TITLE);
   settingsButton.append(puzzleIcon(document));
+  if (unseenCount > 0) {
+    settingsButton.append(unseenCountBadge(document, unseenCount));
+  }
   item.append(settingsButton);
   return item;
 }
 
-function featureRow(document: Document, feature: Feature, isOn: boolean): HTMLElement {
+/** The feature's name, with a New or Updated chip while its change is unseen. */
+function featureName(document: Document, feature: Feature, isChangeUnseen: boolean): HTMLElement {
+  const name = element(document, "span", {
+    className: "fix-ado-settings-feature-name",
+    text: feature.name,
+  });
+  if (isChangeUnseen && feature.change) {
+    name.append(
+      element(document, "span", {
+        className: `fix-ado-settings-chip fix-ado-settings-chip-${feature.change.kind}`,
+        text: CHIP_TEXT[feature.change.kind],
+      }),
+    );
+  }
+  return name;
+}
+
+interface FeatureRowParts {
+  feature: Feature;
+  isOn: boolean;
+  isChangeUnseen: boolean;
+}
+
+function featureRow(
+  document: Document,
+  { feature, isOn, isChangeUnseen }: FeatureRowParts,
+): HTMLElement {
   const row = element(document, "label", { className: "fix-ado-settings-feature" });
   const checkbox = element(document, "input", { className: "fix-ado-settings-checkbox" });
   checkbox.type = "checkbox";
@@ -98,7 +147,7 @@ function featureRow(document: Document, feature: Feature, isOn: boolean): HTMLEl
   checkbox.dataset.featureId = feature.id;
   const text = element(document, "span", { className: "fix-ado-settings-feature-text" });
   text.append(
-    element(document, "span", { className: "fix-ado-settings-feature-name", text: feature.name }),
+    featureName(document, feature, isChangeUnseen),
     element(document, "span", {
       className: "fix-ado-settings-feature-description",
       text: feature.description,
@@ -148,17 +197,21 @@ function createButtons(
   return { buttons, save };
 }
 
-function featureList(options: SettingsPanelOptions): HTMLElement {
+function featureList(options: SettingsPanelOptions, unseen: Feature[]): HTMLElement {
   const list = element(options.document, "div", { className: "fix-ado-settings-features" });
   list.append(
     ...options.features.map((feature) =>
-      featureRow(options.document, feature, options.isOn(feature)),
+      featureRow(options.document, {
+        feature,
+        isChangeUnseen: unseen.includes(feature),
+        isOn: options.isOn(feature),
+      }),
     ),
   );
   return list;
 }
 
-function createDialog(options: SettingsPanelOptions): HTMLDialogElement {
+function createDialog(options: SettingsPanelOptions, unseen: Feature[]): HTMLDialogElement {
   const { document } = options;
   const dialog = element(document, "dialog", { className: DIALOG_CLASS });
   dialog.setAttribute("aria-label", TITLE);
@@ -173,7 +226,7 @@ function createDialog(options: SettingsPanelOptions): HTMLDialogElement {
   });
   dialog.append(
     element(document, "h2", { className: "fix-ado-settings-title", text: TITLE }),
-    featureList(options),
+    featureList(options, unseen),
     warning,
     buttons,
   );
@@ -187,9 +240,15 @@ function createSettingsPanel(options: SettingsPanelOptions): SettingsPanel {
   function open(): void {
     // Built fresh, so it shows the stored choices and not ones a Cancel left behind.
     document.querySelector(`dialog.${DIALOG_CLASS}`)?.remove();
-    const dialog = createDialog(options);
+    const unseen = featuresWithUnseenChange(options);
+    const dialog = createDialog(options, unseen);
     document.body.append(dialog);
     dialog.showModal();
+    // The chips stay while this panel is open; the badge and the next panel show none.
+    if (unseen.length > 0) {
+      options.markChangesSeen(unseen);
+      document.querySelector(`.${BUTTON_ITEM_CLASS} .${BADGE_CLASS}`)?.remove();
+    }
   }
 
   return {
@@ -197,7 +256,7 @@ function createSettingsPanel(options: SettingsPanelOptions): SettingsPanel {
     sync() {
       const topBar = document.querySelector(TOP_BAR_SELECTOR);
       if (topBar && !topBar.querySelector(`.${BUTTON_ITEM_CLASS}`)) {
-        topBar.prepend(createButtonItem(document, open));
+        topBar.prepend(createButtonItem(document, open, featuresWithUnseenChange(options).length));
       }
     },
   };

@@ -9,7 +9,8 @@ const TOP_BAR = `
     <div role="menuitem"><button aria-label="Help"></button></div>
   </div>`;
 
-const featureNamed = (id: string, name: string): Feature => ({
+const featureNamed = (id: string, name: string, change?: Feature["change"]): Feature => ({
+  change,
   description: `What ${name} does.`,
   id,
   name,
@@ -17,11 +18,18 @@ const featureNamed = (id: string, name: string): Feature => ({
   styles: [],
 });
 const FEATURES = [featureNamed("tab", "Pipeline tab"), featureNamed("dots", "Days in column")];
+const CHANGED_FEATURES = [
+  featureNamed("tab", "Pipeline tab", { kind: "new", version: "2.0.0" }),
+  featureNamed("dots", "Days in column", { kind: "updated", version: "2.1.0" }),
+  featureNamed("stars", "Starred reviewers"),
+];
 
 interface TestPage {
   document: Document;
   reloads: number;
   saved: Map<string, boolean>[];
+  /** The change version the owner has seen, by feature id. */
+  seen: Map<string, string>;
   panel: ReturnType<typeof createSettingsPanel>;
   checkbox: (id: string) => HTMLInputElement;
   button: (text: string) => HTMLButtonElement;
@@ -36,7 +44,16 @@ function closeDialog(this: HTMLDialogElement): void {
   this.open = false;
 }
 
-function pageWith(body: string, onIds: string[] = ["tab", "dots"]): TestPage {
+interface PageSetup {
+  onIds?: string[];
+  features?: Feature[];
+  seen?: Map<string, string>;
+}
+
+function pageWith(
+  body: string,
+  { onIds = ["tab", "dots"], features = FEATURES, seen = new Map() }: PageSetup = {},
+): TestPage {
   const { window } = new JSDOM(`<!doctype html><body>${body}</body>`);
   // The test DOM has no modal dialogs.
   window.HTMLDialogElement.prototype.showModal = openDialog;
@@ -59,8 +76,16 @@ function pageWith(body: string, onIds: string[] = ["tab", "dots"]): TestPage {
     document,
     panel: createSettingsPanel({
       document,
-      features: FEATURES,
+      features,
+      isChangeSeen: ({ id, change }) => page.seen.get(id) === change?.version,
       isOn: ({ id }) => onIds.includes(id),
+      markChangesSeen: (seenFeatures) => {
+        for (const { id, change } of seenFeatures) {
+          if (change) {
+            page.seen.set(id, change.version);
+          }
+        }
+      },
       reload: () => {
         page.reloads += 1;
       },
@@ -70,6 +95,7 @@ function pageWith(body: string, onIds: string[] = ["tab", "dots"]): TestPage {
     }),
     reloads: 0,
     saved: [],
+    seen,
   };
   return page;
 }
@@ -98,7 +124,7 @@ test("without a top bar, there is no button and nothing fails", () => {
 });
 
 test("the button opens the panel with a checkbox per feature, checked when on", () => {
-  const page = pageWith(TOP_BAR, ["tab"]);
+  const page = pageWith(TOP_BAR, { onIds: ["tab"] });
   page.panel.sync();
   page.document.querySelector<HTMLButtonElement>(".region-header-menubar button")?.click();
   assert.equal(page.dialog()?.open, true);
@@ -154,4 +180,64 @@ test("opening again shows the stored choices, not the cancelled ones", () => {
   page.panel.open();
   assert.equal(page.checkbox("tab").checked, true);
   assert.equal(page.document.querySelectorAll("dialog").length, 1);
+});
+
+const badge = (page: TestPage): string | null =>
+  page.document.querySelector(".region-header-menubar .fix-ado-settings-badge")?.textContent ??
+  null;
+const chip = (page: TestPage, id: string): string | null =>
+  page.checkbox(id).closest("label")?.querySelector(".fix-ado-settings-chip")?.textContent ?? null;
+
+test("the button shows how many feature changes the owner has not seen", () => {
+  const page = pageWith(TOP_BAR, { features: CHANGED_FEATURES });
+  page.panel.sync();
+  assert.equal(badge(page), "2");
+});
+
+test("a change the owner has seen is not counted, nor is an older one they saw", () => {
+  const page = pageWith(TOP_BAR, {
+    features: CHANGED_FEATURES,
+    seen: new Map([
+      ["tab", "2.0.0"],
+      ["dots", "2.0.0"],
+    ]),
+  });
+  page.panel.sync();
+  assert.equal(badge(page), "1");
+});
+
+test("without unseen changes the button has no badge", () => {
+  const page = pageWith(TOP_BAR);
+  page.panel.sync();
+  assert.equal(badge(page), null);
+});
+
+test("the panel shows a New or Updated chip on each unseen change", () => {
+  const page = pageWith(TOP_BAR, {
+    features: CHANGED_FEATURES,
+    seen: new Map([["tab", "2.0.0"]]),
+  });
+  page.panel.open();
+  assert.equal(chip(page, "tab"), null);
+  assert.equal(chip(page, "dots"), "Updated");
+  assert.equal(chip(page, "stars"), null);
+});
+
+test("opening the panel marks its changes seen and removes the badge", () => {
+  const page = pageWith(TOP_BAR, { features: CHANGED_FEATURES });
+  page.panel.sync();
+  page.document.querySelector<HTMLButtonElement>(".region-header-menubar button")?.click();
+  assert.equal(chip(page, "tab"), "New");
+  assert.equal(chip(page, "dots"), "Updated");
+  assert.deepEqual(
+    page.seen,
+    new Map([
+      ["tab", "2.0.0"],
+      ["dots", "2.1.0"],
+    ]),
+  );
+  assert.equal(badge(page), null);
+  page.button("Cancel").click();
+  page.panel.open();
+  assert.equal(chip(page, "tab"), null);
 });

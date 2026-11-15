@@ -28,6 +28,13 @@ interface FeatureRun {
   sync?: (tick: Tick) => void;
 }
 
+/** What the settings panel flags until the owner has seen it. */
+interface FeatureChange {
+  kind: "new" | "updated";
+  /** The script version that brings the change. A new version flags the feature again. */
+  version: string;
+}
+
 /** One visible change the script makes to Azure DevOps, which the owner turns on or off. */
 interface Feature {
   /** The storage key of its on/off choice. Changing it resets the owner's choice. */
@@ -36,10 +43,12 @@ interface Feature {
   name: string;
   /** One line in the settings panel on what it does. */
   description: string;
+  /** Its latest change worth flagging in the settings panel. */
+  change?: FeatureChange;
   /** Its stylesheets. A stylesheet that several features list is added once. */
   styles: string[];
   /** Null when there is nothing to sync, such as in a frame the feature skips. */
   start: (context: FeatureContext) => FeatureRun | null;
 }
 
-export type { Feature, FeatureContext, FeatureRun, SyncReason, Tick };
+export type { Feature, FeatureChange, FeatureContext, FeatureRun, SyncReason, Tick };

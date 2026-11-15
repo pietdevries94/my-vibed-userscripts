@@ -4,6 +4,7 @@ import { createPipelineStatusPoller } from "./pipeline-status-poller.ts";
 import statusIconStyle from "../../pipeline/pipeline-status-icon.css";
 
 const pipelineStatusOnPullRequests: Feature = {
+  change: { kind: "new", version: "1.7.2" },
   description: "A pipeline status icon on each pull request in a list.",
   id: "pipeline-status",
   name: "Pipeline status on pull requests",

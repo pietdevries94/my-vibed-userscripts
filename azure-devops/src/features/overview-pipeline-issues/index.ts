@@ -4,6 +4,7 @@ import issueListStyle from "../../pipeline/pipeline-issue-list.css";
 import { pullRequestOf } from "../../core/page.ts";
 
 const overviewPipelineIssues: Feature = {
+  change: { kind: "new", version: "1.7.2" },
   description:
     "The warnings and errors of each check's latest run, above the pull request description.",
   id: "overview-pipeline-issues",

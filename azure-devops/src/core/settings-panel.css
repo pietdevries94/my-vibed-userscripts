@@ -6,6 +6,29 @@
   fill: #c239b3;
 }
 
+/* The number of feature changes the owner has not seen, on the button's top right corner. */
+.fix-ado-settings-button {
+  position: relative;
+}
+
+.fix-ado-settings-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background: #c239b3;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* The settings panel: a dialog over the page, in Azure DevOps's own theme colours. */
 .fix-ado-settings {
   width: min(560px, calc(100vw - 32px));
@@ -68,6 +91,26 @@
 
 .fix-ado-settings-feature-name {
   font-weight: 600;
+}
+
+.fix-ado-settings-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+
+.fix-ado-settings-chip-new {
+  background: #c239b3;
+}
+
+.fix-ado-settings-chip-updated {
+  background: var(--communication-background, rgb(0, 120, 212));
 }
 
 .fix-ado-settings-feature-description {

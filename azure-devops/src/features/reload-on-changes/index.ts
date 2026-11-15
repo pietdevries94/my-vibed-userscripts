@@ -7,6 +7,7 @@ import { findPullRequestRows } from "../../pull-requests/pr-list.ts";
 import { watchPullRequestList } from "./pr-list-watch.ts";
 
 const reloadOnChanges: Feature = {
+  change: { kind: "new", version: "1.7.2" },
   description: "Pull request lists and boards reload when their content changes on the server.",
   id: "reload-on-changes",
   name: "Reload on changes",

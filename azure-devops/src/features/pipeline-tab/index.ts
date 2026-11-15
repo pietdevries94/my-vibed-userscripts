@@ -7,6 +7,7 @@ import statusIconStyle from "../../pipeline/pipeline-status-icon.css";
 import style from "./style.css";
 
 const pipelineTab: Feature = {
+  change: { kind: "new", version: "1.7.2" },
   description:
     "A Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs, and a button to start or cancel a run.",
   id: "pipeline-tab",

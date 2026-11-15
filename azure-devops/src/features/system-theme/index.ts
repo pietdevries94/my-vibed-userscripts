@@ -6,6 +6,7 @@ const THEME_LOOKS_KEY = "system-theme-looks";
 const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
 
 const followSystemTheme: Feature = {
+  change: { kind: "new", version: "1.7.2" },
   description: "Azure DevOps shows Light or Dark to match the system.",
   // The key of the earlier menu setting, so the owner's choice stays.
   id: "follow-system-theme",

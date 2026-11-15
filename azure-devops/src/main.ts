@@ -16,6 +16,7 @@ const basePath = apiBasePath(location);
 const isTabActive = (): boolean => document.visibilityState === "visible";
 const isInFrame = globalThis.top !== globalThis.self;
 const isOn = ({ id }: Feature): boolean => GM_getValue(id, IS_ON_BY_DEFAULT);
+const seenChangeKey = ({ id }: Feature): string => `${id}-seen-change`;
 
 // A frame shows a run page inside the Pipeline tab. Only the top page gets the settings.
 const settingsPanel = isInFrame
@@ -23,7 +24,14 @@ const settingsPanel = isInFrame
   : createSettingsPanel({
       document,
       features: FEATURES,
+      isChangeSeen: (feature) =>
+        GM_getValue<string | null>(seenChangeKey(feature), null) === feature.change?.version,
       isOn,
+      markChangesSeen: (features) => {
+        for (const feature of features) {
+          GM_setValue(seenChangeKey(feature), feature.change?.version);
+        }
+      },
       reload: () => {
         location.reload();
       },

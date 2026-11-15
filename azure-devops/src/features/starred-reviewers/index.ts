@@ -5,6 +5,7 @@ import { pullRequestOf } from "../../core/page.ts";
 import style from "./style.css";
 
 const starredReviewers: Feature = {
+  change: { kind: "new", version: "1.7.2" },
   description:
     "Star reviewers, then add a starred one as optional or required reviewer in one click.",
   id: "starred-reviewers",

@@ -6,6 +6,7 @@ import style from "./style.css";
 const HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns";
 
 const daysInColumn: Feature = {
+  change: { kind: "new", version: "1.7.2" },
   description: "A dot per day a card has been in its board column, with a toggle per column.",
   id: "days-in-column",
   name: "Days in column",
