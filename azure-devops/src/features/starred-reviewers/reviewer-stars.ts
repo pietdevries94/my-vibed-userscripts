@@ -8,6 +8,7 @@ import {
 import type { Identity } from "../../pull-requests/reviewer-requests.ts";
 import type { StarredReviewersStore } from "./starred-reviewers-store.ts";
 import { isNameOf } from "./starred-reviewers-store.ts";
+import { log } from "../../../../shared/runtime/script-log.ts";
 
 /** Azure DevOps's reviewer sections. */
 const REVIEWER_SECTION_SELECTOR =
@@ -26,9 +27,23 @@ function nameOfRow(row: Element): string {
   return row.querySelector(".flex-column > .body-m")?.textContent?.trim() ?? "";
 }
 
+/** Azure DevOps's reviewer row of this identity, if it shows one. */
+function reviewerRowOf(document: Document, identity: Identity): HTMLElement | undefined {
+  return reviewerRowsOf(document).find((row) => isNameOf(identity, nameOfRow(row)));
+}
+
 /** True when Azure DevOps shows this identity as a reviewer. */
 function isOnPage(document: Document, identity: Identity): boolean {
-  return reviewerRowsOf(document).some((row) => isNameOf(identity, nameOfRow(row)));
+  return reviewerRowOf(document, identity) !== undefined;
+}
+
+/** For the script log: where the added reviewer's row showed up, and whether it has a box. */
+function logShown(row: HTMLElement): void {
+  log("Starred reviewers: added reviewer shown", {
+    hasBox: row.getClientRects().length > 0,
+    isHidden: row.closest("[hidden], [aria-hidden='true']") !== null,
+    section: row.parentElement?.className ?? "",
+  });
 }
 
 /** Puts a star before the row's ⋮ button, or last when it has none. */
@@ -63,4 +78,4 @@ function addStars(
   }
 }
 
-export { addStars, isOnPage, nameOfRow };
+export { addStars, isOnPage, logShown, nameOfRow, reviewerRowOf };

@@ -10,7 +10,7 @@ import {
   createStarredRow,
   createStarredSection,
 } from "./starred-reviewers-markup.ts";
-import { addStars, isOnPage, nameOfRow } from "./reviewer-stars.ts";
+import { addStars, isOnPage, logShown, nameOfRow, reviewerRowOf } from "./reviewer-stars.ts";
 import type { AdoClient } from "../../core/ado-client.ts";
 import type { Identity } from "../../pull-requests/reviewer-requests.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
@@ -18,6 +18,7 @@ import type { StarredReviewersStore } from "./starred-reviewers-store.ts";
 import { closestHtmlElement } from "../../core/closest-element.ts";
 import { createStarPicker } from "./star-picker.ts";
 import { isNameOf } from "./starred-reviewers-store.ts";
+import { log } from "../../../../shared/runtime/script-log.ts";
 
 /** How long Azure DevOps gets to show an added reviewer before the page reloads to show it. */
 const ADDED_REVIEWER_WAIT_MS = 4000;
@@ -71,9 +72,11 @@ async function toggleStar(state: StarredState, row: HTMLElement): Promise<void> 
   sync(state);
 }
 
-/** Reloads the page when Azure DevOps does not show a reviewer the + button added. */
-function reloadUnlessShown(state: StarredState, identity: Identity): void {
+/** Spins the added reviewer's row until Azure DevOps shows them, or reloads the page when it does not. */
+function waitUntilShown(state: StarredState, identity: Identity): void {
   const { document, schedule, reload } = state.options;
+  log("Starred reviewers: reviewer added, waiting for Azure DevOps to show them");
+  state.addedIds.add(identity.id);
   schedule(() => {
     if (!isOnPage(document, identity)) {
       reload();
@@ -106,8 +109,7 @@ async function addReviewer(
       isRequired,
       reviewerId: identity.id,
     });
-    state.addedIds.add(identity.id);
-    reloadUnlessShown(state, identity);
+    waitUntilShown(state, identity);
   } catch (error) {
     state.errorsById.set(identity.id, `Could not add: ${messageOf(error)}`);
   } finally {
@@ -223,7 +225,9 @@ function createShownRow(state: StarredState, identity: Identity): HTMLElement {
 function shownIdentities(state: StarredState, starred: Identity[]): Identity[] {
   const { document } = state.options;
   for (const identity of starred) {
-    if (state.addedIds.has(identity.id) && isOnPage(document, identity)) {
+    const row = state.addedIds.has(identity.id) ? reviewerRowOf(document, identity) : undefined;
+    if (row !== undefined) {
+      logShown(row);
       state.addedIds.delete(identity.id);
     }
   }
