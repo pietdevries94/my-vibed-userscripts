@@ -6,6 +6,8 @@ interface PullRequestRef {
 
 /** A list location ends in `_git/<repository>/pullrequests`. */
 const LIST_PATH_SEGMENTS_FROM_GIT = 3;
+/** A create location ends in `_git/<repository>/pullrequestcreate`. */
+const CREATE_PATH_SEGMENTS_FROM_GIT = 3;
 
 /**
  * Path prefix of the REST API. On dev.azure.com the organisation is the first
@@ -82,9 +84,19 @@ function isPullRequestInboxLocation(location: { pathname: string }): boolean {
   return pathSegments(location.pathname).at(-1) === "_pulls";
 }
 
+/** The page that creates a pull request: `_git/<repository>/pullrequestcreate`. */
+function isPullRequestCreateLocation(location: { pathname: string }): boolean {
+  const segments = pathSegments(location.pathname);
+  return (
+    segments.at(-1) === "pullrequestcreate" &&
+    segments.at(-CREATE_PATH_SEGMENTS_FROM_GIT) === "_git"
+  );
+}
+
 export type { PullRequestListPage, PullRequestListStatus, PullRequestRef };
 export {
   apiBasePath,
+  isPullRequestCreateLocation,
   isPullRequestInboxLocation,
   parsePullRequestHref,
   parsePullRequestListLocation,

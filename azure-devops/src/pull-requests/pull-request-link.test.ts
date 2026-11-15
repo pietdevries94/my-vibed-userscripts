@@ -1,5 +1,6 @@
 import {
   apiBasePath,
+  isPullRequestCreateLocation,
   isPullRequestInboxLocation,
   parsePullRequestHref,
   parsePullRequestListLocation,
@@ -123,6 +124,26 @@ test("the pull request inbox location", () => {
   assert.equal(isPullRequestInboxLocation({ pathname: "/_pulls" }), true, "on visualstudio.com");
   assert.equal(
     isPullRequestInboxLocation({ pathname: "/my-org/my-project/_git/my-repo/pullrequests" }),
+    false,
+  );
+});
+
+test("the create pull request location", () => {
+  assert.equal(
+    isPullRequestCreateLocation({ pathname: "/my-org/my-project/_git/my-repo/pullrequestcreate" }),
+    true,
+  );
+  assert.equal(
+    isPullRequestCreateLocation({ pathname: "/_git/my-repo/pullrequestcreate/" }),
+    true,
+    "on visualstudio.com",
+  );
+  assert.equal(
+    isPullRequestCreateLocation({ pathname: "/my-org/my-project/_git/my-repo/pullrequests" }),
+    false,
+  );
+  assert.equal(
+    isPullRequestCreateLocation({ pathname: "/my-org/my-project/_git/my-repo/pullrequest/7" }),
     false,
   );
 });

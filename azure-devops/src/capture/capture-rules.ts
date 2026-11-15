@@ -63,6 +63,7 @@ const rules: ScrubRules = {
     "results",
     "pullrequest",
     "pullrequests",
+    "pullrequestcreate",
   ],
   keepUiWords: [
     "Active",
@@ -77,6 +78,13 @@ const rules: ScrubRules = {
     "Required",
     "Optional",
     "Add",
+    // The create pull request page.
+    "Create",
+    "New pull request",
+    "Title",
+    "Description",
+    "Work items to link",
+    "Tags",
     // Pipeline run tabs and sections.
     "Summary",
     "Logs",

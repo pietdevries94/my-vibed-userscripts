@@ -7,6 +7,7 @@ import type {
 } from "../../shared/dev/capture/capture.ts";
 import {
   apiBasePath,
+  isPullRequestCreateLocation,
   isPullRequestInboxLocation,
   parsePullRequestListLocation,
 } from "./pull-requests/pull-request-link.ts";
@@ -165,6 +166,16 @@ function boardPage(): CapturePage {
   };
 }
 
+/** The create pull request page. Its reviewer field and search dropdown need the site's styling. */
+function pullRequestCreatePage(): CapturePage {
+  return {
+    collect: async () => ({ data: {}, meta: {} }),
+    name: "pr-create",
+    root: withoutScriptMarks(document.body),
+    styleRoot: document.body,
+  };
+}
+
 function capturePage(document: Document, location: Location): CapturePage | null {
   if (isThemePanelOpen(document)) {
     return themeSettingsPage(document, location);
@@ -172,6 +183,9 @@ function capturePage(document: Document, location: Location): CapturePage | null
   const listPage = parsePullRequestListLocation(location, apiBasePath(location));
   if (listPage !== null) {
     return pullRequestRowsPage("pr-list", listPage);
+  }
+  if (isPullRequestCreateLocation(location)) {
+    return pullRequestCreatePage();
   }
   if (isPullRequestInboxLocation(location)) {
     return pullRequestRowsPage("pr-inbox", null);
