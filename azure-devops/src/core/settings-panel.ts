@@ -1,4 +1,4 @@
-import type { Feature } from "./feature.ts";
+import type { Feature, FeatureChange } from "./feature.ts";
 
 const TITLE = "Fix Azure DevOps settings";
 const RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.";
@@ -14,8 +14,8 @@ interface SettingsPanelOptions {
   /** In the order the panel lists them. */
   features: Feature[];
   isOn: (feature: Feature) => boolean;
-  /** True when the owner has seen the feature's current change. */
-  isChangeSeen: (feature: Feature) => boolean;
+  /** The version of the feature's latest change the owner has seen, or null when none. */
+  seenChangeVersion: (feature: Feature) => string | null;
   /** Stores that the owner has seen the current change of these features. */
   markChangesSeen: (features: Feature[]) => void;
   /** Stores the changed choices, by feature id. */
@@ -80,8 +80,17 @@ function puzzleIcon(document: Document): Element {
 /** The features with a change the owner has not seen. */
 function featuresWithUnseenChange(options: SettingsPanelOptions): Feature[] {
   return options.features.filter(
-    (feature) => feature.change !== undefined && !options.isChangeSeen(feature),
+    (feature) =>
+      feature.change !== undefined && options.seenChangeVersion(feature) !== feature.change.version,
   );
+}
+
+/** A feature the owner never saw a change of is new to them, even when its change is an update. */
+function chipKind(feature: Feature, options: SettingsPanelOptions): FeatureChange["kind"] {
+  if (options.seenChangeVersion(feature) === null) {
+    return "new";
+  }
+  return feature.change?.kind ?? "new";
 }
 
 /** The count of unseen feature changes, on the settings button's corner. */
@@ -114,16 +123,20 @@ function createButtonItem(document: Document, open: () => void, unseenCount: num
 }
 
 /** The feature's name, with a New or Updated chip while its change is unseen. */
-function featureName(document: Document, feature: Feature, isChangeUnseen: boolean): HTMLElement {
+function featureName(
+  document: Document,
+  feature: Feature,
+  chip: FeatureChange["kind"] | null,
+): HTMLElement {
   const name = element(document, "span", {
     className: "fix-ado-settings-feature-name",
     text: feature.name,
   });
-  if (isChangeUnseen && feature.change) {
+  if (chip) {
     name.append(
       element(document, "span", {
-        className: `fix-ado-settings-chip fix-ado-settings-chip-${feature.change.kind}`,
-        text: CHIP_TEXT[feature.change.kind],
+        className: `fix-ado-settings-chip fix-ado-settings-chip-${chip}`,
+        text: CHIP_TEXT[chip],
       }),
     );
   }
@@ -133,13 +146,11 @@ function featureName(document: Document, feature: Feature, isChangeUnseen: boole
 interface FeatureRowParts {
   feature: Feature;
   isOn: boolean;
-  isChangeUnseen: boolean;
+  /** Null when the feature has no unseen change. */
+  chip: FeatureChange["kind"] | null;
 }
 
-function featureRow(
-  document: Document,
-  { feature, isOn, isChangeUnseen }: FeatureRowParts,
-): HTMLElement {
+function featureRow(document: Document, { feature, isOn, chip }: FeatureRowParts): HTMLElement {
   const row = element(document, "label", { className: "fix-ado-settings-feature" });
   const checkbox = element(document, "input", { className: "fix-ado-settings-checkbox" });
   checkbox.type = "checkbox";
@@ -147,7 +158,7 @@ function featureRow(
   checkbox.dataset.featureId = feature.id;
   const text = element(document, "span", { className: "fix-ado-settings-feature-text" });
   text.append(
-    featureName(document, feature, isChangeUnseen),
+    featureName(document, feature, chip),
     element(document, "span", {
       className: "fix-ado-settings-feature-description",
       text: feature.description,
@@ -202,8 +213,8 @@ function featureList(options: SettingsPanelOptions, unseen: Feature[]): HTMLElem
   list.append(
     ...options.features.map((feature) =>
       featureRow(options.document, {
+        chip: unseen.includes(feature) ? chipKind(feature, options) : null,
         feature,
-        isChangeUnseen: unseen.includes(feature),
         isOn: options.isOn(feature),
       }),
     ),

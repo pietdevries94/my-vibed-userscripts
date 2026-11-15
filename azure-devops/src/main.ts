@@ -24,8 +24,6 @@ const settingsPanel = isInFrame
   : createSettingsPanel({
       document,
       features: FEATURES,
-      isChangeSeen: (feature) =>
-        GM_getValue<string | null>(seenChangeKey(feature), null) === feature.change?.version,
       isOn,
       markChangesSeen: (features) => {
         for (const feature of features) {
@@ -40,6 +38,7 @@ const settingsPanel = isInFrame
           GM_setValue(id, isChosenOn);
         }
       },
+      seenChangeVersion: (feature) => GM_getValue<string | null>(seenChangeKey(feature), null),
     });
 if (settingsPanel) {
   GM_addStyle(settingsPanelStyle);

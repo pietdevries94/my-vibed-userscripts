@@ -77,7 +77,6 @@ function pageWith(
     panel: createSettingsPanel({
       document,
       features,
-      isChangeSeen: ({ id, change }) => page.seen.get(id) === change?.version,
       isOn: ({ id }) => onIds.includes(id),
       markChangesSeen: (seenFeatures) => {
         for (const { id, change } of seenFeatures) {
@@ -92,6 +91,7 @@ function pageWith(
       save: (choices) => {
         page.saved.push(choices);
       },
+      seenChangeVersion: ({ id }) => page.seen.get(id) ?? null,
     }),
     reloads: 0,
     saved: [],
@@ -215,7 +215,10 @@ test("without unseen changes the button has no badge", () => {
 test("the panel shows a New or Updated chip on each unseen change", () => {
   const page = pageWith(TOP_BAR, {
     features: CHANGED_FEATURES,
-    seen: new Map([["tab", "2.0.0"]]),
+    seen: new Map([
+      ["tab", "2.0.0"],
+      ["dots", "2.0.0"],
+    ]),
   });
   page.panel.open();
   assert.equal(chip(page, "tab"), null);
@@ -224,7 +227,10 @@ test("the panel shows a New or Updated chip on each unseen change", () => {
 });
 
 test("opening the panel marks its changes seen and removes the badge", () => {
-  const page = pageWith(TOP_BAR, { features: CHANGED_FEATURES });
+  const page = pageWith(TOP_BAR, {
+    features: CHANGED_FEATURES,
+    seen: new Map([["dots", "2.0.0"]]),
+  });
   page.panel.sync();
   page.document.querySelector<HTMLButtonElement>(".region-header-menubar button")?.click();
   assert.equal(chip(page, "tab"), "New");
@@ -240,4 +246,12 @@ test("opening the panel marks its changes seen and removes the badge", () => {
   page.button("Cancel").click();
   page.panel.open();
   assert.equal(chip(page, "tab"), null);
+});
+
+test("a feature the owner never saw shows New, even when its change is an update", () => {
+  const page = pageWith(TOP_BAR, {
+    features: [featureNamed("dots", "Days in column", { kind: "updated", version: "2.1.0" })],
+  });
+  page.panel.open();
+  assert.equal(chip(page, "dots"), "New");
 });

@@ -24,11 +24,11 @@ test(
     const panel = createSettingsPanel({
       document,
       features: [],
-      isChangeSeen: () => true,
       isOn: () => true,
       markChangesSeen: ignore,
       reload: ignore,
       save: ignore,
+      seenChangeVersion: () => null,
     });
     panel.sync();
     panel.sync();
