@@ -11,7 +11,7 @@ const CREATE_PAGE_SCRIPT = String.raw`
   const REQUIRED_LABEL_ID = "__bolt-pr-required-reviewers-label";
 
   function closeSuggestions() {
-    document.querySelector("#" + SUGGESTIONS_ID)?.remove();
+    document.querySelector("#__bolt-tag-picker-callout")?.remove();
   }
 
   function addPill(input, name) {
@@ -62,13 +62,17 @@ const CREATE_PAGE_SCRIPT = String.raw`
     listbox.id = SUGGESTIONS_ID;
     listbox.setAttribute("role", "listbox");
     const box = input.getBoundingClientRect();
-    listbox.style.cssText =
+    const callout = document.createElement("div");
+    callout.id = "__bolt-tag-picker-callout";
+    callout.className = "bolt-callout";
+    callout.append(listbox);
+    callout.style.cssText =
       "position: absolute; z-index: 1000; width: 400px; left: " + (box.left + scrollX) +
       "px; top: " + (box.bottom + scrollY) +
       "px; background: var(--callout-background-color, #fff); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);";
     listbox.append(...(results[0]?.identities ?? []).map((identity) => createOption(input, identity)));
     input.setAttribute("aria-controls", SUGGESTIONS_ID);
-    document.body.append(listbox);
+    document.body.append(callout);
   }
 
   function showRequiredField() {

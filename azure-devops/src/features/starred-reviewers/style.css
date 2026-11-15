@@ -85,5 +85,29 @@
   gap: 4px;
 }
 .fix-ado-starred-chip[disabled] {
-  opacity: 0.5;
+  cursor: progress;
+}
+.fix-ado-chip-spinner {
+  display: block;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--palette-black-alpha-10, rgba(128, 128, 128, 0.3));
+  border-top-color: var(--communication-foreground, rgba(0, 90, 158, 1));
+  border-radius: 50%;
+  animation: fix-ado-chip-spin 0.8s linear infinite;
+}
+@keyframes fix-ado-chip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* While a chip picks its reviewer: the field's dropdown and typed text stay out of sight.
+   Hidden, not removed, so the chip can still press the suggestion; the field keeps its focus. */
+.fix-ado-starred-picking #__bolt-tag-picker-callout {
+  visibility: hidden;
+}
+.fix-ado-starred-picking .bolt-tag-picker-input {
+  color: transparent;
+  caret-color: transparent;
 }

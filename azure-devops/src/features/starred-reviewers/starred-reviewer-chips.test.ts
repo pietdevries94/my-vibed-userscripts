@@ -157,10 +157,18 @@ test("a click searches the field by sign-in address and picks that person", asyn
   );
   chip(chipRows(harness.document)[1], "Quill Barrow").click();
   assert.equal(input?.value, "quill@example.com");
-  assert.equal(chip(chipRows(harness.document)[1], "Quill Barrow").disabled, true);
+  const busyChip = chip(chipRows(harness.document)[1], "Quill Barrow");
+  assert.equal(busyChip.disabled, true);
+  assert.ok(busyChip.querySelector(".fix-ado-chip-spinner"), "the busy chip spins");
+  assert.equal(busyChip.querySelector("img"), null, "in place of its avatar");
+  assert.ok(
+    harness.document.body.classList.contains("fix-ado-starred-picking"),
+    "the page hides the field's dropdown while the chip picks",
+  );
   await settle();
   harness.runScheduled();
   assert.deepEqual(pillNames(harness.document, REQUIRED), ["Quill Barrow"]);
+  assert.equal(harness.document.body.classList.contains("fix-ado-starred-picking"), false);
   assert.deepEqual(pillNames(harness.document, OPTIONAL), []);
   harness.sync();
   for (const row of chipRows(harness.document)) {
@@ -193,6 +201,7 @@ test("the chip waits for the suggestions, and gives up when its reviewer is not 
   const button = chip(chipRows(harness.document)[0], "Quill Barrow");
   assert.equal(button.disabled, false);
   assert.match(button.title, /not found/iu);
+  assert.equal(harness.document.body.classList.contains("fix-ado-starred-picking"), false);
 });
 
 test("a field that takes only the highlighted suggestion on Enter gets it on Enter", async () => {

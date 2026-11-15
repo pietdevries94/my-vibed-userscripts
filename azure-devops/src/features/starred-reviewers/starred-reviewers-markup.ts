@@ -1,7 +1,6 @@
 // The elements of starred reviewers. They copy Azure DevOps's own markup for reviewer
 // rows, split buttons and the "nothing here" well, so its styles apply.
 import type { Identity } from "../../pull-requests/reviewer-requests.ts";
-import { personOrTeamName } from "../../pull-requests/reviewers.ts";
 
 const STARRED_SECTION_CLASS = "fix-ado-starred-reviewers";
 const STAR_BUTTON_CLASS = "fix-ado-star";
@@ -228,67 +227,19 @@ function createStarredSection(document: Document): HTMLElement {
   });
 }
 
-const STARRED_CHIP_ROW_CLASS = "fix-ado-starred-chips";
-const STARRED_CHIP_CLASS = "fix-ado-starred-chip";
-
-/** A starred reviewer as Azure DevOps's reviewer pill. A click adds them to the field above. */
-function createStarredChip(document: Document, identity: Identity, imageUrl: string): HTMLElement {
-  const name = personOrTeamName(identity.displayName);
-  const image = element(document, "img", {
-    attributes: { alt: "", src: imageUrl },
-    className: "bolt-coin-content using-image size20",
-  });
-  return element(document, "button", {
-    attributes: {
-      "aria-label": `Add ${name} as reviewer`,
-      "data-fix-ado-identity": identity.id,
-      title: "Add as reviewer",
-      type: "button",
-    },
-    children: [
-      element(document, "div", {
-        children: [
-          element(document, "div", {
-            attributes: { "aria-hidden": "true" },
-            children: [image],
-            className: "bolt-coin flex-noshrink flex-row flex-center size20",
-          }),
-        ],
-        className: "bolt-pill-filled-visual flex-noshrink",
-      }),
-      element(document, "div", { className: "bolt-pill-content text-ellipsis", text: name }),
-    ],
-    className: `${STARRED_CHIP_CLASS} bolt-pill flex-row flex-center standard regular clickable has-filled-visual`,
-  });
-}
-
-/** The row of chips under a reviewer field: a star, then the chips the caller adds. */
-function createStarredChipRow(document: Document): HTMLElement {
-  return element(document, "div", {
-    attributes: { "aria-label": "Starred reviewers", role: "group" },
-    children: [
-      svgIcon(document, "fix-ado-starred-chips-icon fix-ado-star-icon", [STAR_PATH]),
-      element(document, "div", { className: "fix-ado-starred-chip-list flex-row flex-wrap" }),
-    ],
-    className: `${STARRED_CHIP_ROW_CLASS} flex-row flex-center`,
-  });
-}
-
 export type { ElementOptions };
 export {
-  STARRED_CHIP_CLASS,
-  STARRED_CHIP_ROW_CLASS,
   STARRED_SECTION_CLASS,
   STAR_BUTTON_CLASS,
   createAvatar,
   createEmptyWell,
   createStarButton,
-  createStarredChip,
-  createStarredChipRow,
   createStarredRow,
   createStarredSection,
   detailOf,
   element,
   fontIcon,
+  STAR_PATH,
+  svgIcon,
   updateStarButton,
 };
