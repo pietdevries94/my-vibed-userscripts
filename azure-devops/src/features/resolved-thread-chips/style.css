@@ -1,0 +1,6 @@
+/* The Resolved chip on a resolved thread: Azure DevOps's pill, in its colour for success. */
+.bolt-pill.fix-ado-resolved-chip {
+  border-color: var(--component-status-success, rgb(85, 163, 98));
+  color: var(--component-status-success, rgb(85, 163, 98));
+  font-weight: 600;
+}

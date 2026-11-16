@@ -3,6 +3,7 @@ import { activityOrder } from "./activity-order/index.ts";
 import { foldedPushes } from "./folded-pushes/index.ts";
 import { joinedReviewerLines } from "./joined-reviewer-lines/index.ts";
 import { overviewPipelineIssues } from "./overview-pipeline-issues/index.ts";
+import { resolvedThreadChips } from "./resolved-thread-chips/index.ts";
 
 /** The features on a pull request's Overview, in the order the settings panel lists them. */
 const OVERVIEW_FEATURES: Feature[] = [
@@ -10,6 +11,7 @@ const OVERVIEW_FEATURES: Feature[] = [
   activityOrder,
   foldedPushes,
   joinedReviewerLines,
+  resolvedThreadChips,
 ];
 
 export { OVERVIEW_FEATURES };
