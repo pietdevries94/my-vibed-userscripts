@@ -27,8 +27,8 @@ test(
     const buttons = document.querySelectorAll(".fix-ado-activity-order");
     assert.equal(buttons.length, 1);
     const [button] = buttons;
-    assert.ok(button?.parentElement?.querySelector(".repos-activity-filter-dropdown") !== null);
-    assert.equal(button?.previousElementSibling, null);
+    const filters = document.querySelector(".repos-activity-filter-dropdown")?.parentElement;
+    assert.equal(filters?.firstElementChild, button?.parentElement);
 
     const feeds = document.querySelectorAll<HTMLElement>("[data-fix-ado-activity-order]");
     assert.equal(feeds.length, 1);

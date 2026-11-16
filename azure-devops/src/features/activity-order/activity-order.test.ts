@@ -61,7 +61,21 @@ test("the sort button sits before the filters", () => {
   const page = overviewPage();
   page.sync();
   const filters = page.document.querySelector(".repos-activity-filter-dropdown")?.parentElement;
-  assert.equal(filters?.firstElementChild, page.button());
+  assert.equal(filters?.firstElementChild, page.button().parentElement);
+});
+
+test("the sort button is spaced like the filters, grey, with an icon before its label", () => {
+  const page = overviewPage();
+  page.sync();
+  const button = page.button();
+  assert.deepEqual(
+    [...(button.parentElement?.classList ?? [])].filter((name) => name.startsWith("margin-")),
+    ["margin-bottom-16", "margin-right-8"],
+  );
+  assert.ok(!button.classList.contains("subtle"));
+  assert.equal(button.firstElementChild?.tagName, "svg");
+  assert.equal(button.firstElementChild?.getAttribute("aria-hidden"), "true");
+  assert.equal(button.lastElementChild?.textContent, "Oldest first");
 });
 
 test("a click flips the order and saves it", () => {
