@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.12.1
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse and a Resolved chip on resolved ones, which start collapsed, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.13.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse and a Resolved chip on resolved ones, which start collapsed, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -1405,10 +1405,149 @@ ${issue.message ?? ""}`;
     styles: [style_default5]
   };
 
+  // azure-devops/src/features/scroll-to-bottom/scroll-to-bottom.ts
+  var FEED_SELECTOR2 = ".activity-feed-list", SCROLLER_SELECTOR = ".v-scroll-auto", BUTTON_CLASS2 = "fix-ado-scroll-to-bottom", LABEL = "Scroll to bottom";
+  var SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", ARROW_DOWN_PATH = "M8 3v10M3.5 8.5L8 13l4.5-4.5";
+  function arrowDownIcon(document2) {
+    let svg = document2.createElementNS(SVG_NAMESPACE3, "svg");
+    svg.setAttribute("aria-hidden", "true"), svg.setAttribute("viewBox", "0 0 16 16");
+    let path = document2.createElementNS(SVG_NAMESPACE3, "path");
+    return path.setAttribute("d", ARROW_DOWN_PATH), svg.append(path), svg;
+  }
+  function scrollerOf(feed) {
+    let box = feed.parentElement?.closest(SCROLLER_SELECTOR) ?? null;
+    for (; box !== null && box.scrollHeight <= box.clientHeight; )
+      box = box.parentElement?.closest(SCROLLER_SELECTOR) ?? null;
+    return box;
+  }
+  function createButton2(document2, onClick2) {
+    let button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = BUTTON_CLASS2, button2.title = LABEL, button2.setAttribute("aria-label", LABEL), button2.append(arrowDownIcon(document2)), button2.addEventListener("click", onClick2), button2;
+  }
+  function overviewScrollerOf(document2) {
+    let feed = document2.querySelector(FEED_SELECTOR2);
+    return feed === null ? null : scrollerOf(feed);
+  }
+  var isAtBottom = (scroller) => scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= 16, OWNER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "pointerdown"];
+  function createBottomFollow(now) {
+    let followed = null;
+    function start(scroller) {
+      followed = { height: scroller.scrollHeight, lastActiveAt: now() }, scroller.scrollTo({ behavior: "smooth", top: scroller.scrollHeight });
+    }
+    function step(scroller, isScrollEvent) {
+      followed !== null && (scroller === null || now() - followed.lastActiveAt > 2e3 ? followed = null : scroller.scrollHeight !== followed.height ? start(scroller) : isScrollEvent && (followed.lastActiveAt = now()));
+    }
+    return {
+      start,
+      step,
+      stop: () => {
+        followed = null;
+      }
+    };
+  }
+  function listen(document2, events) {
+    document2.addEventListener("scroll", events.onScroll, { capture: !0, passive: !0 }), document2.defaultView?.addEventListener("resize", events.onResize);
+    for (let type of OWNER_SCROLL_EVENTS)
+      document2.addEventListener(type, events.onOwnerScroll, { capture: !0, passive: !0 });
+  }
+  function createScrollToBottom(options) {
+    let { document: document2 } = options, follow = createBottomFollow(options.now), button2 = null;
+    function scrollToBottom2() {
+      let scroller = overviewScrollerOf(document2);
+      scroller !== null && follow.start(scroller);
+    }
+    function showOrHideButton(scroller) {
+      let isShown = scroller !== null && !isAtBottom(scroller);
+      button2 === null && !isShown || (button2 ??= createButton2(document2, scrollToBottom2), button2.isConnected || document2.body.append(button2), button2.hidden === isShown && (button2.hidden = !isShown));
+    }
+    function sync4(event) {
+      let scroller = overviewScrollerOf(document2);
+      follow.step(scroller, event?.type === "scroll"), showOrHideButton(scroller);
+    }
+    return listen(document2, {
+      onOwnerScroll: (event) => {
+        event.target !== button2 && follow.stop();
+      },
+      onResize: sync4,
+      onScroll: sync4
+    }), {
+      sync: () => {
+        sync4();
+      }
+    };
+  }
+
+  // azure-devops/src/features/scroll-to-bottom/style.css
+  var style_default6 = `/* The button that scrolls a pull request's Overview to its bottom: round, in the corner of the window. */
+.fix-ado-scroll-to-bottom {
+  position: fixed;
+  right: 32px;
+  bottom: 32px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 50%;
+  background: var(--callout-background-color, rgb(255, 255, 255));
+  box-shadow: 0 3px 8px var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  cursor: pointer;
+}
+
+.fix-ado-scroll-to-bottom[hidden] {
+  display: none;
+}
+
+.fix-ado-scroll-to-bottom:hover {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  color: var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-scroll-to-bottom:focus-visible {
+  outline: 2px solid var(--communication-background, rgb(0, 120, 212));
+  outline-offset: 2px;
+}
+
+/* The arrow, drawn like Azure DevOps's line icons. */
+.fix-ado-scroll-to-bottom svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+`;
+
+  // azure-devops/src/features/scroll-to-bottom/index.ts
+  var scrollToBottom = {
+    change: { kind: "new", version: "1.13.0" },
+    description: "A button in the corner of a pull request's Overview scrolls to its bottom. It keeps up while more content loads, and hides once you are there.",
+    id: "scroll-to-bottom",
+    name: "Scroll to bottom on the Overview",
+    start({ document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2)
+        return null;
+      let scrollButton = createScrollToBottom({ document: document2, now });
+      return {
+        sync() {
+          scrollButton.sync();
+        }
+      };
+    },
+    styles: [style_default6]
+  };
+
   // azure-devops/src/features/overview-features.ts
   var OVERVIEW_FEATURES = [
     overviewPipelineIssues,
     activityOrder,
+    scrollToBottom,
     foldedPushes,
     joinedReviewerLines,
     resolvedThreadChips,
@@ -1886,7 +2025,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/pipeline/pipeline-status-icon.ts
-  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", LABELS2 = {
+  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE4 = "http://www.w3.org/2000/svg", LABELS2 = {
     cancelling: "Pipeline cancelling",
     expired: "Pipeline result expired",
     failed: "Pipeline failed",
@@ -1933,11 +2072,11 @@ ${issue.message ?? ""}`;
       element4.setAttribute(name, value);
   }
   function createShape(document2, [tag, attributes]) {
-    let shape = document2.createElementNS(SVG_NAMESPACE3, tag);
+    let shape = document2.createElementNS(SVG_NAMESPACE4, tag);
     return setAttributes2(shape, attributes), shape;
   }
   function createStatusIcon(document2, status, label = LABELS2[status]) {
-    let icon = document2.createElementNS(SVG_NAMESPACE3, "svg");
+    let icon = document2.createElementNS(SVG_NAMESPACE4, "svg");
     setAttributes2(icon, {
       "aria-label": label,
       class: PIPELINE_STATUS_ICON_CLASS,
@@ -1946,7 +2085,7 @@ ${issue.message ?? ""}`;
       viewBox: "0 0 16 16",
       width: "16"
     }), icon.dataset.status = status;
-    let title = document2.createElementNS(SVG_NAMESPACE3, "title");
+    let title = document2.createElementNS(SVG_NAMESPACE4, "title");
     return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
   }
   function createPipelineStatusIcon(document2, status, pullRequestId) {
@@ -2002,7 +2141,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default6 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default7 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -2041,7 +2180,7 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default6]
+    styles: [style_default7]
   };
 
   // azure-devops/src/features/review/review-store.ts
@@ -2223,10 +2362,10 @@ ${issue.message ?? ""}`;
     let created = document2.createElement(tag);
     return className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text), created;
   }
-  var ACTION_ATTRIBUTE = "data-fix-ado-review-action", BUTTON_CLASS2 = "bolt-button enabled bolt-focus-treatment", PRIMARY_BUTTON_CLASS = "bolt-button enabled primary bolt-focus-treatment";
+  var ACTION_ATTRIBUTE = "data-fix-ado-review-action", BUTTON_CLASS3 = "bolt-button enabled bolt-focus-treatment", PRIMARY_BUTTON_CLASS = "bolt-button enabled primary bolt-focus-treatment";
   function actionButton(document2, { action, isPrimary = !1, text }) {
     let button2 = element(document2, "button", {
-      className: isPrimary ? PRIMARY_BUTTON_CLASS : BUTTON_CLASS2,
+      className: isPrimary ? PRIMARY_BUTTON_CLASS : BUTTON_CLASS3,
       text
     });
     return button2.type = "button", button2.setAttribute(ACTION_ATTRIBUTE, action), button2;
@@ -2759,7 +2898,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/tree-scroll-anchor.ts
-  var TREE_SELECTOR = ".repos-changes-explorer-tree", TREE_ROW_SELECTOR = `${TREE_SELECTOR} tr.bolt-tree-row[aria-rowindex]`, SCROLLER_SELECTOR = ".v-scroll-auto", SMALLEST_MOVE = 1, LARGEST_SHIFT = 100, WEAR_PER_SCROLLED_PIXEL = 0.25, shiftByScroller = /* @__PURE__ */ new WeakMap();
+  var TREE_SELECTOR = ".repos-changes-explorer-tree", TREE_ROW_SELECTOR = `${TREE_SELECTOR} tr.bolt-tree-row[aria-rowindex]`, SCROLLER_SELECTOR2 = ".v-scroll-auto", SMALLEST_MOVE = 1, LARGEST_SHIFT = 100, WEAR_PER_SCROLLED_PIXEL = 0.25, shiftByScroller = /* @__PURE__ */ new WeakMap();
   function shiftTree(scroller, shift, pixels2) {
     let limited = Math.min(Math.max(pixels2, -LARGEST_SHIFT, -scroller.scrollTop), LARGEST_SHIFT);
     shift.pixels = Math.round(limited), shift.scrollTop = scroller.scrollTop;
@@ -2784,7 +2923,7 @@ ${content}`
     ), shift;
   }
   function firstRowInView(document2) {
-    let scroller = document2.querySelector(TREE_SELECTOR)?.closest(SCROLLER_SELECTOR) ?? null;
+    let scroller = document2.querySelector(TREE_SELECTOR)?.closest(SCROLLER_SELECTOR2) ?? null;
     if (scroller === null)
       return null;
     let viewTop = scroller.getBoundingClientRect().top, row = [...document2.querySelectorAll(TREE_ROW_SELECTOR)].find(
@@ -3118,10 +3257,10 @@ ${content}`
   }
 
   // azure-devops/src/features/review/unsaved-edits-dialog.ts
-  var BUTTON_CLASS3 = "bolt-button enabled bolt-focus-treatment";
+  var BUTTON_CLASS4 = "bolt-button enabled bolt-focus-treatment";
   function answerButton(dialog, text, answer) {
     let button2 = element(dialog.ownerDocument, "button", {
-      className: text === "Yes" ? `${BUTTON_CLASS3} primary` : BUTTON_CLASS3,
+      className: text === "Yes" ? `${BUTTON_CLASS4} primary` : BUTTON_CLASS4,
       text
     });
     return button2.type = "button", button2.addEventListener("click", () => {
@@ -3382,7 +3521,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/style.css
-  var style_default7 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
+  var style_default8 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
    reads "Add single comment". Only the stylesheet touches it. */
 .repos-discussion-thread-reply
   :has(> .fix-ado-review-add)
@@ -3689,11 +3828,11 @@ ${content}`
         }
       };
     },
-    styles: [style_default7]
+    styles: [style_default8]
   };
 
   // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
-  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
+  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE5 = "http://www.w3.org/2000/svg";
   function element2(document2, tag, { className, text, attributes = {}, children = [] } = {}) {
     let created = document2.createElement(tag);
     className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text);
@@ -3713,7 +3852,7 @@ ${content}`
     });
   }
   function svgIcon(document2, className, pathData) {
-    let svg = document2.createElementNS(SVG_NAMESPACE4, "svg"), attributes = {
+    let svg = document2.createElementNS(SVG_NAMESPACE5, "svg"), attributes = {
       "aria-hidden": "true",
       class: className,
       height: "16",
@@ -3723,7 +3862,7 @@ ${content}`
     for (let [name, value] of Object.entries(attributes))
       svg.setAttribute(name, value);
     for (let data of pathData) {
-      let path = document2.createElementNS(SVG_NAMESPACE4, "path");
+      let path = document2.createElementNS(SVG_NAMESPACE5, "path");
       path.setAttribute("d", data), svg.append(path);
     }
     return svg;
@@ -4398,7 +4537,7 @@ ${content}`
   }
 
   // azure-devops/src/features/starred-reviewers/style.css
-  var style_default8 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
+  var style_default9 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
 .repos-reviewer > .fix-ado-star {
   visibility: hidden;
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
@@ -4563,14 +4702,14 @@ ${content}`
         }
       };
     },
-    styles: [style_default8]
+    styles: [style_default9]
   };
 
   // azure-devops/src/features/reviewing-features.ts
   var REVIEWING_FEATURES = [requiredReviewers, starredReviewers, review];
 
   // azure-devops/src/features/avatar-initials/style.css
-  var style_default9 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+  var style_default10 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
 [data-fix-ado-initials] {
   position: relative;
   border-radius: 50%;
@@ -4609,7 +4748,7 @@ ${content}`
         showInitialsOnAvatars(document2);
       }
     }),
-    styles: [style_default9]
+    styles: [style_default10]
   };
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
@@ -4764,7 +4903,7 @@ ${content}`
   }
 
   // azure-devops/src/features/days-in-column/style.css
-  var style_default10 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+  var style_default11 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
 .fix-ado-days-in-column {
   display: flex;
   flex-wrap: wrap;
@@ -4882,7 +5021,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default10]
+    styles: [style_default11]
   };
 
   // azure-devops/src/features/system-theme/system-theme.ts
@@ -5249,7 +5388,7 @@ ${content}`
     let [onlyChoice] = choices;
     choices.length === 1 && onlyChoice !== void 0 ? onPick(action, onlyChoice.key) : onToggleList(state !== "choosing");
   }
-  function createButton2(context) {
+  function createButton3(context) {
     let { action, choices, document: document2, state } = context, isWaiting = state === "waiting", button2 = Object.assign(document2.createElement("button"), {
       className: `bolt-button ${LOOKS[action]} bolt-focus-treatment ${isWaiting ? "disabled" : "enabled"} fix-ado-pipeline-run-action`,
       disabled: isWaiting,
@@ -5263,7 +5402,7 @@ ${content}`
     let { action, choices, document: document2, state } = context;
     if (choices.length === 0)
       return null;
-    let button2 = createButton2(context);
+    let button2 = createButton3(context);
     return state === "choosing" ? [button2, createChoices(context)] : state === "failed" ? [button2, textElement2(document2, "fix-ado-pipeline-note", LABELS3[action].failed)] : [button2];
   }
 
@@ -5727,7 +5866,7 @@ ${content}`
   }
 
   // azure-devops/src/features/pipeline-tab/style.css
-  var style_default11 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+  var style_default12 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
 .repos-pr-details-page[data-fix-ado-pipeline-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
   display: none !important;
@@ -5948,7 +6087,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         }
       };
     },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default11]
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default12]
   };
 
   // azure-devops/src/features/reload-on-changes/page-reloader.ts
@@ -6121,7 +6260,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/core/settings-panel.ts
-  var TITLE3 = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", ISSUE_LINK_TEXT = "Found a bug or have a suggestion?", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS2 = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE5 = "http://www.w3.org/2000/svg";
+  var TITLE3 = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", ISSUE_LINK_TEXT = "Found a bug or have a suggestion?", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS2 = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE6 = "http://www.w3.org/2000/svg";
   function element3(document2, tag, { className, text }) {
     let created = document2.createElement(tag);
     return created.className = className, text !== void 0 && (created.textContent = text), created;
@@ -6131,7 +6270,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     return created.type = "button", created.addEventListener("click", onClick2), created;
   }
   function svgElement(document2, tag, attributes) {
-    let created = document2.createElementNS(SVG_NAMESPACE5, tag);
+    let created = document2.createElementNS(SVG_NAMESPACE6, tag);
     for (let [name, value] of Object.entries(attributes))
       created.setAttribute(name, value);
     return created;
