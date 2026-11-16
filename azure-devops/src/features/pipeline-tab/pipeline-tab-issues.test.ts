@@ -110,3 +110,37 @@ test("stages, jobs and steps show how many errors and warnings they hold", async
   assert.deepEqual(countLabels(document, "step", "compile"), ["1 error"]);
   assert.deepEqual(countLabels(document, "step", "checkout"), []);
 });
+
+/** The collapse button of the issue list, with its state as "expanded" or "collapsed" and its icon. */
+function collapseState(document: Document): string {
+  const button = document.querySelector(".fix-ado-pipeline-panel .fix-ado-issue-box-collapse");
+  const state = button?.getAttribute("aria-expanded") === "true" ? "expanded" : "collapsed";
+  const icon = /ms-Icon--\w+/u.exec(button?.querySelector(".fabric-icon")?.className ?? "");
+  const box = document.querySelector<HTMLElement>(".fix-ado-pipeline-panel .fix-ado-issue-box");
+  return `${state}, ${icon?.[0] ?? "no icon"}, box ${box?.dataset.collapsed === undefined ? "open" : "collapsed"}`;
+}
+
+const clickCollapse = (document: Document): void => {
+  click(document.querySelector(".fix-ado-pipeline-panel .fix-ado-issue-box-collapse"));
+};
+
+test("the issue list starts expanded, and its button collapses and expands it", async () => {
+  const document = await openTab();
+  assert.equal(collapseState(document), "expanded, ms-Icon--ChevronDownMed, box open");
+  clickCollapse(document);
+  assert.equal(collapseState(document), "collapsed, ms-Icon--ChevronRightMed, box collapsed");
+  assert.equal(
+    document.querySelector(".fix-ado-pipeline-panel .fix-ado-issue-box-title")?.textContent,
+    "1 error, 2 warnings",
+  );
+  clickCollapse(document);
+  assert.equal(collapseState(document), "expanded, ms-Icon--ChevronDownMed, box open");
+});
+
+test("a collapsed issue list stays collapsed when the tab shows another stage", async () => {
+  const document = await openTab();
+  clickCollapse(document);
+  click(pickItem(document, "stage", "test"));
+  await settle();
+  assert.equal(collapseState(document), "collapsed, ms-Icon--ChevronRightMed, box collapsed");
+});

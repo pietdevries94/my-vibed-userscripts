@@ -18,6 +18,8 @@ const TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree";
 const FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame";
 const LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note";
 const ISSUES_SELECTOR = ":scope > .fix-ado-issue-box";
+/** On the panel while the owner has the issue list collapsed. The list is built anew on each render. */
+const ISSUES_COLLAPSED_ATTRIBUTE = "data-fix-ado-issues-collapsed";
 
 type RunsState =
   | { kind: "loading" }
@@ -130,6 +132,12 @@ function showIssues(panel: HTMLElement, tree: HTMLElement, content: PanelContent
   }
   const context = { document: panel.ownerDocument, shown };
   const box = createIssueBox(context.document, {
+    collapse: {
+      isCollapsed: panel.hasAttribute(ISSUES_COLLAPSED_ATTRIBUTE),
+      onToggle: (isCollapsed) => {
+        panel.toggleAttribute(ISSUES_COLLAPSED_ATTRIBUTE, isCollapsed);
+      },
+    },
     createLink: (issue) => createIssueLink(context, issue, content),
     details: null,
     issues,

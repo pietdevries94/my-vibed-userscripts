@@ -21,6 +21,16 @@
   min-height: 48px;
 }
 
+/* A collapsed box keeps its header row. */
+.fix-ado-issue-box[data-collapsed] .fix-ado-issue {
+  display: none;
+}
+
+.fix-ado-issue-box-collapse {
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+
 .fix-ado-issue {
   display: block;
   color: inherit;

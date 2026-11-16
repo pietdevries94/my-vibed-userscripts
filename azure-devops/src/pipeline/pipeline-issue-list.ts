@@ -3,6 +3,8 @@
 // with a header row, and per issue its job and step, then its log line in dark output.
 // The tree of the Pipeline tab gets counts per stage, job and step.
 import type { IssueCounts, IssueKind, RunIssue } from "./pipeline-issues.ts";
+import type { IssueBoxCollapse } from "./pipeline-issue-box-collapse.ts";
+import { addCollapseButton } from "./pipeline-issue-box-collapse.ts";
 import { sumIssueCounts } from "./pipeline-issues.ts";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -191,6 +193,8 @@ interface IssueBox {
   issues: RunIssue[];
   /** The issue's link, filled by `fillIssueLink`. */
   createLink: (issue: RunIssue) => HTMLAnchorElement;
+  /** Gives the box a collapse button in its header row. Without it, the box stays open. */
+  collapse?: IssueBoxCollapse;
 }
 
 function createBoxHeader(document: Document, box: IssueBox): HTMLElement {
@@ -227,8 +231,13 @@ function createIssueBox(document: Document, box: IssueBox): HTMLElement {
     tag: "div",
   });
   const links = box.issues.map((issue) => box.createLink(issue));
-  content.append(createBoxHeader(document, box), ...links);
-  return wrapIn(document, content, LIST_ROW_WRAPPERS);
+  const header = createBoxHeader(document, box);
+  content.append(header, ...links);
+  const wrapped = wrapIn(document, content, LIST_ROW_WRAPPERS);
+  if (box.collapse !== undefined) {
+    addCollapseButton(wrapped, header, box.collapse);
+  }
+  return wrapped;
 }
 
 export type { ElementSpec, IssueBox };
