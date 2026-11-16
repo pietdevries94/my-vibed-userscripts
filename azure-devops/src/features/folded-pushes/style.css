@@ -1,0 +1,54 @@
+/* A push in the activity feed of a pull request's Overview. Its header is one line, like the
+   feed's other updates: avatar, title, toggle, and the time at the right. */
+[data-fix-ado-push] .iteration-header {
+  align-items: center;
+  padding: 6px 20px;
+}
+
+[data-fix-ado-push] .iteration-header > .flex-column {
+  flex-direction: row;
+  align-items: center;
+}
+
+[data-fix-ado-push] .iteration-header .font-weight-semibold {
+  font-weight: normal;
+}
+
+[data-fix-ado-push] .iteration-header .bolt-coin {
+  margin-top: 0;
+}
+
+[data-fix-ado-push] .iteration-header .secondary-text {
+  flex: none;
+  margin-left: auto;
+  padding-left: 4px;
+  line-height: 32px;
+}
+
+.fix-ado-push-toggle {
+  flex: none;
+  margin: 0 4px;
+}
+
+/* Folded: no card around it, no commits under it. */
+[data-fix-ado-push="folded"] {
+  margin: 0 20px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-fix-ado-push="folded"] .iteration-card-header,
+[data-fix-ado-push="folded"] .iteration-card-header:hover {
+  margin: 0;
+  background: transparent;
+}
+
+[data-fix-ado-push="folded"] .iteration-header {
+  padding: 6px 0;
+  border-bottom: 0;
+}
+
+[data-fix-ado-push="folded"] .iteration-card-header ~ * {
+  display: none;
+}
