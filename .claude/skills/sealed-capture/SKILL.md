@@ -17,6 +17,10 @@ Claude never sees a sealed site. The owner captures; Claude works from scrubbed 
 
 The download folder stays unread at every step.
 
+- After a change to the capture rules or capture code, tell the owner to install the dev script again before capturing. Its version number does not change, so nothing prompts them.
+- Always give a name with the import command, and read only named fixtures in tests. An import without a name replaces `<page>`, and breaks every test that reads it.
+- The `fake-site` tools can fail to connect. Check the fake site with the Playwright browser on `http://localhost:8787` instead, never on the real site.
+
 ## Capture rules
 
 The shared scrubber in `shared/dev/scrub` keeps structure and replaces every value. Per script, the rules may only add keeps: attribute names, JSON paths with a value pattern, id patterns, link route words, exact UI words, and a mapping from the site's URLs to fake ones. Keep the list short enough for the owner to read. A panel that opens over any page, such as a settings panel from the user menu, has no URL of its own: match it by its element before the page routes, or it is captured as the page under it. A capture made after clicking around can show marks a freshly loaded page lacks; when a feature acts on page load, also capture the page right after it loads. Details: `docs/spec/sealed-workflow.md`.
