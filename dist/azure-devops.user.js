@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.11.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.12.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse and a Resolved chip on resolved ones, which start collapsed, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -16,6 +16,860 @@
 // ==/UserScript==
 "use strict";
 (() => {
+  // azure-devops/src/features/activity-order/activity-order.ts
+  var FEED_SELECTOR = ".activity-feed-list", FILTER_SELECTOR = ".repos-activity-filter-dropdown", BUTTON_CLASS = "fix-ado-activity-order", TEXT_CLASS = "bolt-button-text", SVG_NAMESPACE = "http://www.w3.org/2000/svg", SORT_ICON_PATHS = ["M5 13V3M2.5 5.5L5 3l2.5 2.5", "M11 3v10M8.5 10.5L11 13l2.5-2.5"], DEFAULT_ORDER = "oldest-first", LABELS = {
+    "newest-first": "Newest first",
+    "oldest-first": "Oldest first"
+  }, flipped = (order) => order === "oldest-first" ? "newest-first" : "oldest-first";
+  function sortIcon(document2) {
+    let svg = document2.createElementNS(SVG_NAMESPACE, "svg");
+    svg.setAttribute("aria-hidden", "true"), svg.setAttribute("class", "fix-ado-activity-order-icon"), svg.setAttribute("viewBox", "0 0 16 16");
+    for (let data of SORT_ICON_PATHS) {
+      let path = document2.createElementNS(SVG_NAMESPACE, "path");
+      path.setAttribute("d", data), svg.append(path);
+    }
+    return svg;
+  }
+  function createButton(document2, onClick2) {
+    let button2 = document2.createElement("button");
+    button2.type = "button", button2.className = `${BUTTON_CLASS} bolt-button enabled bolt-focus-treatment`;
+    let text = document2.createElement("span");
+    return text.className = TEXT_CLASS, button2.append(sortIcon(document2), text), button2.addEventListener("click", onClick2), button2;
+  }
+  function spacingBox(button2) {
+    let box = button2.ownerDocument.createElement("div");
+    return box.className = "margin-bottom-16 margin-right-8 inline-flex-row", box.append(button2), box;
+  }
+  function findOrAddButton(document2, onClick2) {
+    let existing = document2.querySelector(`.${BUTTON_CLASS}`);
+    if (existing !== null)
+      return existing;
+    let filters = document2.querySelector(FILTER_SELECTOR)?.parentElement;
+    if (filters == null)
+      return null;
+    let button2 = createButton(document2, onClick2);
+    return filters.prepend(spacingBox(button2)), button2;
+  }
+  function showOrder(feed, button2, order) {
+    feed.dataset.fixAdoActivityOrder !== order && (feed.dataset.fixAdoActivityOrder = order);
+    let text = button2?.querySelector(`.${TEXT_CLASS}`);
+    button2 !== null && text !== null && text !== void 0 && text.textContent !== LABELS[order] && (text.textContent = LABELS[order], button2.title = `Show ${LABELS[flipped(order)].toLowerCase()}`);
+  }
+  function createActivityOrder(options) {
+    let { document: document2, storage } = options, order = storage.load() ?? DEFAULT_ORDER;
+    function flip() {
+      order = flipped(order), storage.save(order), sync4();
+    }
+    function sync4() {
+      let feed = document2.querySelector(FEED_SELECTOR);
+      feed !== null && showOrder(feed, findOrAddButton(document2, flip), order);
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/activity-order/style.css
+  var style_default = `/* The activity feed on a pull request's Overview, oldest first. Azure DevOps renders the rows
+   newest first and keeps them that way in the DOM; the feed lays them out bottom to top. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] {
+  display: block;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody > tr {
+  display: block;
+}
+
+/* The timeline line ends at the row that is now on top, and at the one now at the bottom. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-prefix,
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-last-row
+  .bolt-timeline-icon-suffix {
+  visibility: visible;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-suffix,
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-last-row
+  .bolt-timeline-icon-prefix {
+  visibility: hidden;
+}
+
+/* The dashed piece of the line leads to the comment box, which is now the bottom row. */
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-row:nth-child(4)
+  .bolt-timeline-icon-prefix {
+  border-left-style: solid;
+}
+
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-prefix,
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  + .bolt-timeline-row
+  .bolt-timeline-icon-suffix {
+  border-left-style: dashed;
+}
+
+/* The sort button's icon, drawn like Azure DevOps's line icons. */
+.fix-ado-activity-order-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+`;
+
+  // azure-devops/src/features/activity-order/index.ts
+  var ORDER_KEY = "activity-order", activityOrder = {
+    change: { kind: "new", version: "1.11.0" },
+    description: "The comments and updates on a pull request's Overview run from old to new, with a button to flip them.",
+    id: "activity-order",
+    name: "Oldest first on the Overview",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let order = createActivityOrder({
+        document: document2,
+        storage: {
+          load: () => GM_getValue(ORDER_KEY, null),
+          save: (picked) => {
+            GM_setValue(ORDER_KEY, picked);
+          }
+        }
+      });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && order.sync();
+        }
+      };
+    },
+    styles: [style_default]
+  };
+
+  // azure-devops/src/core/fold-toggle.ts
+  var CHEVRONS = { folded: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
+  function createChevron(document2) {
+    let iconFont = document2.createElement("span");
+    iconFont.className = "fluent-icons-enabled";
+    let chevron = document2.createElement("span");
+    return chevron.className = "left-icon flex-noshrink fabric-icon small", chevron.setAttribute("aria-hidden", "true"), iconFont.append(chevron), iconFont;
+  }
+  function createFoldToggle(document2, className) {
+    let toggle = document2.createElement("button");
+    return toggle.type = "button", toggle.className = `${className} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`, toggle.append(createChevron(document2)), toggle;
+  }
+  function showFoldToggleState(toggle, isOpen, labels) {
+    let expanded = String(isOpen);
+    if (toggle.getAttribute("aria-expanded") === expanded)
+      return;
+    toggle.setAttribute("aria-expanded", expanded), toggle.title = isOpen ? labels.open : labels.folded, toggle.setAttribute("aria-label", toggle.title);
+    let chevron = toggle.querySelector(".fabric-icon");
+    chevron?.classList.toggle(CHEVRONS.open, isOpen), chevron?.classList.toggle(CHEVRONS.folded, !isOpen);
+  }
+
+  // azure-devops/src/pull-requests/feed-threads.ts
+  var FEED_THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread", HEADER_SELECTOR = ".repos-discussion-comment-header", STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label", RESOLVED_STATUS = "Resolved";
+  function feedThreadOf(thread) {
+    let header = thread.querySelector(HEADER_SELECTOR), nameAndTime = header?.firstElementChild ?? null;
+    if (header === null || nameAndTime === null)
+      return null;
+    let status = header.querySelector(STATUS_SELECTOR)?.textContent.trim();
+    return { header, isResolved: status === RESOLVED_STATUS, nameAndTime, thread };
+  }
+  var feedThreadElements = (document2) => [
+    ...document2.querySelectorAll(FEED_THREAD_SELECTOR)
+  ];
+
+  // azure-devops/src/features/collapsible-threads/collapsible-threads.ts
+  var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u;
+  function threadIdOf(thread) {
+    let field = thread.querySelector(".repos-discussion-thread-reply input");
+    return THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id ?? null;
+  }
+  function findOrAddToggle({ header, nameAndTime, thread }, onClick2) {
+    let existing = header.querySelector(`.${TOGGLE_CLASS}`);
+    if (existing !== null)
+      return existing;
+    let toggle = createFoldToggle(thread.ownerDocument, TOGGLE_CLASS);
+    return toggle.addEventListener("click", () => {
+      onClick2(thread);
+    }), nameAndTime.append(toggle), toggle;
+  }
+  function createCollapsibleThreads({ document: document2 }) {
+    let pickedStates = /* @__PURE__ */ new Map();
+    function stateOf({ isResolved, thread }) {
+      return pickedStates.get(threadIdOf(thread) ?? "") ?? (isResolved ? "collapsed" : "open");
+    }
+    function flip(thread) {
+      let threadId = threadIdOf(thread);
+      threadId !== null && (pickedStates.set(threadId, thread.dataset.fixAdoThread === "open" ? "collapsed" : "open"), sync4());
+    }
+    function syncThread2(feedThread) {
+      let state = stateOf(feedThread);
+      feedThread.thread.dataset.fixAdoThread !== state && (feedThread.thread.dataset.fixAdoThread = state), showFoldToggleState(findOrAddToggle(feedThread, flip), state === "open", TOGGLE_LABELS);
+    }
+    function sync4() {
+      for (let thread of feedThreadElements(document2)) {
+        let feedThread = feedThreadOf(thread);
+        feedThread !== null && syncThread2(feedThread);
+      }
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/collapsible-threads/style.css
+  var style_default2 = `.fix-ado-thread-toggle {
+  flex: none;
+  margin-left: 4px;
+}
+
+/* A collapsed thread shows the header of its first comment: who wrote it, when, and the
+   thread's Resolved chip. Its text, the other comments and the reply box hide. */
+[data-fix-ado-thread="collapsed"] .repos-comment-viewer:not(:first-child),
+[data-fix-ado-thread="collapsed"] .repos-discussion-thread-reply,
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header ~ * {
+  display: none;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header {
+  margin-bottom: 0;
+}
+
+/* The actions at the end of the header hide too. The status dropdown among them stays in
+   the page, where the script reads the thread's status. */
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header > :not(:first-child) {
+  display: none;
+}
+
+/* The card stays, with little room around the one line that is left. */
+[data-fix-ado-thread="collapsed"] .repos-comment-viewer {
+  padding: 0 12px;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment {
+  padding: 4px 20px;
+  border-bottom: 0;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment > .flex-column > .flex-row {
+  align-items: center;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-comment-header-persona {
+  margin-top: 0;
+}
+
+/* A collapsed thread on a file hides the file's name and code too. */
+.comment-file-header:has(+ [data-fix-ado-thread="collapsed"]) {
+  display: none;
+}
+`;
+
+  // azure-devops/src/features/collapsible-threads/index.ts
+  var collapsibleThreads = {
+    change: { kind: "new", version: "1.12.0" },
+    description: "A button on every thread on a pull request's Overview collapses it. Resolved threads start collapsed.",
+    id: "collapsible-threads",
+    name: "Collapsible threads on the Overview",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let threads = createCollapsibleThreads({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && threads.sync();
+        }
+      };
+    },
+    styles: [style_default2]
+  };
+
+  // azure-devops/src/features/folded-pushes/folded-pushes.ts
+  var HEADER_SELECTOR2 = ".activity-feed-list .iteration-card-header", TITLE_SELECTOR = ".iteration-header .font-weight-semibold", COMMITS_SELECTOR = ".bolt-table-container", TOGGLE_CLASS2 = "fix-ado-push-toggle", TOGGLE_LABELS2 = { folded: "Show commits", open: "Hide commits" };
+  function pushOf(header) {
+    let card = header.closest(".bolt-card");
+    if (card === null)
+      return null;
+    let pushedAt = header.querySelector("time")?.getAttribute("datetime") ?? null;
+    return { card, header, pushedAt };
+  }
+  function findOrAddToggle2({ header }, onClick2) {
+    let existing = header.querySelector(`.${TOGGLE_CLASS2}`);
+    if (existing !== null)
+      return existing;
+    let title = header.querySelector(TITLE_SELECTOR);
+    if (title === null)
+      return null;
+    let toggle = createFoldToggle(header.ownerDocument, TOGGLE_CLASS2);
+    return toggle.addEventListener("click", (event) => {
+      event.preventDefault(), event.stopPropagation(), onClick2(header);
+    }), title.after(toggle), toggle;
+  }
+  function createFoldedPushes({ document: document2 }) {
+    let openPushes = /* @__PURE__ */ new Set();
+    function flip(header) {
+      let pushedAt = pushOf(header)?.pushedAt ?? null;
+      pushedAt !== null && (openPushes.delete(pushedAt) || openPushes.add(pushedAt), sync4());
+    }
+    function syncPush(push) {
+      let hasCommits = push.card.querySelector(COMMITS_SELECTOR) !== null, state = hasCommits && push.pushedAt !== null && openPushes.has(push.pushedAt) ? "open" : "folded";
+      if (push.card.dataset.fixAdoPush !== state && (push.card.dataset.fixAdoPush = state), hasCommits) {
+        let toggle = findOrAddToggle2(push, flip);
+        toggle !== null && showFoldToggleState(toggle, state === "open", TOGGLE_LABELS2);
+      } else
+        push.header.querySelector(`.${TOGGLE_CLASS2}`)?.remove();
+    }
+    function sync4() {
+      for (let header of document2.querySelectorAll(HEADER_SELECTOR2)) {
+        let push = pushOf(header);
+        push !== null && syncPush(push);
+      }
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/folded-pushes/style.css
+  var style_default3 = `/* A push in the activity feed of a pull request's Overview. Its header is one line, like the
+   feed's other updates: avatar, title, toggle, and the time at the right. */
+[data-fix-ado-push] .iteration-header {
+  align-items: center;
+  padding: 6px 20px;
+}
+
+[data-fix-ado-push] .iteration-header > .flex-column {
+  flex-direction: row;
+  align-items: center;
+}
+
+[data-fix-ado-push] .iteration-header .font-weight-semibold {
+  font-weight: normal;
+}
+
+[data-fix-ado-push] .iteration-header .bolt-coin {
+  margin-top: 0;
+}
+
+[data-fix-ado-push] .iteration-header .secondary-text {
+  flex: none;
+  margin-left: auto;
+  padding-left: 4px;
+  line-height: 32px;
+}
+
+.fix-ado-push-toggle {
+  flex: none;
+  margin: 0 4px;
+}
+
+/* Folded: no card around it, no commits under it. */
+[data-fix-ado-push="folded"] {
+  margin: 0 20px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-fix-ado-push="folded"] .iteration-card-header,
+[data-fix-ado-push="folded"] .iteration-card-header:hover {
+  margin: 0;
+  background: transparent;
+}
+
+[data-fix-ado-push="folded"] .iteration-header {
+  padding: 2px 0;
+  border-bottom: 0;
+}
+
+/* The push number in the timeline needs more room than a dot. A folded push gives it less
+   line above and below, so the row is as tall as the feed's other updates and the number
+   sits level with the avatar. */
+.bolt-timeline-row:has([data-fix-ado-push="folded"])
+  .activity-feed-sequence
+  .bolt-timeline-icon-prefix {
+  min-height: 3px;
+}
+
+.bolt-timeline-row:has([data-fix-ado-push="folded"])
+  .activity-feed-sequence
+  .bolt-timeline-icon-suffix {
+  min-height: 0;
+}
+
+[data-fix-ado-push="folded"] .iteration-card-header ~ * {
+  display: none;
+}
+`;
+
+  // azure-devops/src/features/folded-pushes/index.ts
+  var foldedPushes = {
+    change: { kind: "new", version: "1.12.0" },
+    description: "A push on a pull request's Overview is one line, like its other updates, with a button that shows its commits.",
+    id: "folded-pushes",
+    name: "Folded pushes on the Overview",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let pushes = createFoldedPushes({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && pushes.sync();
+        }
+      };
+    },
+    styles: [style_default3]
+  };
+
+  // azure-devops/src/features/joined-reviewer-lines/joined-reviewer-lines.ts
+  var ROW_SELECTOR = ".activity-feed-list > tbody > .bolt-timeline-row", JOINED_CLASS = "fix-ado-joined-line", LINE_SELECTOR = `.activity-card-subtle:not(.${JOINED_CLASS})`, PERSON_LINE_PART_COUNT = 6, isBlank = (node) => node.nodeType === node.TEXT_NODE && (node.textContent ?? "").trim() === "", isText = (node) => node?.nodeType === node?.TEXT_NODE;
+  function avatarNamesOf(line2) {
+    let names = [...line2.querySelectorAll(".bolt-coin")].map(
+      (avatar) => avatar.getAttribute("aria-label") ?? ""
+    ), [actorName, personName] = names;
+    return names.length === 2 && actorName !== void 0 && personName !== void 0 ? [actorName, personName] : null;
+  }
+  function personLineOf(row) {
+    let line2 = row.querySelector(LINE_SELECTOR);
+    if (line2 === null)
+      return null;
+    let parts = [...line2.childNodes].filter((node) => !isBlank(node)), [actorAvatar, actorLabel, words, avatar, label, ending] = parts, names = avatarNamesOf(line2);
+    return names === null || parts.length !== PERSON_LINE_PART_COUNT || actorAvatar === void 0 || actorLabel === void 0 || avatar === void 0 || label === void 0 || !isText(words) || !isText(ending) ? null : {
+      actor: [actorAvatar, actorLabel],
+      actorName: names[0],
+      ending: ending.textContent ?? "",
+      line: line2,
+      person: [avatar, label],
+      personName: names[1],
+      row,
+      words: words.textContent ?? ""
+    };
+  }
+  var continuesRun = (run, next) => run[0]?.actorName === next.actorName && run[0].words.trim() === next.words.trim();
+  function runsOf(rows) {
+    let runs = [], current = [];
+    for (let row of rows) {
+      let personLine = personLineOf(row);
+      personLine !== null && continuesRun(current, personLine) ? current.push(personLine) : (current = personLine === null ? [] : [personLine], personLine !== null && runs.push(current));
+    }
+    return runs.filter((run) => run.length > 1);
+  }
+  function groupsOf(run) {
+    let groups = /* @__PURE__ */ new Map();
+    for (let personLine of run.toReversed()) {
+      let key = personLine.ending.trim();
+      groups.set(key, [...groups.get(key) ?? [], personLine]);
+    }
+    return [...groups.values()];
+  }
+  var signatureOf = (run) => JSON.stringify(
+    run.map(({ actorName, ending, personName, words }) => [actorName, words, personName, ending])
+  ), clonesOf = (nodes) => nodes.map((node) => node.cloneNode(!0));
+  function groupParts(group2) {
+    let parts = [];
+    for (let [index, personLine] of group2.entries())
+      index > 0 && parts.push(", "), parts.push(...clonesOf(personLine.person));
+    return parts.push(group2[0]?.ending ?? ""), parts;
+  }
+  function joinedParts(newest, run) {
+    let parts = [...clonesOf(newest.actor), newest.words];
+    for (let [index, group2] of groupsOf(run).entries())
+      index > 0 && parts.push(", "), parts.push(...groupParts(group2));
+    return parts;
+  }
+  function createJoinedLine(newest, run, signature) {
+    let joined = newest.line.cloneNode(!1);
+    return joined.classList.add(JOINED_CLASS), joined.dataset.fixAdoJoinedFrom = signature, joined.append(...joinedParts(newest, run)), joined;
+  }
+  function showJoined(run) {
+    let [newest] = run;
+    if (newest === void 0)
+      return;
+    let signature = signatureOf(run), existing = newest.row.querySelector(`.${JOINED_CLASS}`);
+    existing?.dataset.fixAdoJoinedFrom !== signature && (existing?.remove(), newest.line.after(createJoinedLine(newest, run, signature)));
+  }
+  function markRow(row, mark) {
+    row.dataset.fixAdoJoined !== mark && (row.dataset.fixAdoJoined = mark), mark === "hidden" && row.querySelector(`.${JOINED_CLASS}`)?.remove();
+  }
+  function unmarkRow(row) {
+    delete row.dataset.fixAdoJoined, row.querySelector(`.${JOINED_CLASS}`)?.remove();
+  }
+  function createJoinedReviewerLines({ document: document2 }) {
+    function sync4() {
+      let runs = runsOf([...document2.querySelectorAll(ROW_SELECTOR)]), joinedRows = new Set(runs.flat().map(({ row }) => row));
+      for (let row of document2.querySelectorAll("[data-fix-ado-joined]"))
+        joinedRows.has(row) || unmarkRow(row);
+      for (let run of runs) {
+        for (let [index, { row }] of run.entries())
+          markRow(row, index === 0 ? "line" : "hidden");
+        showJoined(run);
+      }
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/joined-reviewer-lines/style.css
+  var style_default4 = `/* Lines that add a reviewer, joined to one. The newest row of a run shows the joined line in
+   place of Azure DevOps's own; the other rows hide. */
+[data-fix-ado-joined="hidden"] {
+  /* The sort order of the feed sets a display on its rows. */
+  display: none !important;
+}
+
+[data-fix-ado-joined="line"] .activity-card-subtle:not(.fix-ado-joined-line) {
+  display: none;
+}
+`;
+
+  // azure-devops/src/features/joined-reviewer-lines/index.ts
+  var joinedReviewerLines = {
+    change: { kind: "new", version: "1.12.0" },
+    description: "Lines next to each other on a pull request's Overview that add a reviewer are one line, with required and optional reviewers grouped.",
+    id: "joined-reviewer-lines",
+    name: "Joined reviewer lines on the Overview",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let lines = createJoinedReviewerLines({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && lines.sync();
+        }
+      };
+    },
+    styles: [style_default4]
+  };
+
+  // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
+  var COLLAPSE_ICONS = { collapsed: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
+  function setCollapsed(box, isCollapsed) {
+    box.toggleAttribute("data-collapsed", isCollapsed);
+    let button2 = box.querySelector(".fix-ado-issue-box-collapse");
+    button2?.setAttribute("aria-expanded", String(!isCollapsed));
+    let icon = button2?.querySelector(".fabric-icon");
+    icon?.classList.toggle(COLLAPSE_ICONS.collapsed, isCollapsed), icon?.classList.toggle(COLLAPSE_ICONS.open, !isCollapsed);
+  }
+  function createChevron2(document2) {
+    let iconFont = document2.createElement("span");
+    iconFont.className = "fluent-icons-enabled";
+    let icon = document2.createElement("span");
+    return icon.className = "left-icon flex-noshrink fabric-icon small", icon.setAttribute("aria-hidden", "true"), iconFont.append(icon), iconFont;
+  }
+  function createCollapseButton(document2) {
+    let button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = "bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-issue-box-collapse", button2.setAttribute("aria-label", "Errors and warnings"), button2.append(createChevron2(document2)), button2;
+  }
+  function addCollapseButton(box, header, collapse) {
+    let button2 = createCollapseButton(box.ownerDocument);
+    button2.addEventListener("click", () => {
+      let isCollapsed = !Object.hasOwn(box.dataset, "collapsed");
+      setCollapsed(box, isCollapsed), collapse.onToggle(isCollapsed);
+    }), header.prepend(button2), setCollapsed(box, collapse.isCollapsed);
+  }
+
+  // azure-devops/src/pipeline/pipeline-issues.ts
+  var NO_ISSUES = { errorCount: 0, warningCount: 0 }, COUNT_FIELDS = { error: "errorCount", warning: "warningCount" };
+  function isIssueKind(type) {
+    return type === "error" || type === "warning";
+  }
+  function issueKey(issue) {
+    return `${issue.type}
+${issue.message ?? ""}`;
+  }
+  function childrenByParentOf(records) {
+    let children = /* @__PURE__ */ new Map();
+    for (let record of records)
+      record.parentId !== null && children.set(record.parentId, [...children.get(record.parentId) ?? [], record]);
+    return children;
+  }
+  function descendantsOf(record, childrenByParent) {
+    let descendants = [];
+    for (let child of childrenByParent.get(record.id) ?? [])
+      descendants.push(child, ...descendantsOf(child, childrenByParent));
+    return descendants;
+  }
+  function ownIssuesOf(records) {
+    let childrenByParent = childrenByParentOf(records);
+    return new Map(
+      records.map((record) => {
+        let below = new Set(
+          descendantsOf(record, childrenByParent).flatMap(
+            (descendant) => (descendant.issues ?? []).map((issue) => issueKey(issue))
+          )
+        ), own = (record.issues ?? []).filter(
+          (issue) => isIssueKind(issue.type) && !below.has(issueKey(issue))
+        );
+        return [record.id, own];
+      })
+    );
+  }
+  function ownCountOf(record, own, kind) {
+    let listed = (record.issues ?? []).filter((issue) => issue.type === kind).length, repeated = listed - own.filter((issue) => issue.type === kind).length;
+    return Math.max(0, Math.max(record[COUNT_FIELDS[kind]] ?? 0, listed) - repeated);
+  }
+  function issueCountsOf(records) {
+    let childrenByParent = childrenByParentOf(records), ownIssues = ownIssuesOf(records), ownCounts = new Map(
+      records.map((record) => {
+        let own = ownIssues.get(record.id) ?? [];
+        return [
+          record.id,
+          {
+            errorCount: ownCountOf(record, own, "error"),
+            warningCount: ownCountOf(record, own, "warning")
+          }
+        ];
+      })
+    );
+    return new Map(
+      records.map((record) => [
+        record.id,
+        sumIssueCounts(
+          [record, ...descendantsOf(record, childrenByParent)].map(
+            ({ id }) => ownCounts.get(id) ?? NO_ISSUES
+          )
+        )
+      ])
+    );
+  }
+  function sumIssueCounts(counts) {
+    let total = { ...NO_ISSUES };
+    for (let count of counts)
+      total.errorCount += count.errorCount, total.warningCount += count.warningCount;
+    return total;
+  }
+  function runIssueOf(issue, spot) {
+    let place = (spot.job === null ? [spot.stage.name] : [spot.job.name, spot.step?.name]).filter((name) => name != null), lineNumber = Number(issue.data?.logFileLineNumber ?? Number.NaN);
+    return {
+      jobId: spot.job?.id ?? null,
+      kind: issue.type,
+      lineNumber: Number.isInteger(lineNumber) ? lineNumber : null,
+      message: issue.message ?? "",
+      place,
+      stageId: spot.stage.id,
+      stepId: spot.step?.id ?? null
+    };
+  }
+  function runIssuesAt(spot, issues) {
+    return issues.flatMap(
+      (issue) => isIssueKind(issue.type) ? [runIssueOf({ ...issue, type: issue.type }, spot)] : []
+    );
+  }
+  function runIssuesOf(stages) {
+    let issues = stages.flatMap((stage) => stage.issues);
+    return [
+      ...issues.filter((issue) => issue.kind === "error"),
+      ...issues.filter((issue) => issue.kind === "warning")
+    ];
+  }
+
+  // azure-devops/src/pipeline/pipeline-issue-list.ts
+  var SVG_NAMESPACE2 = "http://www.w3.org/2000/svg", ICON_SIZES = {
+    large: { className: " margin-4", drawing: 32, pixels: 24 },
+    small: { className: "", drawing: 16, pixels: 16 }
+  }, ICON_MARKS = {
+    error: {
+      large: "M21.99 9.99a1.5 1.5 0 0 0-2.122 0L16 13.856 12.132 9.99a1.5 1.5 0 0 0-2.121 2.122l3.868 3.868-3.89 3.889a1.5 1.5 0 0 0 2.122 2.121L16 18.1l3.89 3.89a1.5 1.5 0 0 0 2.12-2.122l-3.889-3.89 3.868-3.867a1.5 1.5 0 0 0 0-2.122z",
+      small: "M10.984 5.004a.9.9 0 0 1 0 1.272L9.27 7.99l1.74 1.741a.9.9 0 1 1-1.272 1.273l-1.74-1.741-1.742 1.74a.9.9 0 1 1-1.272-1.272l1.74-1.74-1.713-1.714a.9.9 0 0 1 1.273-1.273l1.713 1.713 1.714-1.713a.9.9 0 0 1 1.273 0z"
+    },
+    warning: {
+      large: "M16 7a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 16 7zm-1.5 16a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z",
+      small: "M8.91 3.9a.9.9 0 0 0-1.8 0v4.7a.9.9 0 1 0 1.8 0V3.9zm-.95 8.65a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8z"
+    }
+  }, KIND_STATUSES = { error: "failed", warning: "warning" }, KIND_LABELS = { error: "Error", warning: "Warning" }, LIST_ROW_WRAPPERS = [
+    { className: "bolt-list-cell-content flex-row", tag: "div" },
+    { className: "bolt-list-cell", tag: "td" },
+    { className: "bolt-list-row first-row", role: "listitem", tag: "tr" },
+    { className: "relative", tag: "tbody" },
+    {
+      className: "preview-check-list bolt-list body-m relative scroll-hidden",
+      role: "list",
+      tag: "table"
+    },
+    { className: "status-details-container fix-ado-issue-box", tag: "div" }
+  ];
+  function countText(count, kind) {
+    return `${count} ${kind}${count === 1 ? "" : "s"}`;
+  }
+  function issueSummary(parts) {
+    let { errorCount, warningCount } = sumIssueCounts(parts);
+    return [
+      ...errorCount > 0 ? [countText(errorCount, "error")] : [],
+      ...warningCount > 0 ? [countText(warningCount, "warning")] : []
+    ].join(", ");
+  }
+  function worstKindOf(issues) {
+    return issues.some((issue) => issue.kind === "error") ? "error" : "warning";
+  }
+  function createElement(document2, { className, role, tag, text }) {
+    let created = document2.createElement(tag);
+    return created.className = className, text !== void 0 && (created.textContent = text), role !== void 0 && created.setAttribute("role", role), created;
+  }
+  function wrapIn(document2, content, wrappers) {
+    let wrapped = content;
+    for (let wrapper of wrappers) {
+      let outer = createElement(document2, wrapper);
+      outer.append(wrapped), wrapped = outer;
+    }
+    return wrapped;
+  }
+  function setAttributes(element4, attributes) {
+    for (let [name, value] of Object.entries(attributes))
+      element4.setAttribute(name, value);
+  }
+  function createKindIcon(document2, kind, size) {
+    let { className, drawing, pixels: pixels2 } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE2, "svg");
+    setAttributes(icon, {
+      "aria-label": KIND_LABELS[kind],
+      class: `bolt-status flex-noshrink ${KIND_STATUSES[kind]}${className} fix-ado-kind-icon`,
+      "data-kind": kind,
+      height: String(pixels2),
+      role: "img",
+      viewBox: `0 0 ${drawing} ${drawing}`,
+      width: String(pixels2)
+    });
+    let circle = document2.createElementNS(SVG_NAMESPACE2, "circle"), middle = String(drawing / 2);
+    setAttributes(circle, { cx: middle, cy: middle, r: middle });
+    let mark = document2.createElementNS(SVG_NAMESPACE2, "path");
+    return setAttributes(mark, { d: ICON_MARKS[kind][size], fill: "#fff" }), icon.append(circle, mark), icon;
+  }
+  function createIssueCounts(document2, counts) {
+    return ["error", "warning"].flatMap((kind) => {
+      let count = kind === "error" ? counts.errorCount : counts.warningCount;
+      if (count === 0)
+        return [];
+      let text = String(count), badge = createElement(document2, { className: "fix-ado-issue-count", tag: "span", text });
+      return badge.dataset.kind = kind, badge.setAttribute("aria-label", countText(count, kind)), badge.title = countText(count, kind), [badge];
+    });
+  }
+  function createOutputLine(document2, issue) {
+    let line2 = createElement(document2, {
+      className: "flex-row monospaced-m dark-build-output fix-ado-issue-output",
+      tag: "div"
+    });
+    issue.lineNumber !== null && line2.append(createElement(document2, { className: "line-number padding-horizontal-16", tag: "div", text: String(issue.lineNumber) }));
+    let className = `${issue.kind === "error" ? "error-text" : "fix-ado-warning-text"} word-break fix-ado-issue-message`;
+    return line2.append(createElement(document2, { className, tag: "div", text: issue.message })), line2;
+  }
+  function fillIssueLink(link, issue) {
+    let { ownerDocument: document2 } = link;
+    link.className = "bolt-table-link full-width-link-no-padding no-underline-link bolt-link fix-ado-issue", link.dataset.kind = issue.kind;
+    let place = createElement(document2, {
+      className: "padding-horizontal-16 padding-vertical-8 text-ellipsis separator-line-top secondary-text body-s fix-ado-issue-place",
+      tag: "div",
+      text: issue.place.join(" / ")
+    }), output = createElement(document2, { className: "flex-column", tag: "div" });
+    return output.append(createOutputLine(document2, issue)), link.append(place, output), link;
+  }
+  function createBoxHeader(document2, box) {
+    let text = createElement(document2, {
+      className: "pr-completion-status-header flex-row flex-center flex-grow rhythm-horizontal-8 text-ellipsis",
+      tag: "div"
+    }), { title } = box;
+    text.append(
+      createElement(document2, {
+        className: "text-ellipsis fix-ado-issue-box-title",
+        tag: "span",
+        text: title
+      })
+    ), box.details !== null && text.append(createElement(document2, { className: "secondary-text fix-ado-issue-box-details", tag: "span", text: box.details }));
+    let header = createElement(document2, {
+      className: "flex-row flex-grow flex-center padding-horizontal-16 rhythm-horizontal-8 fix-ado-issue-box-header",
+      tag: "div"
+    });
+    return header.append(createKindIcon(document2, worstKindOf(box.issues), "small"), text), header;
+  }
+  function createIssueBox(document2, box) {
+    let content = createElement(document2, {
+      className: "flex-column flex-grow text-ellipsis",
+      tag: "div"
+    }), links = box.issues.map((issue) => box.createLink(issue)), header = createBoxHeader(document2, box);
+    content.append(header, ...links);
+    let wrapped = wrapIn(document2, content, LIST_ROW_WRAPPERS);
+    return box.collapse !== void 0 && addCollapseButton(wrapped, header, box.collapse), wrapped;
+  }
+
+  // azure-devops/src/pipeline/pipeline-run-link.ts
+  var RUN_PATH_END = "/_build/results";
+  function parsePipelineRunLocation(location2) {
+    let query = new URLSearchParams(location2.search), buildId = Number(query.get("buildId") ?? Number.NaN);
+    if (!location2.pathname.endsWith(RUN_PATH_END) || !Number.isInteger(buildId))
+      return null;
+    let jobId = query.get("j"), stepId = query.get("t");
+    return query.get("view") !== "logs" ? { buildId, jobId: null, stepId: null, view: "summary" } : jobId !== null && stepId !== null ? { buildId, jobId, stepId, view: "log" } : { buildId, jobId: null, stepId: null, view: "steps" };
+  }
+  function pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) {
+    let step = `j=${encodeURIComponent(jobId)}&t=${encodeURIComponent(stepId)}`;
+    return `${apiBasePath2}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs&${step}`;
+  }
+
+  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues-card.ts
+  var OVERVIEW_ISSUES_CLASS = "fix-ado-overview-issues";
+  function runLinkOf({ apiBasePath: apiBasePath2, project }, buildId, { jobId, stepId }) {
+    return jobId !== null && stepId !== null ? pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) : `${apiBasePath2}/${encodeURIComponent(project)}/_build/results?buildId=${buildId}`;
+  }
+  function createCheckIssueBox(document2, content, { check: check2, counts, issues }) {
+    return createIssueBox(document2, {
+      createLink: (issue) => {
+        let link = document2.createElement("a");
+        return link.href = runLinkOf(content, check2.buildId, issue), fillIssueLink(link, issue);
+      },
+      details: issueSummary([counts]),
+      issues,
+      title: check2.name
+    });
+  }
+  function headingOf(checks) {
+    let runs = checks.length === 1 ? "the latest run" : "the latest runs";
+    return `${issueSummary(checks.map(({ counts }) => counts))} in ${runs}`;
+  }
+  var CARD_WRAPPERS = [
+    { className: "flex-column flex-grow scroll-hidden", tag: "div" },
+    { className: "bolt-card-content flex-row flex-grow bolt-default-horizontal-spacing", tag: "div" },
+    {
+      className: `bolt-table-card bolt-card flex-column depth-8 bolt-card-white ${OVERVIEW_ISSUES_CLASS}`,
+      role: "region",
+      tag: "section"
+    }
+  ];
+  function createHeading(document2, checks) {
+    let heading = createElement(document2, {
+      className: "fix-ado-overview-issues-heading",
+      tag: "span",
+      text: headingOf(checks)
+    }), text = wrapIn(document2, heading, [
+      { className: "flex-column flex-grow scroll-hidden", tag: "div" }
+    ]), row = createElement(document2, {
+      className: "flex-row flex-center rhythm-horizontal-8",
+      tag: "div"
+    }), kind = worstKindOf(checks.flatMap(({ issues }) => issues));
+    return row.append(createKindIcon(document2, kind, "large"), text), row;
+  }
+  function createIssuesCard(document2, content) {
+    let { checks } = content, rows = createElement(document2, {
+      className: "padding-vertical-16 padding-horizontal-20 rhythm-vertical-16",
+      tag: "div"
+    });
+    rows.append(
+      createHeading(document2, checks),
+      ...checks.map((checkIssues) => createCheckIssueBox(document2, content, checkIssues))
+    );
+    let block = wrapIn(document2, rows, CARD_WRAPPERS);
+    return block.setAttribute("aria-label", "Pipeline warnings and errors"), block.dataset.fixAdoRendered = JSON.stringify(checks), block;
+  }
+
   // azure-devops/src/pipeline/pipeline-status.ts
   var BUILD_POLICY_TYPE_ID = "0609b952-1397-4640-95ec-e00a01b2c241";
   function hasStatus(evaluations, status) {
@@ -51,6 +905,515 @@
   function isInProgress(status) {
     return status === "running" || status === "queued";
   }
+
+  // azure-devops/src/pipeline/pipeline-checks.ts
+  function checkNameOf(evaluation, fallback) {
+    return evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? fallback;
+  }
+  function pipelineCheckOf(evaluation) {
+    let buildId = evaluation.context?.buildId ?? 0;
+    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId <= 0 ? null : {
+      buildId,
+      isRequired: evaluation.configuration.isBlocking,
+      name: checkNameOf(evaluation, `Run ${buildId}`),
+      startedAt: evaluation.context?.buildStartedUtc ?? null,
+      status: pipelineStatusOf([evaluation])
+    };
+  }
+  function startedAtMs(check2) {
+    return check2.startedAt === null ? 0 : Date.parse(check2.startedAt);
+  }
+  function pipelineChecksOf(evaluations) {
+    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check2) => check2 !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
+  }
+  function startableChecksOf(evaluations) {
+    return evaluations.flatMap(
+      ({ evaluationId, ...evaluation }) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && evaluationId !== void 0 ? [
+        {
+          evaluationId,
+          isRequired: evaluation.configuration.isBlocking,
+          name: checkNameOf(evaluation, "Build check")
+        }
+      ] : []
+    );
+  }
+
+  // azure-devops/src/pipeline/pipeline-timeline.ts
+  var RESULT_STATUSES = {
+    abandoned: { label: "Canceled", status: "notStarted" },
+    canceled: { label: "Canceled", status: "notStarted" },
+    failed: { label: "Failed", status: "failed" },
+    skipped: { label: "Skipped", status: "notStarted" },
+    succeeded: { label: "Succeeded", status: "succeeded" },
+    succeededWithIssues: { label: "Succeeded with warnings", status: "expired" }
+  };
+  function recordStatusOf({ result, state }) {
+    return state === "inProgress" ? { label: "Running", status: "running" } : (result === null ? void 0 : RESULT_STATUSES[result]) ?? { label: "Not started", status: "notStarted" };
+  }
+  var NO_STAGE_ID = "", DEFAULT_STAGE_NAME = "__default";
+  function inRunOrder(records) {
+    return records.toSorted((first, second) => (first.order ?? 0) - (second.order ?? 0));
+  }
+  function stageIdOf(record, byId) {
+    let parent = record.parentId === null ? void 0 : byId.get(record.parentId);
+    for (; parent !== void 0 && parent.type !== "Stage"; )
+      parent = parent.parentId === null ? void 0 : byId.get(parent.parentId);
+    return parent?.id ?? NO_STAGE_ID;
+  }
+  function countsOf(index, id) {
+    return index.counts.get(id) ?? NO_ISSUES;
+  }
+  function jobOf(job, index) {
+    let steps = inRunOrder(
+      index.records.filter((record) => record.type === "Task" && record.parentId === job.id)
+    ).map(({ id, name, result, state }) => {
+      let { errorCount, warningCount } = countsOf(index, id);
+      return { errorCount, id, jobId: job.id, name, result, state, warningCount };
+    });
+    return {
+      id: job.id,
+      name: job.name,
+      result: job.result,
+      state: job.state,
+      steps,
+      ...countsOf(index, job.id)
+    };
+  }
+  function stageIssuesOf(stage, jobs, index) {
+    let ownOf = (id) => index.ownIssues.get(id) ?? [], stageSpot = {
+      job: null,
+      stage: {
+        id: stage.id,
+        name: stage.id === NO_STAGE_ID || stage.name === DEFAULT_STAGE_NAME ? null : stage.name
+      },
+      step: null
+    };
+    return [
+      ...index.records.filter(
+        (record) => record.type !== "Job" && record.type !== "Task" && (record.id === stage.id || stageIdOf(record, index.byId) === stage.id)
+      ).flatMap((record) => runIssuesAt(stageSpot, ownOf(record.id))),
+      ...jobs.flatMap((job) => {
+        let jobSpot = { ...stageSpot, job };
+        return [
+          ...runIssuesAt(jobSpot, ownOf(job.id)),
+          ...job.steps.flatMap((step) => runIssuesAt({ ...jobSpot, step }, ownOf(step.id)))
+        ];
+      })
+    ];
+  }
+  function stagesOf(records) {
+    let index = {
+      byId: new Map(records.map((record) => [record.id, record])),
+      counts: issueCountsOf(records),
+      ownIssues: ownIssuesOf(records),
+      records
+    }, jobs = inRunOrder(records.filter((record) => record.type === "Job")), stages = inRunOrder(records.filter((record) => record.type === "Stage"));
+    return (stages.length > 0 || jobs.length === 0 ? stages : [{ id: NO_STAGE_ID, name: "Jobs", result: null, state: "" }]).map((stage) => {
+      let stageJobs = jobs.filter((job) => stageIdOf(job, index.byId) === stage.id).map((job) => jobOf(job, index)), { errorCount, warningCount } = stage.id === NO_STAGE_ID ? sumIssueCounts(stageJobs) : countsOf(index, stage.id);
+      return {
+        errorCount,
+        id: stage.id,
+        issues: stageIssuesOf(stage, stageJobs, index),
+        jobs: stageJobs,
+        name: stage.name,
+        result: stage.result,
+        state: stage.state,
+        warningCount
+      };
+    });
+  }
+  function defaultStepOf(stages) {
+    let steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
+    return steps.find((step) => step.state === "inProgress") ?? steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
+  }
+
+  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues.ts
+  var REFRESH_MS = 3e4, DESCRIPTION_SELECTOR = ".repos-pr-description-card", CHECKS_AREA_ERROR_SELECTOR = ".dark-build-output .error-text", RUN_LINK_SELECTOR = 'a[href*="/_build/results?"]';
+  function isBusy(check2) {
+    return check2.status === "running" || check2.status === "queued";
+  }
+  function isTimelineDue(data, check2, now) {
+    let loaded = data.timelines.get(check2.buildId);
+    return loaded === void 0 || loaded.checkStatus !== check2.status || isBusy(check2) && now - loaded.loadedAt >= REFRESH_MS;
+  }
+  function checksAreaErrorsOf(document2) {
+    let errors = /* @__PURE__ */ new Map();
+    for (let line2 of document2.querySelectorAll(CHECKS_AREA_ERROR_SELECTOR)) {
+      let href = line2.closest(RUN_LINK_SELECTOR)?.getAttribute("href"), run = href == null || line2.closest(`.${OVERVIEW_ISSUES_CLASS}`) !== null ? null : parsePipelineRunLocation(new URL(href, document2.baseURI));
+      run !== null && errors.set(run.buildId, (errors.get(run.buildId) ?? /* @__PURE__ */ new Set()).add(line2.textContent.trim()));
+    }
+    return errors;
+  }
+  function checkIssuesOf(check2, stages, shownErrors) {
+    let all = runIssuesOf(stages), issues = all.filter(
+      (issue) => issue.kind !== "error" || !shownErrors.has(issue.message.trim())
+    ), { errorCount, warningCount } = sumIssueCounts(stages), hiddenCount = all.length - issues.length;
+    return {
+      check: check2,
+      counts: { errorCount: Math.max(0, errorCount - hiddenCount), warningCount },
+      issues
+    };
+  }
+  function checksWithIssues(data, document2) {
+    let checksAreaErrors = checksAreaErrorsOf(document2);
+    return data.checks.flatMap((check2) => {
+      let stages = data.timelines.get(check2.buildId)?.stages ?? [], shownErrors = checksAreaErrors.get(check2.buildId) ?? /* @__PURE__ */ new Set(), checkIssues = checkIssuesOf(check2, stages, shownErrors);
+      return checkIssues.issues.length > 0 ? [checkIssues] : [];
+    });
+  }
+  function isBlockShown(block, checks, description) {
+    return block?.dataset.fixAdoRendered === JSON.stringify(checks) && block.nextElementSibling === description;
+  }
+  function render(state) {
+    let { data, options } = state, description = options.document.querySelector(DESCRIPTION_SELECTOR), existing = options.document.querySelector(`.${OVERVIEW_ISSUES_CLASS}`), checks = data === null ? [] : checksWithIssues(data, options.document);
+    if (description === null || data === null || checks.length === 0) {
+      existing?.remove();
+      return;
+    }
+    isBlockShown(existing, checks, description) || (existing?.remove(), description.before(createCard(options, data, checks)));
+  }
+  function createCard({ apiBasePath: apiBasePath2, document: document2 }, data, checks) {
+    return createIssuesCard(document2, { apiBasePath: apiBasePath2, checks, project: data.pullRequest.project });
+  }
+  function showIfCurrent(state, data) {
+    state.data === data && render(state);
+  }
+  async function loadTimeline(state, data, check2) {
+    let { options } = state, loaded = {
+      checkStatus: check2.status,
+      loadedAt: options.now(),
+      stages: data.timelines.get(check2.buildId)?.stages ?? null
+    };
+    data.timelines.set(check2.buildId, loaded);
+    try {
+      loaded.stages = stagesOf(await options.getTimeline(data.pullRequest.project, check2.buildId));
+    } catch {
+    }
+    showIfCurrent(state, data);
+  }
+  async function loadChecks(state, data) {
+    let { options } = state;
+    data.checksLoadedAt = options.now();
+    try {
+      data.checks = pipelineChecksOf(await options.getEvaluations(data.pullRequest));
+    } catch {
+      return;
+    }
+    let now = options.now();
+    for (let check2 of data.checks.filter((candidate) => isTimelineDue(data, candidate, now)))
+      loadTimeline(state, data, check2);
+    showIfCurrent(state, data);
+  }
+  function syncOverview(state, pullRequest, canFetch) {
+    JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest) && (state.data = pullRequest === null ? null : {
+      checks: [],
+      checksLoadedAt: Number.NEGATIVE_INFINITY,
+      pullRequest,
+      timelines: /* @__PURE__ */ new Map()
+    }), render(state);
+    let { data, options } = state, isOnOverview = options.document.querySelector(DESCRIPTION_SELECTOR) !== null;
+    data !== null && canFetch && isOnOverview && options.now() - data.checksLoadedAt >= REFRESH_MS && loadChecks(state, data);
+  }
+  function createOverviewPipelineIssues(options) {
+    let state = { data: null, options };
+    return {
+      sync: (pullRequest, canFetch) => {
+        syncOverview(state, pullRequest, canFetch);
+      }
+    };
+  }
+
+  // azure-devops/src/pipeline/pipeline-issue-list.css
+  var pipeline_issue_list_default = `/* A run's warnings and errors, in a box like Azure DevOps's check list on a pull
+   request's Overview. Azure DevOps's own classes on it style it there; these rules keep
+   the look where they do not reach, such as the Pipeline tab. */
+.fix-ado-issue-box {
+  border: 1px solid rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+  border-radius: 4px;
+  background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+.fix-ado-issue-box > table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fix-ado-issue-box td {
+  padding: 0;
+  border: 0;
+}
+
+.fix-ado-issue-box-header {
+  min-height: 48px;
+}
+
+/* A collapsed box keeps its header row. */
+.fix-ado-issue-box[data-collapsed] .fix-ado-issue {
+  display: none;
+}
+
+.fix-ado-issue-box-collapse {
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+
+.fix-ado-issue {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fix-ado-issue:hover {
+  background: var(--component-grid-row-hover-color, rgba(0, 0, 0, 0.02));
+}
+
+.fix-ado-issue-output {
+  padding: 8px 0;
+  background: rgb(30, 30, 30);
+  color: rgb(212, 212, 212);
+}
+
+.fix-ado-issue-output > .line-number {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* A long message wraps, and keeps its own line breaks. */
+.fix-ado-issue-message {
+  min-width: 0;
+  padding-right: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Without a line number, the message keeps the line number's left padding. */
+.fix-ado-issue-message:first-child {
+  padding-left: 16px;
+}
+
+.fix-ado-issue-output > .error-text {
+  color: rgb(241, 112, 112);
+}
+
+.fix-ado-warning-text {
+  color: rgb(240, 190, 90);
+}
+
+.fix-ado-kind-icon[data-kind="error"] {
+  fill: var(--component-status-error, rgb(205, 74, 69));
+}
+
+.fix-ado-kind-icon[data-kind="warning"] {
+  fill: var(--component-status-warning, rgb(214, 127, 60));
+}
+
+/* The counts of warnings and errors on a stage, job or step in the run tree. */
+.fix-ado-issue-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.fix-ado-issue-count + .fix-ado-issue-count {
+  margin-left: 0;
+}
+
+.fix-ado-issue-count[data-kind="error"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
+}
+
+.fix-ado-issue-count[data-kind="warning"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+`;
+
+  // azure-devops/src/pull-requests/pull-request-link.ts
+  function apiBasePath(location2) {
+    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
+    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
+  }
+  function pathSegments(pathname) {
+    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
+  }
+  function projectOf(segments, gitIndex, basePath2) {
+    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
+    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
+  }
+  function parsePullRequestHref(href, basePath2) {
+    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
+    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
+  }
+  function parsePullRequestListLocation(location2, basePath2) {
+    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
+    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
+      return null;
+    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
+    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
+  }
+  function isPullRequestInboxLocation(location2) {
+    return pathSegments(location2.pathname).at(-1) === "_pulls";
+  }
+  function isPullRequestCreateLocation(location2) {
+    let segments = pathSegments(location2.pathname);
+    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
+  }
+
+  // azure-devops/src/boards/board.ts
+  var CARD_SELECTOR = ".wit-card[data-itemid]";
+  function isBoardLocation(location2) {
+    return location2.pathname.includes("/_boards/board/");
+  }
+  function findBoardCardIds(root) {
+    let ids = /* @__PURE__ */ new Set();
+    for (let card of root.querySelectorAll(CARD_SELECTOR)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && ids.add(id);
+    }
+    return [...ids];
+  }
+  function hasBoardChanged(loaded, current) {
+    for (let [id, workItem] of current.workItems) {
+      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
+      if (isChanged && !isMyOwnChange)
+        return !0;
+    }
+    return !1;
+  }
+  function watchBoard(client, location2, cardIds) {
+    return {
+      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
+      extendLoaded: (loaded, current) => ({
+        myUserId: current.myUserId,
+        workItems: new Map([...current.workItems, ...loaded.workItems])
+      }),
+      async fetchSnapshot() {
+        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
+          client.getWorkItems(cardIds),
+          client.getAuthenticatedUserId()
+        ]);
+        return {
+          retryAfterSeconds,
+          snapshot: {
+            myUserId,
+            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
+          }
+        };
+      },
+      hasChanged: hasBoardChanged,
+      key: `board:${location2.pathname}${location2.search}`
+    };
+  }
+
+  // azure-devops/src/core/page.ts
+  function parsePullRequestPage(location2, basePath2) {
+    if (isPullRequestCreateLocation(location2))
+      return { kind: "pull-request-create" };
+    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
+    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
+  }
+  function parsePage(location2, basePath2) {
+    if (isBoardLocation(location2))
+      return { kind: "board" };
+    let listPage = parsePullRequestListLocation(location2, basePath2);
+    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
+  }
+  function pullRequestOf(page) {
+    return page.kind === "pull-request" ? page.pullRequest : null;
+  }
+
+  // azure-devops/src/features/overview-pipeline-issues/index.ts
+  var overviewPipelineIssues = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "The warnings and errors of each check's latest run, above the pull request description.",
+    id: "overview-pipeline-issues",
+    name: "Warnings and errors on the Overview",
+    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2)
+        return null;
+      let issues = createOverviewPipelineIssues({
+        apiBasePath: basePath2,
+        document: document2,
+        getEvaluations: async (pullRequest) => {
+          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
+          return evaluations;
+        },
+        getTimeline: async (project, buildId) => {
+          let { records } = await client.getTimeline(project, buildId);
+          return records;
+        },
+        now
+      });
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          issues.sync(pullRequestOf(page), isTabActive2);
+        }
+      };
+    },
+    styles: [pipeline_issue_list_default]
+  };
+
+  // azure-devops/src/features/resolved-thread-chips/resolved-thread-chips.ts
+  var CHIP_CLASS = "fix-ado-resolved-chip";
+  function createChip(document2) {
+    let chip = document2.createElement("div");
+    chip.className = `${CHIP_CLASS} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
+    let content = document2.createElement("div");
+    return content.className = "bolt-pill-content text-ellipsis", content.textContent = RESOLVED_STATUS, chip.append(content), chip;
+  }
+  function syncThread(thread) {
+    let feedThread = feedThreadOf(thread), chip = thread.querySelector(`.${CHIP_CLASS}`);
+    feedThread?.isResolved !== !0 ? chip?.remove() : chip === null && feedThread.nameAndTime.append(createChip(thread.ownerDocument));
+  }
+  function createResolvedThreadChips({ document: document2 }) {
+    function sync4() {
+      for (let thread of feedThreadElements(document2))
+        syncThread(thread);
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/resolved-thread-chips/style.css
+  var style_default5 = `/* The Resolved chip on a resolved thread: Azure DevOps's pill, in its colour for success. */
+.bolt-pill.fix-ado-resolved-chip {
+  border-color: var(--component-status-success, rgb(85, 163, 98));
+  color: var(--component-status-success, rgb(85, 163, 98));
+  font-weight: 600;
+}
+`;
+
+  // azure-devops/src/features/resolved-thread-chips/index.ts
+  var resolvedThreadChips = {
+    change: { kind: "new", version: "1.12.0" },
+    description: "A Resolved chip on every resolved thread on a pull request's Overview.",
+    id: "resolved-thread-chips",
+    name: "Resolved chip on threads",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let chips = createResolvedThreadChips({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && chips.sync();
+        }
+      };
+    },
+    styles: [style_default5]
+  };
+
+  // azure-devops/src/features/overview-features.ts
+  var OVERVIEW_FEATURES = [
+    overviewPipelineIssues,
+    activityOrder,
+    foldedPushes,
+    joinedReviewerLines,
+    resolvedThreadChips,
+    collapsibleThreads
+  ];
 
   // azure-devops/src/core/ado-request.ts
   var AdoRequestError = class extends Error {
@@ -523,7 +1886,7 @@
   }
 
   // azure-devops/src/pipeline/pipeline-status-icon.ts
-  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE = "http://www.w3.org/2000/svg", LABELS = {
+  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", LABELS2 = {
     cancelling: "Pipeline cancelling",
     expired: "Pipeline result expired",
     failed: "Pipeline failed",
@@ -565,17 +1928,17 @@
     running: [SPINNER],
     succeeded: [DISC, line("M4.5 8.3l2.3 2.3 4.7-5", "#fff")]
   };
-  function setAttributes(element4, attributes) {
+  function setAttributes2(element4, attributes) {
     for (let [name, value] of Object.entries(attributes))
       element4.setAttribute(name, value);
   }
   function createShape(document2, [tag, attributes]) {
-    let shape = document2.createElementNS(SVG_NAMESPACE, tag);
-    return setAttributes(shape, attributes), shape;
+    let shape = document2.createElementNS(SVG_NAMESPACE3, tag);
+    return setAttributes2(shape, attributes), shape;
   }
-  function createStatusIcon(document2, status, label = LABELS[status]) {
-    let icon = document2.createElementNS(SVG_NAMESPACE, "svg");
-    setAttributes(icon, {
+  function createStatusIcon(document2, status, label = LABELS2[status]) {
+    let icon = document2.createElementNS(SVG_NAMESPACE3, "svg");
+    setAttributes2(icon, {
       "aria-label": label,
       class: PIPELINE_STATUS_ICON_CLASS,
       height: "16",
@@ -583,43 +1946,12 @@
       viewBox: "0 0 16 16",
       width: "16"
     }), icon.dataset.status = status;
-    let title = document2.createElementNS(SVG_NAMESPACE, "title");
+    let title = document2.createElementNS(SVG_NAMESPACE3, "title");
     return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
   }
   function createPipelineStatusIcon(document2, status, pullRequestId) {
     let icon = createStatusIcon(document2, status);
     return icon.dataset.pullRequestId = String(pullRequestId), icon;
-  }
-
-  // azure-devops/src/pull-requests/pull-request-link.ts
-  function apiBasePath(location2) {
-    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
-    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
-  }
-  function pathSegments(pathname) {
-    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
-  }
-  function projectOf(segments, gitIndex, basePath2) {
-    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
-    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
-  }
-  function parsePullRequestHref(href, basePath2) {
-    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
-    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
-  }
-  function parsePullRequestListLocation(location2, basePath2) {
-    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
-    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
-      return null;
-    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
-    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
-  }
-  function isPullRequestInboxLocation(location2) {
-    return pathSegments(location2.pathname).at(-1) === "_pulls";
-  }
-  function isPullRequestCreateLocation(location2) {
-    let segments = pathSegments(location2.pathname);
-    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
   }
 
   // azure-devops/src/pull-requests/pr-list.ts
@@ -670,7 +2002,7 @@
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default6 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -709,7 +2041,7 @@
         }
       };
     },
-    styles: [style_default]
+    styles: [style_default6]
   };
 
   // azure-devops/src/features/review/review-store.ts
@@ -768,7 +2100,7 @@
   }
 
   // azure-devops/src/features/review/editor-comment-boxes.ts
-  var ZONE_SELECTOR = ".zone-widget", EDITOR_SELECTOR = ".monaco-editor", OLD_FILE_EDITOR_CLASS = "original-in-monaco-diff-editor", GUTTER_SELECTOR = ".margin", GUTTER_ROW_SELECTOR = ".margin-view-overlays > div", LINE_NUMBER_SELECTOR = ".line-numbers", LINE_SELECTOR = ".lines-content > .view-lines > .view-line", SHOWN_PATH_SELECTOR = ".repos-compare-toolbar .secondary-text.text-ellipsis";
+  var ZONE_SELECTOR = ".zone-widget", EDITOR_SELECTOR = ".monaco-editor", OLD_FILE_EDITOR_CLASS = "original-in-monaco-diff-editor", GUTTER_SELECTOR = ".margin", GUTTER_ROW_SELECTOR = ".margin-view-overlays > div", LINE_NUMBER_SELECTOR = ".line-numbers", LINE_SELECTOR2 = ".lines-content > .view-lines > .view-line", SHOWN_PATH_SELECTOR = ".repos-compare-toolbar .secondary-text.text-ellipsis";
   function pixels(element4, property2) {
     let length = element4?.style[property2] ?? "";
     return length.endsWith("px") ? Number(length.slice(0, -2)) : Number.NaN;
@@ -784,7 +2116,7 @@
     ) ?? null;
   }
   function lineLengthAt(editor, top) {
-    return [...editor.querySelectorAll(LINE_SELECTOR)].find(
+    return [...editor.querySelectorAll(LINE_SELECTOR2)].find(
       (candidate) => pixels(candidate, "top") === top
     )?.textContent.length ?? 0;
   }
@@ -891,10 +2223,10 @@
     let created = document2.createElement(tag);
     return className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text), created;
   }
-  var ACTION_ATTRIBUTE = "data-fix-ado-review-action", BUTTON_CLASS = "bolt-button enabled bolt-focus-treatment", PRIMARY_BUTTON_CLASS = "bolt-button enabled primary bolt-focus-treatment";
+  var ACTION_ATTRIBUTE = "data-fix-ado-review-action", BUTTON_CLASS2 = "bolt-button enabled bolt-focus-treatment", PRIMARY_BUTTON_CLASS = "bolt-button enabled primary bolt-focus-treatment";
   function actionButton(document2, { action, isPrimary = !1, text }) {
     let button2 = element(document2, "button", {
-      className: isPrimary ? PRIMARY_BUTTON_CLASS : BUTTON_CLASS,
+      className: isPrimary ? PRIMARY_BUTTON_CLASS : BUTTON_CLASS2,
       text
     });
     return button2.type = "button", button2.setAttribute(ACTION_ATTRIBUTE, action), button2;
@@ -968,7 +2300,7 @@ ${content}`
       actionButton(document2, { action: "update", isPrimary: !0, text: "Update comment" })
     ), editor.append(textarea, buttons), editor;
   }
-  function createCard(document2, { content, draft }, note) {
+  function createCard2(document2, { content, draft }, note) {
     let card = element(document2, "div", { className: "fix-ado-review-card" }), body = draft === null ? element(document2, "div", { className: "fix-ado-review-card-text", text: content }) : cardEditor(document2, draft);
     return card.append(cardHeader(document2, note), body), card;
   }
@@ -1020,7 +2352,7 @@ ${content}`
   var CARD_ROW_CLASS = "fix-ado-review-card-row", THREAD_SELECTOR = ".repos-diff-discussion", LINE_CELL_CLASS = "repos-line-content";
   function cardCell(document2, comment) {
     let cell2 = element(document2, "div", { className: "fix-ado-review-card-cell body-m" });
-    return cell2.append(createCard(document2, comment, ONLY_YOU_NOTE)), cell2;
+    return cell2.append(createCard2(document2, comment, ONLY_YOU_NOTE)), cell2;
   }
   function cellsBeforeCode(lineRow) {
     return [...lineRow.children].findIndex((cell2) => cell2.classList.contains(LINE_CELL_CLASS));
@@ -1155,7 +2487,7 @@ ${content}`
   }
   function createItem(document2, comment) {
     let item = element(document2, "div", { className: "fix-ado-review-listed" });
-    return markHolder(item, comment), item.append(createCard(document2, comment, ONLY_YOU_NOTE)), item;
+    return markHolder(item, comment), item.append(createCard2(document2, comment, ONLY_YOU_NOTE)), item;
   }
   function showAt(card, editor, top) {
     let { contentLeft, contentWidth } = editor.getLayoutInfo();
@@ -1285,7 +2617,7 @@ ${content}`
   }
   function listItem(document2, comment) {
     let item = element(document2, "div", { className: ITEM_CLASS });
-    return markHolder(item, comment), item.append(createCard(document2, comment, lineLabel(comment))), item;
+    return markHolder(item, comment), item.append(createCard2(document2, comment, lineLabel(comment))), item;
   }
   function createList(document2, inFile, isOpen) {
     let list = element(document2, "details", { className: `${LIST_CLASS} body-m` });
@@ -1393,7 +2725,7 @@ ${content}`
       return row?.name === name && row.level === level + levelShift;
     });
   }
-  function runsOf(drawn) {
+  function runsOf2(drawn) {
     let runs = [];
     for (let row of drawn) {
       let run = row.isAfterGap ? void 0 : runs.at(-1);
@@ -1414,7 +2746,7 @@ ${content}`
     return fitting;
   }
   function findDrawn(changedPaths, drawn, folded) {
-    let listed = listedRows(changedPaths).filter(({ path }) => !isUnder(path, folded)), runs = runsOf(drawn), everyStart = listed.map((_row, start) => start), starts = withoutOverlap(
+    let listed = listedRows(changedPaths).filter(({ path }) => !isUnder(path, folded)), runs = runsOf2(drawn), everyStart = listed.map((_row, start) => start), starts = withoutOverlap(
       runs,
       runs.map((run) => everyStart.filter((start) => isDrawnAt(listed, run, start)))
     );
@@ -1786,10 +3118,10 @@ ${content}`
   }
 
   // azure-devops/src/features/review/unsaved-edits-dialog.ts
-  var BUTTON_CLASS2 = "bolt-button enabled bolt-focus-treatment";
+  var BUTTON_CLASS3 = "bolt-button enabled bolt-focus-treatment";
   function answerButton(dialog, text, answer) {
     let button2 = element(dialog.ownerDocument, "button", {
-      className: text === "Yes" ? `${BUTTON_CLASS2} primary` : BUTTON_CLASS2,
+      className: text === "Yes" ? `${BUTTON_CLASS3} primary` : BUTTON_CLASS3,
       text
     });
     return button2.type = "button", button2.addEventListener("click", () => {
@@ -1914,12 +3246,12 @@ ${content}`
       pending
     };
   }
-  function render(state) {
+  function render2(state) {
     showReview(state.options.document, shownReview(state));
   }
   function requestStatus(state, shown) {
     shown.isStatusRequested || state.options.store.pending(shown.key).length === 0 || (shown.isStatusRequested = !0, state.options.client.getPullRequestStatus(shown.pullRequest).then((status) => {
-      shown.isActive = status === "active", render(state);
+      shown.isActive = status === "active", render2(state);
     }).catch(() => null));
   }
   async function loadIteration(state, shown) {
@@ -1928,7 +3260,7 @@ ${content}`
       return;
     shown.newestIteration = Math.max(...ids);
     let changes = await client.getIterationChanges(shown.pullRequest, shown.newestIteration);
-    shown.changedPaths = changes.flatMap(({ item }) => item?.path ?? []), render(state);
+    shown.changedPaths = changes.flatMap(({ item }) => item?.path ?? []), render2(state);
   }
   function show(state, pullRequest) {
     let key = state.options.keyOf(pullRequest);
@@ -1958,13 +3290,13 @@ ${content}`
         side: anchor.side
       },
       content
-    }), closeBox(box), render(state);
+    }), closeBox(box), render2(state);
   }
   function openFinish(state, shown) {
     let { client, document: document2, reload, store } = state.options;
     openFinishDialog({
       discard: () => {
-        store.discard(shown.key), render(state);
+        store.discard(shown.key), render2(state);
       },
       document: document2,
       onSubmitted: reload,
@@ -1985,7 +3317,7 @@ ${content}`
       count: drafts.size,
       document: options.document,
       onAnswer: (shouldSave) => {
-        shouldSave && saveDrafts({ drafts, key: shown.key, store: options.store }), drafts.clear(), render(state), openFinish(state, shown);
+        shouldSave && saveDrafts({ drafts, key: shown.key, store: options.store }), drafts.clear(), render2(state), openFinish(state, shown);
       }
     });
   }
@@ -2018,7 +3350,7 @@ ${content}`
     if (shown === null || clicked === null)
       return;
     let editedId = runAction(state, shown, clicked);
-    render(state), editedId !== null && focusEditor(state.options.document, editedId);
+    render2(state), editedId !== null && focusEditor(state.options.document, editedId);
   }
   function boxToAddFrom(state, shown, event) {
     let box = event.key === "Enter" && (event.ctrlKey || event.metaKey) ? commentBoxAround(event.target) : null, hasReview = state.options.store.pending(shown.key).length > 0;
@@ -2033,7 +3365,7 @@ ${content}`
     return document2.addEventListener("click", (event) => {
       handleClick(state, event);
     }), document2.addEventListener("input", (event) => {
-      noteDraft(state.drafts, event.target), render(state);
+      noteDraft(state.drafts, event.target), render2(state);
     }), watchTree(document2, () => {
       showInTree(document2, shownReview(state));
     }), document2.addEventListener(
@@ -2044,76 +3376,13 @@ ${content}`
       !0
     ), {
       sync(pullRequest) {
-        state.shown = pullRequest === null ? null : show(state, pullRequest), state.shown !== null && requestStatus(state, state.shown), render(state);
+        state.shown = pullRequest === null ? null : show(state, pullRequest), state.shown !== null && requestStatus(state, state.shown), render2(state);
       }
     };
   }
 
-  // azure-devops/src/boards/board.ts
-  var CARD_SELECTOR = ".wit-card[data-itemid]";
-  function isBoardLocation(location2) {
-    return location2.pathname.includes("/_boards/board/");
-  }
-  function findBoardCardIds(root) {
-    let ids = /* @__PURE__ */ new Set();
-    for (let card of root.querySelectorAll(CARD_SELECTOR)) {
-      let id = Number(card.dataset.itemid);
-      Number.isInteger(id) && id > 0 && ids.add(id);
-    }
-    return [...ids];
-  }
-  function hasBoardChanged(loaded, current) {
-    for (let [id, workItem] of current.workItems) {
-      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
-      if (isChanged && !isMyOwnChange)
-        return !0;
-    }
-    return !1;
-  }
-  function watchBoard(client, location2, cardIds) {
-    return {
-      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
-      extendLoaded: (loaded, current) => ({
-        myUserId: current.myUserId,
-        workItems: new Map([...current.workItems, ...loaded.workItems])
-      }),
-      async fetchSnapshot() {
-        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
-          client.getWorkItems(cardIds),
-          client.getAuthenticatedUserId()
-        ]);
-        return {
-          retryAfterSeconds,
-          snapshot: {
-            myUserId,
-            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
-          }
-        };
-      },
-      hasChanged: hasBoardChanged,
-      key: `board:${location2.pathname}${location2.search}`
-    };
-  }
-
-  // azure-devops/src/core/page.ts
-  function parsePullRequestPage(location2, basePath2) {
-    if (isPullRequestCreateLocation(location2))
-      return { kind: "pull-request-create" };
-    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
-    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
-  }
-  function parsePage(location2, basePath2) {
-    if (isBoardLocation(location2))
-      return { kind: "board" };
-    let listPage = parsePullRequestListLocation(location2, basePath2);
-    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
-  }
-  function pullRequestOf(page) {
-    return page.kind === "pull-request" ? page.pullRequest : null;
-  }
-
   // azure-devops/src/features/review/style.css
-  var style_default2 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
+  var style_default7 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
    reads "Add single comment". Only the stylesheet touches it. */
 .repos-discussion-thread-reply
   :has(> .fix-ado-review-add)
@@ -2420,11 +3689,11 @@ ${content}`
         }
       };
     },
-    styles: [style_default2]
+    styles: [style_default7]
   };
 
   // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
-  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE2 = "http://www.w3.org/2000/svg";
+  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
   function element2(document2, tag, { className, text, attributes = {}, children = [] } = {}) {
     let created = document2.createElement(tag);
     className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text);
@@ -2444,7 +3713,7 @@ ${content}`
     });
   }
   function svgIcon(document2, className, pathData) {
-    let svg = document2.createElementNS(SVG_NAMESPACE2, "svg"), attributes = {
+    let svg = document2.createElementNS(SVG_NAMESPACE4, "svg"), attributes = {
       "aria-hidden": "true",
       class: className,
       height: "16",
@@ -2454,7 +3723,7 @@ ${content}`
     for (let [name, value] of Object.entries(attributes))
       svg.setAttribute(name, value);
     for (let data of pathData) {
-      let path = document2.createElementNS(SVG_NAMESPACE2, "path");
+      let path = document2.createElementNS(SVG_NAMESPACE4, "path");
       path.setAttribute("d", data), svg.append(path);
     }
     return svg;
@@ -2769,7 +4038,7 @@ ${content}`
     let id = closestHtmlElement(event.target, `.${STARRED_CHIP_CLASS}`)?.dataset.fixAdoIdentity, identity = state.options.store.list().find((starred) => starred.id === id);
     identity !== void 0 && addThroughField(state, field, identity);
   }
-  function createChip(state, identity) {
+  function createChip2(state, identity) {
     let { document: document2, imageUrlOf } = state.options, chip = createStarredChip(document2, identity, imageUrlOf(identity));
     return state.activePick !== null && (chip.setAttribute("disabled", ""), chip.classList.remove("clickable")), state.activePick?.identityId === identity.id && showChipSpinner(document2, chip), state.notFoundIds.has(identity.id) && (chip.title = NOT_FOUND_TITLE), chip;
   }
@@ -2788,7 +4057,7 @@ ${content}`
       state.activePick?.identityId,
       shown.map(({ id }) => [id, state.notFoundIds.has(id)])
     ]);
-    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip(state, identity))));
+    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip2(state, identity))));
   }
   function removeChipRows(document2) {
     for (let row of document2.querySelectorAll(`.${STARRED_CHIP_ROW_CLASS}`))
@@ -2858,254 +4127,6 @@ ${content}`
       });
       updateStarButton(star, store.findByName(nameOfRow(row)) !== null);
     }
-  }
-
-  // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
-  var COLLAPSE_ICONS = { collapsed: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
-  function setCollapsed(box, isCollapsed) {
-    box.toggleAttribute("data-collapsed", isCollapsed);
-    let button2 = box.querySelector(".fix-ado-issue-box-collapse");
-    button2?.setAttribute("aria-expanded", String(!isCollapsed));
-    let icon = button2?.querySelector(".fabric-icon");
-    icon?.classList.toggle(COLLAPSE_ICONS.collapsed, isCollapsed), icon?.classList.toggle(COLLAPSE_ICONS.open, !isCollapsed);
-  }
-  function createChevron(document2) {
-    let iconFont = document2.createElement("span");
-    iconFont.className = "fluent-icons-enabled";
-    let icon = document2.createElement("span");
-    return icon.className = "left-icon flex-noshrink fabric-icon small", icon.setAttribute("aria-hidden", "true"), iconFont.append(icon), iconFont;
-  }
-  function createCollapseButton(document2) {
-    let button2 = document2.createElement("button");
-    return button2.type = "button", button2.className = "bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-issue-box-collapse", button2.setAttribute("aria-label", "Errors and warnings"), button2.append(createChevron(document2)), button2;
-  }
-  function addCollapseButton(box, header, collapse) {
-    let button2 = createCollapseButton(box.ownerDocument);
-    button2.addEventListener("click", () => {
-      let isCollapsed = !Object.hasOwn(box.dataset, "collapsed");
-      setCollapsed(box, isCollapsed), collapse.onToggle(isCollapsed);
-    }), header.prepend(button2), setCollapsed(box, collapse.isCollapsed);
-  }
-
-  // azure-devops/src/pipeline/pipeline-issues.ts
-  var NO_ISSUES = { errorCount: 0, warningCount: 0 }, COUNT_FIELDS = { error: "errorCount", warning: "warningCount" };
-  function isIssueKind(type) {
-    return type === "error" || type === "warning";
-  }
-  function issueKey(issue) {
-    return `${issue.type}
-${issue.message ?? ""}`;
-  }
-  function childrenByParentOf(records) {
-    let children = /* @__PURE__ */ new Map();
-    for (let record of records)
-      record.parentId !== null && children.set(record.parentId, [...children.get(record.parentId) ?? [], record]);
-    return children;
-  }
-  function descendantsOf(record, childrenByParent) {
-    let descendants = [];
-    for (let child of childrenByParent.get(record.id) ?? [])
-      descendants.push(child, ...descendantsOf(child, childrenByParent));
-    return descendants;
-  }
-  function ownIssuesOf(records) {
-    let childrenByParent = childrenByParentOf(records);
-    return new Map(
-      records.map((record) => {
-        let below = new Set(
-          descendantsOf(record, childrenByParent).flatMap(
-            (descendant) => (descendant.issues ?? []).map((issue) => issueKey(issue))
-          )
-        ), own = (record.issues ?? []).filter(
-          (issue) => isIssueKind(issue.type) && !below.has(issueKey(issue))
-        );
-        return [record.id, own];
-      })
-    );
-  }
-  function ownCountOf(record, own, kind) {
-    let listed = (record.issues ?? []).filter((issue) => issue.type === kind).length, repeated = listed - own.filter((issue) => issue.type === kind).length;
-    return Math.max(0, Math.max(record[COUNT_FIELDS[kind]] ?? 0, listed) - repeated);
-  }
-  function issueCountsOf(records) {
-    let childrenByParent = childrenByParentOf(records), ownIssues = ownIssuesOf(records), ownCounts = new Map(
-      records.map((record) => {
-        let own = ownIssues.get(record.id) ?? [];
-        return [
-          record.id,
-          {
-            errorCount: ownCountOf(record, own, "error"),
-            warningCount: ownCountOf(record, own, "warning")
-          }
-        ];
-      })
-    );
-    return new Map(
-      records.map((record) => [
-        record.id,
-        sumIssueCounts(
-          [record, ...descendantsOf(record, childrenByParent)].map(
-            ({ id }) => ownCounts.get(id) ?? NO_ISSUES
-          )
-        )
-      ])
-    );
-  }
-  function sumIssueCounts(counts) {
-    let total = { ...NO_ISSUES };
-    for (let count of counts)
-      total.errorCount += count.errorCount, total.warningCount += count.warningCount;
-    return total;
-  }
-  function runIssueOf(issue, spot) {
-    let place = (spot.job === null ? [spot.stage.name] : [spot.job.name, spot.step?.name]).filter((name) => name != null), lineNumber = Number(issue.data?.logFileLineNumber ?? Number.NaN);
-    return {
-      jobId: spot.job?.id ?? null,
-      kind: issue.type,
-      lineNumber: Number.isInteger(lineNumber) ? lineNumber : null,
-      message: issue.message ?? "",
-      place,
-      stageId: spot.stage.id,
-      stepId: spot.step?.id ?? null
-    };
-  }
-  function runIssuesAt(spot, issues) {
-    return issues.flatMap(
-      (issue) => isIssueKind(issue.type) ? [runIssueOf({ ...issue, type: issue.type }, spot)] : []
-    );
-  }
-  function runIssuesOf(stages) {
-    let issues = stages.flatMap((stage) => stage.issues);
-    return [
-      ...issues.filter((issue) => issue.kind === "error"),
-      ...issues.filter((issue) => issue.kind === "warning")
-    ];
-  }
-
-  // azure-devops/src/pipeline/pipeline-issue-list.ts
-  var SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", ICON_SIZES = {
-    large: { className: " margin-4", drawing: 32, pixels: 24 },
-    small: { className: "", drawing: 16, pixels: 16 }
-  }, ICON_MARKS = {
-    error: {
-      large: "M21.99 9.99a1.5 1.5 0 0 0-2.122 0L16 13.856 12.132 9.99a1.5 1.5 0 0 0-2.121 2.122l3.868 3.868-3.89 3.889a1.5 1.5 0 0 0 2.122 2.121L16 18.1l3.89 3.89a1.5 1.5 0 0 0 2.12-2.122l-3.889-3.89 3.868-3.867a1.5 1.5 0 0 0 0-2.122z",
-      small: "M10.984 5.004a.9.9 0 0 1 0 1.272L9.27 7.99l1.74 1.741a.9.9 0 1 1-1.272 1.273l-1.74-1.741-1.742 1.74a.9.9 0 1 1-1.272-1.272l1.74-1.74-1.713-1.714a.9.9 0 0 1 1.273-1.273l1.713 1.713 1.714-1.713a.9.9 0 0 1 1.273 0z"
-    },
-    warning: {
-      large: "M16 7a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 16 7zm-1.5 16a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z",
-      small: "M8.91 3.9a.9.9 0 0 0-1.8 0v4.7a.9.9 0 1 0 1.8 0V3.9zm-.95 8.65a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8z"
-    }
-  }, KIND_STATUSES = { error: "failed", warning: "warning" }, KIND_LABELS = { error: "Error", warning: "Warning" }, LIST_ROW_WRAPPERS = [
-    { className: "bolt-list-cell-content flex-row", tag: "div" },
-    { className: "bolt-list-cell", tag: "td" },
-    { className: "bolt-list-row first-row", role: "listitem", tag: "tr" },
-    { className: "relative", tag: "tbody" },
-    {
-      className: "preview-check-list bolt-list body-m relative scroll-hidden",
-      role: "list",
-      tag: "table"
-    },
-    { className: "status-details-container fix-ado-issue-box", tag: "div" }
-  ];
-  function countText(count, kind) {
-    return `${count} ${kind}${count === 1 ? "" : "s"}`;
-  }
-  function issueSummary(parts) {
-    let { errorCount, warningCount } = sumIssueCounts(parts);
-    return [
-      ...errorCount > 0 ? [countText(errorCount, "error")] : [],
-      ...warningCount > 0 ? [countText(warningCount, "warning")] : []
-    ].join(", ");
-  }
-  function worstKindOf(issues) {
-    return issues.some((issue) => issue.kind === "error") ? "error" : "warning";
-  }
-  function createElement(document2, { className, role, tag, text }) {
-    let created = document2.createElement(tag);
-    return created.className = className, text !== void 0 && (created.textContent = text), role !== void 0 && created.setAttribute("role", role), created;
-  }
-  function wrapIn(document2, content, wrappers) {
-    let wrapped = content;
-    for (let wrapper of wrappers) {
-      let outer = createElement(document2, wrapper);
-      outer.append(wrapped), wrapped = outer;
-    }
-    return wrapped;
-  }
-  function setAttributes2(element4, attributes) {
-    for (let [name, value] of Object.entries(attributes))
-      element4.setAttribute(name, value);
-  }
-  function createKindIcon(document2, kind, size) {
-    let { className, drawing, pixels: pixels2 } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE3, "svg");
-    setAttributes2(icon, {
-      "aria-label": KIND_LABELS[kind],
-      class: `bolt-status flex-noshrink ${KIND_STATUSES[kind]}${className} fix-ado-kind-icon`,
-      "data-kind": kind,
-      height: String(pixels2),
-      role: "img",
-      viewBox: `0 0 ${drawing} ${drawing}`,
-      width: String(pixels2)
-    });
-    let circle = document2.createElementNS(SVG_NAMESPACE3, "circle"), middle = String(drawing / 2);
-    setAttributes2(circle, { cx: middle, cy: middle, r: middle });
-    let mark = document2.createElementNS(SVG_NAMESPACE3, "path");
-    return setAttributes2(mark, { d: ICON_MARKS[kind][size], fill: "#fff" }), icon.append(circle, mark), icon;
-  }
-  function createIssueCounts(document2, counts) {
-    return ["error", "warning"].flatMap((kind) => {
-      let count = kind === "error" ? counts.errorCount : counts.warningCount;
-      if (count === 0)
-        return [];
-      let text = String(count), badge = createElement(document2, { className: "fix-ado-issue-count", tag: "span", text });
-      return badge.dataset.kind = kind, badge.setAttribute("aria-label", countText(count, kind)), badge.title = countText(count, kind), [badge];
-    });
-  }
-  function createOutputLine(document2, issue) {
-    let line2 = createElement(document2, {
-      className: "flex-row monospaced-m dark-build-output fix-ado-issue-output",
-      tag: "div"
-    });
-    issue.lineNumber !== null && line2.append(createElement(document2, { className: "line-number padding-horizontal-16", tag: "div", text: String(issue.lineNumber) }));
-    let className = `${issue.kind === "error" ? "error-text" : "fix-ado-warning-text"} word-break fix-ado-issue-message`;
-    return line2.append(createElement(document2, { className, tag: "div", text: issue.message })), line2;
-  }
-  function fillIssueLink(link, issue) {
-    let { ownerDocument: document2 } = link;
-    link.className = "bolt-table-link full-width-link-no-padding no-underline-link bolt-link fix-ado-issue", link.dataset.kind = issue.kind;
-    let place = createElement(document2, {
-      className: "padding-horizontal-16 padding-vertical-8 text-ellipsis separator-line-top secondary-text body-s fix-ado-issue-place",
-      tag: "div",
-      text: issue.place.join(" / ")
-    }), output = createElement(document2, { className: "flex-column", tag: "div" });
-    return output.append(createOutputLine(document2, issue)), link.append(place, output), link;
-  }
-  function createBoxHeader(document2, box) {
-    let text = createElement(document2, {
-      className: "pr-completion-status-header flex-row flex-center flex-grow rhythm-horizontal-8 text-ellipsis",
-      tag: "div"
-    }), { title } = box;
-    text.append(
-      createElement(document2, {
-        className: "text-ellipsis fix-ado-issue-box-title",
-        tag: "span",
-        text: title
-      })
-    ), box.details !== null && text.append(createElement(document2, { className: "secondary-text fix-ado-issue-box-details", tag: "span", text: box.details }));
-    let header = createElement(document2, {
-      className: "flex-row flex-grow flex-center padding-horizontal-16 rhythm-horizontal-8 fix-ado-issue-box-header",
-      tag: "div"
-    });
-    return header.append(createKindIcon(document2, worstKindOf(box.issues), "small"), text), header;
-  }
-  function createIssueBox(document2, box) {
-    let content = createElement(document2, {
-      className: "flex-column flex-grow text-ellipsis",
-      tag: "div"
-    }), links = box.issues.map((issue) => box.createLink(issue)), header = createBoxHeader(document2, box);
-    content.append(header, ...links);
-    let wrapped = wrapIn(document2, content, LIST_ROW_WRAPPERS);
-    return box.collapse !== void 0 && addCollapseButton(wrapped, header, box.collapse), wrapped;
   }
 
   // azure-devops/src/features/starred-reviewers/star-picker.ts
@@ -3377,7 +4398,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/starred-reviewers/style.css
-  var style_default3 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
+  var style_default8 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
 .repos-reviewer > .fix-ado-star {
   visibility: hidden;
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
@@ -3542,159 +4563,14 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default3]
+    styles: [style_default8]
   };
 
   // azure-devops/src/features/reviewing-features.ts
   var REVIEWING_FEATURES = [requiredReviewers, starredReviewers, review];
 
-  // azure-devops/src/features/activity-order/activity-order.ts
-  var FEED_SELECTOR = ".activity-feed-list", FILTER_SELECTOR = ".repos-activity-filter-dropdown", BUTTON_CLASS3 = "fix-ado-activity-order", TEXT_CLASS = "bolt-button-text", SVG_NAMESPACE4 = "http://www.w3.org/2000/svg", SORT_ICON_PATHS = ["M5 13V3M2.5 5.5L5 3l2.5 2.5", "M11 3v10M8.5 10.5L11 13l2.5-2.5"], DEFAULT_ORDER = "oldest-first", LABELS2 = {
-    "newest-first": "Newest first",
-    "oldest-first": "Oldest first"
-  }, flipped = (order) => order === "oldest-first" ? "newest-first" : "oldest-first";
-  function sortIcon(document2) {
-    let svg = document2.createElementNS(SVG_NAMESPACE4, "svg");
-    svg.setAttribute("aria-hidden", "true"), svg.setAttribute("class", "fix-ado-activity-order-icon"), svg.setAttribute("viewBox", "0 0 16 16");
-    for (let data of SORT_ICON_PATHS) {
-      let path = document2.createElementNS(SVG_NAMESPACE4, "path");
-      path.setAttribute("d", data), svg.append(path);
-    }
-    return svg;
-  }
-  function createButton(document2, onClick2) {
-    let button2 = document2.createElement("button");
-    button2.type = "button", button2.className = `${BUTTON_CLASS3} bolt-button enabled bolt-focus-treatment`;
-    let text = document2.createElement("span");
-    return text.className = TEXT_CLASS, button2.append(sortIcon(document2), text), button2.addEventListener("click", onClick2), button2;
-  }
-  function spacingBox(button2) {
-    let box = button2.ownerDocument.createElement("div");
-    return box.className = "margin-bottom-16 margin-right-8 inline-flex-row", box.append(button2), box;
-  }
-  function findOrAddButton(document2, onClick2) {
-    let existing = document2.querySelector(`.${BUTTON_CLASS3}`);
-    if (existing !== null)
-      return existing;
-    let filters = document2.querySelector(FILTER_SELECTOR)?.parentElement;
-    if (filters == null)
-      return null;
-    let button2 = createButton(document2, onClick2);
-    return filters.prepend(spacingBox(button2)), button2;
-  }
-  function showOrder(feed, button2, order) {
-    feed.dataset.fixAdoActivityOrder !== order && (feed.dataset.fixAdoActivityOrder = order);
-    let text = button2?.querySelector(`.${TEXT_CLASS}`);
-    button2 !== null && text !== null && text !== void 0 && text.textContent !== LABELS2[order] && (text.textContent = LABELS2[order], button2.title = `Show ${LABELS2[flipped(order)].toLowerCase()}`);
-  }
-  function createActivityOrder(options) {
-    let { document: document2, storage } = options, order = storage.load() ?? DEFAULT_ORDER;
-    function flip() {
-      order = flipped(order), storage.save(order), sync4();
-    }
-    function sync4() {
-      let feed = document2.querySelector(FEED_SELECTOR);
-      feed !== null && showOrder(feed, findOrAddButton(document2, flip), order);
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/activity-order/style.css
-  var style_default4 = `/* The activity feed on a pull request's Overview, oldest first. Azure DevOps renders the rows
-   newest first and keeps them that way in the DOM; the feed lays them out bottom to top. */
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"] {
-  display: block;
-}
-
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody {
-  display: flex;
-  flex-direction: column-reverse;
-}
-
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody > tr {
-  display: block;
-}
-
-/* The timeline line ends at the row that is now on top, and at the one now at the bottom. */
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-first-row
-  .bolt-timeline-icon-prefix,
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-last-row
-  .bolt-timeline-icon-suffix {
-  visibility: visible;
-}
-
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-first-row
-  .bolt-timeline-icon-suffix,
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-last-row
-  .bolt-timeline-icon-prefix {
-  visibility: hidden;
-}
-
-/* The dashed piece of the line leads to the comment box, which is now the bottom row. */
-.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-row:nth-child(4)
-  .bolt-timeline-icon-prefix {
-  border-left-style: solid;
-}
-
-.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-first-row
-  .bolt-timeline-icon-prefix,
-.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-first-row
-  + .bolt-timeline-row
-  .bolt-timeline-icon-suffix {
-  border-left-style: dashed;
-}
-
-/* The sort button's icon, drawn like Azure DevOps's line icons. */
-.fix-ado-activity-order-icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin-right: 8px;
-  vertical-align: middle;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-`;
-
-  // azure-devops/src/features/activity-order/index.ts
-  var ORDER_KEY = "activity-order", activityOrder = {
-    change: { kind: "new", version: "1.11.0" },
-    description: "The comments and updates on a pull request's Overview run from old to new, with a button to flip them.",
-    id: "activity-order",
-    name: "Oldest first on the Overview",
-    start({ document: document2, isInFrame: isInFrame2 }) {
-      if (isInFrame2)
-        return null;
-      let order = createActivityOrder({
-        document: document2,
-        storage: {
-          load: () => GM_getValue(ORDER_KEY, null),
-          save: (picked) => {
-            GM_setValue(ORDER_KEY, picked);
-          }
-        }
-      });
-      return {
-        sync({ page }) {
-          page.kind === "pull-request" && order.sync();
-        }
-      };
-    },
-    styles: [style_default4]
-  };
-
   // azure-devops/src/features/avatar-initials/style.css
-  var style_default5 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+  var style_default9 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
 [data-fix-ado-initials] {
   position: relative;
   border-radius: 50%;
@@ -3733,7 +4609,7 @@ ${issue.message ?? ""}`;
         showInitialsOnAvatars(document2);
       }
     }),
-    styles: [style_default5]
+    styles: [style_default9]
   };
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
@@ -3847,7 +4723,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
-  var HEADER_SELECTOR = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS = "fix-ado-days-toggle";
+  var HEADER_SELECTOR3 = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS3 = "fix-ado-days-toggle";
   function showColumnState(column, toggle, isHidden) {
     Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
     let pressed = String(!isHidden);
@@ -3855,12 +4731,12 @@ ${issue.message ?? ""}`;
   }
   function createToggle(document2, onClick2) {
     let toggle = document2.createElement("button");
-    return toggle.type = "button", toggle.className = TOGGLE_CLASS, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
+    return toggle.type = "button", toggle.className = TOGGLE_CLASS3, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
       event.preventDefault(), event.stopPropagation(), onClick2();
     }), toggle;
   }
-  function findOrAddToggle(header, onClick2) {
-    let existing = header.querySelector(`.${TOGGLE_CLASS}`);
+  function findOrAddToggle3(header, onClick2) {
+    let existing = header.querySelector(`.${TOGGLE_CLASS3}`);
     if (existing !== null)
       return existing;
     let toggle = createToggle(header.ownerDocument, onClick2);
@@ -3872,12 +4748,12 @@ ${issue.message ?? ""}`;
       hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync4();
     }
     function sync4() {
-      let headers = [...document2.querySelectorAll(HEADER_SELECTOR)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
+      let headers = [...document2.querySelectorAll(HEADER_SELECTOR3)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
       if (headers.length === columns.length)
         for (let [index, header] of headers.entries()) {
           let column = columns[index], columnId = column?.dataset.column;
           if (column !== void 0 && columnId !== void 0) {
-            let toggle = findOrAddToggle(header, () => {
+            let toggle = findOrAddToggle3(header, () => {
               flip(columnId);
             });
             showColumnState(column, toggle, hiddenColumnIds.has(columnId));
@@ -3888,7 +4764,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/days-in-column/style.css
-  var style_default6 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+  var style_default10 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
 .fix-ado-days-in-column {
   display: flex;
   flex-wrap: wrap;
@@ -4006,7 +4882,7 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default6]
+    styles: [style_default10]
   };
 
   // azure-devops/src/features/system-theme/system-theme.ts
@@ -4135,432 +5011,6 @@ ${issue.message ?? ""}`;
       }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), theme.start(), null;
     },
     styles: []
-  };
-
-  // azure-devops/src/pipeline/pipeline-run-link.ts
-  var RUN_PATH_END = "/_build/results";
-  function parsePipelineRunLocation(location2) {
-    let query = new URLSearchParams(location2.search), buildId = Number(query.get("buildId") ?? Number.NaN);
-    if (!location2.pathname.endsWith(RUN_PATH_END) || !Number.isInteger(buildId))
-      return null;
-    let jobId = query.get("j"), stepId = query.get("t");
-    return query.get("view") !== "logs" ? { buildId, jobId: null, stepId: null, view: "summary" } : jobId !== null && stepId !== null ? { buildId, jobId, stepId, view: "log" } : { buildId, jobId: null, stepId: null, view: "steps" };
-  }
-  function pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) {
-    let step = `j=${encodeURIComponent(jobId)}&t=${encodeURIComponent(stepId)}`;
-    return `${apiBasePath2}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs&${step}`;
-  }
-
-  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues-card.ts
-  var OVERVIEW_ISSUES_CLASS = "fix-ado-overview-issues";
-  function runLinkOf({ apiBasePath: apiBasePath2, project }, buildId, { jobId, stepId }) {
-    return jobId !== null && stepId !== null ? pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) : `${apiBasePath2}/${encodeURIComponent(project)}/_build/results?buildId=${buildId}`;
-  }
-  function createCheckIssueBox(document2, content, { check: check2, counts, issues }) {
-    return createIssueBox(document2, {
-      createLink: (issue) => {
-        let link = document2.createElement("a");
-        return link.href = runLinkOf(content, check2.buildId, issue), fillIssueLink(link, issue);
-      },
-      details: issueSummary([counts]),
-      issues,
-      title: check2.name
-    });
-  }
-  function headingOf(checks) {
-    let runs = checks.length === 1 ? "the latest run" : "the latest runs";
-    return `${issueSummary(checks.map(({ counts }) => counts))} in ${runs}`;
-  }
-  var CARD_WRAPPERS = [
-    { className: "flex-column flex-grow scroll-hidden", tag: "div" },
-    { className: "bolt-card-content flex-row flex-grow bolt-default-horizontal-spacing", tag: "div" },
-    {
-      className: `bolt-table-card bolt-card flex-column depth-8 bolt-card-white ${OVERVIEW_ISSUES_CLASS}`,
-      role: "region",
-      tag: "section"
-    }
-  ];
-  function createHeading(document2, checks) {
-    let heading = createElement(document2, {
-      className: "fix-ado-overview-issues-heading",
-      tag: "span",
-      text: headingOf(checks)
-    }), text = wrapIn(document2, heading, [
-      { className: "flex-column flex-grow scroll-hidden", tag: "div" }
-    ]), row = createElement(document2, {
-      className: "flex-row flex-center rhythm-horizontal-8",
-      tag: "div"
-    }), kind = worstKindOf(checks.flatMap(({ issues }) => issues));
-    return row.append(createKindIcon(document2, kind, "large"), text), row;
-  }
-  function createIssuesCard(document2, content) {
-    let { checks } = content, rows = createElement(document2, {
-      className: "padding-vertical-16 padding-horizontal-20 rhythm-vertical-16",
-      tag: "div"
-    });
-    rows.append(
-      createHeading(document2, checks),
-      ...checks.map((checkIssues) => createCheckIssueBox(document2, content, checkIssues))
-    );
-    let block = wrapIn(document2, rows, CARD_WRAPPERS);
-    return block.setAttribute("aria-label", "Pipeline warnings and errors"), block.dataset.fixAdoRendered = JSON.stringify(checks), block;
-  }
-
-  // azure-devops/src/pipeline/pipeline-checks.ts
-  function checkNameOf(evaluation, fallback) {
-    return evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? fallback;
-  }
-  function pipelineCheckOf(evaluation) {
-    let buildId = evaluation.context?.buildId ?? 0;
-    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId <= 0 ? null : {
-      buildId,
-      isRequired: evaluation.configuration.isBlocking,
-      name: checkNameOf(evaluation, `Run ${buildId}`),
-      startedAt: evaluation.context?.buildStartedUtc ?? null,
-      status: pipelineStatusOf([evaluation])
-    };
-  }
-  function startedAtMs(check2) {
-    return check2.startedAt === null ? 0 : Date.parse(check2.startedAt);
-  }
-  function pipelineChecksOf(evaluations) {
-    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check2) => check2 !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
-  }
-  function startableChecksOf(evaluations) {
-    return evaluations.flatMap(
-      ({ evaluationId, ...evaluation }) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && evaluationId !== void 0 ? [
-        {
-          evaluationId,
-          isRequired: evaluation.configuration.isBlocking,
-          name: checkNameOf(evaluation, "Build check")
-        }
-      ] : []
-    );
-  }
-
-  // azure-devops/src/pipeline/pipeline-timeline.ts
-  var RESULT_STATUSES = {
-    abandoned: { label: "Canceled", status: "notStarted" },
-    canceled: { label: "Canceled", status: "notStarted" },
-    failed: { label: "Failed", status: "failed" },
-    skipped: { label: "Skipped", status: "notStarted" },
-    succeeded: { label: "Succeeded", status: "succeeded" },
-    succeededWithIssues: { label: "Succeeded with warnings", status: "expired" }
-  };
-  function recordStatusOf({ result, state }) {
-    return state === "inProgress" ? { label: "Running", status: "running" } : (result === null ? void 0 : RESULT_STATUSES[result]) ?? { label: "Not started", status: "notStarted" };
-  }
-  var NO_STAGE_ID = "", DEFAULT_STAGE_NAME = "__default";
-  function inRunOrder(records) {
-    return records.toSorted((first, second) => (first.order ?? 0) - (second.order ?? 0));
-  }
-  function stageIdOf(record, byId) {
-    let parent = record.parentId === null ? void 0 : byId.get(record.parentId);
-    for (; parent !== void 0 && parent.type !== "Stage"; )
-      parent = parent.parentId === null ? void 0 : byId.get(parent.parentId);
-    return parent?.id ?? NO_STAGE_ID;
-  }
-  function countsOf(index, id) {
-    return index.counts.get(id) ?? NO_ISSUES;
-  }
-  function jobOf(job, index) {
-    let steps = inRunOrder(
-      index.records.filter((record) => record.type === "Task" && record.parentId === job.id)
-    ).map(({ id, name, result, state }) => {
-      let { errorCount, warningCount } = countsOf(index, id);
-      return { errorCount, id, jobId: job.id, name, result, state, warningCount };
-    });
-    return {
-      id: job.id,
-      name: job.name,
-      result: job.result,
-      state: job.state,
-      steps,
-      ...countsOf(index, job.id)
-    };
-  }
-  function stageIssuesOf(stage, jobs, index) {
-    let ownOf = (id) => index.ownIssues.get(id) ?? [], stageSpot = {
-      job: null,
-      stage: {
-        id: stage.id,
-        name: stage.id === NO_STAGE_ID || stage.name === DEFAULT_STAGE_NAME ? null : stage.name
-      },
-      step: null
-    };
-    return [
-      ...index.records.filter(
-        (record) => record.type !== "Job" && record.type !== "Task" && (record.id === stage.id || stageIdOf(record, index.byId) === stage.id)
-      ).flatMap((record) => runIssuesAt(stageSpot, ownOf(record.id))),
-      ...jobs.flatMap((job) => {
-        let jobSpot = { ...stageSpot, job };
-        return [
-          ...runIssuesAt(jobSpot, ownOf(job.id)),
-          ...job.steps.flatMap((step) => runIssuesAt({ ...jobSpot, step }, ownOf(step.id)))
-        ];
-      })
-    ];
-  }
-  function stagesOf(records) {
-    let index = {
-      byId: new Map(records.map((record) => [record.id, record])),
-      counts: issueCountsOf(records),
-      ownIssues: ownIssuesOf(records),
-      records
-    }, jobs = inRunOrder(records.filter((record) => record.type === "Job")), stages = inRunOrder(records.filter((record) => record.type === "Stage"));
-    return (stages.length > 0 || jobs.length === 0 ? stages : [{ id: NO_STAGE_ID, name: "Jobs", result: null, state: "" }]).map((stage) => {
-      let stageJobs = jobs.filter((job) => stageIdOf(job, index.byId) === stage.id).map((job) => jobOf(job, index)), { errorCount, warningCount } = stage.id === NO_STAGE_ID ? sumIssueCounts(stageJobs) : countsOf(index, stage.id);
-      return {
-        errorCount,
-        id: stage.id,
-        issues: stageIssuesOf(stage, stageJobs, index),
-        jobs: stageJobs,
-        name: stage.name,
-        result: stage.result,
-        state: stage.state,
-        warningCount
-      };
-    });
-  }
-  function defaultStepOf(stages) {
-    let steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
-    return steps.find((step) => step.state === "inProgress") ?? steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
-  }
-
-  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues.ts
-  var REFRESH_MS = 3e4, DESCRIPTION_SELECTOR = ".repos-pr-description-card", CHECKS_AREA_ERROR_SELECTOR = ".dark-build-output .error-text", RUN_LINK_SELECTOR = 'a[href*="/_build/results?"]';
-  function isBusy(check2) {
-    return check2.status === "running" || check2.status === "queued";
-  }
-  function isTimelineDue(data, check2, now) {
-    let loaded = data.timelines.get(check2.buildId);
-    return loaded === void 0 || loaded.checkStatus !== check2.status || isBusy(check2) && now - loaded.loadedAt >= REFRESH_MS;
-  }
-  function checksAreaErrorsOf(document2) {
-    let errors = /* @__PURE__ */ new Map();
-    for (let line2 of document2.querySelectorAll(CHECKS_AREA_ERROR_SELECTOR)) {
-      let href = line2.closest(RUN_LINK_SELECTOR)?.getAttribute("href"), run = href == null || line2.closest(`.${OVERVIEW_ISSUES_CLASS}`) !== null ? null : parsePipelineRunLocation(new URL(href, document2.baseURI));
-      run !== null && errors.set(run.buildId, (errors.get(run.buildId) ?? /* @__PURE__ */ new Set()).add(line2.textContent.trim()));
-    }
-    return errors;
-  }
-  function checkIssuesOf(check2, stages, shownErrors) {
-    let all = runIssuesOf(stages), issues = all.filter(
-      (issue) => issue.kind !== "error" || !shownErrors.has(issue.message.trim())
-    ), { errorCount, warningCount } = sumIssueCounts(stages), hiddenCount = all.length - issues.length;
-    return {
-      check: check2,
-      counts: { errorCount: Math.max(0, errorCount - hiddenCount), warningCount },
-      issues
-    };
-  }
-  function checksWithIssues(data, document2) {
-    let checksAreaErrors = checksAreaErrorsOf(document2);
-    return data.checks.flatMap((check2) => {
-      let stages = data.timelines.get(check2.buildId)?.stages ?? [], shownErrors = checksAreaErrors.get(check2.buildId) ?? /* @__PURE__ */ new Set(), checkIssues = checkIssuesOf(check2, stages, shownErrors);
-      return checkIssues.issues.length > 0 ? [checkIssues] : [];
-    });
-  }
-  function isBlockShown(block, checks, description) {
-    return block?.dataset.fixAdoRendered === JSON.stringify(checks) && block.nextElementSibling === description;
-  }
-  function render2(state) {
-    let { data, options } = state, description = options.document.querySelector(DESCRIPTION_SELECTOR), existing = options.document.querySelector(`.${OVERVIEW_ISSUES_CLASS}`), checks = data === null ? [] : checksWithIssues(data, options.document);
-    if (description === null || data === null || checks.length === 0) {
-      existing?.remove();
-      return;
-    }
-    isBlockShown(existing, checks, description) || (existing?.remove(), description.before(createCard2(options, data, checks)));
-  }
-  function createCard2({ apiBasePath: apiBasePath2, document: document2 }, data, checks) {
-    return createIssuesCard(document2, { apiBasePath: apiBasePath2, checks, project: data.pullRequest.project });
-  }
-  function showIfCurrent(state, data) {
-    state.data === data && render2(state);
-  }
-  async function loadTimeline(state, data, check2) {
-    let { options } = state, loaded = {
-      checkStatus: check2.status,
-      loadedAt: options.now(),
-      stages: data.timelines.get(check2.buildId)?.stages ?? null
-    };
-    data.timelines.set(check2.buildId, loaded);
-    try {
-      loaded.stages = stagesOf(await options.getTimeline(data.pullRequest.project, check2.buildId));
-    } catch {
-    }
-    showIfCurrent(state, data);
-  }
-  async function loadChecks(state, data) {
-    let { options } = state;
-    data.checksLoadedAt = options.now();
-    try {
-      data.checks = pipelineChecksOf(await options.getEvaluations(data.pullRequest));
-    } catch {
-      return;
-    }
-    let now = options.now();
-    for (let check2 of data.checks.filter((candidate) => isTimelineDue(data, candidate, now)))
-      loadTimeline(state, data, check2);
-    showIfCurrent(state, data);
-  }
-  function syncOverview(state, pullRequest, canFetch) {
-    JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest) && (state.data = pullRequest === null ? null : {
-      checks: [],
-      checksLoadedAt: Number.NEGATIVE_INFINITY,
-      pullRequest,
-      timelines: /* @__PURE__ */ new Map()
-    }), render2(state);
-    let { data, options } = state, isOnOverview = options.document.querySelector(DESCRIPTION_SELECTOR) !== null;
-    data !== null && canFetch && isOnOverview && options.now() - data.checksLoadedAt >= REFRESH_MS && loadChecks(state, data);
-  }
-  function createOverviewPipelineIssues(options) {
-    let state = { data: null, options };
-    return {
-      sync: (pullRequest, canFetch) => {
-        syncOverview(state, pullRequest, canFetch);
-      }
-    };
-  }
-
-  // azure-devops/src/pipeline/pipeline-issue-list.css
-  var pipeline_issue_list_default = `/* A run's warnings and errors, in a box like Azure DevOps's check list on a pull
-   request's Overview. Azure DevOps's own classes on it style it there; these rules keep
-   the look where they do not reach, such as the Pipeline tab. */
-.fix-ado-issue-box {
-  border: 1px solid rgba(var(--palette-neutral-8, 234, 234, 234), 1);
-  border-radius: 4px;
-  background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
-}
-
-.fix-ado-issue-box > table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.fix-ado-issue-box td {
-  padding: 0;
-  border: 0;
-}
-
-.fix-ado-issue-box-header {
-  min-height: 48px;
-}
-
-/* A collapsed box keeps its header row. */
-.fix-ado-issue-box[data-collapsed] .fix-ado-issue {
-  display: none;
-}
-
-.fix-ado-issue-box-collapse {
-  flex-shrink: 0;
-  margin-left: -4px;
-}
-
-.fix-ado-issue {
-  display: block;
-  color: inherit;
-  text-decoration: none;
-}
-
-.fix-ado-issue:hover {
-  background: var(--component-grid-row-hover-color, rgba(0, 0, 0, 0.02));
-}
-
-.fix-ado-issue-output {
-  padding: 8px 0;
-  background: rgb(30, 30, 30);
-  color: rgb(212, 212, 212);
-}
-
-.fix-ado-issue-output > .line-number {
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-/* A long message wraps, and keeps its own line breaks. */
-.fix-ado-issue-message {
-  min-width: 0;
-  padding-right: 16px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* Without a line number, the message keeps the line number's left padding. */
-.fix-ado-issue-message:first-child {
-  padding-left: 16px;
-}
-
-.fix-ado-issue-output > .error-text {
-  color: rgb(241, 112, 112);
-}
-
-.fix-ado-warning-text {
-  color: rgb(240, 190, 90);
-}
-
-.fix-ado-kind-icon[data-kind="error"] {
-  fill: var(--component-status-error, rgb(205, 74, 69));
-}
-
-.fix-ado-kind-icon[data-kind="warning"] {
-  fill: var(--component-status-warning, rgb(214, 127, 60));
-}
-
-/* The counts of warnings and errors on a stage, job or step in the run tree. */
-.fix-ado-issue-count {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 0 6px;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-}
-
-.fix-ado-issue-count + .fix-ado-issue-count {
-  margin-left: 0;
-}
-
-.fix-ado-issue-count[data-kind="error"] {
-  background: var(--component-status-error, rgb(205, 74, 69));
-}
-
-.fix-ado-issue-count[data-kind="warning"] {
-  background: var(--component-status-warning, rgb(214, 119, 48));
-}
-`;
-
-  // azure-devops/src/features/overview-pipeline-issues/index.ts
-  var overviewPipelineIssues = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "The warnings and errors of each check's latest run, above the pull request description.",
-    id: "overview-pipeline-issues",
-    name: "Warnings and errors on the Overview",
-    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
-      if (isInFrame2)
-        return null;
-      let issues = createOverviewPipelineIssues({
-        apiBasePath: basePath2,
-        document: document2,
-        getEvaluations: async (pullRequest) => {
-          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
-          return evaluations;
-        },
-        getTimeline: async (project, buildId) => {
-          let { records } = await client.getTimeline(project, buildId);
-          return records;
-        },
-        now
-      });
-      return {
-        sync({ page, isTabActive: isTabActive2 }) {
-          issues.sync(pullRequestOf(page), isTabActive2);
-        }
-      };
-    },
-    styles: [pipeline_issue_list_default]
   };
 
   // azure-devops/src/pipeline/pipeline-status-icon.css
@@ -5277,7 +5727,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/style.css
-  var style_default7 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+  var style_default11 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
 .repos-pr-details-page[data-fix-ado-pipeline-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
   display: none !important;
@@ -5498,7 +5948,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         }
       };
     },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default7]
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default11]
   };
 
   // azure-devops/src/features/reload-on-changes/page-reloader.ts
@@ -5629,8 +6079,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   var FEATURES = [
     pipelineStatusOnPullRequests,
     pipelineTab,
-    overviewPipelineIssues,
-    activityOrder,
+    ...OVERVIEW_FEATURES,
     ...REVIEWING_FEATURES,
     avatarInitials,
     followSystemTheme,
