@@ -9,8 +9,10 @@ import type { PolicyEvaluation } from "../pipeline/pipeline-status.ts";
 import type { Pseudonyms } from "../../../shared/dev/scrub/pseudonyms.ts";
 import type { PullRequestBuild } from "../pipeline/pipeline-checks.ts";
 import type { PullRequestRef } from "../pull-requests/pull-request-link.ts";
+import { pageProbesOf } from "./capture-probes.ts";
 import { parsePipelineRunLocation } from "../pipeline/pipeline-run-link.ts";
 import { pipelineChecksOf } from "../pipeline/pipeline-checks.ts";
+import { reviewResponsesOf } from "./capture-review.ts";
 import { withoutScriptMarks } from "./capture-script-marks.ts";
 
 /** A response as the capture records it. A failed request keeps its HTTP status. */
@@ -97,8 +99,16 @@ async function buildsOf(
   });
 }
 
-/** The pull request page: its checks and runs, the evaluations behind them, and timelines. */
-function pullRequestPage(pullRequest: PullRequestRef): CapturePage {
+/** The Files tab is its own page: its diff and comment boxes are what a review works on. */
+function pullRequestPageName(location: Location): string {
+  return new URLSearchParams(location.search).get("_a") === "files" ? "pr-files" : "pr-detail";
+}
+
+/**
+ * The pull request page: its checks and runs, the evaluations behind them, timelines,
+ * and its threads and iterations.
+ */
+function pullRequestPage(pullRequest: PullRequestRef, location: Location): CapturePage {
   return {
     async collect(fetch, pseudonyms) {
       const client = clientFor(fetch, pseudonyms);
@@ -116,9 +126,16 @@ function pullRequestPage(pullRequest: PullRequestRef): CapturePage {
         { buildIds, project: pullRequest.project },
         pseudonyms,
       );
-      return { data: { builds, evaluations, timelinesByBuildId }, meta: {} };
+      const review = await reviewResponsesOf(
+        { apiBasePath: apiBasePath(location), fetch, origin: location.origin },
+        pullRequest,
+      );
+      return {
+        data: { builds, evaluations, review, timelinesByBuildId, ...pageProbesOf(document) },
+        meta: {},
+      };
     },
-    name: "pr-detail",
+    name: pullRequestPageName(location),
     root: withoutScriptMarks(document.body),
     // The reviewer section, its add dropdown and split buttons need the site's own styling.
     styleRoot: document.body,
@@ -148,7 +165,7 @@ function pipelineRunPage(view: PipelineRunView, buildId: number): CapturePage {
 function pullRequestOrRunPage(location: Location): CapturePage | null {
   const pullRequest = parsePullRequestHref(location.pathname, apiBasePath(location));
   if (pullRequest !== null) {
-    return pullRequestPage(pullRequest);
+    return pullRequestPage(pullRequest, location);
   }
   const run = parsePipelineRunLocation(location);
   return run === null ? null : pipelineRunPage(run.view, run.buildId);

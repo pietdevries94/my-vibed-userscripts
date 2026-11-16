@@ -118,10 +118,12 @@ test("the script source has one fetch call and no write methods", () => {
       "core/ado-request.ts PATCH",
       "core/ado-request.ts POST",
       "core/ado-request.ts PUT",
+      "pull-requests/review-requests.ts POST",
+      "pull-requests/review-requests.ts PUT",
       "pull-requests/reviewer-requests.ts PUT",
       "pull-requests/reviewer-requests.ts POST",
     ],
-    "only the re-queue of a build check, the cancel of a run, saving the theme, adding a reviewer and the identity search (a POST that reads) write",
+    "only the re-queue of a build check, the cancel of a run, saving the theme, a review's threads and vote, adding a reviewer and the identity search (a POST that reads) write",
   );
   assert.doesNotMatch(source, /XMLHttpRequest|sendBeacon|WebSocket/u);
 });

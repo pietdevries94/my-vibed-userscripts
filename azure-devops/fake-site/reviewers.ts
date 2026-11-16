@@ -5,6 +5,7 @@ import type { FakeRequest, FakeResponse } from "../../shared/dev/fake-site/serve
 import { JSDOM } from "jsdom";
 import { jsonResponse } from "../../shared/dev/fake-site/server.ts";
 import { pageHtml } from "./data.ts";
+import { reviewResponse } from "./review.ts";
 
 interface FakeIdentity {
   id: string;
@@ -117,8 +118,12 @@ const REVIEWER_ROUTES: Route[] = [
   ["GET", /^\/fake-org\/_api\/_common\/identityImage$/u, avatarResponse],
 ];
 
-/** The answer to a starred reviewers request, or null for another request. */
+/** The answer to a review or starred reviewers request, or null for another request. */
 function reviewerResponse(request: FakeRequest): FakeResponse | null {
+  const review = reviewResponse(request);
+  if (review !== null) {
+    return review;
+  }
   for (const [method, pattern, answer] of REVIEWER_ROUTES) {
     const match = pattern.exec(request.url.pathname);
     if (match !== null && method === request.method) {

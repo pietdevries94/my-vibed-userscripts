@@ -212,6 +212,21 @@ test("a pull request page capture keeps its tabs, its run links and its evaluati
   assert.match(html, /href="\/fake-org\/text-\d+\/_build\/results\?buildId=\d+"/u);
 });
 
+test("a Files tab capture is its own page, and its tab links keep their tab", async () => {
+  const tabLink = `${ROW_LINK}?_a=files&path=/${encodeURIComponent(PROJECT)}/totals.ts`;
+  const page = `<!doctype html><body><a role="tab" href="${tabLink}">Files</a><button>Approve with suggestions</button></body>`;
+  const { alerts, files } = await runCapture(page, `https://dev.azure.com${ROW_LINK}?_a=files`);
+  assert.deepEqual(alerts, []);
+  assert.deepEqual(
+    [...files.keys()],
+    ["azure-devops--pr-files.html", "azure-devops--pr-files.json", "azure-devops--pr-files.css"],
+  );
+  assertNoRealValue(files);
+  const html = files.get("azure-devops--pr-files.html") ?? "";
+  assert.match(html, /href="\/fake-org\/text-\d+\/_git\/text-\d+\/pullrequest\/\d+\?_a=files"/u);
+  assert.match(html, />Approve with suggestions</u);
+});
+
 test("a pipeline log capture keeps the job and step of its links as stand-ins", async () => {
   const stepLink = `/${ORGANISATION}/${encodeURIComponent(PROJECT)}/_build/results?buildId=${BUILD_ID}&view=logs&j=${JOB_GUID}&t=${STEP_GUID}`;
   const page = `<!doctype html><body><a href="${stepLink}">Logs</a></body>`;
@@ -249,4 +264,11 @@ test("the capture keeps the kinds of identities a search found, and drops their 
   assert.match(scrubbed, /"foundCount":1/u);
   assert.match(scrubbed, /"fields":\{"displayName":true,"localId":true\}/u);
   assert.ok(!scrubbed.includes(PERSON));
+});
+
+test("the capture keeps the file tree's layout: kinds, row numbers and pixels", async () => {
+  const { captureDefinition } = await import("./capture.ts");
+  const data = { treeLayout: { rows: ["own-spacer::-12:76", "row:7:64:35"], view: "480:900" } };
+  const scrubbed = scrubJson({ data }, captureDefinition.rules, createPseudonyms());
+  assert.deepEqual(scrubbed, { data });
 });

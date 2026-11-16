@@ -87,3 +87,11 @@ _Avoid_: Clean mode, minimal view
 **Settings panel**:
 The script's own dialog on Azure DevOps where the owner turns each feature on or off. Saving reloads the page. Opened from a button the script adds to Azure DevOps's top bar.
 _Avoid_: Options, preferences, config screen
+
+**Review**:
+The owner's pending comments on one pull request, kept by the script until the owner submits them in one go, with a vote. Started from a comment box with "Start a review".
+_Avoid_: Draft (a pull request state in Azure DevOps), batch
+
+**Pending comment**:
+A comment in a review that is not posted yet. Only the owner sees it.
+_Avoid_: Draft comment, unsent comment

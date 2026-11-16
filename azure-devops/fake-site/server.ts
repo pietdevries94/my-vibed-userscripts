@@ -52,7 +52,8 @@ function pageAt(url: URL): Page | null {
   if (run !== null) {
     return RUN_PAGES[run.view];
   }
-  return PAGE_PATHS.find(([, matches]) => matches(url.pathname))?.[0] ?? null;
+  const page = PAGE_PATHS.find(([, matches]) => matches(url.pathname))?.[0] ?? null;
+  return page === "pr-detail" && url.searchParams.get("_a") === "files" ? "pr-files" : page;
 }
 
 function statusColorStyle(page: "pr-list" | "pr-inbox"): string {
@@ -67,7 +68,7 @@ function styleOf(page: Page): string {
   if (page === "pr-list" || page === "pr-inbox") {
     return `${PULL_REQUEST_STYLE}\n${statusColorStyle(page)}`;
   }
-  if (page === "pr-detail" || page === "pr-create") {
+  if (page === "pr-detail" || page === "pr-files" || page === "pr-create") {
     return pageCss(page) ?? PULL_REQUEST_STYLE;
   }
   return RUN_STYLE;
@@ -240,6 +241,7 @@ const PAGES: Page[] = [
   "pr-list",
   "pr-inbox",
   "pr-detail",
+  "pr-files",
   "pr-create",
   "pipeline-summary",
   "pipeline-steps",
@@ -272,6 +274,10 @@ startFakeSite(
       {
         label: "Pull request",
         path: pullRequestDetailPath() ?? "/fake-org/text-16/_git/text-17/pullrequest/1003",
+      },
+      {
+        label: "Pull request, Files tab",
+        path: `${pullRequestDetailPath() ?? "/fake-org/text-16/_git/text-17/pullrequest/1003"}?_a=files`,
       },
       { label: "New pull request", path: CREATE_PATH },
       { label: "Theme panel", path: THEME_PATH },

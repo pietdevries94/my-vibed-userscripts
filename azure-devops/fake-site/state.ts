@@ -1,12 +1,13 @@
 // What the fake site's actions change, on top of the captured pages: build statuses,
 // pull request changes, required reviewers and work item changes.
-import { boardData, showPullRequestCapture } from "./data.ts";
+import { boardData, showFilesCapture, showPullRequestCapture } from "./data.ts";
 import { BUILD_POLICY_TYPE_ID } from "../src/pipeline/pipeline-status.ts";
 import type { BoardWorkItem } from "../src/boards/board.ts";
 import type { FakeSiteAction } from "../../shared/dev/fake-site/server.ts";
 import type { ListedPullRequest } from "../src/features/reload-on-changes/pr-list-changes.ts";
 import type { PolicyEvaluation } from "../src/pipeline/pipeline-status.ts";
 import { addedReviewers } from "./reviewers.ts";
+import { reviewActions } from "./review.ts";
 
 /** Build statuses the set-build-status action takes, besides "reset". */
 const BUILD_STATUSES = [
@@ -136,6 +137,7 @@ function reset(): unknown {
   }
   addedReviewers.length = 0;
   showPullRequestCapture("");
+  showFilesCapture("");
   return "reset";
 }
 
@@ -178,11 +180,19 @@ function actions(): FakeSiteAction[] {
       run: (query) => showPullRequestCapture(query.get("name") ?? ""),
     },
     {
+      description:
+        "Shows another capture as the Files tab: side-by-side-pending, single-file-composer, composer-left, reply-open, plain (the capture without a name), or composer (the default).",
+      example: "name=side-by-side-pending",
+      name: "show-files-capture",
+      run: (query) => showFilesCapture(query.get("name") ?? ""),
+    },
+    {
       description: "The reviewers the script added, with required or optional.",
       example: "",
       name: "added-reviewers",
       run: () => addedReviewers,
     },
+    ...reviewActions,
     { description: "Undoes every action.", example: "", name: "reset", run: reset },
   ];
 }

@@ -19,8 +19,17 @@ declare function GM_getValue<Value>(key: string, defaultValue: Value): Value;
 /** Stores a JSON value for this script. Needs `@grant GM_setValue`. */
 declare function GM_setValue(key: string, value: unknown): void;
 
+/** Deletes a value this script stored. Needs `@grant GM_deleteValue`. */
+declare function GM_deleteValue(key: string): void;
+
+/** The keys of every value this script stored. Needs `@grant GM_listValues`. */
+declare function GM_listValues(): string[];
+
 /** The build inlines a CSS file as text. */
 declare module "*.css" {
   const css: string;
   export default css;
 }
+
+/** The page's own window, in a script that runs with grants. Absent outside a userscript manager. */
+declare const unsafeWindow: unknown;

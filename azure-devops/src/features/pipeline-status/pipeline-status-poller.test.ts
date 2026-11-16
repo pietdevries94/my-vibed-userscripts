@@ -35,6 +35,15 @@ async function notUsedByThePoller(): Promise<never> {
   throw new Error("not used by the pipeline status poller");
 }
 
+const UNUSED_REVIEW_REQUESTS = {
+  createPullRequestThread: notUsedByThePoller,
+  getIterationChanges: notUsedByThePoller,
+  getPullRequestIterationIds: notUsedByThePoller,
+  getPullRequestStatus: notUsedByThePoller,
+  getPullRequestThreads: notUsedByThePoller,
+  setPullRequestVote: notUsedByThePoller,
+};
+
 function pollerOnFakeList(pullRequestIds: number[]): {
   list: FakeList;
   poller: PipelineStatusPoller;
@@ -52,6 +61,7 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     shown: new Map<number, PipelineStatus | null>(),
   };
   const client: AdoClient = {
+    ...UNUSED_REVIEW_REQUESTS,
     addPullRequestReviewer: notUsedByThePoller,
     cancelBuild: notUsedByThePoller,
     getAuthenticatedUserId: notUsedByThePoller,

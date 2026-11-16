@@ -9,6 +9,11 @@ const rules: ScrubRules = {
     "data-componentregion",
     "data-done",
     "data-is-focusable",
+    // Line numbers and columns of a diff row. Small numbers that name nothing.
+    "data-line",
+    "data-mline",
+    "data-offset",
+    "data-oline",
     "data-noclose",
     "data-renderedregion",
     "data-side",
@@ -49,6 +54,31 @@ const rules: ScrubRules = {
       path: /theme.*\.data\.[\w-]+$/iu,
       value: /^(?:#[\da-f]{3,8}|rgba?\([\d., ]{5,40}\)|[\d, .]{5,40})$/iu,
     },
+    // The editor probe: names of the page's own code, kinds and counts. Never content.
+    { path: /(?:^|\.)editorProbe\./u, value: /^[\w$.:-]{0,80}$/u },
+    // The file tree's layout: kinds of rows, row numbers and pixels. Never content.
+    { path: /(?:^|\.)treeLayout\./u, value: /^[\w:-]{0,40}$/u },
+    // Where a thread sits in a file: line and column. Small numbers that name nothing.
+    {
+      path: /(?:threadContext|trackingCriteria)\.(?:orig)?(?:Left|Right|left|right)File(?:Start|End)\.(?:line|offset)$/u,
+      value: /^\d{1,6}$/u,
+    },
+    // Which iterations a thread compares, and the id of its file within the iteration.
+    {
+      path: /(?:iterationContext|trackingCriteria)\.(?:first|second)ComparingIteration$/u,
+      value: /^\d{1,4}$/u,
+    },
+    { path: /(?:^|\.)(?:changeTrackingId|changeId)$/u, value: /^\d{1,6}$/u },
+    // How a file changed: "edit", "add", "delete, rename".
+    { path: /(?:^|\.)changeType$/u, value: /^[A-Za-z, ]{1,40}$/u },
+    // A comment's kind and its place in the thread: "text" or "system", and small counters.
+    { path: /comments\.commentType$/u, value: /^[A-Za-z]{1,20}$/u },
+    { path: /comments\.(?:id|parentCommentId)$/u, value: /^\d{1,4}$/u },
+    // An iteration's number and why it exists: "push", "forcePush", "create".
+    { path: /iterations\.body\.value\.id$/u, value: /^\d{1,4}$/u },
+    { path: /iterations\.body\.value\.reason$/u, value: /^[A-Za-z]{1,30}$/u },
+    // What made a system thread: "VoteUpdate", "RefUpdate".
+    { path: /CodeReviewThreadType\.\$value$/u, value: /^[A-Za-z]{1,40}$/u },
     // Response status, Retry-After and work item revisions.
     { path: /(?:^|\.)(?:httpStatus|retryAfterSeconds|rev)$/u, value: /^\d{1,6}$/u },
   ],
@@ -102,6 +132,26 @@ const rules: ScrubRules = {
     "System",
     "Save",
     "Cancel",
+    // Comment boxes and threads.
+    "Comment",
+    "Reply",
+    "Resolve",
+    "Add comment",
+    "Add a comment",
+    // Thread statuses. "Active" is kept above.
+    "Pending",
+    "Resolved",
+    "Won't fix",
+    "Closed",
+    // The vote button and its menu.
+    "Approve",
+    "Approve with suggestions",
+    "Wait for author",
+    "Reject",
+    "Reset feedback",
+    // The Files tab's diff layouts.
+    "Side-by-side",
+    "Inline",
   ],
   mapUrl: fakeLink,
 };

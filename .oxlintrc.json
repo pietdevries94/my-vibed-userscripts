@@ -49,7 +49,9 @@
       {
         "capIsNewExceptions": [
           "GM_addStyle",
+          "GM_deleteValue",
           "GM_getValue",
+          "GM_listValues",
           "GM_registerMenuCommand",
           "GM_setValue"
         ]

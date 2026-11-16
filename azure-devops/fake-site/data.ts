@@ -15,6 +15,7 @@ type Page =
   | "pr-list"
   | "pr-inbox"
   | "pr-detail"
+  | "pr-files"
   | "pr-create"
   | "pipeline-summary"
   | "pipeline-steps"
@@ -50,6 +51,17 @@ interface PullRequestDetailData {
   };
 }
 
+/** What a pull request capture took along for a review, passed on as captured. */
+interface ReviewData {
+  data: {
+    review: {
+      iterations: { body: unknown };
+      newestIterationChanges: { body: unknown } | null;
+      threads: { body: { value: unknown[] } | null };
+    };
+  };
+}
+
 interface BoardData {
   data: { myUserId: string | null; workItems: BoardWorkItem[] };
 }
@@ -62,8 +74,11 @@ const PAGE_FIXTURES: Partial<Record<Page, string>> = {
   // The create page once a branch is picked: the first capture with the reviewer field.
   "pr-create": "pr-create-with-branch-selected",
   "pr-detail": "pr-detail-warnings",
+  // The Files tab with a comment box open on a line.
+  "pr-files": "pr-files-composer",
 };
 const DEFAULT_PULL_REQUEST_CAPTURE = "warnings";
+const DEFAULT_FILES_CAPTURE = "composer";
 
 function fixtureOfPage(page: Page): string {
   return PAGE_FIXTURES[page] ?? page;
@@ -74,6 +89,15 @@ function showPullRequestCapture(name: string): string {
   const fixture = `pr-detail-${name === "" ? DEFAULT_PULL_REQUEST_CAPTURE : name}`;
   readFixture(`${fixture}.html`);
   PAGE_FIXTURES["pr-detail"] = fixture;
+  return fixture;
+}
+
+/** Shows another capture as the Files tab, such as "side-by-side-pending". "plain" is pr-files itself. */
+function showFilesCapture(name: string): string {
+  const suffix = name === "" ? DEFAULT_FILES_CAPTURE : name;
+  const fixture = suffix === "plain" ? "pr-files" : `pr-files-${suffix}`;
+  readFixture(`${fixture}.html`);
+  PAGE_FIXTURES["pr-files"] = fixture;
   return fixture;
 }
 
@@ -131,6 +155,11 @@ function pullRequestDetailData(): PullRequestDetailData {
   return pageJson("pr-detail") as PullRequestDetailData;
 }
 
+function reviewData(): ReviewData {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the capture writes this shape
+  return pageJson("pr-files") as ReviewData;
+}
+
 /** The pull request page's path, from the link of its first tab. Null when there is none. */
 function pullRequestDetailPath(): string | null {
   const match = /href="(?<path>\/fake-org\/[^/"]+\/_git\/[^/"]+\/pullrequest\/\d+)"/u.exec(
@@ -161,5 +190,7 @@ export {
   pullRequestDetailPath,
   pullRequestListPath,
   pullRequestPageData,
+  reviewData,
+  showFilesCapture,
   showPullRequestCapture,
 };

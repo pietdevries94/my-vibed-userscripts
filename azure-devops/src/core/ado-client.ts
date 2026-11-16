@@ -6,8 +6,10 @@ import type { Identity } from "../pull-requests/reviewer-requests.ts";
 import type { ListedPullRequest } from "../features/reload-on-changes/pr-list-changes.ts";
 import type { PolicyEvaluation } from "../pipeline/pipeline-status.ts";
 import type { PullRequestBuild } from "../pipeline/pipeline-checks.ts";
+import type { ReviewRequests } from "../pull-requests/review-requests.ts";
 import type { TimelineRecord } from "../pipeline/pipeline-timeline.ts";
 import type { WorkItemUpdate } from "../features/days-in-column/days-in-column.ts";
+import { createReviewRequests } from "../pull-requests/review-requests.ts";
 import { createReviewerRequests } from "../pull-requests/reviewer-requests.ts";
 
 interface PolicyEvaluationsResponse {
@@ -47,7 +49,7 @@ interface WorkItemUpdatesResponse {
   retryAfterSeconds: number | null;
 }
 
-interface AdoClient {
+interface AdoClient extends ReviewRequests {
   getPolicyEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluationsResponse>;
   getPullRequests: (listPage: PullRequestListPage) => Promise<PullRequestsResponse>;
   /** The pipeline runs of a pull request, newest first. */
@@ -230,7 +232,8 @@ async function getPullRequestBuilds(
 
 /**
  * Client with the page's session cookie. Every request is a GET, but the re-queue of a
- * build check, the cancel of a run, saving the theme, adding a reviewer and the identity search.
+ * build check, the cancel of a run, saving the theme, adding a reviewer, the identity search,
+ * and a review's threads and vote.
  */
 function createAdoClient(options: AdoClientOptions): AdoClient {
   const getProjectId = createProjectIdCache(options);
@@ -272,13 +275,13 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
     },
 
     getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
-
     getWorkItems: async (ids) => getWorkItems(options, ids),
 
     requeuePolicyEvaluation: async (project, evaluationId) =>
       requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
     saveTheme: async (themeId) => saveTheme(options, themeId),
 
+    ...createReviewRequests(options),
     ...createReviewerRequests(options),
   };
 }

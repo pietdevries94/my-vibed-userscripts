@@ -6,6 +6,8 @@ import { parsePipelineRunLocation } from "../pipeline/pipeline-run-link.ts";
 
 /** The organisation in every fake URL. */
 const FAKE_ORGANISATION = "fake-org";
+/** The pull request tabs a fake link keeps in `_a`. */
+const PULL_REQUEST_TABS = new Set(["overview", "files", "updates", "commits"]);
 
 function fakePullRequestLink(url: URL, pseudonyms: Pseudonyms): string | null {
   const pullRequest = parsePullRequestHref(url.pathname, apiBasePath(location));
@@ -15,7 +17,9 @@ function fakePullRequestLink(url: URL, pseudonyms: Pseudonyms): string | null {
   const project = pseudonyms.text(pullRequest.project, "pull request link project");
   const repository = pseudonyms.text(pullRequest.repository, "pull request link repository");
   const pullRequestId = pseudonyms.number(pullRequest.pullRequestId, "pull request link id");
-  return `/${FAKE_ORGANISATION}/${project}/_git/${repository}/pullrequest/${pullRequestId}`;
+  const tab = url.searchParams.get("_a");
+  const query = tab !== null && PULL_REQUEST_TABS.has(tab) ? `?_a=${tab}` : "";
+  return `/${FAKE_ORGANISATION}/${project}/_git/${repository}/pullrequest/${pullRequestId}${query}`;
 }
 
 function fakePipelineRunQuery(run: PipelineRunLocation, pseudonyms: Pseudonyms): string {
