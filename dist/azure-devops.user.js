@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.9.0
+// @version      1.9.1
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -544,6 +544,33 @@
     styles: []
   };
 
+  // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
+  var COLLAPSE_ICONS = { collapsed: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
+  function setCollapsed(box, isCollapsed) {
+    box.toggleAttribute("data-collapsed", isCollapsed);
+    let button2 = box.querySelector(".fix-ado-issue-box-collapse");
+    button2?.setAttribute("aria-expanded", String(!isCollapsed));
+    let icon = button2?.querySelector(".fabric-icon");
+    icon?.classList.toggle(COLLAPSE_ICONS.collapsed, isCollapsed), icon?.classList.toggle(COLLAPSE_ICONS.open, !isCollapsed);
+  }
+  function createChevron(document2) {
+    let iconFont = document2.createElement("span");
+    iconFont.className = "fluent-icons-enabled";
+    let icon = document2.createElement("span");
+    return icon.className = "left-icon flex-noshrink fabric-icon small", icon.setAttribute("aria-hidden", "true"), iconFont.append(icon), iconFont;
+  }
+  function createCollapseButton(document2) {
+    let button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = "bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-issue-box-collapse", button2.setAttribute("aria-label", "Errors and warnings"), button2.append(createChevron(document2)), button2;
+  }
+  function addCollapseButton(box, header, collapse) {
+    let button2 = createCollapseButton(box.ownerDocument);
+    button2.addEventListener("click", () => {
+      let isCollapsed = !Object.hasOwn(box.dataset, "collapsed");
+      setCollapsed(box, isCollapsed), collapse.onToggle(isCollapsed);
+    }), header.prepend(button2), setCollapsed(box, collapse.isCollapsed);
+  }
+
   // azure-devops/src/pipeline/pipeline-issues.ts
   var NO_ISSUES = { errorCount: 0, warningCount: 0 }, COUNT_FIELDS = { error: "errorCount", warning: "warningCount" };
   function isIssueKind(type) {
@@ -759,8 +786,10 @@ ${issue.message ?? ""}`;
     let content = createElement(document2, {
       className: "flex-column flex-grow text-ellipsis",
       tag: "div"
-    }), links = box.issues.map((issue) => box.createLink(issue));
-    return content.append(createBoxHeader(document2, box), ...links), wrapIn(document2, content, LIST_ROW_WRAPPERS);
+    }), links = box.issues.map((issue) => box.createLink(issue)), header = createBoxHeader(document2, box);
+    content.append(header, ...links);
+    let wrapped = wrapIn(document2, content, LIST_ROW_WRAPPERS);
+    return box.collapse !== void 0 && addCollapseButton(wrapped, header, box.collapse), wrapped;
   }
 
   // azure-devops/src/pipeline/pipeline-run-link.ts
@@ -1107,6 +1136,16 @@ ${issue.message ?? ""}`;
 
 .fix-ado-issue-box-header {
   min-height: 48px;
+}
+
+/* A collapsed box keeps its header row. */
+.fix-ado-issue-box[data-collapsed] .fix-ado-issue {
+  display: none;
+}
+
+.fix-ado-issue-box-collapse {
+  flex-shrink: 0;
+  margin-left: -4px;
 }
 
 .fix-ado-issue {
@@ -1991,7 +2030,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/pipeline-tab-panel.ts
-  var PANEL_CLASS = "fix-ado-pipeline-panel", TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree", FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame", LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note", ISSUES_SELECTOR = ":scope > .fix-ado-issue-box";
+  var PANEL_CLASS = "fix-ado-pipeline-panel", TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree", FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame", LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note", ISSUES_SELECTOR = ":scope > .fix-ado-issue-box", ISSUES_COLLAPSED_ATTRIBUTE = "data-fix-ado-issues-collapsed";
   function message(panel, text) {
     let note = panel.ownerDocument.createElement("p");
     note.className = "fix-ado-pipeline-message", note.textContent = text, panel.replaceChildren(note);
@@ -2042,6 +2081,12 @@ ${issue.message ?? ""}`;
     if (shown === null || issues.length === 0)
       return;
     let context = { document: panel.ownerDocument, shown }, box = createIssueBox(context.document, {
+      collapse: {
+        isCollapsed: panel.hasAttribute(ISSUES_COLLAPSED_ATTRIBUTE),
+        onToggle: (isCollapsed) => {
+          panel.toggleAttribute(ISSUES_COLLAPSED_ATTRIBUTE, isCollapsed);
+        }
+      },
       createLink: (issue) => createIssueLink(context, issue, content),
       details: null,
       issues,
