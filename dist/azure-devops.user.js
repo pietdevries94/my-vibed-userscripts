@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.12.0
+// @version      1.12.1
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse and a Resolved chip on resolved ones, which start collapsed, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -6332,7 +6332,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 
 /* The settings panel: a dialog over the page, in Azure DevOps's own theme colours. */
 .fix-ado-settings {
-  width: min(560px, calc(100vw - 32px));
+  width: min(1080px, calc(100vw - 32px));
   max-height: calc(100vh - 64px);
   padding: 24px;
   border: none;
@@ -6357,18 +6357,32 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   font-weight: 600;
 }
 
+/* A card per feature, three next to each other. A narrow window gets two, then one. */
 .fix-ado-settings-features {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .fix-ado-settings-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .fix-ado-settings-features {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .fix-ado-settings-feature {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 8px;
-  border-radius: 4px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
   cursor: pointer;
 }
 
