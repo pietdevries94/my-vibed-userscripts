@@ -28,22 +28,34 @@ interface OverviewPage {
   /** Gives the element sizes, as jsdom lays nothing out, and records where it is scrolled to. */
   size: (selector: string, sizes: Sizes) => ScrollToOptions[];
   scroll: (selector: string, scrollTop: number) => void;
+  /** The Overview loads more content: the element gets taller. */
+  grow: (selector: string, scrollHeight: number) => void;
+  wait: (milliseconds: number) => void;
+  turnWheel: () => void;
+}
+
+function existing(document: Document, selector: string): HTMLElement {
+  const element = document.querySelector<HTMLElement>(selector);
+  assert.ok(element !== null, `${selector} is there`);
+  return element;
 }
 
 function overviewPage(html = OVERVIEW): OverviewPage {
   const { window } = new JSDOM(`<!doctype html><body>${html}</body>`);
   const { document } = window;
-  const { sync } = createScrollToBottom({ document });
+  let time = 0;
+  const { sync } = createScrollToBottom({ document, now: () => time });
   const button = (): HTMLButtonElement | null =>
     document.querySelector<HTMLButtonElement>(".fix-ado-scroll-to-bottom");
-  const elementAt = (selector: string): HTMLElement => {
-    const element = document.querySelector<HTMLElement>(selector);
-    assert.ok(element !== null, `${selector} is there`);
-    return element;
-  };
   return {
     button,
     document,
+    grow: (selector, scrollHeight) => {
+      Object.defineProperty(existing(document, selector), "scrollHeight", {
+        configurable: true,
+        value: scrollHeight,
+      });
+    },
     isButtonShown: () => {
       const found = button();
       return found !== null && found.hidden === false;
@@ -52,13 +64,13 @@ function overviewPage(html = OVERVIEW): OverviewPage {
       window.dispatchEvent(new window.Event("resize"));
     },
     scroll: (selector, scrollTop) => {
-      const element = elementAt(selector);
+      const element = existing(document, selector);
       Object.defineProperty(element, "scrollTop", { configurable: true, value: scrollTop });
       element.dispatchEvent(new window.Event("scroll"));
     },
     size: (selector, sizes) => {
       const scrolledTo: ScrollToOptions[] = [];
-      const element = elementAt(selector);
+      const element = existing(document, selector);
       for (const [name, value] of Object.entries(sizes)) {
         Object.defineProperty(element, name, { configurable: true, value });
       }
@@ -70,6 +82,12 @@ function overviewPage(html = OVERVIEW): OverviewPage {
       return scrolledTo;
     },
     sync,
+    turnWheel: () => {
+      document.body.dispatchEvent(new window.Event("wheel", { bubbles: true }));
+    },
+    wait: (milliseconds) => {
+      time += milliseconds;
+    },
   };
 }
 
@@ -94,6 +112,70 @@ test("the button scrolls the Overview to its bottom", () => {
   page.sync();
   page.button()?.click();
   assert.deepEqual(scrolledTo, [{ behavior: "smooth", top: 2000 }]);
+});
+
+test("content that loads after the click is scrolled to as well", () => {
+  const page = overviewPage();
+  const scrolledTo = page.size(PAGE, TALL);
+  page.sync();
+  page.button()?.click();
+  page.scroll(PAGE, 1400);
+  page.grow(PAGE, 3000);
+  page.sync();
+  page.sync();
+  assert.deepEqual(scrolledTo, [
+    { behavior: "smooth", top: 2000 },
+    { behavior: "smooth", top: 3000 },
+  ]);
+});
+
+test("content that loads without a click scrolls nothing", () => {
+  const page = overviewPage();
+  const scrolledTo = page.size(PAGE, TALL);
+  page.sync();
+  page.grow(PAGE, 3000);
+  page.sync();
+  assert.deepEqual(scrolledTo, []);
+});
+
+test("the owner scrolling by hand after the click ends the follow", () => {
+  const page = overviewPage();
+  const scrolledTo = page.size(PAGE, TALL);
+  page.sync();
+  page.button()?.click();
+  page.turnWheel();
+  page.grow(PAGE, 3000);
+  page.sync();
+  assert.equal(scrolledTo.length, 1);
+});
+
+test("content that loads long after the scroll ended scrolls nothing", () => {
+  const page = overviewPage();
+  const scrolledTo = page.size(PAGE, TALL);
+  page.sync();
+  page.button()?.click();
+  page.wait(1500);
+  page.scroll(PAGE, 1400);
+  page.wait(2500);
+  page.grow(PAGE, 3000);
+  page.sync();
+  page.wait(100);
+  page.grow(PAGE, 3500);
+  page.sync();
+  assert.equal(scrolledTo.length, 1);
+});
+
+test("the follow lasts while the scroll itself takes long", () => {
+  const page = overviewPage();
+  const scrolledTo = page.size(PAGE, TALL);
+  page.sync();
+  page.button()?.click();
+  page.wait(1500);
+  page.scroll(PAGE, 700);
+  page.wait(1500);
+  page.grow(PAGE, 3000);
+  page.sync();
+  assert.equal(scrolledTo.length, 2);
 });
 
 test("the button hides at the bottom, and comes back after scrolling up", () => {

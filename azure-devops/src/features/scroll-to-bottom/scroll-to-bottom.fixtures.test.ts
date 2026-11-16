@@ -21,7 +21,7 @@ test(
     page.scrollTo = (options?: ScrollToOptions | number): void => {
       scrolledTo.push(typeof options === "object" ? options.top : options);
     };
-    const { sync } = createScrollToBottom({ document });
+    const { sync } = createScrollToBottom({ document, now: () => 0 });
     sync();
     sync();
 
