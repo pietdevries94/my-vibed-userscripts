@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.10.0
+// @version      1.10.1
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -5526,7 +5526,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/core/settings-panel.ts
-  var TITLE3 = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS2 = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
+  var TITLE3 = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", ISSUE_LINK_TEXT = "Found a bug or have a suggestion?", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS2 = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
   function element3(document2, tag, { className, text }) {
     let created = document2.createElement(tag);
     return created.className = className, text !== void 0 && (created.textContent = text), created;
@@ -5611,6 +5611,13 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     }
     return changed;
   }
+  function issueLink(document2) {
+    let link = element3(document2, "a", {
+      className: "fix-ado-settings-issue-link",
+      text: ISSUE_LINK_TEXT
+    });
+    return link.href = NEW_ISSUE_URL, link.target = "_blank", link.rel = "noopener noreferrer", link;
+  }
   function createButtons2(dialog, options) {
     let { document: document2 } = options, cancel = button(
       document2,
@@ -5627,7 +5634,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     );
     save.disabled = !0;
     let buttons = element3(document2, "div", { className: "fix-ado-settings-buttons" });
-    return buttons.append(cancel, save), { buttons, save };
+    return buttons.append(issueLink(document2), cancel, save), { buttons, save };
   }
   function featureList(options, unseen) {
     let list = element3(options.document, "div", { className: "fix-ado-settings-features" });
@@ -5839,9 +5846,16 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
 
 .fix-ado-settings-buttons {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 20px;
+}
+
+/* The issue link sits left of the buttons, on the same row. */
+.fix-ado-settings-issue-link {
+  margin-right: auto;
+  color: var(--communication-foreground, rgb(0, 90, 158));
 }
 
 .fix-ado-settings-buttons .bolt-button:disabled {
