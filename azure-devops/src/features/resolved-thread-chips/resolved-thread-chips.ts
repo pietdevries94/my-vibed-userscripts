@@ -1,10 +1,10 @@
-const THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread";
-const HEADER_SELECTOR = ".repos-discussion-comment-header";
-/** The thread's status dropdown, in the header of its first comment. */
-const STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label";
+import {
+  RESOLVED_STATUS,
+  feedThreadElements,
+  feedThreadOf,
+} from "../../pull-requests/feed-threads.ts";
+
 const CHIP_CLASS = "fix-ado-resolved-chip";
-/** The word Azure DevOps shows as the status of a resolved thread. */
-const RESOLVED = "Resolved";
 
 /** A chip built like Azure DevOps's own pills, so its styles apply. */
 function createChip(document: Document): HTMLElement {
@@ -12,26 +12,18 @@ function createChip(document: Document): HTMLElement {
   chip.className = `${CHIP_CLASS} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
   const content = document.createElement("div");
   content.className = "bolt-pill-content text-ellipsis";
-  content.textContent = RESOLVED;
+  content.textContent = RESOLVED_STATUS;
   chip.append(content);
   return chip;
 }
 
-/** Adds the chip after the name and time of the comment, when it is not there yet. */
-function addChip(header: Element): void {
-  const nameAndTime = header.firstElementChild;
-  if (nameAndTime !== null && nameAndTime.querySelector(`.${CHIP_CLASS}`) === null) {
-    nameAndTime.append(createChip(header.ownerDocument));
-  }
-}
-
-function syncThread(thread: Element): void {
-  const header = thread.querySelector(HEADER_SELECTOR);
-  const status = header?.querySelector(STATUS_SELECTOR)?.textContent.trim();
-  if (header !== null && header !== undefined && status === RESOLVED) {
-    addChip(header);
-  } else {
-    thread.querySelector(`.${CHIP_CLASS}`)?.remove();
+function syncThread(thread: HTMLElement): void {
+  const feedThread = feedThreadOf(thread);
+  const chip = thread.querySelector(`.${CHIP_CLASS}`);
+  if (feedThread?.isResolved !== true) {
+    chip?.remove();
+  } else if (chip === null) {
+    feedThread.nameAndTime.append(createChip(thread.ownerDocument));
   }
 }
 
@@ -42,7 +34,7 @@ function syncThread(thread: Element): void {
  */
 function createResolvedThreadChips({ document }: { document: Document }): { sync: () => void } {
   function sync(): void {
-    for (const thread of document.querySelectorAll(THREAD_SELECTOR)) {
+    for (const thread of feedThreadElements(document)) {
       syncThread(thread);
     }
   }

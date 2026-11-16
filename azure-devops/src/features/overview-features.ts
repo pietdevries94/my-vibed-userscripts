@@ -1,5 +1,6 @@
 import type { Feature } from "../core/feature.ts";
 import { activityOrder } from "./activity-order/index.ts";
+import { collapsibleThreads } from "./collapsible-threads/index.ts";
 import { foldedPushes } from "./folded-pushes/index.ts";
 import { joinedReviewerLines } from "./joined-reviewer-lines/index.ts";
 import { overviewPipelineIssues } from "./overview-pipeline-issues/index.ts";
@@ -12,6 +13,7 @@ const OVERVIEW_FEATURES: Feature[] = [
   foldedPushes,
   joinedReviewerLines,
   resolvedThreadChips,
+  collapsibleThreads,
 ];
 
 export { OVERVIEW_FEATURES };

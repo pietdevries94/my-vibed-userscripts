@@ -1,9 +1,10 @@
+import { createFoldToggle, showFoldToggleState } from "../../core/fold-toggle.ts";
+
 const HEADER_SELECTOR = ".activity-feed-list .iteration-card-header";
 const TITLE_SELECTOR = ".iteration-header .font-weight-semibold";
 const COMMITS_SELECTOR = ".bolt-table-container";
 const TOGGLE_CLASS = "fix-ado-push-toggle";
-/** Azure DevOps's chevron for an open and a folded card. */
-const CHEVRONS = { folded: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
+const TOGGLE_LABELS = { folded: "Show commits", open: "Hide commits" };
 
 type PushState = "folded" | "open";
 
@@ -24,25 +25,6 @@ function pushOf(header: HTMLElement): Push | null {
   return { card, header, pushedAt };
 }
 
-/** The chevron of a toggle. `showToggleState` gives it its direction. */
-function createChevron(document: Document): HTMLElement {
-  const iconFont = document.createElement("span");
-  iconFont.className = "fluent-icons-enabled";
-  const chevron = document.createElement("span");
-  chevron.className = "left-icon flex-noshrink fabric-icon small";
-  chevron.setAttribute("aria-hidden", "true");
-  iconFont.append(chevron);
-  return iconFont;
-}
-
-function createToggle(document: Document): HTMLButtonElement {
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = `${TOGGLE_CLASS} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`;
-  toggle.append(createChevron(document));
-  return toggle;
-}
-
 /** The toggle of a push, added after its title when it is not there yet. Null when the push has no title. */
 function findOrAddToggle(
   { header }: Push,
@@ -56,7 +38,7 @@ function findOrAddToggle(
   if (title === null) {
     return null;
   }
-  const toggle = createToggle(header.ownerDocument);
+  const toggle = createFoldToggle(header.ownerDocument, TOGGLE_CLASS);
   toggle.addEventListener("click", (event) => {
     // The header is a link.
     event.preventDefault();
@@ -65,20 +47,6 @@ function findOrAddToggle(
   });
   title.after(toggle);
   return toggle;
-}
-
-/** Writes only what changed, to keep the page's mutation observer quiet. */
-function showToggleState(toggle: HTMLButtonElement, state: PushState): void {
-  const expanded = String(state === "open");
-  if (toggle.getAttribute("aria-expanded") === expanded) {
-    return;
-  }
-  toggle.setAttribute("aria-expanded", expanded);
-  toggle.title = state === "open" ? "Hide commits" : "Show commits";
-  toggle.setAttribute("aria-label", toggle.title);
-  const chevron = toggle.querySelector(".fabric-icon");
-  chevron?.classList.toggle(CHEVRONS.open, state === "open");
-  chevron?.classList.toggle(CHEVRONS.folded, state === "folded");
 }
 
 /**
@@ -111,7 +79,7 @@ function createFoldedPushes({ document }: { document: Document }): { sync: () =>
     if (hasCommits) {
       const toggle = findOrAddToggle(push, flip);
       if (toggle !== null) {
-        showToggleState(toggle, state);
+        showFoldToggleState(toggle, state === "open", TOGGLE_LABELS);
       }
     } else {
       push.header.querySelector(`.${TOGGLE_CLASS}`)?.remove();
