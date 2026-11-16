@@ -43,7 +43,7 @@ test(
 );
 
 test(
-  "a captured file thread has its file header right before it, where the collapsed style finds the diff",
+  "a captured file thread has its file header right before it, where the collapsed style hides it",
   { skip: fixtures.skip },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail-warnings");
@@ -51,6 +51,5 @@ test(
     const thread = document.querySelector("[data-fix-ado-thread]");
     const fileHeader = thread?.previousElementSibling;
     assert.ok(fileHeader?.classList.contains("comment-file-header") === true);
-    assert.ok(fileHeader.querySelector(".comment-file-diff-container") !== null);
   },
 );

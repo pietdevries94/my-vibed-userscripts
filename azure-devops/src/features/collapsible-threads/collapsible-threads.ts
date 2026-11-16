@@ -34,7 +34,7 @@ function findOrAddToggle(
 
 /**
  * The threads in the activity feed of a pull request's Overview, each with a toggle that
- * collapses it to the header of its first comment (style.css). A resolved thread starts
+ * collapses it to the header of its first comment, also a thread on a file (style.css). A resolved thread starts
  * collapsed. A thread the owner opened or collapsed stays that way until a reload.
  */
 function createCollapsibleThreads({ document }: { document: Document }): { sync: () => void } {

@@ -15,7 +15,7 @@
   margin-bottom: 0;
 }
 
-/* A collapsed thread on a file keeps the file's name and hides the code. */
-.comment-file-header:has(+ [data-fix-ado-thread="collapsed"]) .comment-file-diff-container {
+/* A collapsed thread on a file hides the file's name and code too. */
+.comment-file-header:has(+ [data-fix-ado-thread="collapsed"]) {
   display: none;
 }
