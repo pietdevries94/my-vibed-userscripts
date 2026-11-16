@@ -1,5 +1,6 @@
 import type { Feature } from "../core/feature.ts";
 import { REVIEWING_FEATURES } from "./reviewing-features.ts";
+import { activityOrder } from "./activity-order/index.ts";
 import { avatarInitials } from "./avatar-initials/index.ts";
 import { daysInColumn } from "./days-in-column/index.ts";
 import { followSystemTheme } from "./system-theme/index.ts";
@@ -13,6 +14,7 @@ const FEATURES: Feature[] = [
   pipelineStatusOnPullRequests,
   pipelineTab,
   overviewPipelineIssues,
+  activityOrder,
   ...REVIEWING_FEATURES,
   avatarInitials,
   followSystemTheme,

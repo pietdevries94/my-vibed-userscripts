@@ -1,0 +1,50 @@
+/* The activity feed on a pull request's Overview, oldest first. Azure DevOps renders the rows
+   newest first and keeps them that way in the DOM; the feed lays them out bottom to top. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] {
+  display: block;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody > tr {
+  display: block;
+}
+
+/* The timeline line ends at the row that is now on top, and at the one now at the bottom. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-prefix,
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-last-row
+  .bolt-timeline-icon-suffix {
+  visibility: visible;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-suffix,
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-last-row
+  .bolt-timeline-icon-prefix {
+  visibility: hidden;
+}
+
+/* The dashed piece of the line leads to the comment box, which is now the bottom row. */
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-row:nth-child(4)
+  .bolt-timeline-icon-prefix {
+  border-left-style: solid;
+}
+
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-prefix,
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  + .bolt-timeline-row
+  .bolt-timeline-icon-suffix {
+  border-left-style: dashed;
+}

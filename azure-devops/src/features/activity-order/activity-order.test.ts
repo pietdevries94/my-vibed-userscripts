@@ -1,0 +1,107 @@
+import type { ActivityOrder } from "./activity-order.ts";
+import { JSDOM } from "jsdom";
+import assert from "node:assert/strict";
+import { createActivityOrder } from "./activity-order.ts";
+import { test } from "node:test";
+
+const OVERVIEW = `
+  <div class="flex-row flex-wrap justify-end">
+    <div class="bolt-dropdown-expandable"><button>Show everything</button></div>
+    <div class="repos-activity-filter-dropdown"><button>All</button></div>
+  </div>
+  <table class="activity-feed-list"><tbody>
+    <tr class="bolt-timeline-row bolt-timeline-first-row"><td>Add a comment</td></tr>
+    <tr class="bolt-timeline-row"><td>Quill Barrow approved</td></tr>
+    <tr class="bolt-timeline-row bolt-timeline-last-row"><td>Marren Tolk created the pull request</td></tr>
+  </tbody></table>`;
+
+interface OverviewPage {
+  document: Document;
+  saved: ActivityOrder[];
+  sync: () => void;
+  button: () => HTMLButtonElement;
+  shownOrder: () => string | undefined;
+}
+
+function overviewPage(stored: ActivityOrder | null = null, html = OVERVIEW): OverviewPage {
+  const { document } = new JSDOM(`<!doctype html><body>${html}</body>`).window;
+  const saved: ActivityOrder[] = [];
+  const { sync } = createActivityOrder({
+    document,
+    storage: {
+      load: () => stored,
+      save: (order) => {
+        saved.push(order);
+      },
+    },
+  });
+  return {
+    button: () => {
+      const button = document.querySelector<HTMLButtonElement>(".fix-ado-activity-order");
+      assert.ok(button !== null, "the sort button is there");
+      return button;
+    },
+    document,
+    saved,
+    shownOrder: () =>
+      document.querySelector<HTMLElement>(".activity-feed-list")?.dataset.fixAdoActivityOrder,
+    sync,
+  };
+}
+
+test("the activity feed runs oldest first until the owner picks an order", () => {
+  const page = overviewPage();
+  page.sync();
+  assert.equal(page.shownOrder(), "oldest-first");
+  assert.equal(page.button().textContent, "Oldest first");
+  assert.equal(page.button().title, "Show newest first");
+});
+
+test("the sort button sits before the filters", () => {
+  const page = overviewPage();
+  page.sync();
+  const filters = page.document.querySelector(".repos-activity-filter-dropdown")?.parentElement;
+  assert.equal(filters?.firstElementChild, page.button());
+});
+
+test("a click flips the order and saves it", () => {
+  const page = overviewPage();
+  page.sync();
+  page.button().click();
+  assert.equal(page.shownOrder(), "newest-first");
+  assert.equal(page.button().textContent, "Newest first");
+  assert.equal(page.button().title, "Show oldest first");
+  page.button().click();
+  assert.equal(page.shownOrder(), "oldest-first");
+  assert.deepEqual(page.saved, ["newest-first", "oldest-first"]);
+});
+
+test("a saved order is shown", () => {
+  const page = overviewPage("newest-first");
+  page.sync();
+  assert.equal(page.shownOrder(), "newest-first");
+  assert.equal(page.button().textContent, "Newest first");
+});
+
+test("syncing again adds no second button", () => {
+  const page = overviewPage();
+  page.sync();
+  page.sync();
+  assert.equal(page.document.querySelectorAll(".fix-ado-activity-order").length, 1);
+});
+
+test("a feed that Azure DevOps rendered again gets the order and the button back", () => {
+  const page = overviewPage();
+  page.sync();
+  page.button().click();
+  page.document.body.innerHTML = OVERVIEW;
+  page.sync();
+  assert.equal(page.shownOrder(), "newest-first");
+  assert.equal(page.button().textContent, "Newest first");
+});
+
+test("a page without an activity feed gets no button", () => {
+  const page = overviewPage(null, `<div class="repos-pr-description-card"></div>`);
+  page.sync();
+  assert.equal(page.document.querySelector(".fix-ado-activity-order"), null);
+});
