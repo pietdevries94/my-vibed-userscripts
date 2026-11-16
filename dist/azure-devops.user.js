@@ -1,866 +1,21 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.9.1
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.10.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_deleteValue
+// @grant        GM_listValues
 // @grant        GM_registerMenuCommand
 // @run-at       document-idle
 // @downloadURL  https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js
 // ==/UserScript==
 "use strict";
 (() => {
-  // azure-devops/src/pull-requests/reviewers.ts
-  var EMAIL_ADDRESS = /^(?<localPart>[^\s@]+)@[^\s@]+$/u;
-  function personOrTeamName(displayName) {
-    return displayName.replace(/^\[[^\]]*\]\\/u, "").replaceAll(/\([^)]*\)/gu, "").trim();
-  }
-  function wordsOf(text) {
-    return text.split(/\s+/u).filter(Boolean);
-  }
-  function firstCharacter(word) {
-    let codePoint = (word ?? "").codePointAt(0);
-    return codePoint === void 0 ? "" : String.fromCodePoint(codePoint);
-  }
-  function initialsOf(displayName) {
-    let localPart = EMAIL_ADDRESS.exec(displayName.trim())?.groups?.localPart, name = localPart === void 0 ? personOrTeamName(displayName) : localPart.replaceAll(/[._-]+/gu, " "), commaIndex = name.indexOf(","), isSurnameFirst = commaIndex !== -1, firstNames = wordsOf(isSurnameFirst ? name.slice(commaIndex + 1) : name), surnameWords = isSurnameFirst ? wordsOf(name.slice(0, commaIndex)) : firstNames.slice(1);
-    return [firstNames[0], surnameWords.at(-1)].map((word) => firstCharacter(word)).join("").toUpperCase();
-  }
-  function hueOf(name) {
-    let hash = 2166136261;
-    for (let character of name.trim().toLowerCase())
-      hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16777619) >>> 0;
-    return hash % 360;
-  }
-  function namesOf(reviewer) {
-    let { displayName } = reviewer;
-    return displayName === void 0 || displayName === "" ? [] : [displayName, personOrTeamName(displayName)];
-  }
-  function findReviewerByLabel(avatarLabel, reviewers) {
-    let label = avatarLabel.toLowerCase(), bestMatch = null, bestMatchLength = 0;
-    for (let reviewer of reviewers)
-      for (let name of namesOf(reviewer))
-        name.length > bestMatchLength && label.includes(name.toLowerCase()) && (bestMatch = reviewer, bestMatchLength = name.length);
-    return bestMatch;
-  }
-
-  // azure-devops/src/pull-requests/avatars.ts
-  var AVATAR_SELECTOR = ".bolt-coin, .vss-Persona:not(.project-persona)";
-  function avatarName(avatar) {
-    let label = avatar.getAttribute("aria-label") ?? "", imageAlt = avatar.querySelector("img")?.getAttribute("alt") ?? "";
-    return (label === "" ? imageAlt : label).trim();
-  }
-  function markAvatar(avatar, initials, hue) {
-    initials ? avatar.dataset.fixAdoInitials = initials : delete avatar.dataset.fixAdoInitials, avatar.style.setProperty("--fix-ado-hue", hue || null), initials && avatar.offsetWidth > 0 && avatar.style.setProperty("--fix-ado-avatar-size", `${avatar.offsetWidth}px`);
-  }
-  function showInitialsOnAvatars(root) {
-    for (let avatar of root.querySelectorAll(AVATAR_SELECTOR)) {
-      let name = avatarName(avatar), initials = initialsOf(name), shownInitials = avatar.dataset.fixAdoInitials ?? "", hue = initials ? String(hueOf(name)) : "";
-      shownInitials === initials && avatar.style.getPropertyValue("--fix-ado-hue") === hue || markAvatar(avatar, initials, hue);
-    }
-  }
-
-  // azure-devops/src/features/avatar-initials/style.css
-  var style_default = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
-[data-fix-ado-initials] {
-  position: relative;
-  border-radius: 50%;
-  background: hsl(var(--fix-ado-hue, 210) 45% 38%);
-}
-
-[data-fix-ado-initials] > .bolt-coin-content,
-[data-fix-ado-initials] > .vss-Persona-content {
-  visibility: hidden;
-}
-
-[data-fix-ado-initials]::after {
-  content: attr(data-fix-ado-initials);
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: calc(var(--fix-ado-avatar-size, 24px) * 0.42);
-  line-height: 1;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-`;
-
-  // azure-devops/src/features/avatar-initials/index.ts
-  var avatarInitials = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "Initials on avatars, in a colour per person.",
-    // The key of the earlier menu setting, so the owner's choice stays.
-    id: "avatar-initials",
-    name: "Avatar initials",
-    start: ({ document: document2 }) => ({
-      sync() {
-        showInitialsOnAvatars(document2);
-      }
-    }),
-    styles: [style_default]
-  };
-
-  // azure-devops/src/features/days-in-column/days-in-column.ts
-  var CARD_SELECTOR = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS = "fix-ado-days-in-column";
-  function columnEnteredAt(updates) {
-    for (let update2 of updates.toReversed()) {
-      let columnChange = update2.fields?.["System.BoardColumn"];
-      if (columnChange !== void 0 && columnChange.newValue !== columnChange.oldValue) {
-        let changedDate = update2.fields?.["System.ChangedDate"]?.newValue;
-        return typeof changedDate == "string" ? changedDate : null;
-      }
-    }
-    return null;
-  }
-  function daysSince(enteredAt, now) {
-    return Math.max(0, Math.floor((now - Date.parse(enteredAt)) / 864e5));
-  }
-  function dotAge(day) {
-    return day <= 7 ? "fresh" : day <= 14 ? "aging" : "old";
-  }
-  var LOADING_DOT_COUNT = 3;
-  function dotsFor(document2, days) {
-    return (days === null ? Array.from({ length: LOADING_DOT_COUNT }, () => "loading") : Array.from({ length: Math.min(days, 30) }, (_entry, index) => dotAge(index + 1))).map((age) => {
-      let dot = document2.createElement("span");
-      return dot.dataset.age = age, dot;
-    });
-  }
-  function captionFor(days) {
-    return days === null ? "" : days === 0 ? "Less than a day in this column" : `${days} ${days === 1 ? "day" : "days"} in this column`;
-  }
-  function createDotBar(document2, days) {
-    let bar = document2.createElement("div");
-    return bar.className = BAR_CLASS, bar.dataset.days = String(days), bar.title = captionFor(days), days === null ? bar.setAttribute("aria-hidden", "true") : (bar.setAttribute("aria-label", bar.title), bar.setAttribute("role", "img")), bar.append(...dotsFor(document2, days)), bar;
-  }
-  function showDaysInColumn(card, days) {
-    let existing = card.querySelector(`.${BAR_CLASS}`);
-    existing?.dataset.days !== String(days) && (existing?.remove(), (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days)));
-  }
-  function findCards(document2) {
-    let cards = /* @__PURE__ */ new Map();
-    for (let card of document2.querySelectorAll(CARD_SELECTOR)) {
-      let id = Number(card.dataset.itemid);
-      Number.isInteger(id) && id > 0 && cards.set(id, [...cards.get(id) ?? [], card]);
-    }
-    return cards;
-  }
-  function columnIdOf(card) {
-    return card.closest(COLUMN_SELECTOR)?.dataset.column ?? null;
-  }
-  function noteMoves(tracker, cards) {
-    for (let [id, [element3]] of cards) {
-      let columnId = columnIdOf(element3), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
-      lastColumnId !== void 0 && lastColumnId !== columnId && entry !== void 0 && (entry.enteredAt = new Date(tracker.now()).toISOString()), tracker.columnIds.set(id, columnId);
-    }
-  }
-  function showBars(tracker, cards) {
-    noteMoves(tracker, cards);
-    for (let [id, elements] of cards) {
-      let entry = tracker.entries.get(id), enteredAt = entry?.enteredAt ?? null, days = null;
-      entry !== void 0 && (days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now()));
-      for (let element3 of elements)
-        showDaysInColumn(element3, days);
-    }
-  }
-  function pauseIfAsked(tracker, retryAfterSeconds) {
-    return retryAfterSeconds === null ? !1 : (tracker.pausedUntil = tracker.now() + retryAfterSeconds * 1e3, !0);
-  }
-  async function fetchChangedCards(tracker, ids) {
-    let { workItems, retryAfterSeconds } = await tracker.client.getWorkItems(ids);
-    if (pauseIfAsked(tracker, retryAfterSeconds))
-      return;
-    let changed = workItems.filter(({ id, rev }) => tracker.entries.get(id)?.rev !== rev);
-    for (let { id, rev } of changed) {
-      let response = await tracker.client.getWorkItemUpdates(id);
-      if (tracker.entries.set(id, { enteredAt: columnEnteredAt(response.updates), rev }), pauseIfAsked(tracker, response.retryAfterSeconds))
-        return;
-    }
-  }
-  function isCheckDue(tracker, ids) {
-    let now = tracker.now(), isDue = ids.some((id) => !tracker.entries.has(id)) || now - tracker.lastCheckAt >= 6e4;
-    return !tracker.isChecking && ids.length > 0 && isDue && now >= tracker.pausedUntil;
-  }
-  async function check(tracker, ids) {
-    tracker.isChecking = !0, tracker.lastCheckAt = tracker.now();
-    try {
-      await fetchChangedCards(tracker, ids);
-    } catch {
-      tracker.pausedUntil = tracker.now() + 6e4;
-    } finally {
-      tracker.isChecking = !1;
-    }
-  }
-  function createDaysInColumn(options) {
-    let tracker = {
-      client: options.client,
-      columnIds: /* @__PURE__ */ new Map(),
-      entries: /* @__PURE__ */ new Map(),
-      isChecking: !1,
-      lastCheckAt: Number.NEGATIVE_INFINITY,
-      now: options.now,
-      pausedUntil: Number.NEGATIVE_INFINITY
-    };
-    return {
-      async sync() {
-        let cards = findCards(options.document);
-        showBars(tracker, cards);
-        let ids = [...cards.keys()];
-        isCheckDue(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
-      }
-    };
-  }
-
-  // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
-  var HEADER_SELECTOR = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS = "fix-ado-days-toggle";
-  function showColumnState(column, toggle, isHidden) {
-    Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
-    let pressed = String(!isHidden);
-    toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", toggle.title));
-  }
-  function createToggle(document2, onClick2) {
-    let toggle = document2.createElement("button");
-    return toggle.type = "button", toggle.className = TOGGLE_CLASS, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
-      event.preventDefault(), event.stopPropagation(), onClick2();
-    }), toggle;
-  }
-  function findOrAddToggle(header, onClick2) {
-    let existing = header.querySelector(`.${TOGGLE_CLASS}`);
-    if (existing !== null)
-      return existing;
-    let toggle = createToggle(header.ownerDocument, onClick2);
-    return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
-  }
-  function createDaysInColumnToggles(options) {
-    let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
-    function flip(columnId) {
-      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync4();
-    }
-    function sync4() {
-      let headers = [...document2.querySelectorAll(HEADER_SELECTOR)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
-      if (headers.length === columns.length)
-        for (let [index, header] of headers.entries()) {
-          let column = columns[index], columnId = column?.dataset.column;
-          if (column !== void 0 && columnId !== void 0) {
-            let toggle = findOrAddToggle(header, () => {
-              flip(columnId);
-            });
-            showColumnState(column, toggle, hiddenColumnIds.has(columnId));
-          }
-        }
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/days-in-column/style.css
-  var style_default2 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
-.fix-ado-days-in-column {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  /* One row of dots, also when empty, so a card keeps its height. */
-  min-height: 5px;
-  margin-top: 6px;
-}
-
-.fix-ado-days-in-column > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  /* Azure DevOps keeps its palette as bare "r, g, b" values, so it follows the theme. */
-  background: rgb(var(--palette-neutral-20, 200, 200, 200));
-}
-
-.fix-ado-days-in-column > span[data-age="aging"] {
-  background: var(--component-status-warning, rgb(214, 119, 48));
-}
-
-.fix-ado-days-in-column > span[data-age="old"] {
-  background: var(--component-status-error, rgb(205, 74, 69));
-}
-
-/* Skeleton while the day count loads: three grey dots that pulse one after another. */
-.fix-ado-days-in-column > span[data-age="loading"] {
-  animation: fix-ado-pulse 1.2s ease-in-out infinite;
-}
-.fix-ado-days-in-column > span[data-age="loading"]:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.fix-ado-days-in-column > span[data-age="loading"]:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes fix-ado-pulse {
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fix-ado-days-in-column > span[data-age="loading"] {
-    animation: none;
-    opacity: 0.6;
-  }
-}
-
-.kanban-board-column[data-fix-ado-days-hidden] .fix-ado-days-in-column {
-  display: none;
-}
-
-/* The days-in-column toggle in a column header. It shows while the header is hovered, or
-   while something in it has keyboard focus. A click also focuses the toggle; that focus must
-   not keep it showing once the pointer leaves. */
-.fix-ado-days-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 6px;
-  padding: 3px 4px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  opacity: 0;
-}
-
-.kanban-board-column-header:is(:hover, :has(:focus-visible)) .fix-ado-days-toggle {
-  opacity: 1;
-}
-
-.fix-ado-days-toggle:hover {
-  background: rgba(var(--palette-black-alpha-6, 0, 0, 0, 0.06));
-}
-
-.fix-ado-days-toggle > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--component-status-warning, rgb(214, 119, 48));
-}
-
-/* Off: hollow dots. */
-.fix-ado-days-toggle[aria-pressed="false"] > span {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
-}
-`;
-
-  // azure-devops/src/features/days-in-column/index.ts
-  var HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns", daysInColumn = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "A dot per day a card has been in its board column, with a toggle per column.",
-    id: "days-in-column",
-    name: "Days in column",
-    start({ client, document: document2, now }) {
-      let days = createDaysInColumn({ client, document: document2, now }), toggles = createDaysInColumnToggles({
-        document: document2,
-        storage: {
-          load: () => GM_getValue(HIDDEN_COLUMNS_KEY, []),
-          save: (columnIds) => {
-            GM_setValue(HIDDEN_COLUMNS_KEY, columnIds);
-          }
-        }
-      });
-      return {
-        sync({ page, isTabActive: isTabActive2 }) {
-          page.kind === "board" && (toggles.sync(), isTabActive2 && days.sync());
-        }
-      };
-    },
-    styles: [style_default2]
-  };
-
-  // azure-devops/src/core/ado-request.ts
-  var AdoRequestError = class extends Error {
-    httpStatus;
-    retryAfterSeconds;
-    constructor(httpStatus, retryAfterSeconds) {
-      super(`Azure DevOps request failed with HTTP ${httpStatus}`), this.name = "AdoRequestError", this.httpStatus = httpStatus, this.retryAfterSeconds = retryAfterSeconds;
-    }
-  };
-  function retryAfterSecondsOf(response) {
-    let retryAfter = Number(response.headers.get("Retry-After"));
-    return response.headers.has("Retry-After") && Number.isFinite(retryAfter) ? retryAfter : null;
-  }
-  async function sendRequest(options, path, write) {
-    let accept = { Accept: "application/json" }, response = await options.fetch(options.origin + options.apiBasePath + path, {
-      credentials: "same-origin",
-      ...write === void 0 ? { headers: accept, method: "GET" } : {
-        body: JSON.stringify(write.body),
-        headers: { ...accept, "Content-Type": "application/json" },
-        method: write.method
-      }
-    });
-    if (!response.ok)
-      throw new AdoRequestError(response.status, retryAfterSecondsOf(response));
-    return response;
-  }
-  async function getJson(options, path) {
-    let response = await sendRequest(options, path), retryAfterSeconds = retryAfterSecondsOf(response);
-    return { body: await response.json() ?? {}, retryAfterSeconds };
-  }
-
-  // shared/runtime/script-log.ts
-  var entries = [];
-  function log(message2, data) {
-    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
-  }
-
-  // azure-devops/src/features/system-theme/system-theme.ts
-  var LIGHT_THEME_ID = "ms.vss-web.vsts-theme", DARK_THEME_ID = "ms.vss-web.vsts-theme-dark", THEME_CLASS_PREFIX = "ms-vss-web-vsts-theme", PALETTE_VARIABLE = "--palette-neutral-0", LIGHT_THEME_CLASS = "ms-vss-web-vsts-theme", DARK_THEME_CLASS = "ms-vss-web-vsts-theme-dark";
-  function currentThemeId(document2) {
-    let { body } = document2;
-    if (body.dataset.theme !== void 0)
-      return body.dataset.theme;
-    let themeClasses = [...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX));
-    if (!themeClasses.some((name) => name !== LIGHT_THEME_CLASS && name !== DARK_THEME_CLASS))
-      return themeClasses.includes(DARK_THEME_CLASS) ? DARK_THEME_ID : themeClasses.includes(LIGHT_THEME_CLASS) ? LIGHT_THEME_ID : void 0;
-  }
-  function isFollowedTheme(themeId) {
-    return themeId === LIGHT_THEME_ID || themeId === DARK_THEME_ID;
-  }
-  function findRootStyle(document2) {
-    return [...document2.head.querySelectorAll("style")].find((style) => {
-      let text = style.textContent.trimStart();
-      return text.startsWith(":root") && text.includes(PALETTE_VARIABLE);
-    }) ?? null;
-  }
-  function readLook(document2) {
-    let rootStyle = findRootStyle(document2);
-    return rootStyle === null ? null : {
-      bodyClasses: [...document2.body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX)),
-      rootStyle: rootStyle.textContent
-    };
-  }
-  function applyLook(document2, themeId, look) {
-    let rootStyle = findRootStyle(document2);
-    if (rootStyle === null)
-      return !1;
-    rootStyle.textContent = look.rootStyle;
-    let { body } = document2;
-    return body.classList.remove(
-      ...[...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX))
-    ), body.classList.add(...look.bodyClasses), body.dataset.theme = themeId, !0;
-  }
-  function rememberLook({ document: document2, looks }) {
-    let themeId = currentThemeId(document2), look = readLook(document2);
-    if (!isFollowedTheme(themeId) || look === null)
-      return;
-    let stored = looks.load();
-    JSON.stringify(stored[themeId]) !== JSON.stringify(look) && looks.save({ ...stored, [themeId]: look });
-  }
-  function themeToSwitchTo(options) {
-    let current = currentThemeId(options.document), wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
-    return isFollowedTheme(current) && current !== wanted ? wanted : null;
-  }
-  async function trySaveTheme(options, themeId) {
-    try {
-      return await options.saveTheme(themeId), !0;
-    } catch (error) {
-      return log("System theme: Azure DevOps refused the theme save", {
-        httpStatus: error instanceof AdoRequestError ? error.httpStatus : null
-      }), !1;
-    }
-  }
-  async function switchToSystemTheme(options, isPageLoad) {
-    let wanted = themeToSwitchTo(options);
-    if (log("System theme: checked", {
-      current: currentThemeId(options.document) ?? null,
-      isPageLoad,
-      prefersDark: options.prefersDark(),
-      rememberedThemes: Object.keys(options.looks.load())
-    }), wanted === null || !await trySaveTheme(options, wanted))
-      return;
-    let look = options.looks.load()[wanted], isSwitched = look !== void 0 && applyLook(options.document, wanted, look);
-    log("System theme: saved", {
-      hasRootStyle: findRootStyle(options.document) !== null,
-      isSwitched,
-      wanted
-    }), !isSwitched && isPageLoad && options.reload();
-  }
-  function createSystemTheme(options) {
-    let lastSwitch = Promise.resolve(), seenPrefersDark = options.prefersDark(), isWaitingForTheme = !1;
-    function queueSwitch(isPageLoad) {
-      lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, isPageLoad));
-    }
-    function onPageChange() {
-      rememberLook(options), isWaitingForTheme && currentThemeId(options.document) !== void 0 && (isWaitingForTheme = !1, queueSwitch(!0));
-    }
-    function onSystemThemeChange() {
-      onPageChange();
-      let prefersDark = options.prefersDark();
-      prefersDark !== seenPrefersDark && (seenPrefersDark = prefersDark, queueSwitch(!1));
-    }
-    return options.onSystemThemeChange(() => {
-      log("System theme: the system's theme changed"), onSystemThemeChange();
-    }), {
-      onPageChange,
-      settled: async () => lastSwitch,
-      async start() {
-        seenPrefersDark = options.prefersDark(), rememberLook(options), isWaitingForTheme = currentThemeId(options.document) === void 0, isWaitingForTheme || queueSwitch(!0), await lastSwitch;
-      }
-    };
-  }
-
-  // azure-devops/src/features/system-theme/index.ts
-  var THEME_LOOKS_KEY = "system-theme-looks", SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)", followSystemTheme = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "Azure DevOps shows Light or Dark to match the system.",
-    // The key of the earlier menu setting, so the owner's choice stays.
-    id: "follow-system-theme",
-    name: "Follow system theme",
-    start({ client, document: document2, isInFrame: isInFrame2, reloadWhenIdle: reloadWhenIdle2 }) {
-      if (isInFrame2)
-        return null;
-      let systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY), theme = createSystemTheme({
-        document: document2,
-        looks: {
-          load: () => GM_getValue(THEME_LOOKS_KEY, {}),
-          save: (looks) => {
-            GM_setValue(THEME_LOOKS_KEY, looks);
-          }
-        },
-        onSystemThemeChange: (listener) => {
-          systemDark.addEventListener("change", listener);
-        },
-        prefersDark: () => systemDark.matches,
-        reload: reloadWhenIdle2,
-        saveTheme: async (themeId) => client.saveTheme(themeId)
-      });
-      return new MutationObserver(() => {
-        theme.onPageChange();
-      }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), theme.start(), null;
-    },
-    styles: []
-  };
-
-  // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
-  var COLLAPSE_ICONS = { collapsed: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
-  function setCollapsed(box, isCollapsed) {
-    box.toggleAttribute("data-collapsed", isCollapsed);
-    let button2 = box.querySelector(".fix-ado-issue-box-collapse");
-    button2?.setAttribute("aria-expanded", String(!isCollapsed));
-    let icon = button2?.querySelector(".fabric-icon");
-    icon?.classList.toggle(COLLAPSE_ICONS.collapsed, isCollapsed), icon?.classList.toggle(COLLAPSE_ICONS.open, !isCollapsed);
-  }
-  function createChevron(document2) {
-    let iconFont = document2.createElement("span");
-    iconFont.className = "fluent-icons-enabled";
-    let icon = document2.createElement("span");
-    return icon.className = "left-icon flex-noshrink fabric-icon small", icon.setAttribute("aria-hidden", "true"), iconFont.append(icon), iconFont;
-  }
-  function createCollapseButton(document2) {
-    let button2 = document2.createElement("button");
-    return button2.type = "button", button2.className = "bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-issue-box-collapse", button2.setAttribute("aria-label", "Errors and warnings"), button2.append(createChevron(document2)), button2;
-  }
-  function addCollapseButton(box, header, collapse) {
-    let button2 = createCollapseButton(box.ownerDocument);
-    button2.addEventListener("click", () => {
-      let isCollapsed = !Object.hasOwn(box.dataset, "collapsed");
-      setCollapsed(box, isCollapsed), collapse.onToggle(isCollapsed);
-    }), header.prepend(button2), setCollapsed(box, collapse.isCollapsed);
-  }
-
-  // azure-devops/src/pipeline/pipeline-issues.ts
-  var NO_ISSUES = { errorCount: 0, warningCount: 0 }, COUNT_FIELDS = { error: "errorCount", warning: "warningCount" };
-  function isIssueKind(type) {
-    return type === "error" || type === "warning";
-  }
-  function issueKey(issue) {
-    return `${issue.type}
-${issue.message ?? ""}`;
-  }
-  function childrenByParentOf(records) {
-    let children = /* @__PURE__ */ new Map();
-    for (let record of records)
-      record.parentId !== null && children.set(record.parentId, [...children.get(record.parentId) ?? [], record]);
-    return children;
-  }
-  function descendantsOf(record, childrenByParent) {
-    let descendants = [];
-    for (let child of childrenByParent.get(record.id) ?? [])
-      descendants.push(child, ...descendantsOf(child, childrenByParent));
-    return descendants;
-  }
-  function ownIssuesOf(records) {
-    let childrenByParent = childrenByParentOf(records);
-    return new Map(
-      records.map((record) => {
-        let below = new Set(
-          descendantsOf(record, childrenByParent).flatMap(
-            (descendant) => (descendant.issues ?? []).map((issue) => issueKey(issue))
-          )
-        ), own = (record.issues ?? []).filter(
-          (issue) => isIssueKind(issue.type) && !below.has(issueKey(issue))
-        );
-        return [record.id, own];
-      })
-    );
-  }
-  function ownCountOf(record, own, kind) {
-    let listed = (record.issues ?? []).filter((issue) => issue.type === kind).length, repeated = listed - own.filter((issue) => issue.type === kind).length;
-    return Math.max(0, Math.max(record[COUNT_FIELDS[kind]] ?? 0, listed) - repeated);
-  }
-  function issueCountsOf(records) {
-    let childrenByParent = childrenByParentOf(records), ownIssues = ownIssuesOf(records), ownCounts = new Map(
-      records.map((record) => {
-        let own = ownIssues.get(record.id) ?? [];
-        return [
-          record.id,
-          {
-            errorCount: ownCountOf(record, own, "error"),
-            warningCount: ownCountOf(record, own, "warning")
-          }
-        ];
-      })
-    );
-    return new Map(
-      records.map((record) => [
-        record.id,
-        sumIssueCounts(
-          [record, ...descendantsOf(record, childrenByParent)].map(
-            ({ id }) => ownCounts.get(id) ?? NO_ISSUES
-          )
-        )
-      ])
-    );
-  }
-  function sumIssueCounts(counts) {
-    let total = { ...NO_ISSUES };
-    for (let count of counts)
-      total.errorCount += count.errorCount, total.warningCount += count.warningCount;
-    return total;
-  }
-  function runIssueOf(issue, spot) {
-    let place = (spot.job === null ? [spot.stage.name] : [spot.job.name, spot.step?.name]).filter((name) => name != null), lineNumber = Number(issue.data?.logFileLineNumber ?? Number.NaN);
-    return {
-      jobId: spot.job?.id ?? null,
-      kind: issue.type,
-      lineNumber: Number.isInteger(lineNumber) ? lineNumber : null,
-      message: issue.message ?? "",
-      place,
-      stageId: spot.stage.id,
-      stepId: spot.step?.id ?? null
-    };
-  }
-  function runIssuesAt(spot, issues) {
-    return issues.flatMap(
-      (issue) => isIssueKind(issue.type) ? [runIssueOf({ ...issue, type: issue.type }, spot)] : []
-    );
-  }
-  function runIssuesOf(stages) {
-    let issues = stages.flatMap((stage) => stage.issues);
-    return [
-      ...issues.filter((issue) => issue.kind === "error"),
-      ...issues.filter((issue) => issue.kind === "warning")
-    ];
-  }
-
-  // azure-devops/src/pipeline/pipeline-issue-list.ts
-  var SVG_NAMESPACE = "http://www.w3.org/2000/svg", ICON_SIZES = {
-    large: { className: " margin-4", drawing: 32, pixels: 24 },
-    small: { className: "", drawing: 16, pixels: 16 }
-  }, ICON_MARKS = {
-    error: {
-      large: "M21.99 9.99a1.5 1.5 0 0 0-2.122 0L16 13.856 12.132 9.99a1.5 1.5 0 0 0-2.121 2.122l3.868 3.868-3.89 3.889a1.5 1.5 0 0 0 2.122 2.121L16 18.1l3.89 3.89a1.5 1.5 0 0 0 2.12-2.122l-3.889-3.89 3.868-3.867a1.5 1.5 0 0 0 0-2.122z",
-      small: "M10.984 5.004a.9.9 0 0 1 0 1.272L9.27 7.99l1.74 1.741a.9.9 0 1 1-1.272 1.273l-1.74-1.741-1.742 1.74a.9.9 0 1 1-1.272-1.272l1.74-1.74-1.713-1.714a.9.9 0 0 1 1.273-1.273l1.713 1.713 1.714-1.713a.9.9 0 0 1 1.273 0z"
-    },
-    warning: {
-      large: "M16 7a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 16 7zm-1.5 16a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z",
-      small: "M8.91 3.9a.9.9 0 0 0-1.8 0v4.7a.9.9 0 1 0 1.8 0V3.9zm-.95 8.65a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8z"
-    }
-  }, KIND_STATUSES = { error: "failed", warning: "warning" }, KIND_LABELS = { error: "Error", warning: "Warning" }, LIST_ROW_WRAPPERS = [
-    { className: "bolt-list-cell-content flex-row", tag: "div" },
-    { className: "bolt-list-cell", tag: "td" },
-    { className: "bolt-list-row first-row", role: "listitem", tag: "tr" },
-    { className: "relative", tag: "tbody" },
-    {
-      className: "preview-check-list bolt-list body-m relative scroll-hidden",
-      role: "list",
-      tag: "table"
-    },
-    { className: "status-details-container fix-ado-issue-box", tag: "div" }
-  ];
-  function countText(count, kind) {
-    return `${count} ${kind}${count === 1 ? "" : "s"}`;
-  }
-  function issueSummary(parts) {
-    let { errorCount, warningCount } = sumIssueCounts(parts);
-    return [
-      ...errorCount > 0 ? [countText(errorCount, "error")] : [],
-      ...warningCount > 0 ? [countText(warningCount, "warning")] : []
-    ].join(", ");
-  }
-  function worstKindOf(issues) {
-    return issues.some((issue) => issue.kind === "error") ? "error" : "warning";
-  }
-  function createElement(document2, { className, role, tag, text }) {
-    let created = document2.createElement(tag);
-    return created.className = className, text !== void 0 && (created.textContent = text), role !== void 0 && created.setAttribute("role", role), created;
-  }
-  function wrapIn(document2, content, wrappers) {
-    let wrapped = content;
-    for (let wrapper of wrappers) {
-      let outer = createElement(document2, wrapper);
-      outer.append(wrapped), wrapped = outer;
-    }
-    return wrapped;
-  }
-  function setAttributes(element3, attributes) {
-    for (let [name, value] of Object.entries(attributes))
-      element3.setAttribute(name, value);
-  }
-  function createKindIcon(document2, kind, size) {
-    let { className, drawing, pixels } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE, "svg");
-    setAttributes(icon, {
-      "aria-label": KIND_LABELS[kind],
-      class: `bolt-status flex-noshrink ${KIND_STATUSES[kind]}${className} fix-ado-kind-icon`,
-      "data-kind": kind,
-      height: String(pixels),
-      role: "img",
-      viewBox: `0 0 ${drawing} ${drawing}`,
-      width: String(pixels)
-    });
-    let circle = document2.createElementNS(SVG_NAMESPACE, "circle"), middle = String(drawing / 2);
-    setAttributes(circle, { cx: middle, cy: middle, r: middle });
-    let mark = document2.createElementNS(SVG_NAMESPACE, "path");
-    return setAttributes(mark, { d: ICON_MARKS[kind][size], fill: "#fff" }), icon.append(circle, mark), icon;
-  }
-  function createIssueCounts(document2, counts) {
-    return ["error", "warning"].flatMap((kind) => {
-      let count = kind === "error" ? counts.errorCount : counts.warningCount;
-      if (count === 0)
-        return [];
-      let text = String(count), badge = createElement(document2, { className: "fix-ado-issue-count", tag: "span", text });
-      return badge.dataset.kind = kind, badge.setAttribute("aria-label", countText(count, kind)), badge.title = countText(count, kind), [badge];
-    });
-  }
-  function createOutputLine(document2, issue) {
-    let line2 = createElement(document2, {
-      className: "flex-row monospaced-m dark-build-output fix-ado-issue-output",
-      tag: "div"
-    });
-    issue.lineNumber !== null && line2.append(createElement(document2, { className: "line-number padding-horizontal-16", tag: "div", text: String(issue.lineNumber) }));
-    let className = `${issue.kind === "error" ? "error-text" : "fix-ado-warning-text"} word-break fix-ado-issue-message`;
-    return line2.append(createElement(document2, { className, tag: "div", text: issue.message })), line2;
-  }
-  function fillIssueLink(link, issue) {
-    let { ownerDocument: document2 } = link;
-    link.className = "bolt-table-link full-width-link-no-padding no-underline-link bolt-link fix-ado-issue", link.dataset.kind = issue.kind;
-    let place = createElement(document2, {
-      className: "padding-horizontal-16 padding-vertical-8 text-ellipsis separator-line-top secondary-text body-s fix-ado-issue-place",
-      tag: "div",
-      text: issue.place.join(" / ")
-    }), output = createElement(document2, { className: "flex-column", tag: "div" });
-    return output.append(createOutputLine(document2, issue)), link.append(place, output), link;
-  }
-  function createBoxHeader(document2, box) {
-    let text = createElement(document2, {
-      className: "pr-completion-status-header flex-row flex-center flex-grow rhythm-horizontal-8 text-ellipsis",
-      tag: "div"
-    }), { title } = box;
-    text.append(
-      createElement(document2, {
-        className: "text-ellipsis fix-ado-issue-box-title",
-        tag: "span",
-        text: title
-      })
-    ), box.details !== null && text.append(createElement(document2, { className: "secondary-text fix-ado-issue-box-details", tag: "span", text: box.details }));
-    let header = createElement(document2, {
-      className: "flex-row flex-grow flex-center padding-horizontal-16 rhythm-horizontal-8 fix-ado-issue-box-header",
-      tag: "div"
-    });
-    return header.append(createKindIcon(document2, worstKindOf(box.issues), "small"), text), header;
-  }
-  function createIssueBox(document2, box) {
-    let content = createElement(document2, {
-      className: "flex-column flex-grow text-ellipsis",
-      tag: "div"
-    }), links = box.issues.map((issue) => box.createLink(issue)), header = createBoxHeader(document2, box);
-    content.append(header, ...links);
-    let wrapped = wrapIn(document2, content, LIST_ROW_WRAPPERS);
-    return box.collapse !== void 0 && addCollapseButton(wrapped, header, box.collapse), wrapped;
-  }
-
-  // azure-devops/src/pipeline/pipeline-run-link.ts
-  var RUN_PATH_END = "/_build/results";
-  function parsePipelineRunLocation(location2) {
-    let query = new URLSearchParams(location2.search), buildId = Number(query.get("buildId") ?? Number.NaN);
-    if (!location2.pathname.endsWith(RUN_PATH_END) || !Number.isInteger(buildId))
-      return null;
-    let jobId = query.get("j"), stepId = query.get("t");
-    return query.get("view") !== "logs" ? { buildId, jobId: null, stepId: null, view: "summary" } : jobId !== null && stepId !== null ? { buildId, jobId, stepId, view: "log" } : { buildId, jobId: null, stepId: null, view: "steps" };
-  }
-  function pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) {
-    let step = `j=${encodeURIComponent(jobId)}&t=${encodeURIComponent(stepId)}`;
-    return `${apiBasePath2}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs&${step}`;
-  }
-
-  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues-card.ts
-  var OVERVIEW_ISSUES_CLASS = "fix-ado-overview-issues";
-  function runLinkOf({ apiBasePath: apiBasePath2, project }, buildId, { jobId, stepId }) {
-    return jobId !== null && stepId !== null ? pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) : `${apiBasePath2}/${encodeURIComponent(project)}/_build/results?buildId=${buildId}`;
-  }
-  function createCheckIssueBox(document2, content, { check: check2, counts, issues }) {
-    return createIssueBox(document2, {
-      createLink: (issue) => {
-        let link = document2.createElement("a");
-        return link.href = runLinkOf(content, check2.buildId, issue), fillIssueLink(link, issue);
-      },
-      details: issueSummary([counts]),
-      issues,
-      title: check2.name
-    });
-  }
-  function headingOf(checks) {
-    let runs = checks.length === 1 ? "the latest run" : "the latest runs";
-    return `${issueSummary(checks.map(({ counts }) => counts))} in ${runs}`;
-  }
-  var CARD_WRAPPERS = [
-    { className: "flex-column flex-grow scroll-hidden", tag: "div" },
-    { className: "bolt-card-content flex-row flex-grow bolt-default-horizontal-spacing", tag: "div" },
-    {
-      className: `bolt-table-card bolt-card flex-column depth-8 bolt-card-white ${OVERVIEW_ISSUES_CLASS}`,
-      role: "region",
-      tag: "section"
-    }
-  ];
-  function createHeading(document2, checks) {
-    let heading = createElement(document2, {
-      className: "fix-ado-overview-issues-heading",
-      tag: "span",
-      text: headingOf(checks)
-    }), text = wrapIn(document2, heading, [
-      { className: "flex-column flex-grow scroll-hidden", tag: "div" }
-    ]), row = createElement(document2, {
-      className: "flex-row flex-center rhythm-horizontal-8",
-      tag: "div"
-    }), kind = worstKindOf(checks.flatMap(({ issues }) => issues));
-    return row.append(createKindIcon(document2, kind, "large"), text), row;
-  }
-  function createIssuesCard(document2, content) {
-    let { checks } = content, rows = createElement(document2, {
-      className: "padding-vertical-16 padding-horizontal-20 rhythm-vertical-16",
-      tag: "div"
-    });
-    rows.append(
-      createHeading(document2, checks),
-      ...checks.map((checkIssues) => createCheckIssueBox(document2, content, checkIssues))
-    );
-    let block = wrapIn(document2, rows, CARD_WRAPPERS);
-    return block.setAttribute("aria-label", "Pipeline warnings and errors"), block.dataset.fixAdoRendered = JSON.stringify(checks), block;
-  }
-
   // azure-devops/src/pipeline/pipeline-status.ts
   var BUILD_POLICY_TYPE_ID = "0609b952-1397-4640-95ec-e00a01b2c241";
   function hasStatus(evaluations, status) {
@@ -897,548 +52,114 @@ ${issue.message ?? ""}`;
     return status === "running" || status === "queued";
   }
 
-  // azure-devops/src/pipeline/pipeline-checks.ts
-  function checkNameOf(evaluation, fallback) {
-    return evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? fallback;
-  }
-  function pipelineCheckOf(evaluation) {
-    let buildId = evaluation.context?.buildId ?? 0;
-    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId <= 0 ? null : {
-      buildId,
-      isRequired: evaluation.configuration.isBlocking,
-      name: checkNameOf(evaluation, `Run ${buildId}`),
-      startedAt: evaluation.context?.buildStartedUtc ?? null,
-      status: pipelineStatusOf([evaluation])
-    };
-  }
-  function startedAtMs(check2) {
-    return check2.startedAt === null ? 0 : Date.parse(check2.startedAt);
-  }
-  function pipelineChecksOf(evaluations) {
-    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check2) => check2 !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
-  }
-  function startableChecksOf(evaluations) {
-    return evaluations.flatMap(
-      ({ evaluationId, ...evaluation }) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && evaluationId !== void 0 ? [
-        {
-          evaluationId,
-          isRequired: evaluation.configuration.isBlocking,
-          name: checkNameOf(evaluation, "Build check")
-        }
-      ] : []
-    );
-  }
-
-  // azure-devops/src/pipeline/pipeline-timeline.ts
-  var RESULT_STATUSES = {
-    abandoned: { label: "Canceled", status: "notStarted" },
-    canceled: { label: "Canceled", status: "notStarted" },
-    failed: { label: "Failed", status: "failed" },
-    skipped: { label: "Skipped", status: "notStarted" },
-    succeeded: { label: "Succeeded", status: "succeeded" },
-    succeededWithIssues: { label: "Succeeded with warnings", status: "expired" }
+  // azure-devops/src/core/ado-request.ts
+  var AdoRequestError = class extends Error {
+    httpStatus;
+    retryAfterSeconds;
+    constructor(httpStatus, retryAfterSeconds) {
+      super(`Azure DevOps request failed with HTTP ${httpStatus}`), this.name = "AdoRequestError", this.httpStatus = httpStatus, this.retryAfterSeconds = retryAfterSeconds;
+    }
   };
-  function recordStatusOf({ result, state }) {
-    return state === "inProgress" ? { label: "Running", status: "running" } : (result === null ? void 0 : RESULT_STATUSES[result]) ?? { label: "Not started", status: "notStarted" };
+  function retryAfterSecondsOf(response) {
+    let retryAfter = Number(response.headers.get("Retry-After"));
+    return response.headers.has("Retry-After") && Number.isFinite(retryAfter) ? retryAfter : null;
   }
-  var NO_STAGE_ID = "", DEFAULT_STAGE_NAME = "__default";
-  function inRunOrder(records) {
-    return records.toSorted((first, second) => (first.order ?? 0) - (second.order ?? 0));
-  }
-  function stageIdOf(record, byId) {
-    let parent = record.parentId === null ? void 0 : byId.get(record.parentId);
-    for (; parent !== void 0 && parent.type !== "Stage"; )
-      parent = parent.parentId === null ? void 0 : byId.get(parent.parentId);
-    return parent?.id ?? NO_STAGE_ID;
-  }
-  function countsOf(index, id) {
-    return index.counts.get(id) ?? NO_ISSUES;
-  }
-  function jobOf(job, index) {
-    let steps = inRunOrder(
-      index.records.filter((record) => record.type === "Task" && record.parentId === job.id)
-    ).map(({ id, name, result, state }) => {
-      let { errorCount, warningCount } = countsOf(index, id);
-      return { errorCount, id, jobId: job.id, name, result, state, warningCount };
+  async function sendRequest(options, path, write) {
+    let accept = { Accept: "application/json" }, response = await options.fetch(options.origin + options.apiBasePath + path, {
+      credentials: "same-origin",
+      ...write === void 0 ? { headers: accept, method: "GET" } : {
+        body: JSON.stringify(write.body),
+        headers: { ...accept, "Content-Type": "application/json" },
+        method: write.method
+      }
     });
-    return {
-      id: job.id,
-      name: job.name,
-      result: job.result,
-      state: job.state,
-      steps,
-      ...countsOf(index, job.id)
-    };
+    if (!response.ok)
+      throw new AdoRequestError(response.status, retryAfterSecondsOf(response));
+    return response;
   }
-  function stageIssuesOf(stage, jobs, index) {
-    let ownOf = (id) => index.ownIssues.get(id) ?? [], stageSpot = {
-      job: null,
-      stage: {
-        id: stage.id,
-        name: stage.id === NO_STAGE_ID || stage.name === DEFAULT_STAGE_NAME ? null : stage.name
-      },
-      step: null
-    };
-    return [
-      ...index.records.filter(
-        (record) => record.type !== "Job" && record.type !== "Task" && (record.id === stage.id || stageIdOf(record, index.byId) === stage.id)
-      ).flatMap((record) => runIssuesAt(stageSpot, ownOf(record.id))),
-      ...jobs.flatMap((job) => {
-        let jobSpot = { ...stageSpot, job };
-        return [
-          ...runIssuesAt(jobSpot, ownOf(job.id)),
-          ...job.steps.flatMap((step) => runIssuesAt({ ...jobSpot, step }, ownOf(step.id)))
-        ];
-      })
-    ];
-  }
-  function stagesOf(records) {
-    let index = {
-      byId: new Map(records.map((record) => [record.id, record])),
-      counts: issueCountsOf(records),
-      ownIssues: ownIssuesOf(records),
-      records
-    }, jobs = inRunOrder(records.filter((record) => record.type === "Job")), stages = inRunOrder(records.filter((record) => record.type === "Stage"));
-    return (stages.length > 0 || jobs.length === 0 ? stages : [{ id: NO_STAGE_ID, name: "Jobs", result: null, state: "" }]).map((stage) => {
-      let stageJobs = jobs.filter((job) => stageIdOf(job, index.byId) === stage.id).map((job) => jobOf(job, index)), { errorCount, warningCount } = stage.id === NO_STAGE_ID ? sumIssueCounts(stageJobs) : countsOf(index, stage.id);
-      return {
-        errorCount,
-        id: stage.id,
-        issues: stageIssuesOf(stage, stageJobs, index),
-        jobs: stageJobs,
-        name: stage.name,
-        result: stage.result,
-        state: stage.state,
-        warningCount
-      };
-    });
-  }
-  function defaultStepOf(stages) {
-    let steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
-    return steps.find((step) => step.state === "inProgress") ?? steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
+  async function getJson(options, path) {
+    let response = await sendRequest(options, path), retryAfterSeconds = retryAfterSecondsOf(response);
+    return { body: await response.json() ?? {}, retryAfterSeconds };
   }
 
-  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues.ts
-  var REFRESH_MS = 3e4, DESCRIPTION_SELECTOR = ".repos-pr-description-card", CHECKS_AREA_ERROR_SELECTOR = ".dark-build-output .error-text", RUN_LINK_SELECTOR = 'a[href*="/_build/results?"]';
-  function isBusy(check2) {
-    return check2.status === "running" || check2.status === "queued";
+  // azure-devops/src/pull-requests/review-requests.ts
+  var API_VERSION = "api-version=7.1", CHANGES_PER_REQUEST = 500, ACTIVE_THREAD_STATUS = 1, TEXT_COMMENT_TYPE = 1;
+  function pullRequestPath({ project, repository, pullRequestId }) {
+    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}`;
   }
-  function isTimelineDue(data, check2, now) {
-    let loaded = data.timelines.get(check2.buildId);
-    return loaded === void 0 || loaded.checkStatus !== check2.status || isBusy(check2) && now - loaded.loadedAt >= REFRESH_MS;
+  async function getPullRequestStatus(options, pullRequest) {
+    return (await (await sendRequest(options, `${pullRequestPath(pullRequest)}?${API_VERSION}`)).json()).status ?? "";
   }
-  function checksAreaErrorsOf(document2) {
-    let errors = /* @__PURE__ */ new Map();
-    for (let line2 of document2.querySelectorAll(CHECKS_AREA_ERROR_SELECTOR)) {
-      let href = line2.closest(RUN_LINK_SELECTOR)?.getAttribute("href"), run = href == null || line2.closest(`.${OVERVIEW_ISSUES_CLASS}`) !== null ? null : parsePipelineRunLocation(new URL(href, document2.baseURI));
-      run !== null && errors.set(run.buildId, (errors.get(run.buildId) ?? /* @__PURE__ */ new Set()).add(line2.textContent.trim()));
+  function pageAfter({ nextSkip, nextTop }) {
+    return nextSkip !== void 0 && nextSkip > 0 ? { skip: nextSkip, top: nextTop ?? CHANGES_PER_REQUEST } : null;
+  }
+  async function getIterationChanges(options, pullRequest, iteration) {
+    let changes = [], next = { skip: 0, top: CHANGES_PER_REQUEST };
+    for (; next !== null; ) {
+      let body = await (await sendRequest(
+        options,
+        `${pullRequestPath(pullRequest)}/iterations/${iteration}/changes?$top=${next.top}&$skip=${next.skip}&${API_VERSION}`
+      )).json(), page = body.changeEntries ?? [];
+      changes.push(...page), next = page.length === 0 ? null : pageAfter(body);
     }
-    return errors;
+    return changes;
   }
-  function checkIssuesOf(check2, stages, shownErrors) {
-    let all = runIssuesOf(stages), issues = all.filter(
-      (issue) => issue.kind !== "error" || !shownErrors.has(issue.message.trim())
-    ), { errorCount, warningCount } = sumIssueCounts(stages), hiddenCount = all.length - issues.length;
+  function threadBody({ content, iteration, threadContext }) {
     return {
-      check: check2,
-      counts: { errorCount: Math.max(0, errorCount - hiddenCount), warningCount },
-      issues
+      comments: [{ commentType: TEXT_COMMENT_TYPE, content, parentCommentId: 0 }],
+      status: ACTIVE_THREAD_STATUS,
+      ...threadContext === void 0 ? {} : { threadContext },
+      ...iteration === void 0 ? {} : {
+        pullRequestThreadContext: {
+          changeTrackingId: iteration.changeTrackingId,
+          iterationContext: {
+            firstComparingIteration: iteration.id,
+            secondComparingIteration: iteration.id
+          }
+        }
+      }
     };
   }
-  function checksWithIssues(data, document2) {
-    let checksAreaErrors = checksAreaErrorsOf(document2);
-    return data.checks.flatMap((check2) => {
-      let stages = data.timelines.get(check2.buildId)?.stages ?? [], shownErrors = checksAreaErrors.get(check2.buildId) ?? /* @__PURE__ */ new Set(), checkIssues = checkIssuesOf(check2, stages, shownErrors);
-      return checkIssues.issues.length > 0 ? [checkIssues] : [];
-    });
+  async function createPullRequestThread(options, pullRequest, thread) {
+    return (await (await sendRequest(
+      options,
+      `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`,
+      { body: threadBody(thread), method: "POST" }
+    )).json()).id;
   }
-  function isBlockShown(block, checks, description) {
-    return block?.dataset.fixAdoRendered === JSON.stringify(checks) && block.nextElementSibling === description;
-  }
-  function render(state) {
-    let { data, options } = state, description = options.document.querySelector(DESCRIPTION_SELECTOR), existing = options.document.querySelector(`.${OVERVIEW_ISSUES_CLASS}`), checks = data === null ? [] : checksWithIssues(data, options.document);
-    if (description === null || data === null || checks.length === 0) {
-      existing?.remove();
-      return;
-    }
-    isBlockShown(existing, checks, description) || (existing?.remove(), description.before(createCard(options, data, checks)));
-  }
-  function createCard({ apiBasePath: apiBasePath2, document: document2 }, data, checks) {
-    return createIssuesCard(document2, { apiBasePath: apiBasePath2, checks, project: data.pullRequest.project });
-  }
-  function showIfCurrent(state, data) {
-    state.data === data && render(state);
-  }
-  async function loadTimeline(state, data, check2) {
-    let { options } = state, loaded = {
-      checkStatus: check2.status,
-      loadedAt: options.now(),
-      stages: data.timelines.get(check2.buildId)?.stages ?? null
-    };
-    data.timelines.set(check2.buildId, loaded);
-    try {
-      loaded.stages = stagesOf(await options.getTimeline(data.pullRequest.project, check2.buildId));
-    } catch {
-    }
-    showIfCurrent(state, data);
-  }
-  async function loadChecks(state, data) {
-    let { options } = state;
-    data.checksLoadedAt = options.now();
-    try {
-      data.checks = pipelineChecksOf(await options.getEvaluations(data.pullRequest));
-    } catch {
-      return;
-    }
-    let now = options.now();
-    for (let check2 of data.checks.filter((candidate) => isTimelineDue(data, candidate, now)))
-      loadTimeline(state, data, check2);
-    showIfCurrent(state, data);
-  }
-  function syncOverview(state, pullRequest, canFetch) {
-    JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest) && (state.data = pullRequest === null ? null : {
-      checks: [],
-      checksLoadedAt: Number.NEGATIVE_INFINITY,
-      pullRequest,
-      timelines: /* @__PURE__ */ new Map()
-    }), render(state);
-    let { data, options } = state, isOnOverview = options.document.querySelector(DESCRIPTION_SELECTOR) !== null;
-    data !== null && canFetch && isOnOverview && options.now() - data.checksLoadedAt >= REFRESH_MS && loadChecks(state, data);
-  }
-  function createOverviewPipelineIssues(options) {
-    let state = { data: null, options };
+  function createReviewRequests(options) {
     return {
-      sync: (pullRequest, canFetch) => {
-        syncOverview(state, pullRequest, canFetch);
+      createPullRequestThread: async (pullRequest, thread) => createPullRequestThread(options, pullRequest, thread),
+      getIterationChanges: async (pullRequest, iteration) => getIterationChanges(options, pullRequest, iteration),
+      async getPullRequestIterationIds(pullRequest) {
+        let { body } = await getJson(
+          options,
+          `${pullRequestPath(pullRequest)}/iterations?${API_VERSION}`
+        );
+        return (body.value ?? []).map(({ id }) => id);
+      },
+      getPullRequestStatus: async (pullRequest) => getPullRequestStatus(options, pullRequest),
+      async getPullRequestThreads(pullRequest) {
+        let { body } = await getJson(
+          options,
+          `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`
+        );
+        return body.value ?? [];
+      },
+      async setPullRequestVote(pullRequest, { reviewerId, vote }) {
+        await sendRequest(
+          options,
+          `${pullRequestPath(pullRequest)}/reviewers/${encodeURIComponent(reviewerId)}?${API_VERSION}`,
+          { body: { vote }, method: "PUT" }
+        );
       }
     };
   }
 
-  // azure-devops/src/pipeline/pipeline-issue-list.css
-  var pipeline_issue_list_default = `/* A run's warnings and errors, in a box like Azure DevOps's check list on a pull
-   request's Overview. Azure DevOps's own classes on it style it there; these rules keep
-   the look where they do not reach, such as the Pipeline tab. */
-.fix-ado-issue-box {
-  border: 1px solid rgba(var(--palette-neutral-8, 234, 234, 234), 1);
-  border-radius: 4px;
-  background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
-}
-
-.fix-ado-issue-box > table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.fix-ado-issue-box td {
-  padding: 0;
-  border: 0;
-}
-
-.fix-ado-issue-box-header {
-  min-height: 48px;
-}
-
-/* A collapsed box keeps its header row. */
-.fix-ado-issue-box[data-collapsed] .fix-ado-issue {
-  display: none;
-}
-
-.fix-ado-issue-box-collapse {
-  flex-shrink: 0;
-  margin-left: -4px;
-}
-
-.fix-ado-issue {
-  display: block;
-  color: inherit;
-  text-decoration: none;
-}
-
-.fix-ado-issue:hover {
-  background: var(--component-grid-row-hover-color, rgba(0, 0, 0, 0.02));
-}
-
-.fix-ado-issue-output {
-  padding: 8px 0;
-  background: rgb(30, 30, 30);
-  color: rgb(212, 212, 212);
-}
-
-.fix-ado-issue-output > .line-number {
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-/* A long message wraps, and keeps its own line breaks. */
-.fix-ado-issue-message {
-  min-width: 0;
-  padding-right: 16px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* Without a line number, the message keeps the line number's left padding. */
-.fix-ado-issue-message:first-child {
-  padding-left: 16px;
-}
-
-.fix-ado-issue-output > .error-text {
-  color: rgb(241, 112, 112);
-}
-
-.fix-ado-warning-text {
-  color: rgb(240, 190, 90);
-}
-
-.fix-ado-kind-icon[data-kind="error"] {
-  fill: var(--component-status-error, rgb(205, 74, 69));
-}
-
-.fix-ado-kind-icon[data-kind="warning"] {
-  fill: var(--component-status-warning, rgb(214, 127, 60));
-}
-
-/* The counts of warnings and errors on a stage, job or step in the run tree. */
-.fix-ado-issue-count {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 0 6px;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-}
-
-.fix-ado-issue-count + .fix-ado-issue-count {
-  margin-left: 0;
-}
-
-.fix-ado-issue-count[data-kind="error"] {
-  background: var(--component-status-error, rgb(205, 74, 69));
-}
-
-.fix-ado-issue-count[data-kind="warning"] {
-  background: var(--component-status-warning, rgb(214, 119, 48));
-}
-`;
-
-  // azure-devops/src/pull-requests/pull-request-link.ts
-  function apiBasePath(location2) {
-    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
-    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
-  }
-  function pathSegments(pathname) {
-    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
-  }
-  function projectOf(segments, gitIndex, basePath2) {
-    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
-    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
-  }
-  function parsePullRequestHref(href, basePath2) {
-    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
-    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
-  }
-  function parsePullRequestListLocation(location2, basePath2) {
-    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
-    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
-      return null;
-    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
-    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
-  }
-  function isPullRequestInboxLocation(location2) {
-    return pathSegments(location2.pathname).at(-1) === "_pulls";
-  }
-  function isPullRequestCreateLocation(location2) {
-    let segments = pathSegments(location2.pathname);
-    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
-  }
-
-  // azure-devops/src/boards/board.ts
-  var CARD_SELECTOR2 = ".wit-card[data-itemid]";
-  function isBoardLocation(location2) {
-    return location2.pathname.includes("/_boards/board/");
-  }
-  function findBoardCardIds(root) {
-    let ids = /* @__PURE__ */ new Set();
-    for (let card of root.querySelectorAll(CARD_SELECTOR2)) {
-      let id = Number(card.dataset.itemid);
-      Number.isInteger(id) && id > 0 && ids.add(id);
-    }
-    return [...ids];
-  }
-  function hasBoardChanged(loaded, current) {
-    for (let [id, workItem] of current.workItems) {
-      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
-      if (isChanged && !isMyOwnChange)
-        return !0;
-    }
-    return !1;
-  }
-  function watchBoard(client, location2, cardIds) {
-    return {
-      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
-      extendLoaded: (loaded, current) => ({
-        myUserId: current.myUserId,
-        workItems: new Map([...current.workItems, ...loaded.workItems])
-      }),
-      async fetchSnapshot() {
-        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
-          client.getWorkItems(cardIds),
-          client.getAuthenticatedUserId()
-        ]);
-        return {
-          retryAfterSeconds,
-          snapshot: {
-            myUserId,
-            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
-          }
-        };
-      },
-      hasChanged: hasBoardChanged,
-      key: `board:${location2.pathname}${location2.search}`
-    };
-  }
-
-  // azure-devops/src/core/page.ts
-  function parsePullRequestPage(location2, basePath2) {
-    if (isPullRequestCreateLocation(location2))
-      return { kind: "pull-request-create" };
-    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
-    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
-  }
-  function parsePage(location2, basePath2) {
-    if (isBoardLocation(location2))
-      return { kind: "board" };
-    let listPage = parsePullRequestListLocation(location2, basePath2);
-    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
-  }
-  function pullRequestOf(page) {
-    return page.kind === "pull-request" ? page.pullRequest : null;
-  }
-
-  // azure-devops/src/features/overview-pipeline-issues/index.ts
-  var overviewPipelineIssues = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "The warnings and errors of each check's latest run, above the pull request description.",
-    id: "overview-pipeline-issues",
-    name: "Warnings and errors on the Overview",
-    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
-      if (isInFrame2)
-        return null;
-      let issues = createOverviewPipelineIssues({
-        apiBasePath: basePath2,
-        document: document2,
-        getEvaluations: async (pullRequest) => {
-          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
-          return evaluations;
-        },
-        getTimeline: async (project, buildId) => {
-          let { records } = await client.getTimeline(project, buildId);
-          return records;
-        },
-        now
-      });
-      return {
-        sync({ page, isTabActive: isTabActive2 }) {
-          issues.sync(pullRequestOf(page), isTabActive2);
-        }
-      };
-    },
-    styles: [pipeline_issue_list_default]
-  };
-
-  // azure-devops/src/pipeline/pipeline-status-icon.ts
-  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE2 = "http://www.w3.org/2000/svg", LABELS = {
-    cancelling: "Pipeline cancelling",
-    expired: "Pipeline result expired",
-    failed: "Pipeline failed",
-    notStarted: "Pipeline not started",
-    queued: "Pipeline queued",
-    running: "Pipeline running",
-    succeeded: "Pipeline succeeded"
-  }, DISC = ["circle", { cx: "8", cy: "8", fill: "currentColor", r: "8" }], RING = [
-    "circle",
-    { cx: "8", cy: "8", fill: "none", r: "7", stroke: "currentColor", "stroke-width": "2" }
-  ], SPINNER = [
-    "circle",
-    {
-      cx: "8",
-      cy: "8",
-      fill: "none",
-      r: "6.5",
-      stroke: "currentColor",
-      "stroke-dasharray": "28 13",
-      "stroke-linecap": "round",
-      "stroke-width": "2.5"
-    }
-  ];
-  function line(pathData, stroke) {
-    return ["path", { d: pathData, ...{
-      fill: "none",
-      stroke,
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round",
-      "stroke-width": "1.75"
-    } }];
-  }
-  var SHAPES = {
-    cancelling: [RING, line("M5 11l6-6", "currentColor")],
-    expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
-    failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
-    notStarted: [RING],
-    queued: [RING, line("M8 4.5V8l2.5 1.5", "currentColor")],
-    running: [SPINNER],
-    succeeded: [DISC, line("M4.5 8.3l2.3 2.3 4.7-5", "#fff")]
-  };
-  function setAttributes2(element3, attributes) {
-    for (let [name, value] of Object.entries(attributes))
-      element3.setAttribute(name, value);
-  }
-  function createShape(document2, [tag, attributes]) {
-    let shape = document2.createElementNS(SVG_NAMESPACE2, tag);
-    return setAttributes2(shape, attributes), shape;
-  }
-  function createStatusIcon(document2, status, label = LABELS[status]) {
-    let icon = document2.createElementNS(SVG_NAMESPACE2, "svg");
-    setAttributes2(icon, {
-      "aria-label": label,
-      class: PIPELINE_STATUS_ICON_CLASS,
-      height: "16",
-      role: "img",
-      viewBox: "0 0 16 16",
-      width: "16"
-    }), icon.dataset.status = status;
-    let title = document2.createElementNS(SVG_NAMESPACE2, "title");
-    return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
-  }
-  function createPipelineStatusIcon(document2, status, pullRequestId) {
-    let icon = createStatusIcon(document2, status);
-    return icon.dataset.pullRequestId = String(pullRequestId), icon;
-  }
-
-  // azure-devops/src/pull-requests/pr-list.ts
-  var PULL_REQUEST_ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]', TITLE_LINE_SELECTOR = ".bolt-table-two-line-cell-item";
-  function findPullRequestRows(root, apiBasePath2) {
-    let rows = [];
-    for (let row of root.querySelectorAll(PULL_REQUEST_ROW_SELECTOR)) {
-      let pullRequest = parsePullRequestHref(row.getAttribute("href") ?? "", apiBasePath2);
-      pullRequest && rows.push({ pullRequest, row });
-    }
-    return rows;
-  }
-  function showPipelineStatus(row, pullRequestId, status) {
-    let shownIcon = row.querySelector(`.${PIPELINE_STATUS_ICON_CLASS}`);
-    if ((shownIcon ? shownIcon.dataset.status === status && shownIcon.dataset.pullRequestId === String(pullRequestId) : status === null) || (shownIcon?.remove(), status === null))
-      return;
-    row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
-  }
-  var REVIEWER_SELECTOR = ".pr-reviewer";
-  function markRequiredReviewers(row, reviewers) {
-    for (let reviewerElement of row.querySelectorAll(REVIEWER_SELECTOR)) {
-      let avatar = reviewerElement.querySelector(AVATAR_SELECTOR), reviewer = avatar ? findReviewerByLabel(avatarName(avatar), reviewers) : null;
-      reviewerElement.toggleAttribute("data-fix-ado-required", reviewer?.isRequired ?? !1), reviewerElement.parentElement?.toggleAttribute("data-fix-ado-reviewers", !0);
-    }
+  // shared/runtime/script-log.ts
+  var entries = [];
+  function log(message2, data) {
+    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
   }
 
   // azure-devops/src/pull-requests/reviewer-requests.ts
@@ -1635,6 +356,7 @@ ${issue.message ?? ""}`;
       getWorkItems: async (ids) => getWorkItems(options, ids),
       requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
       saveTheme: async (themeId) => saveTheme(options, themeId),
+      ...createReviewRequests(options),
       ...createReviewerRequests(options)
     };
   }
@@ -1707,6 +429,3994 @@ ${issue.message ?? ""}`;
       }
     };
   }
+
+  // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
+  var REVIEWER_REFRESH_INTERVAL_MS = 12e4, listKey = ({ project, repository }, status) => JSON.stringify([project, repository, status]);
+  function dueRepositories(options, nextFetchAtByList) {
+    let status = options.listStatus(), due = /* @__PURE__ */ new Map();
+    for (let pullRequest of options.findPullRequests()) {
+      let key = listKey(pullRequest, status);
+      (nextFetchAtByList.get(key) ?? 0) <= options.now() && due.set(key, pullRequest);
+    }
+    return [...due.values()];
+  }
+  function createReviewerFetcher(options) {
+    let nextFetchAtByList = /* @__PURE__ */ new Map(), isFetching = !1;
+    async function fetchRepository(pullRequest) {
+      let status = options.listStatus(), key = listKey(pullRequest, status);
+      try {
+        let { pullRequests } = await options.client.getPullRequests({
+          project: pullRequest.project,
+          repository: pullRequest.repository,
+          status
+        });
+        for (let listed of pullRequests)
+          options.reviewersByPullRequestId.set(listed.pullRequestId, listed.reviewers ?? []);
+        nextFetchAtByList.set(key, options.now() + REVIEWER_REFRESH_INTERVAL_MS);
+      } catch {
+        nextFetchAtByList.set(key, options.now() + FAILED_REQUEST_RETRY_MS);
+      }
+    }
+    return {
+      async sync() {
+        if (!isFetching) {
+          isFetching = !0;
+          try {
+            for (let pullRequest of dueRepositories(options, nextFetchAtByList))
+              await fetchRepository(pullRequest);
+          } finally {
+            isFetching = !1;
+          }
+        }
+      }
+    };
+  }
+
+  // azure-devops/src/pull-requests/reviewers.ts
+  var EMAIL_ADDRESS = /^(?<localPart>[^\s@]+)@[^\s@]+$/u;
+  function personOrTeamName(displayName) {
+    return displayName.replace(/^\[[^\]]*\]\\/u, "").replaceAll(/\([^)]*\)/gu, "").trim();
+  }
+  function wordsOf(text) {
+    return text.split(/\s+/u).filter(Boolean);
+  }
+  function firstCharacter(word) {
+    let codePoint = (word ?? "").codePointAt(0);
+    return codePoint === void 0 ? "" : String.fromCodePoint(codePoint);
+  }
+  function initialsOf(displayName) {
+    let localPart = EMAIL_ADDRESS.exec(displayName.trim())?.groups?.localPart, name = localPart === void 0 ? personOrTeamName(displayName) : localPart.replaceAll(/[._-]+/gu, " "), commaIndex = name.indexOf(","), isSurnameFirst = commaIndex !== -1, firstNames = wordsOf(isSurnameFirst ? name.slice(commaIndex + 1) : name), surnameWords = isSurnameFirst ? wordsOf(name.slice(0, commaIndex)) : firstNames.slice(1);
+    return [firstNames[0], surnameWords.at(-1)].map((word) => firstCharacter(word)).join("").toUpperCase();
+  }
+  function hueOf(name) {
+    let hash = 2166136261;
+    for (let character of name.trim().toLowerCase())
+      hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16777619) >>> 0;
+    return hash % 360;
+  }
+  function namesOf(reviewer) {
+    let { displayName } = reviewer;
+    return displayName === void 0 || displayName === "" ? [] : [displayName, personOrTeamName(displayName)];
+  }
+  function findReviewerByLabel(avatarLabel, reviewers) {
+    let label = avatarLabel.toLowerCase(), bestMatch = null, bestMatchLength = 0;
+    for (let reviewer of reviewers)
+      for (let name of namesOf(reviewer))
+        name.length > bestMatchLength && label.includes(name.toLowerCase()) && (bestMatch = reviewer, bestMatchLength = name.length);
+    return bestMatch;
+  }
+
+  // azure-devops/src/pull-requests/avatars.ts
+  var AVATAR_SELECTOR = ".bolt-coin, .vss-Persona:not(.project-persona)";
+  function avatarName(avatar) {
+    let label = avatar.getAttribute("aria-label") ?? "", imageAlt = avatar.querySelector("img")?.getAttribute("alt") ?? "";
+    return (label === "" ? imageAlt : label).trim();
+  }
+  function markAvatar(avatar, initials, hue) {
+    initials ? avatar.dataset.fixAdoInitials = initials : delete avatar.dataset.fixAdoInitials, avatar.style.setProperty("--fix-ado-hue", hue || null), initials && avatar.offsetWidth > 0 && avatar.style.setProperty("--fix-ado-avatar-size", `${avatar.offsetWidth}px`);
+  }
+  function showInitialsOnAvatars(root) {
+    for (let avatar of root.querySelectorAll(AVATAR_SELECTOR)) {
+      let name = avatarName(avatar), initials = initialsOf(name), shownInitials = avatar.dataset.fixAdoInitials ?? "", hue = initials ? String(hueOf(name)) : "";
+      shownInitials === initials && avatar.style.getPropertyValue("--fix-ado-hue") === hue || markAvatar(avatar, initials, hue);
+    }
+  }
+
+  // azure-devops/src/pipeline/pipeline-status-icon.ts
+  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE = "http://www.w3.org/2000/svg", LABELS = {
+    cancelling: "Pipeline cancelling",
+    expired: "Pipeline result expired",
+    failed: "Pipeline failed",
+    notStarted: "Pipeline not started",
+    queued: "Pipeline queued",
+    running: "Pipeline running",
+    succeeded: "Pipeline succeeded"
+  }, DISC = ["circle", { cx: "8", cy: "8", fill: "currentColor", r: "8" }], RING = [
+    "circle",
+    { cx: "8", cy: "8", fill: "none", r: "7", stroke: "currentColor", "stroke-width": "2" }
+  ], SPINNER = [
+    "circle",
+    {
+      cx: "8",
+      cy: "8",
+      fill: "none",
+      r: "6.5",
+      stroke: "currentColor",
+      "stroke-dasharray": "28 13",
+      "stroke-linecap": "round",
+      "stroke-width": "2.5"
+    }
+  ];
+  function line(pathData, stroke) {
+    return ["path", { d: pathData, ...{
+      fill: "none",
+      stroke,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      "stroke-width": "1.75"
+    } }];
+  }
+  var SHAPES = {
+    cancelling: [RING, line("M5 11l6-6", "currentColor")],
+    expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
+    failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
+    notStarted: [RING],
+    queued: [RING, line("M8 4.5V8l2.5 1.5", "currentColor")],
+    running: [SPINNER],
+    succeeded: [DISC, line("M4.5 8.3l2.3 2.3 4.7-5", "#fff")]
+  };
+  function setAttributes(element4, attributes) {
+    for (let [name, value] of Object.entries(attributes))
+      element4.setAttribute(name, value);
+  }
+  function createShape(document2, [tag, attributes]) {
+    let shape = document2.createElementNS(SVG_NAMESPACE, tag);
+    return setAttributes(shape, attributes), shape;
+  }
+  function createStatusIcon(document2, status, label = LABELS[status]) {
+    let icon = document2.createElementNS(SVG_NAMESPACE, "svg");
+    setAttributes(icon, {
+      "aria-label": label,
+      class: PIPELINE_STATUS_ICON_CLASS,
+      height: "16",
+      role: "img",
+      viewBox: "0 0 16 16",
+      width: "16"
+    }), icon.dataset.status = status;
+    let title = document2.createElementNS(SVG_NAMESPACE, "title");
+    return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
+  }
+  function createPipelineStatusIcon(document2, status, pullRequestId) {
+    let icon = createStatusIcon(document2, status);
+    return icon.dataset.pullRequestId = String(pullRequestId), icon;
+  }
+
+  // azure-devops/src/pull-requests/pull-request-link.ts
+  function apiBasePath(location2) {
+    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
+    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
+  }
+  function pathSegments(pathname) {
+    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
+  }
+  function projectOf(segments, gitIndex, basePath2) {
+    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
+    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
+  }
+  function parsePullRequestHref(href, basePath2) {
+    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
+    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
+  }
+  function parsePullRequestListLocation(location2, basePath2) {
+    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
+    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
+      return null;
+    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
+    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
+  }
+  function isPullRequestInboxLocation(location2) {
+    return pathSegments(location2.pathname).at(-1) === "_pulls";
+  }
+  function isPullRequestCreateLocation(location2) {
+    let segments = pathSegments(location2.pathname);
+    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
+  }
+
+  // azure-devops/src/pull-requests/pr-list.ts
+  var PULL_REQUEST_ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]', TITLE_LINE_SELECTOR = ".bolt-table-two-line-cell-item";
+  function findPullRequestRows(root, apiBasePath2) {
+    let rows = [];
+    for (let row of root.querySelectorAll(PULL_REQUEST_ROW_SELECTOR)) {
+      let pullRequest = parsePullRequestHref(row.getAttribute("href") ?? "", apiBasePath2);
+      pullRequest && rows.push({ pullRequest, row });
+    }
+    return rows;
+  }
+  function showPipelineStatus(row, pullRequestId, status) {
+    let shownIcon = row.querySelector(`.${PIPELINE_STATUS_ICON_CLASS}`);
+    if ((shownIcon ? shownIcon.dataset.status === status && shownIcon.dataset.pullRequestId === String(pullRequestId) : status === null) || (shownIcon?.remove(), status === null))
+      return;
+    row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
+  }
+  var REVIEWER_SELECTOR = ".pr-reviewer";
+  function markRequiredReviewers(row, reviewers) {
+    for (let reviewerElement of row.querySelectorAll(REVIEWER_SELECTOR)) {
+      let avatar = reviewerElement.querySelector(AVATAR_SELECTOR), reviewer = avatar ? findReviewerByLabel(avatarName(avatar), reviewers) : null;
+      reviewerElement.toggleAttribute("data-fix-ado-required", reviewer?.isRequired ?? !1), reviewerElement.parentElement?.toggleAttribute("data-fix-ado-reviewers", !0);
+    }
+  }
+
+  // azure-devops/src/features/required-reviewers/required-reviewers.ts
+  function createRequiredReviewerMarker(options) {
+    let reviewersByPullRequestId = /* @__PURE__ */ new Map(), reviewerFetcher = createReviewerFetcher({
+      client: options.client,
+      findPullRequests: () => options.findRows().map(({ pullRequest }) => pullRequest),
+      listStatus: options.listStatus,
+      now: options.now,
+      reviewersByPullRequestId
+    });
+    function markAll() {
+      for (let { row, pullRequest } of options.findRows()) {
+        let reviewers = reviewersByPullRequestId.get(pullRequest.pullRequestId);
+        reviewers && markRequiredReviewers(row, reviewers);
+      }
+    }
+    return {
+      markAll,
+      async sync() {
+        await reviewerFetcher.sync(), markAll();
+      }
+    };
+  }
+
+  // azure-devops/src/features/required-reviewers/style.css
+  var style_default = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+
+/* A glow that spills outside the circle, so the circle keeps its full size. */
+.pr-reviewer[data-fix-ado-required] .bolt-coin {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--communication-background, rgb(0, 120, 212)),
+    0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
+}
+
+/* Required reviewers first. Even spacing whatever the visual order. */
+[data-fix-ado-reviewers] > .pr-reviewer {
+  margin: 0 8px 0 0 !important;
+}
+
+[data-fix-ado-reviewers] > .pr-reviewer[data-fix-ado-required] {
+  order: -1;
+}
+`;
+
+  // azure-devops/src/features/required-reviewers/index.ts
+  var requiredReviewers = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Required reviewers come first in pull request lists, with a glow.",
+    id: "required-reviewers",
+    name: "Required reviewers first",
+    start({ basePath: basePath2, client, document: document2, now }) {
+      let shownPage = { kind: "other" }, marker = createRequiredReviewerMarker({
+        client,
+        findRows: () => findPullRequestRows(document2, basePath2),
+        listStatus: () => shownPage.kind === "pull-request-list" ? shownPage.listPage.status : "active",
+        now
+      });
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          shownPage = page, marker.markAll(), (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") && isTabActive2 && marker.sync();
+        }
+      };
+    },
+    styles: [style_default]
+  };
+
+  // azure-devops/src/features/review/review-store.ts
+  var KEY_PREFIX = "review:";
+  function reviewKey(hostAndBasePath, { project, pullRequestId, repository }) {
+    return `${KEY_PREFIX}${hostAndBasePath}/${project}/${repository}/${pullRequestId}`;
+  }
+  function isLineAnchor(value) {
+    return typeof value == "object" && value !== null && "filePath" in value && typeof value.filePath == "string" && "side" in value && (value.side === "left" || value.side === "right") && "line" in value && typeof value.line == "number" && "lineLength" in value && typeof value.lineLength == "number" && "iteration" in value && (value.iteration === null || typeof value.iteration == "number");
+  }
+  function isPendingComment(value) {
+    return typeof value == "object" && value !== null && "id" in value && typeof value.id == "string" && "content" in value && typeof value.content == "string" && "anchor" in value && (value.anchor === null || isLineAnchor(value.anchor)) && "isAttempted" in value && typeof value.isAttempted == "boolean" && "postedThreadId" in value && (value.postedThreadId === null || typeof value.postedThreadId == "number");
+  }
+  function isReview(value) {
+    return typeof value == "object" && value !== null && "updatedAt" in value && typeof value.updatedAt == "number" && "comments" in value && Array.isArray(value.comments) && value.comments.every((comment) => isPendingComment(comment));
+  }
+  var isPending = ({ postedThreadId }) => postedThreadId === null;
+  function deleteReviewsBefore(storage, time) {
+    for (let key of storage.keys().filter((name) => name.startsWith(KEY_PREFIX))) {
+      let stored = storage.load(key);
+      isReview(stored) && stored.updatedAt < time && storage.remove(key);
+    }
+  }
+  function createReviewStore({ storage, now, createId }) {
+    function comments(key) {
+      let stored = storage.load(key);
+      return isReview(stored) ? stored.comments : [];
+    }
+    function save(key, changed) {
+      changed.some((comment) => isPending(comment)) ? storage.save(key, { comments: changed, updatedAt: now() }) : storage.remove(key);
+    }
+    return {
+      add(key, { anchor, content }, position = "last") {
+        let comment = { anchor, content, id: createId(), isAttempted: !1, postedThreadId: null }, others = comments(key);
+        return save(key, position === "first" ? [comment, ...others] : [...others, comment]), comment;
+      },
+      change(key, id, changes) {
+        let changed = comments(key), comment = changed.find((candidate) => candidate.id === id);
+        comment !== void 0 && (Object.assign(comment, changes), save(key, changed));
+      },
+      comments,
+      deleteOlderThan: (maxAgeMs) => {
+        deleteReviewsBefore(storage, now() - maxAgeMs);
+      },
+      discard: (key) => {
+        storage.remove(key);
+      },
+      pending: (key) => comments(key).filter((comment) => isPending(comment)),
+      remove(key, id) {
+        save(
+          key,
+          comments(key).filter((comment) => comment.id !== id)
+        );
+      }
+    };
+  }
+
+  // azure-devops/src/features/review/editor-comment-boxes.ts
+  var ZONE_SELECTOR = ".zone-widget", EDITOR_SELECTOR = ".monaco-editor", OLD_FILE_EDITOR_CLASS = "original-in-monaco-diff-editor", GUTTER_SELECTOR = ".margin", GUTTER_ROW_SELECTOR = ".margin-view-overlays > div", LINE_NUMBER_SELECTOR = ".line-numbers", LINE_SELECTOR = ".lines-content > .view-lines > .view-line", SHOWN_PATH_SELECTOR = ".repos-compare-toolbar .secondary-text.text-ellipsis";
+  function pixels(element4, property2) {
+    let length = element4?.style[property2] ?? "";
+    return length.endsWith("px") ? Number(length.slice(0, -2)) : Number.NaN;
+  }
+  function shownFilePath(document2) {
+    let shown = document2.querySelector(SHOWN_PATH_SELECTOR)?.textContent.trim() ?? "", path = shown === "" ? new URLSearchParams(document2.location.search).get("path") : shown;
+    return path === null || path === "" ? null : path;
+  }
+  function gutterRowAbove(editor, zone) {
+    let gutterTop = pixels(editor.querySelector(GUTTER_SELECTOR), "top"), zoneTop = pixels(zone, "top");
+    return [...editor.querySelectorAll(GUTTER_ROW_SELECTOR)].find(
+      (row) => Math.abs(gutterTop + pixels(row, "top") + pixels(row, "height") - zoneTop) < 1
+    ) ?? null;
+  }
+  function lineLengthAt(editor, top) {
+    return [...editor.querySelectorAll(LINE_SELECTOR)].find(
+      (candidate) => pixels(candidate, "top") === top
+    )?.textContent.length ?? 0;
+  }
+  var anchorByZone = /* @__PURE__ */ new WeakMap();
+  function drawnAnchorOf(zone, filePath) {
+    let editor = zone.closest(EDITOR_SELECTOR), row = editor === null ? null : gutterRowAbove(editor, zone), line2 = Number(row?.querySelector(LINE_NUMBER_SELECTOR)?.textContent);
+    return editor === null || row === null || !(line2 > 0) ? null : {
+      filePath,
+      line: line2,
+      lineLength: lineLengthAt(editor, pixels(row, "top")),
+      side: editor.classList.contains(OLD_FILE_EDITOR_CLASS) ? "left" : "right"
+    };
+  }
+  function editorAnchorOf(box) {
+    let zone = box.closest(ZONE_SELECTOR), filePath = shownFilePath(box.ownerDocument);
+    if (zone === null || filePath === null)
+      return null;
+    let drawn = drawnAnchorOf(zone, filePath);
+    if (drawn !== null)
+      return anchorByZone.set(zone, drawn), drawn;
+    let last = anchorByZone.get(zone);
+    return last?.filePath === filePath ? last : null;
+  }
+
+  // azure-devops/src/features/review/comment-boxes.ts
+  var BOX_SELECTOR = ".repos-discussion-thread-reply", NEW_THREAD_CLASS = /(?:^|\s)threadId--\d+(?:\s|$)/u, DIFF_ROW_SELECTOR = ".repos-diff-contents-row", LINE_CELL_SELECTOR = ".repos-line-content", FILE_CARD_SELECTOR = ".repos-summary-header", FILE_PATH_SELECTOR = ":scope > div:first-child .secondary-text.text-ellipsis", OVERVIEW_BOX_SELECTOR = ".repos-comment-card", NOT_LINE_TEXT_SELECTOR = '.screen-reader-only, [aria-hidden="true"]';
+  function lineTextOf(cell2) {
+    let copy = cell2.cloneNode(!0);
+    for (let extra of copy.querySelectorAll(NOT_LINE_TEXT_SELECTOR))
+      extra.remove();
+    return copy.textContent;
+  }
+  function lineCellOf(row) {
+    return row?.querySelector(`:scope > ${LINE_CELL_SELECTOR}`) ?? null;
+  }
+  function sideAndLineOf(cell2) {
+    let newLine = Number(cell2.dataset.mline), oldLine = Number(cell2.dataset.oline);
+    return Number.isInteger(newLine) && newLine > 0 ? { line: newLine, side: "right" } : Number.isInteger(oldLine) && oldLine > 0 ? { line: oldLine, side: "left" } : null;
+  }
+  function filePathOf(element4) {
+    let path = element4.closest(FILE_CARD_SELECTOR)?.querySelector(FILE_PATH_SELECTOR)?.textContent.trim();
+    return path === void 0 || path === "" ? null : path;
+  }
+  function lineRowAbove(boxRow) {
+    let row = boxRow.previousElementSibling;
+    for (; row !== null && lineCellOf(row) === null; )
+      row = row.previousElementSibling;
+    return row;
+  }
+  function lineAnchorOf(boxRow) {
+    let cell2 = lineCellOf(lineRowAbove(boxRow)), filePath = filePathOf(boxRow), sideAndLine = cell2 === null ? null : sideAndLineOf(cell2);
+    return cell2 === null || filePath === null || sideAndLine === null ? null : { filePath, kind: "line", lineLength: lineTextOf(cell2).length, ...sideAndLine };
+  }
+  function editorBoxAnchorOf(box) {
+    let anchor = editorAnchorOf(box);
+    return anchor === null ? null : { kind: "line", ...anchor };
+  }
+  function anchorOf(box) {
+    let boxRow = box.closest(DIFF_ROW_SELECTOR);
+    return boxRow !== null ? lineAnchorOf(boxRow) : box.closest(ZONE_SELECTOR) !== null ? editorBoxAnchorOf(box) : box.closest(OVERVIEW_BOX_SELECTOR) === null ? null : { kind: "general" };
+  }
+  function commentBoxOf(box) {
+    let textarea = [...box.querySelectorAll("textarea")].find(
+      (candidate) => candidate.getAttribute("aria-hidden") !== "true" && NEW_THREAD_CLASS.test(candidate.className)
+    ), postButton = box.querySelector("button.bolt-button.primary"), anchor = anchorOf(box);
+    if (textarea === void 0 || postButton === null || anchor === null)
+      return null;
+    let cancelButton = postButton.parentElement?.querySelector(
+      ":scope > button.bolt-button:not(.primary)"
+    ) ?? null;
+    return { anchor, cancelButton, postButton, textarea };
+  }
+  function findCommentBoxes(document2) {
+    return [...document2.querySelectorAll(BOX_SELECTOR)].flatMap((box) => commentBoxOf(box) ?? []);
+  }
+  function findLineRow(document2, { filePath, line: line2, side }) {
+    for (let card of document2.querySelectorAll(FILE_CARD_SELECTOR))
+      if (filePathOf(card) === filePath) {
+        let attribute = side === "right" ? "data-mline" : "data-oline";
+        return [
+          ...card.querySelectorAll(`${LINE_CELL_SELECTOR}[${attribute}="${line2}"]`)
+        ].find((candidate) => sideAndLineOf(candidate)?.side === side)?.closest(DIFF_ROW_SELECTOR) ?? null;
+      }
+    return null;
+  }
+
+  // azure-devops/src/core/closest-element.ts
+  function isElement(target) {
+    return target !== null && "nodeType" in target && target.nodeType === 1;
+  }
+  function closestElement(target, selector) {
+    return isElement(target) ? target.closest(selector) : null;
+  }
+  function isHtmlElement(element4) {
+    return "dataset" in element4;
+  }
+  function closestHtmlElement(target, selector) {
+    let found = closestElement(target, selector);
+    return found !== null && isHtmlElement(found) ? found : null;
+  }
+
+  // azure-devops/src/features/review/review-markup.ts
+  function element(document2, tag, { className, text } = {}) {
+    let created = document2.createElement(tag);
+    return className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text), created;
+  }
+  var ACTION_ATTRIBUTE = "data-fix-ado-review-action", BUTTON_CLASS = "bolt-button enabled bolt-focus-treatment", PRIMARY_BUTTON_CLASS = "bolt-button enabled primary bolt-focus-treatment";
+  function actionButton(document2, { action, isPrimary = !1, text }) {
+    let button2 = element(document2, "button", {
+      className: isPrimary ? PRIMARY_BUTTON_CLASS : BUTTON_CLASS,
+      text
+    });
+    return button2.type = "button", button2.setAttribute(ACTION_ATTRIBUTE, action), button2;
+  }
+  function clickedAction(target) {
+    let button2 = closestElement(target, `[${ACTION_ATTRIBUTE}]`), action = button2?.getAttribute(ACTION_ATTRIBUTE) ?? null;
+    return button2 === null || action === null ? null : { action, button: button2 };
+  }
+  function pendingCountText(count) {
+    return `${count} pending comment${count === 1 ? "" : "s"}`;
+  }
+  function asMarkdown(pending) {
+    return pending.map(
+      ({ anchor, content }) => anchor === null ? content : `**${anchor.filePath}, line ${anchor.line}**
+
+${content}`
+    ).join(`
+
+---
+
+`);
+  }
+
+  // azure-devops/src/features/review/comment-box-buttons.ts
+  var ADD_BUTTON_CLASS = "fix-ado-review-add", ADD_ACTION = "add", START_LABEL = "Start a review", ADD_LABEL = "Add review comment", TITLE = "Add to your review. Nothing is posted until you submit.";
+  function addButtonOf(box) {
+    return box.postButton.parentElement?.querySelector(`.${ADD_BUTTON_CLASS}`) ?? null;
+  }
+  function createAddButton(document2) {
+    let button2 = actionButton(document2, { action: ADD_ACTION, isPrimary: !0, text: "" });
+    return button2.classList.add(ADD_BUTTON_CLASS), button2.title = TITLE, button2;
+  }
+  function setIfChanged(button2, label, isDisabled) {
+    button2.textContent !== label && (button2.textContent = label), button2.disabled !== isDisabled && (button2.disabled = isDisabled, button2.classList.toggle("disabled", isDisabled), button2.classList.toggle("enabled", !isDisabled));
+  }
+  function syncAddButtons(document2, hasReview) {
+    for (let box of findCommentBoxes(document2)) {
+      let button2 = addButtonOf(box);
+      button2 === null && (button2 = createAddButton(box.textarea.ownerDocument), box.postButton.after(button2)), setIfChanged(button2, hasReview ? ADD_LABEL : START_LABEL, box.textarea.value.trim() === "");
+    }
+  }
+  function commentBoxAround(target) {
+    let box = closestElement(target, BOX_SELECTOR);
+    return box === null ? null : commentBoxOf(box);
+  }
+  function hasAddButton(box) {
+    return addButtonOf(box) !== null;
+  }
+  function closeBox({ cancelButton, textarea }) {
+    let view = textarea.ownerDocument.defaultView;
+    view !== null && (Reflect.set(view.HTMLTextAreaElement.prototype, "value", "", textarea), textarea.dispatchEvent(new view.Event("input", { bubbles: !0 }))), cancelButton?.click();
+  }
+
+  // azure-devops/src/features/review/pending-card.ts
+  var ID_ATTRIBUTE = "data-fix-ado-review-id", EDITING_ATTRIBUTE = "data-fix-ado-review-editing", ONLY_YOU_NOTE = "Only you see this until you submit your review.";
+  function cardHeader(document2, note) {
+    let header = element(document2, "div", { className: "fix-ado-review-card-header" });
+    return header.append(
+      element(document2, "span", { className: "fix-ado-review-pending", text: "Pending" }),
+      element(document2, "span", { className: "fix-ado-review-card-note secondary-text", text: note }),
+      actionButton(document2, { action: "edit", text: "Edit" }),
+      actionButton(document2, { action: "remove", text: "Delete comment" })
+    ), header;
+  }
+  function cardEditor(document2, draft) {
+    let editor = element(document2, "div", { className: "fix-ado-review-card-editor" }), textarea = element(document2, "textarea", { className: "fix-ado-review-textarea" });
+    textarea.value = draft, textarea.setAttribute("aria-label", "Edit pending comment");
+    let buttons = element(document2, "div", { className: "fix-ado-review-buttons" });
+    return buttons.append(
+      actionButton(document2, { action: "cancel-edit", text: "Cancel" }),
+      actionButton(document2, { action: "update", isPrimary: !0, text: "Update comment" })
+    ), editor.append(textarea, buttons), editor;
+  }
+  function createCard(document2, { content, draft }, note) {
+    let card = element(document2, "div", { className: "fix-ado-review-card" }), body = draft === null ? element(document2, "div", { className: "fix-ado-review-card-text", text: content }) : cardEditor(document2, draft);
+    return card.append(cardHeader(document2, note), body), card;
+  }
+  function markHolder(holder, { content, draft, id }) {
+    holder.setAttribute(ID_ATTRIBUTE, id), holder.dataset.fixAdoReviewContent = content, holder.toggleAttribute(EDITING_ATTRIBUTE, draft !== null);
+  }
+  function holdsCurrent(holder, { content, draft }) {
+    return holder.dataset.fixAdoReviewContent === content && holder.hasAttribute(EDITING_ATTRIBUTE) === (draft !== null);
+  }
+  function cardAround(target) {
+    let holder = target.closest(`[${ID_ATTRIBUTE}]`), id = holder?.getAttribute(ID_ATTRIBUTE) ?? null;
+    return holder === null || id === null ? null : { holder, id };
+  }
+
+  // azure-devops/src/features/review/card-actions.ts
+  function saveDrafts({ drafts, key, store }) {
+    for (let [id, draft] of drafts)
+      draft.trim() !== "" && store.change(key, id, { content: draft.trim() });
+    drafts.clear();
+  }
+  var CARD_ACTIONS = {
+    "cancel-edit": ({ drafts }, { id }) => {
+      drafts.delete(id);
+    },
+    edit: ({ drafts }, { content, id }) => {
+      drafts.set(id, drafts.get(id) ?? content);
+    },
+    remove: ({ drafts, key, store }, { id }) => {
+      store.remove(key, id), drafts.delete(id);
+    },
+    update: ({ drafts, key, store }, { id }) => {
+      let draft = drafts.get(id)?.trim() ?? "";
+      draft !== "" && (store.change(key, id, { content: draft }), drafts.delete(id));
+    }
+  };
+  function handleCardAction(context, { action, button: button2 }) {
+    let id = cardAround(button2)?.id ?? null, comment = context.store.pending(context.key).find((candidate) => candidate.id === id), act = CARD_ACTIONS[action];
+    return comment === void 0 || act === void 0 ? null : (act(context, comment), action === "edit" ? comment.id : null);
+  }
+  function noteDraft(drafts, target) {
+    let textarea = closestElement(target, "textarea"), card = textarea === null ? null : cardAround(textarea);
+    card !== null && drafts.has(card.id) && textarea !== null && "value" in textarea && drafts.set(card.id, String(textarea.value));
+  }
+  function focusEditor(document2, id) {
+    document2.querySelector(`[${ID_ATTRIBUTE}="${id}"] textarea`)?.focus();
+  }
+
+  // azure-devops/src/features/review/pending-cards.ts
+  var CARD_ROW_CLASS = "fix-ado-review-card-row", THREAD_SELECTOR = ".repos-diff-discussion", LINE_CELL_CLASS = "repos-line-content";
+  function cardCell(document2, comment) {
+    let cell2 = element(document2, "div", { className: "fix-ado-review-card-cell body-m" });
+    return cell2.append(createCard(document2, comment, ONLY_YOU_NOTE)), cell2;
+  }
+  function cellsBeforeCode(lineRow) {
+    return [...lineRow.children].findIndex((cell2) => cell2.classList.contains(LINE_CELL_CLASS));
+  }
+  function createCardRow(lineRow, comment) {
+    let document2 = lineRow.ownerDocument, row = element(document2, "div", { className: `repos-diff-contents-row ${CARD_ROW_CLASS}` });
+    markHolder(row, comment);
+    for (let cell2 = 0; cell2 < cellsBeforeCode(lineRow); cell2 += 1)
+      row.append(element(document2, "span"));
+    return row.append(cardCell(document2, comment)), row;
+  }
+  function isThreadRow(row) {
+    return row?.querySelector(`:scope > ${THREAD_SELECTOR}`) !== null && row !== null;
+  }
+  function isCardRow(row) {
+    return row?.classList.contains(CARD_ROW_CLASS) === !0;
+  }
+  function isInPlace(cardRow, lineRow) {
+    let above = cardRow.previousElementSibling;
+    for (; isCardRow(above) || isThreadRow(above); )
+      above = above?.previousElementSibling ?? null;
+    let below = cardRow.nextElementSibling;
+    for (; isCardRow(below); )
+      below = below?.nextElementSibling ?? null;
+    return above === lineRow && !isThreadRow(below);
+  }
+  function lastRowUnder(lineRow) {
+    let last = lineRow;
+    for (; isCardRow(last.nextElementSibling) || isThreadRow(last.nextElementSibling); )
+      last = last.nextElementSibling ?? last;
+    return last;
+  }
+  function syncPendingCards(document2, pending) {
+    let stale = new Set(document2.querySelectorAll(`.${CARD_ROW_CLASS}`));
+    for (let comment of pending) {
+      let lineRow = comment.anchor === null ? null : findLineRow(document2, comment.anchor), cardRow = [...stale].find((row) => row.getAttribute(ID_ATTRIBUTE) === comment.id), isUpToDate2 = lineRow !== null && cardRow !== void 0 && isInPlace(cardRow, lineRow) && holdsCurrent(cardRow, comment);
+      cardRow !== void 0 && isUpToDate2 ? stale.delete(cardRow) : lineRow !== null && lastRowUnder(lineRow).after(createCardRow(lineRow, comment));
+    }
+    for (let cardRow of stale)
+      cardRow.remove();
+  }
+
+  // azure-devops/src/features/review/card-spacers.ts
+  var SPACER_ROW_CLASS = "fix-ado-review-spacer-row", SPLIT_SELECTOR = ".repos-summary-diff-splitter", PANE_SELECTOR = ".repos-summary-diff-blocks", HEIGHT_PROPERTY = "--fix-ado-review-spacer-height", PIXEL_TOLERANCE = 0.5;
+  function otherPaneOf(cardRow) {
+    let ownPane = cardRow.closest(PANE_SELECTOR);
+    return [...cardRow.closest(SPLIT_SELECTOR)?.querySelectorAll(PANE_SELECTOR) ?? []].find((pane) => pane !== ownPane) ?? null;
+  }
+  function rowBeside(cardRow, otherPane) {
+    let { top } = cardRow.getBoundingClientRect(), beside = null;
+    for (let row of otherPane.children)
+      (beside === null || row.getBoundingClientRect().top < top - PIXEL_TOLERANCE) && (beside = row);
+    return beside;
+  }
+  function insertSpacer(cardRow, id) {
+    let otherPane = otherPaneOf(cardRow), beside = otherPane === null ? null : rowBeside(cardRow, otherPane);
+    if (beside === null)
+      return null;
+    let document2 = cardRow.ownerDocument, spacer = element(document2, "div", {
+      className: `repos-diff-contents-row ${SPACER_ROW_CLASS}`
+    });
+    return spacer.setAttribute(ID_ATTRIBUTE, id), spacer.append(element(document2, "div")), beside.after(spacer), spacer;
+  }
+  function matchHeight(spacer, cardRow) {
+    let { height } = cardRow.getBoundingClientRect(), shown = Number(spacer.dataset.fixAdoReviewHeight ?? 0);
+    Math.abs(shown - height) > PIXEL_TOLERANCE && (spacer.dataset.fixAdoReviewHeight = String(height), spacer.style.setProperty(HEIGHT_PROPERTY, `${height}px`));
+  }
+  function syncCardSpacers(document2) {
+    let stale = new Set(document2.querySelectorAll(`.${SPACER_ROW_CLASS}`));
+    for (let cardRow of document2.querySelectorAll(`${SPLIT_SELECTOR} .${CARD_ROW_CLASS}`)) {
+      let id = cardRow.getAttribute(ID_ATTRIBUTE) ?? "", spacer = [...stale].find((row) => row.getAttribute(ID_ATTRIBUTE) === id) ?? insertSpacer(cardRow, id);
+      spacer !== null && (stale.delete(spacer), matchHeight(spacer, cardRow));
+    }
+    for (let spacer of stale)
+      spacer.remove();
+  }
+
+  // azure-devops/src/features/review/code-editor.ts
+  var EDITOR_ELEMENT_SELECTOR = ".vss-base-editor", FRAMEWORK_KEY_PREFIX = "__reactFiber", HOLDER_KEYS = ["stateNode", "memoizedProps"], EDITOR_FUNCTIONS = [
+    "changeViewZones",
+    "addOverlayWidget",
+    "removeOverlayWidget",
+    "getModel",
+    "getLayoutInfo"
+  ];
+  function property(target, key) {
+    return (typeof target == "object" || typeof target == "function") && target !== null ? Reflect.get(target, key) : void 0;
+  }
+  function ownKeys(target) {
+    return typeof target == "object" && target !== null ? Object.keys(target) : [];
+  }
+  function asCodeEditor(candidate) {
+    return EDITOR_FUNCTIONS.every(
+      (name) => typeof property(candidate, name) == "function"
+    ) ? candidate : null;
+  }
+  function halfOf(diffEditor, getter) {
+    let get = property(diffEditor, getter);
+    return typeof get == "function" ? asCodeEditor(Reflect.apply(get, diffEditor, [])) : null;
+  }
+  function asShownEditors(candidate) {
+    let right = halfOf(candidate, "getModifiedEditor") ?? asCodeEditor(candidate);
+    return right === null ? null : { left: halfOf(candidate, "getOriginalEditor"), right };
+  }
+  function editorsHeldBy(node) {
+    for (let holderKey of HOLDER_KEYS) {
+      let holder = property(node, holderKey);
+      for (let key of ownKeys(holder)) {
+        let editors = asShownEditors(property(holder, key));
+        if (editors !== null)
+          return editors;
+      }
+    }
+    return null;
+  }
+  function findShownEditors(document2) {
+    let element4 = document2.querySelector(EDITOR_ELEMENT_SELECTOR), nodeKey = ownKeys(element4).find((key) => key.startsWith(FRAMEWORK_KEY_PREFIX)), node = nodeKey === void 0 ? void 0 : property(element4, nodeKey);
+    for (let level = 0; level < 30 && node !== void 0 && node !== null; level += 1) {
+      let editors = editorsHeldBy(node);
+      if (editors !== null)
+        return editors;
+      node = property(node, "return");
+    }
+    return null;
+  }
+
+  // azure-devops/src/features/review/editor-cards.ts
+  var OVERLAY_CLASS = "fix-ado-review-editor-card", MAX_CARD_WIDTH = 744, CARD_MARGIN = 16, MIN_EDITOR_WIDTH = 200, cardsByDocument = /* @__PURE__ */ new WeakMap();
+  function cardsOf(document2) {
+    let cards = cardsByDocument.get(document2) ?? /* @__PURE__ */ new Map();
+    return cardsByDocument.set(document2, cards), cards;
+  }
+  function createItem(document2, comment) {
+    let item = element(document2, "div", { className: "fix-ado-review-listed" });
+    return markHolder(item, comment), item.append(createCard(document2, comment, ONLY_YOU_NOTE)), item;
+  }
+  function showAt(card, editor, top) {
+    let { contentLeft, contentWidth } = editor.getLayoutInfo();
+    Object.assign(card.style, {
+      display: "block",
+      left: `${contentLeft}px`,
+      top: `${top}px`,
+      width: `${Math.min(MAX_CARD_WIDTH, contentWidth - CARD_MARGIN)}px`
+    });
+  }
+  function doNothing() {
+  }
+  function keepRoomFor(card, resize) {
+    let view = card.ownerDocument.defaultView;
+    if (view === null || !("ResizeObserver" in view))
+      return doNothing;
+    let observer = new view.ResizeObserver(() => {
+      resize(card.getBoundingClientRect().height);
+    });
+    return observer.observe(card), () => {
+      observer.disconnect();
+    };
+  }
+  function hideWithRoom(card, room) {
+    let view = card.ownerDocument.defaultView;
+    if (view === null)
+      return doNothing;
+    let observer = new view.MutationObserver(() => {
+      room.style.display === "none" && (card.style.display = "none");
+    });
+    return observer.observe(room, { attributeFilter: ["style"], attributes: !0 }), () => {
+      observer.disconnect();
+    };
+  }
+  function addRoom(editor, zone) {
+    let zoneId = null;
+    return editor.changeViewZones((changes) => {
+      zoneId = changes.addZone(zone);
+    }), {
+      remove: () => {
+        editor.changeViewZones((changes) => {
+          changes.removeZone(zoneId);
+        });
+      },
+      resize: (height) => {
+        Math.abs(height - zone.heightInPx) >= 1 && (zone.heightInPx = height, editor.changeViewZones((changes) => {
+          changes.layoutZone(zoneId);
+        }));
+      }
+    };
+  }
+  function showOverlay(document2, { comment, editor }) {
+    let card = element(document2, "div", { className: `${OVERLAY_CLASS} body-m` }), item = createItem(document2, comment);
+    card.append(item);
+    let overlay = {
+      getDomNode: () => card,
+      getId: () => `fix-ado-review-${comment.id}`,
+      getPosition: () => null
+    };
+    return editor.addOverlayWidget(overlay), { card, item, overlay };
+  }
+  function placeCard(document2, wanted) {
+    let { comment, editor, line: line2 } = wanted, { card, item, overlay } = showOverlay(document2, wanted), { height } = card.getBoundingClientRect(), zone = {
+      afterLineNumber: line2,
+      domNode: element(document2, "div"),
+      heightInPx: height,
+      onDomNodeTop: (top) => {
+        showAt(card, editor, top);
+      }
+    }, room = addRoom(editor, zone), stops = [keepRoomFor(card, room.resize), hideWithRoom(card, zone.domNode)], remove = () => {
+      for (let stop of stops)
+        stop();
+      room.remove(), editor.removeOverlayWidget(overlay);
+    }, { content, draft } = comment;
+    return {
+      content,
+      editor,
+      isEditing: draft !== null,
+      item,
+      model: editor.getModel(),
+      overlay,
+      remove
+    };
+  }
+  function removeCard(card) {
+    try {
+      card.remove();
+    } catch {
+    }
+  }
+  function editorFor({ left, right }, side) {
+    return side === "right" ? right : left !== null && left.getLayoutInfo().contentWidth >= MIN_EDITOR_WIDTH ? left : null;
+  }
+  function wantedCards(document2, pending) {
+    let editors = findShownEditors(document2), filePath = shownFilePath(document2), wanted = /* @__PURE__ */ new Map();
+    for (let comment of editors === null ? [] : pending) {
+      let { anchor } = comment, editor = editors !== null && anchor?.filePath === filePath ? editorFor(editors, anchor.side) : null;
+      anchor !== null && editor !== null && wanted.set(comment.id, { comment, editor, line: anchor.line });
+    }
+    return wanted;
+  }
+  function isCurrent(card, { comment, editor }) {
+    return card.editor === editor && card.model === editor.getModel() && card.content === comment.content && card.isEditing === (comment.draft !== null) && card.item.isConnected;
+  }
+  function removeOutdated(cards, wanted) {
+    for (let [id, card] of cards) {
+      let want = wanted.get(id);
+      (want === void 0 || !isCurrent(card, want)) && (removeCard(card), cards.delete(id));
+    }
+  }
+  function syncEditorCards(document2, pending) {
+    let cards = cardsOf(document2), wanted = wantedCards(document2, pending);
+    removeOutdated(cards, wanted);
+    for (let [id, want] of wanted)
+      cards.has(id) || cards.set(id, placeCard(document2, want));
+    return new Set(cards.keys());
+  }
+
+  // azure-devops/src/features/review/file-pending-list.ts
+  var LIST_CLASS = "fix-ado-review-file-pending", ITEM_CLASS = "fix-ado-review-listed", EDITOR_SELECTOR2 = ".monaco-diff-editor, .monaco-editor", EDITOR_CARD_SELECTOR = ".bolt-card-content";
+  function listHost(document2) {
+    let editor = document2.querySelector(EDITOR_SELECTOR2);
+    return editor?.closest(EDITOR_CARD_SELECTOR) ?? editor?.parentElement ?? null;
+  }
+  function lineLabel({ anchor }) {
+    return anchor === null ? "" : anchor.side === "left" ? `Line ${anchor.line}, before the change` : `Line ${anchor.line}`;
+  }
+  function listItem(document2, comment) {
+    let item = element(document2, "div", { className: ITEM_CLASS });
+    return markHolder(item, comment), item.append(createCard(document2, comment, lineLabel(comment))), item;
+  }
+  function createList(document2, inFile, isOpen) {
+    let list = element(document2, "details", { className: `${LIST_CLASS} body-m` });
+    return list.open = isOpen, list.append(
+      element(document2, "summary", { text: `${pendingCountText(inFile.length)} in this file` }),
+      ...inFile.map((comment) => listItem(document2, comment))
+    ), list;
+  }
+  function pendingInShownFile(document2, pending) {
+    let filePath = shownFilePath(document2);
+    return listHost(document2) === null ? [] : pending.filter(({ anchor }) => anchor?.filePath === filePath);
+  }
+  function showsExactly(list, shown, count) {
+    return list?.dataset.fixAdoReviewShown === shown && list.parentElement === listHost(list.ownerDocument) && list.querySelectorAll(`.${ITEM_CLASS}`).length === count;
+  }
+  function syncFilePendingList(document2, pending) {
+    let inFile = pendingInShownFile(document2, pending), existing = document2.querySelector(`.${LIST_CLASS}`), shown = JSON.stringify(
+      inFile.map(({ content, draft, id }) => [id, content, draft !== null])
+    );
+    if (inFile.length === 0)
+      existing?.remove();
+    else if (!showsExactly(existing, shown, inFile.length)) {
+      let list = createList(document2, inFile, existing?.open ?? !1);
+      list.dataset.fixAdoReviewShown = shown, existing?.remove(), listHost(document2)?.append(list);
+    }
+  }
+
+  // azure-devops/src/features/review/review-header.ts
+  var HEADER_CLASS = "fix-ado-review-header", TABBAR_SELECTOR = ".repos-pr-details-page-tabbar";
+  function submitButton(document2, count) {
+    let button2 = actionButton(document2, {
+      action: "finish",
+      isPrimary: !0,
+      text: "Submit review"
+    });
+    return button2.setAttribute("aria-label", `Submit review, ${pendingCountText(count)}`), button2.append(
+      element(document2, "span", { className: "fix-ado-review-count", text: String(count) })
+    ), button2;
+  }
+  function createHeader(document2, { count, isPullRequestActive }) {
+    let header = element(document2, "div", { className: HEADER_CLASS });
+    return isPullRequestActive ? header.append(submitButton(document2, count)) : header.append(
+      element(document2, "span", { className: "secondary-text", text: pendingCountText(count) }),
+      actionButton(document2, { action: "copy", text: "Copy" }),
+      actionButton(document2, { action: "discard", text: "Discard" })
+    ), header;
+  }
+  function syncHeader(document2, state) {
+    let tabbar = state.count === 0 ? null : document2.querySelector(TABBAR_SELECTOR), existing = document2.querySelector(`.${HEADER_CLASS}`), shown = `${state.count} ${state.isPullRequestActive}`;
+    if (tabbar === null)
+      existing?.remove();
+    else if (existing?.dataset.fixAdoReviewShown !== shown || existing.parentElement !== tabbar) {
+      let header = createHeader(document2, state);
+      header.dataset.fixAdoReviewShown = shown, existing?.remove(), tabbar.append(header);
+    }
+  }
+
+  // azure-devops/src/features/review/tree-listing.ts
+  var listedByChangedPaths = /* @__PURE__ */ new WeakMap();
+  function byName(left, right) {
+    return left.localeCompare(right, "en", { sensitivity: "base" });
+  }
+  function folderOf(changedPaths) {
+    let root = { files: [], folders: /* @__PURE__ */ new Map() };
+    for (let filePath of changedPaths) {
+      let names = filePath.split("/").filter(Boolean), folder = root;
+      for (let name of names.slice(0, -1)) {
+        let inner = folder.folders.get(name) ?? { files: [], folders: /* @__PURE__ */ new Map() };
+        folder.folders.set(name, inner), folder = inner;
+      }
+      folder.files.push(names.at(-1) ?? "");
+    }
+    return root;
+  }
+  function folderRow(name, folder) {
+    let [only] = [...folder.folders];
+    return folder.files.length > 0 || folder.folders.size !== 1 || only === void 0 ? { folder, name } : folderRow(`${name}/${only[0]}`, only[1]);
+  }
+  function addRows(rows, folder, above) {
+    let level = above.level + 1;
+    for (let first of [...folder.folders.keys()].toSorted(byName)) {
+      let inner = folder.folders.get(first);
+      if (inner !== void 0) {
+        let row = folderRow(first, inner), path = `${above.path}/${row.name}`;
+        rows.push({ level, name: row.name, path }), addRows(rows, row.folder, { level, path });
+      }
+    }
+    for (let name of folder.files.toSorted(byName))
+      rows.push({ level, name, path: `${above.path}/${name}` });
+  }
+  function listedRows(changedPaths) {
+    let known = listedByChangedPaths.get(changedPaths);
+    if (known !== void 0)
+      return known;
+    let rows = [];
+    return addRows(rows, folderOf(changedPaths), { level: 0, path: "" }), listedByChangedPaths.set(changedPaths, rows), rows;
+  }
+  function isUnder(path, folded) {
+    return [...folded].some((foldedPath) => path.startsWith(`${foldedPath}/`));
+  }
+  function isDrawnAt(listed, drawn, start) {
+    let levelShift = (listed[start]?.level ?? 0) - (drawn[0]?.level ?? 0);
+    return drawn.every(({ level, name }, index) => {
+      let row = listed[start + index];
+      return row?.name === name && row.level === level + levelShift;
+    });
+  }
+  function runsOf(drawn) {
+    let runs = [];
+    for (let row of drawn) {
+      let run = row.isAfterGap ? void 0 : runs.at(-1);
+      run === void 0 ? runs.push([row]) : run.push(row);
+    }
+    return runs;
+  }
+  function withoutOverlap(runs, starts) {
+    let fitting = starts.map((candidates) => [...candidates]);
+    for (let [index, candidates] of fitting.entries()) {
+      let earliest = Math.min(...fitting[index - 1] ?? []) + (runs[index - 1]?.length ?? 0);
+      fitting[index] = candidates.filter((start) => index === 0 || start >= earliest);
+    }
+    for (let [index, candidates] of [...fitting.entries()].toReversed()) {
+      let latest = Math.max(...fitting[index + 1] ?? []) - (runs[index]?.length ?? 0);
+      fitting[index] = candidates.filter((start) => index === runs.length - 1 || start <= latest);
+    }
+    return fitting;
+  }
+  function findDrawn(changedPaths, drawn, folded) {
+    let listed = listedRows(changedPaths).filter(({ path }) => !isUnder(path, folded)), runs = runsOf(drawn), everyStart = listed.map((_row, start) => start), starts = withoutOverlap(
+      runs,
+      runs.map((run) => everyStart.filter((start) => isDrawnAt(listed, run, start)))
+    );
+    if (runs.length === 0 || starts.some((candidates) => candidates.length !== 1))
+      return null;
+    let placeOfDrawn = runs.flatMap(
+      (run, index) => run.map((_row, offset) => (starts[index]?.[0] ?? 0) + offset)
+    );
+    return { paths: listed.map(({ path }) => path), placeOfDrawn };
+  }
+
+  // azure-devops/src/features/review/tree-scroll-anchor.ts
+  var TREE_SELECTOR = ".repos-changes-explorer-tree", TREE_ROW_SELECTOR = `${TREE_SELECTOR} tr.bolt-tree-row[aria-rowindex]`, SCROLLER_SELECTOR = ".v-scroll-auto", SMALLEST_MOVE = 1, LARGEST_SHIFT = 100, WEAR_PER_SCROLLED_PIXEL = 0.25, shiftByScroller = /* @__PURE__ */ new WeakMap();
+  function shiftTree(scroller, shift, pixels2) {
+    let limited = Math.min(Math.max(pixels2, -LARGEST_SHIFT, -scroller.scrollTop), LARGEST_SHIFT);
+    shift.pixels = Math.round(limited), shift.scrollTop = scroller.scrollTop;
+    let tree = scroller.querySelector(TREE_SELECTOR), margin = shift.pixels === 0 ? "" : `${shift.pixels}px`;
+    tree !== null && tree.style.marginTop !== margin && (tree.style.marginTop = margin);
+  }
+  function wearOff(scroller, shift) {
+    let wear = Math.abs(scroller.scrollTop - shift.scrollTop) * WEAR_PER_SCROLLED_PIXEL, left = Math.max(Math.abs(shift.pixels) - wear, 0);
+    shiftTree(scroller, shift, Math.sign(shift.pixels) * left);
+  }
+  function shiftOf(scroller) {
+    let known = shiftByScroller.get(scroller);
+    if (known !== void 0)
+      return known;
+    let shift = { pixels: 0, scrollTop: scroller.scrollTop };
+    return shiftByScroller.set(scroller, shift), scroller.addEventListener(
+      "scroll",
+      () => {
+        wearOff(scroller, shift);
+      },
+      { passive: !0 }
+    ), shift;
+  }
+  function firstRowInView(document2) {
+    let scroller = document2.querySelector(TREE_SELECTOR)?.closest(SCROLLER_SELECTOR) ?? null;
+    if (scroller === null)
+      return null;
+    let viewTop = scroller.getBoundingClientRect().top, row = [...document2.querySelectorAll(TREE_ROW_SELECTOR)].find(
+      (candidate) => candidate.getBoundingClientRect().top >= viewTop
+    );
+    return row === void 0 ? null : { row, scroller };
+  }
+  function keepingTreeInPlace(document2, change) {
+    let anchor = firstRowInView(document2), topBefore = anchor?.row.getBoundingClientRect().top ?? 0;
+    change();
+    let moved = (anchor?.row.getBoundingClientRect().top ?? 0) - topBefore;
+    if (anchor !== null && Math.abs(moved) >= SMALLEST_MOVE) {
+      let shift = shiftOf(anchor.scroller);
+      shiftTree(anchor.scroller, shift, shift.pixels - moved);
+    }
+  }
+
+  // azure-devops/src/features/review/tree-folded.ts
+  var FOLDED_ATTRIBUTE = "aria-expanded", foldedByDocument = /* @__PURE__ */ new WeakMap(), treePathsByChangedPaths = /* @__PURE__ */ new WeakMap();
+  function treePathsOf(changedPaths) {
+    let known = treePathsByChangedPaths.get(changedPaths);
+    if (known !== void 0)
+      return known;
+    let paths = /* @__PURE__ */ new Set();
+    for (let filePath of changedPaths) {
+      let names = filePath.split("/").filter(Boolean);
+      for (let depth = 1; depth <= names.length; depth += 1)
+        paths.add(`/${names.slice(0, depth).join("/")}`);
+    }
+    return treePathsByChangedPaths.set(changedPaths, [...paths]), [...paths];
+  }
+  function treePathOf({ isWholePath, pathEnd }, changedPaths) {
+    let end = `/${pathEnd}`, fitting = treePathsOf(changedPaths).filter(
+      (path) => (
+        // The tree's first row may name the repository, which a path leaves out.
+        isWholePath ? end === path || end.endsWith(path) : path.endsWith(end)
+      )
+    );
+    return isWholePath ? fitting.toSorted((left, right) => right.length - left.length)[0] ?? null : fitting.length === 1 ? fitting[0] ?? null : null;
+  }
+  function noteFolded(document2, drawn, changedPaths) {
+    let folded = foldedByDocument.get(document2) ?? /* @__PURE__ */ new Set();
+    foldedByDocument.set(document2, folded);
+    for (let drawnRow of changedPaths === null ? [] : drawn) {
+      let state = drawnRow.row.getAttribute(FOLDED_ATTRIBUTE), path = state === "false" || state === "true" && folded.size > 0 ? treePathOf(drawnRow, changedPaths ?? []) : null;
+      path !== null && state === "false" ? folded.add(path) : path !== null && folded.delete(path);
+    }
+    return folded;
+  }
+
+  // azure-devops/src/features/review/tree-pending-rows.ts
+  var TREE_ROW_SELECTOR2 = ".repos-changes-explorer-tree tr.bolt-tree-row", PENDING_ROW_CLASS = "fix-ado-review-tree-row", ID_ATTRIBUTE2 = "data-fix-ado-review-tree-id", THREAD_ITEM_CLASS = "repos-file-explorer-tree-thread-item", NAME_SELECTOR = ".bolt-tree-cell .text-ellipsis", INDENT_SELECTOR = ".bolt-tree-expand-button", INDENT_STEP = 16, INDEX_ATTRIBUTE = "aria-rowindex", DOT_TITLE = "Pending comment", UNSAVED_MARK = "*";
+  function isThreadRow2(row) {
+    return row?.querySelector(`.${THREAD_ITEM_CLASS}`) !== null && row !== null;
+  }
+  function isAfterSkippedRows(row) {
+    let before = row.previousElementSibling;
+    for (; before !== null && !before.hasAttribute(INDEX_ATTRIBUTE); )
+      before = before.previousElementSibling;
+    let index = Number(row.getAttribute(INDEX_ATTRIBUTE));
+    return before !== null && Number(before.getAttribute(INDEX_ATTRIBUTE)) !== index - 1;
+  }
+  function drawnRows(document2) {
+    let names = [];
+    return [...document2.querySelectorAll(TREE_ROW_SELECTOR2)].filter((row) => !isThreadRow2(row)).map((row) => {
+      let depth = Math.max(Number(row.getAttribute("aria-level")) - 1, 0);
+      for (; names.length < depth; )
+        names.push(null);
+      names.length = depth;
+      let name = row.querySelector(NAME_SELECTOR)?.textContent.trim() ?? "";
+      names.push(name);
+      let firstKnown = names.lastIndexOf(null) + 1, pathEnd = names.slice(firstKnown).join("/").split("/").filter(Boolean).join("/");
+      return { isAfterGap: isAfterSkippedRows(row), isWholePath: firstKnown === 0, level: depth + 1, name, pathEnd, row };
+    });
+  }
+  function isRowOf(drawn, filePath, changedPaths) {
+    let end = `/${drawn.pathEnd}`;
+    if (drawn.isWholePath)
+      return end === filePath || end.endsWith(filePath);
+    let sameEnd = (changedPaths ?? []).filter((path) => path.endsWith(end));
+    return filePath.endsWith(end) && sameEnd.length === 1;
+  }
+  function fileRowOf(drawn, filePath, changedPaths) {
+    return drawn.find((candidate) => isRowOf(candidate, filePath, changedPaths))?.row ?? null;
+  }
+  function cell(document2, className) {
+    return element(document2, "td", { className: `${className} bolt-table-cell bolt-list-cell` });
+  }
+  function threadIndent(fileRow) {
+    let indent = element(fileRow.ownerDocument, "span", {
+      className: "fix-ado-review-tree-indent"
+    }), fileIndent = fileRow.querySelector(INDENT_SELECTOR)?.style.marginLeft ?? "", pixels2 = fileIndent.endsWith("px") ? Number(fileIndent.slice(0, -2)) : 0;
+    return indent.style.marginLeft = `${pixels2 + INDENT_STEP}px`, indent;
+  }
+  function pendingDot(document2) {
+    let dot = element(document2, "span", { className: "fix-ado-review-pending-dot" });
+    return dot.title = DOT_TITLE, dot.setAttribute("aria-label", DOT_TITLE), dot.setAttribute("role", "img"), dot;
+  }
+  function pendingText(document2, { content, draft }) {
+    let [firstLine = ""] = (draft ?? content).split(`
+`), text = element(document2, "div", { className: "flex-grow text-ellipsis" });
+    return draft !== null && text.append(element(document2, "span", { className: "margin-right-4", text: UNSAVED_MARK })), text.append(firstLine), text;
+  }
+  function pendingItem(fileRow, comment) {
+    let document2 = fileRow.ownerDocument, item = element(document2, "div", {
+      className: `${THREAD_ITEM_CLASS} rhythm-horizontal-4 bolt-table-cell-content flex-row flex-center`
+    });
+    return item.append(threadIndent(fileRow), pendingDot(document2), pendingText(document2, comment)), item;
+  }
+  function shownOf({ content, draft }) {
+    return JSON.stringify([content, draft]);
+  }
+  function fileRowAbove(pendingRow) {
+    let above = pendingRow.previousElementSibling;
+    for (; isThreadRow2(above); )
+      above = above?.previousElementSibling ?? null;
+    return above;
+  }
+  function openFileOf(pendingRow) {
+    let fileRow = fileRowAbove(pendingRow), view = pendingRow.ownerDocument.defaultView;
+    fileRow !== null && view !== null && fileRow.dispatchEvent(new view.MouseEvent("click", { bubbles: !0 }));
+  }
+  function createPendingRow(fileRow, comment) {
+    let document2 = fileRow.ownerDocument, row = element(document2, "tr", {
+      className: `bolt-tree-row bolt-table-row bolt-list-row single-click-activation ${PENDING_ROW_CLASS}`
+    });
+    row.setAttribute(ID_ATTRIBUTE2, comment.id), row.dataset.fixAdoReviewShown = shownOf(comment);
+    let treeCell = cell(document2, "bolt-tree-cell");
+    return treeCell.append(pendingItem(fileRow, comment)), row.append(cell(document2, "bolt-table-cell-compact"), cell(document2, ""), treeCell), row.addEventListener("click", () => {
+      openFileOf(row);
+    }), row;
+  }
+  function lastRowUnder2(fileRow) {
+    let last = fileRow;
+    for (; isThreadRow2(last.nextElementSibling); )
+      last = last.nextElementSibling ?? last;
+    return last;
+  }
+  function isUpToDate(row, fileRow, comment) {
+    return row.dataset.fixAdoReviewShown === shownOf(comment) && fileRowAbove(row) === fileRow;
+  }
+  function showRow(stale, fileRow, comment) {
+    let row = [...stale].find((candidate) => candidate.getAttribute(ID_ATTRIBUTE2) === comment.id);
+    row !== void 0 && isUpToDate(row, fileRow, comment) ? stale.delete(row) : fileRow !== null && lastRowUnder2(fileRow).after(createPendingRow(fileRow, comment));
+  }
+  function drawnFileRow(filePath, { changedPaths, drawn, listing }) {
+    let place = listing?.paths.indexOf(filePath) ?? -1;
+    return listing === null || place === -1 ? fileRowOf(drawn, filePath, changedPaths) : drawn[listing.placeOfDrawn.indexOf(place)]?.row ?? null;
+  }
+  function treeNow(document2, changedPaths) {
+    let drawn = drawnRows(document2), folded = noteFolded(document2, drawn, changedPaths), listing = changedPaths === null ? null : findDrawn(changedPaths, drawn, folded);
+    return { changedPaths, drawn, listing };
+  }
+  function syncTreePendingRows(document2, { changedPaths, pending }) {
+    let stale = new Set(document2.querySelectorAll(`.${PENDING_ROW_CLASS}`)), tree = treeNow(document2, changedPaths);
+    keepingTreeInPlace(document2, () => {
+      for (let comment of pending.filter(({ anchor }) => anchor !== null))
+        showRow(stale, drawnFileRow(comment.anchor?.filePath ?? "", tree), comment);
+      for (let row of stale)
+        row.remove();
+    });
+  }
+
+  // azure-devops/src/features/review/review-view.ts
+  var TREE_SELECTOR2 = ".repos-changes-explorer-tree", OWN_CLASS_PREFIX = "fix-ado-review";
+  function withDraft(comment, drafts) {
+    return { ...comment, draft: drafts.get(comment.id) ?? null };
+  }
+  function showReview(document2, review2) {
+    let { changedPaths, isOnPullRequest, isPullRequestActive } = review2, pending = review2.pending.map((comment) => withDraft(comment, review2.drafts));
+    isOnPullRequest && syncAddButtons(document2, pending.length > 0), syncPendingCards(document2, pending), syncCardSpacers(document2);
+    let inEditor = syncEditorCards(document2, pending);
+    syncFilePendingList(
+      document2,
+      pending.filter(({ id }) => !inEditor.has(id))
+    ), syncTreePendingRows(document2, { changedPaths, pending }), syncHeader(document2, { count: pending.length, isPullRequestActive });
+  }
+  function showInTree(document2, { changedPaths, drafts, pending }) {
+    syncTreePendingRows(document2, {
+      changedPaths,
+      pending: pending.map((comment) => withDraft(comment, drafts))
+    });
+  }
+  function isOwnNode(node) {
+    return "className" in node && String(node.className).includes(OWN_CLASS_PREFIX);
+  }
+  function isTreeChange({ addedNodes, removedNodes, target }) {
+    return "closest" in target && closestElement(target, TREE_SELECTOR2) !== null && [...addedNodes, ...removedNodes].some((node) => !isOwnNode(node));
+  }
+  function watchTree(document2, onChange) {
+    let view = document2.defaultView;
+    view !== null && new view.MutationObserver((records) => {
+      records.some((record) => isTreeChange(record)) && onChange();
+    }).observe(document2.body, { childList: !0, subtree: !0 });
+  }
+
+  // azure-devops/src/features/review/finish-dialog.ts
+  var DIALOG_CLASS = "fix-ado-review-dialog", TITLE2 = "Finish your review", VOTE_OPTIONS = [
+    {
+      description: "Submit general feedback without explicit approval.",
+      label: "Comment",
+      vote: null
+    },
+    { description: "Submit feedback and approve merging these changes.", label: "Approve", vote: 10 },
+    { description: "Approve, and leave suggestions.", label: "Approve with suggestions", vote: 5 },
+    { description: "Submit feedback suggesting changes.", label: "Wait for author", vote: -5 },
+    { description: "Reject these changes.", label: "Reject", vote: -10 }
+  ];
+  function voteOption(document2, index) {
+    let option = element(document2, "label", { className: "fix-ado-review-vote" }), radio = element(document2, "input");
+    radio.type = "radio", radio.name = "fix-ado-review-vote", radio.value = String(index), radio.checked = index === 0;
+    let text = element(document2, "span");
+    return text.append(
+      element(document2, "strong", { text: VOTE_OPTIONS[index]?.label }),
+      element(document2, "span", {
+        className: "secondary-text",
+        text: VOTE_OPTIONS[index]?.description
+      })
+    ), option.append(radio, text), option;
+  }
+  function voteOptions(document2) {
+    let group2 = element(document2, "fieldset", { className: "fix-ado-review-votes" });
+    return group2.append(...VOTE_OPTIONS.map((_option, index) => voteOption(document2, index))), group2;
+  }
+  function placeOf({ anchor }) {
+    return anchor === null ? "Pull request" : `${anchor.filePath}, line ${anchor.line}`;
+  }
+  function pendingList(document2, pending) {
+    let details = element(document2, "details", { className: "fix-ado-review-pending-list" });
+    details.append(element(document2, "summary", { text: pendingCountText(pending.length) }));
+    for (let comment of pending) {
+      let item = element(document2, "div", { className: "fix-ado-review-pending-item" });
+      item.append(
+        element(document2, "div", { className: "secondary-text", text: placeOf(comment) }),
+        element(document2, "div", { className: "fix-ado-review-card-text", text: comment.content })
+      ), details.append(item);
+    }
+    return details;
+  }
+  function chosenVote(dialog) {
+    let checked = dialog.querySelector("input[type=radio]:checked");
+    return VOTE_OPTIONS[Number(checked?.value ?? 0)]?.vote ?? null;
+  }
+  function setBusy(dialog, isBusy2) {
+    for (let control of dialog.querySelectorAll("button, input, textarea"))
+      control.disabled = isBusy2;
+  }
+  function problemOf({ failures, vote }) {
+    if (failures.length > 0) {
+      let statuses = [...new Set(failures.map(({ httpStatus }) => httpStatus))].join(", ");
+      return `${failures.length} of your comments could not be posted (HTTP ${statuses}). They are still pending. Submit again to retry.`;
+    }
+    return vote === "failed" ? "Your comments are posted, but your vote could not be saved. Vote with Azure DevOps's own button." : null;
+  }
+  async function postFrom(dialog, options) {
+    let status = dialog.querySelector(".fix-ado-review-status"), summary = dialog.querySelector("textarea"), choices = { summary: summary?.value ?? "", vote: chosenVote(dialog) };
+    setBusy(dialog, !0);
+    try {
+      let result = await options.submit(choices, (handled, total) => {
+        status !== null && (status.textContent = `Sending ${handled + 1} of ${total}`);
+      });
+      return problemOf(result);
+    } catch {
+      return "Azure DevOps could not be reached. Nothing more was posted. Submit again to retry.";
+    } finally {
+      summary !== null && (summary.value = "");
+    }
+  }
+  async function submitFrom(dialog, options) {
+    let problem = await postFrom(dialog, options);
+    if (problem === null || options.pending().length === 0) {
+      dialog.close(), options.onSubmitted();
+      return;
+    }
+    setBusy(dialog, !1);
+    let status = dialog.querySelector(".fix-ado-review-status");
+    status !== null && (status.textContent = problem), dialog.querySelector(".fix-ado-review-pending-list")?.replaceWith(pendingList(options.document, options.pending()));
+  }
+  function createButtons(document2) {
+    let buttons = element(document2, "div", { className: "fix-ado-review-dialog-buttons" }), right = element(document2, "div", { className: "fix-ado-review-buttons" });
+    return right.append(
+      actionButton(document2, { action: "close", text: "Cancel" }),
+      actionButton(document2, { action: "submit", isPrimary: !0, text: "Submit review" })
+    ), buttons.append(
+      actionButton(document2, { action: "discard-review", text: "Discard review" }),
+      right
+    ), buttons;
+  }
+  function summaryBox(document2) {
+    let summary = element(document2, "textarea", { className: "fix-ado-review-textarea" });
+    return summary.placeholder = "Leave a comment", summary.setAttribute("aria-label", "Leave a comment"), summary;
+  }
+  function statusLine(document2) {
+    let status = element(document2, "p", { className: "fix-ado-review-status" });
+    return status.setAttribute("role", "status"), status;
+  }
+  function createDialog(options) {
+    let { document: document2 } = options, dialog = element(document2, "dialog", { className: DIALOG_CLASS });
+    return dialog.setAttribute("role", "dialog"), dialog.setAttribute("aria-label", TITLE2), dialog.append(
+      element(document2, "h2", { className: "fix-ado-review-title", text: TITLE2 }),
+      summaryBox(document2),
+      voteOptions(document2),
+      pendingList(document2, options.pending()),
+      statusLine(document2),
+      createButtons(document2)
+    ), dialog;
+  }
+  function dialogActions(dialog, options) {
+    return {
+      close: () => {
+        dialog.close();
+      },
+      "discard-review": () => {
+        globalThis.confirm(`Discard ${pendingCountText(options.pending().length)}?`) && (options.discard(), dialog.close());
+      },
+      submit: () => {
+        submitFrom(dialog, options);
+      }
+    };
+  }
+  function openFinishDialog(options) {
+    let { document: document2 } = options;
+    document2.querySelector(`dialog.${DIALOG_CLASS}`)?.remove();
+    let dialog = createDialog(options), actions = dialogActions(dialog, options);
+    dialog.addEventListener("click", (event) => {
+      let clicked = clickedAction(event.target);
+      clicked !== null && actions[clicked.action]?.();
+    }), dialog.addEventListener("close", () => {
+      dialog.remove();
+    }), document2.body.append(dialog), dialog.showModal();
+  }
+
+  // azure-devops/src/features/review/unsaved-edits-dialog.ts
+  var BUTTON_CLASS2 = "bolt-button enabled bolt-focus-treatment";
+  function answerButton(dialog, text, answer) {
+    let button2 = element(dialog.ownerDocument, "button", {
+      className: text === "Yes" ? `${BUTTON_CLASS2} primary` : BUTTON_CLASS2,
+      text
+    });
+    return button2.type = "button", button2.addEventListener("click", () => {
+      dialog.close(), dialog.remove(), answer();
+    }), button2;
+  }
+  function openUnsavedEditsDialog({ count, document: document2, onAnswer }) {
+    let dialog = element(document2, "dialog", {
+      className: "fix-ado-review-dialog fix-ado-review-unsaved"
+    }), buttons = element(document2, "div", { className: "fix-ado-review-buttons" });
+    buttons.append(
+      answerButton(dialog, "Cancel", () => {
+      }),
+      answerButton(dialog, "No", () => {
+        onAnswer(!1);
+      }),
+      answerButton(dialog, "Yes", () => {
+        onAnswer(!0);
+      })
+    ), dialog.append(
+      element(document2, "h2", { className: "fix-ado-review-title", text: "Save your edits?" }),
+      element(document2, "p", {
+        text: `You are still editing ${pendingCountText(count)}. "No" drops the edits and keeps the comments as they were.`
+      }),
+      buttons
+    ), document2.body.append(dialog), dialog.showModal();
+  }
+
+  // azure-devops/src/features/review/review-submit.ts
+  function threadContextOf({ filePath, line: line2, lineLength, side }) {
+    let start = { line: line2, offset: 1 }, end = { line: line2, offset: lineLength + 1 };
+    return side === "right" ? { filePath, rightFileEnd: end, rightFileStart: start } : { filePath, leftFileEnd: end, leftFileStart: start };
+  }
+  function isThreadOf({ anchor, content }, thread) {
+    if (thread.isDeleted === !0 || thread.comments?.[0]?.content !== content)
+      return !1;
+    let context = thread.threadContext ?? null;
+    if (anchor === null || context === null)
+      return anchor === null && context === null;
+    let start = anchor.side === "right" ? context.rightFileStart : context.leftFileStart;
+    return context.filePath === anchor.filePath && start?.line === anchor.line;
+  }
+  async function changeTrackingIdOf(state, iteration, filePath) {
+    let idsByPath = state.changeTrackingIdsByIteration.get(iteration);
+    if (idsByPath === void 0) {
+      let changes = await state.options.client.getIterationChanges(
+        state.options.pullRequest,
+        iteration
+      );
+      idsByPath = new Map(
+        changes.flatMap(
+          ({ changeTrackingId, item }) => item?.path === void 0 ? [] : [[item.path, changeTrackingId]]
+        )
+      ), state.changeTrackingIdsByIteration.set(iteration, idsByPath);
+    }
+    return idsByPath.get(filePath) ?? null;
+  }
+  async function newThreadOf(state, comment) {
+    let { anchor, content } = comment;
+    if (anchor === null)
+      return { content };
+    let threadContext = threadContextOf(anchor), iteration = anchor.iteration ?? state.newestIteration, changeTrackingId = iteration === null ? null : await changeTrackingIdOf(state, iteration, anchor.filePath);
+    return iteration === null || changeTrackingId === null ? { content, threadContext } : { content, iteration: { changeTrackingId, id: iteration }, threadContext };
+  }
+  async function postComment(state, comment) {
+    let { client, key, pullRequest, store } = state.options;
+    if (comment.isAttempted) {
+      state.threads ??= await client.getPullRequestThreads(pullRequest);
+      let posted = state.threads.find((thread) => isThreadOf(comment, thread));
+      if (posted !== void 0)
+        return posted.id;
+    }
+    return store.change(key, comment.id, { isAttempted: !0 }), client.createPullRequestThread(pullRequest, await newThreadOf(state, comment));
+  }
+  async function postComments(state) {
+    let { key, onProgress, store } = state.options, pending = store.pending(key), failures = [];
+    for (let [index, comment] of pending.entries()) {
+      onProgress?.(index, pending.length);
+      try {
+        let postedThreadId = await postComment(state, comment);
+        store.change(key, comment.id, { postedThreadId });
+      } catch (error) {
+        failures.push({
+          httpStatus: error instanceof AdoRequestError ? error.httpStatus : 0,
+          id: comment.id
+        });
+      }
+    }
+    return failures;
+  }
+  async function sendVote({ client, pullRequest }, vote) {
+    try {
+      let reviewerId = await client.getAuthenticatedUserId();
+      return reviewerId === null ? !1 : (await client.setPullRequestVote(pullRequest, { reviewerId, vote }), !0);
+    } catch {
+      return !1;
+    }
+  }
+  async function submitReview(options, { summary, vote }) {
+    summary.trim() !== "" && options.store.add(options.key, { anchor: null, content: summary.trim() }, "first");
+    let iterationIds = await options.client.getPullRequestIterationIds(options.pullRequest), failures = await postComments({
+      changeTrackingIdsByIteration: /* @__PURE__ */ new Map(),
+      newestIteration: iterationIds.length === 0 ? null : Math.max(...iterationIds),
+      options,
+      threads: null
+    });
+    return vote === null ? { failures, vote: "none" } : failures.length > 0 ? { failures, vote: "skipped" } : { failures, vote: await sendVote(options, vote) ? "sent" : "failed" };
+  }
+
+  // azure-devops/src/features/review/review.ts
+  function dropOrphanDrafts(drafts, pending) {
+    for (let id of drafts.keys())
+      pending.some((comment) => comment.id === id) || drafts.delete(id);
+  }
+  function shownReview({ drafts, options, shown }) {
+    let pending = shown === null ? [] : options.store.pending(shown.key);
+    return dropOrphanDrafts(drafts, pending), {
+      changedPaths: shown?.changedPaths ?? null,
+      drafts,
+      isOnPullRequest: shown !== null,
+      isPullRequestActive: shown?.isActive ?? !0,
+      pending
+    };
+  }
+  function render(state) {
+    showReview(state.options.document, shownReview(state));
+  }
+  function requestStatus(state, shown) {
+    shown.isStatusRequested || state.options.store.pending(shown.key).length === 0 || (shown.isStatusRequested = !0, state.options.client.getPullRequestStatus(shown.pullRequest).then((status) => {
+      shown.isActive = status === "active", render(state);
+    }).catch(() => null));
+  }
+  async function loadIteration(state, shown) {
+    let { client } = state.options, ids = await client.getPullRequestIterationIds(shown.pullRequest);
+    if (ids.length === 0)
+      return;
+    shown.newestIteration = Math.max(...ids);
+    let changes = await client.getIterationChanges(shown.pullRequest, shown.newestIteration);
+    shown.changedPaths = changes.flatMap(({ item }) => item?.path ?? []), render(state);
+  }
+  function show(state, pullRequest) {
+    let key = state.options.keyOf(pullRequest);
+    if (state.shown?.key === key)
+      return state.shown;
+    let shown = {
+      changedPaths: null,
+      isActive: !0,
+      isStatusRequested: !1,
+      key,
+      newestIteration: null,
+      pullRequest
+    };
+    return loadIteration(state, shown).catch(() => null), shown;
+  }
+  function addFromBox(state, shown, box) {
+    let content = box?.textarea.value.trim() ?? "";
+    if (box === null || content === "")
+      return;
+    let { anchor } = box;
+    state.options.store.add(shown.key, {
+      anchor: anchor.kind === "general" ? null : {
+        filePath: anchor.filePath,
+        iteration: shown.newestIteration,
+        line: anchor.line,
+        lineLength: anchor.lineLength,
+        side: anchor.side
+      },
+      content
+    }), closeBox(box), render(state);
+  }
+  function openFinish(state, shown) {
+    let { client, document: document2, reload, store } = state.options;
+    openFinishDialog({
+      discard: () => {
+        store.discard(shown.key), render(state);
+      },
+      document: document2,
+      onSubmitted: reload,
+      pending: () => store.pending(shown.key),
+      submit: async (choices, onProgress) => submitReview(
+        { client, key: shown.key, onProgress, pullRequest: shown.pullRequest, store },
+        choices
+      )
+    });
+  }
+  function finish(state, shown) {
+    let { drafts, options } = state;
+    if (drafts.size === 0) {
+      openFinish(state, shown);
+      return;
+    }
+    openUnsavedEditsDialog({
+      count: drafts.size,
+      document: options.document,
+      onAnswer: (shouldSave) => {
+        shouldSave && saveDrafts({ drafts, key: shown.key, store: options.store }), drafts.clear(), render(state), openFinish(state, shown);
+      }
+    });
+  }
+  function discard(state, shown) {
+    let { confirm, store } = state.options;
+    confirm(`Discard ${pendingCountText(store.pending(shown.key).length)}?`) && store.discard(shown.key);
+  }
+  function headerActions(state, shown) {
+    let { options } = state;
+    return {
+      copy: () => {
+        options.copy(asMarkdown(options.store.pending(shown.key)));
+      },
+      discard: () => {
+        discard(state, shown);
+      },
+      finish: () => {
+        finish(state, shown);
+      }
+    };
+  }
+  function runAction(state, shown, clicked) {
+    let headerAction = headerActions(state, shown)[clicked.action];
+    clicked.action === ADD_ACTION ? addFromBox(state, shown, commentBoxAround(clicked.button)) : headerAction !== void 0 && headerAction();
+    let { drafts, options } = state;
+    return headerAction === void 0 ? handleCardAction({ drafts, key: shown.key, store: options.store }, clicked) : null;
+  }
+  function handleClick(state, event) {
+    let { shown } = state, clicked = clickedAction(event.target);
+    if (shown === null || clicked === null)
+      return;
+    let editedId = runAction(state, shown, clicked);
+    render(state), editedId !== null && focusEditor(state.options.document, editedId);
+  }
+  function boxToAddFrom(state, shown, event) {
+    let box = event.key === "Enter" && (event.ctrlKey || event.metaKey) ? commentBoxAround(event.target) : null, hasReview = state.options.store.pending(shown.key).length > 0;
+    return box !== null && hasReview && hasAddButton(box) && box.textarea.value.trim() !== "" ? box : null;
+  }
+  function handleKeydown(state, event) {
+    let { shown } = state, box = shown === null ? null : boxToAddFrom(state, shown, event);
+    shown === null || box === null || (event.preventDefault(), event.stopImmediatePropagation(), addFromBox(state, shown, box));
+  }
+  function createReview(options) {
+    let state = { drafts: /* @__PURE__ */ new Map(), options, shown: null }, { document: document2 } = options;
+    return document2.addEventListener("click", (event) => {
+      handleClick(state, event);
+    }), document2.addEventListener("input", (event) => {
+      noteDraft(state.drafts, event.target), render(state);
+    }), watchTree(document2, () => {
+      showInTree(document2, shownReview(state));
+    }), document2.addEventListener(
+      "keydown",
+      (event) => {
+        handleKeydown(state, event);
+      },
+      !0
+    ), {
+      sync(pullRequest) {
+        state.shown = pullRequest === null ? null : show(state, pullRequest), state.shown !== null && requestStatus(state, state.shown), render(state);
+      }
+    };
+  }
+
+  // azure-devops/src/boards/board.ts
+  var CARD_SELECTOR = ".wit-card[data-itemid]";
+  function isBoardLocation(location2) {
+    return location2.pathname.includes("/_boards/board/");
+  }
+  function findBoardCardIds(root) {
+    let ids = /* @__PURE__ */ new Set();
+    for (let card of root.querySelectorAll(CARD_SELECTOR)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && ids.add(id);
+    }
+    return [...ids];
+  }
+  function hasBoardChanged(loaded, current) {
+    for (let [id, workItem] of current.workItems) {
+      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
+      if (isChanged && !isMyOwnChange)
+        return !0;
+    }
+    return !1;
+  }
+  function watchBoard(client, location2, cardIds) {
+    return {
+      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
+      extendLoaded: (loaded, current) => ({
+        myUserId: current.myUserId,
+        workItems: new Map([...current.workItems, ...loaded.workItems])
+      }),
+      async fetchSnapshot() {
+        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
+          client.getWorkItems(cardIds),
+          client.getAuthenticatedUserId()
+        ]);
+        return {
+          retryAfterSeconds,
+          snapshot: {
+            myUserId,
+            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
+          }
+        };
+      },
+      hasChanged: hasBoardChanged,
+      key: `board:${location2.pathname}${location2.search}`
+    };
+  }
+
+  // azure-devops/src/core/page.ts
+  function parsePullRequestPage(location2, basePath2) {
+    if (isPullRequestCreateLocation(location2))
+      return { kind: "pull-request-create" };
+    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
+    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
+  }
+  function parsePage(location2, basePath2) {
+    if (isBoardLocation(location2))
+      return { kind: "board" };
+    let listPage = parsePullRequestListLocation(location2, basePath2);
+    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
+  }
+  function pullRequestOf(page) {
+    return page.kind === "pull-request" ? page.pullRequest : null;
+  }
+
+  // azure-devops/src/features/review/style.css
+  var style_default2 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
+   reads "Add single comment". Only the stylesheet touches it. */
+.repos-discussion-thread-reply
+  :has(> .fix-ado-review-add)
+  > .bolt-button.primary:not(.fix-ado-review-add) {
+  background-color: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  font-size: 0;
+}
+
+.repos-discussion-thread-reply
+  :has(> .fix-ado-review-add)
+  > .bolt-button.primary:not(.fix-ado-review-add):hover {
+  background-color: var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+}
+
+.repos-discussion-thread-reply
+  :has(> .fix-ado-review-add)
+  > .bolt-button.primary:not(.fix-ado-review-add)::after {
+  content: "Add single comment";
+  font-size: 0.875rem;
+}
+
+.fix-ado-review-add.disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* A pending comment under its line. The card is as wide as the part of the diff in
+   view, and stays in view while the code scrolls sideways. */
+.repos-summary-code-diff,
+.repos-summary-diff-splitter > [class*="vss-Splitter--pane"] {
+  container-type: inline-size;
+}
+
+.fix-ado-review-card-cell {
+  white-space: normal;
+}
+
+.fix-ado-review-spacer-row > div {
+  height: var(--fix-ado-review-spacer-height, 0);
+}
+
+.fix-ado-review-card {
+  background-color: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+  border: 1px dashed var(--communication-background, rgba(0, 120, 212, 1));
+  border-radius: 4px;
+  box-sizing: border-box;
+  left: 8px;
+  margin: 8px 0;
+  max-width: 744px;
+  padding: 8px 12px;
+  position: sticky;
+  width: calc(100cqw - 88px);
+}
+
+.fix-ado-review-card-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.fix-ado-review-card-note {
+  flex: 1 1 160px;
+  font-size: 0.75rem;
+}
+
+.fix-ado-review-pending {
+  border: 1px solid var(--status-warning-foreground, rgba(177, 133, 37, 1));
+  border-radius: 120px;
+  color: var(--status-warning-foreground, rgba(177, 133, 37, 1));
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0 8px;
+}
+
+.fix-ado-review-card-text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.fix-ado-review-textarea {
+  background-color: var(--background-color, rgba(255, 255, 255, 1));
+  border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+  border-radius: 2px;
+  box-sizing: border-box;
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  font: inherit;
+  min-height: 80px;
+  padding: 6px 8px;
+  resize: vertical;
+  width: 100%;
+}
+
+.fix-ado-review-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* A pending comment in the single-file view, over the room the editor keeps under its line. */
+.fix-ado-review-editor-card {
+  box-sizing: border-box;
+  /* Until the editor has drawn the room. */
+  display: none;
+  position: absolute;
+  white-space: normal;
+  z-index: 5;
+}
+
+.fix-ado-review-editor-card .fix-ado-review-card {
+  margin: 4px 0;
+  position: static;
+  width: auto;
+}
+
+/* The pending comments on the file in the single-file view, over a corner of the
+   card around the editor. */
+.fix-ado-review-file-pending {
+  background-color: var(--callout-background-color, rgba(255, 255, 255, 1));
+  border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+  border-radius: 4px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  max-height: 70%;
+  max-width: 70%;
+  overflow-y: auto;
+  padding: 6px 12px;
+  position: absolute;
+  right: 24px;
+  top: 8px;
+  z-index: 20;
+}
+
+.fix-ado-review-file-pending > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.fix-ado-review-file-pending[open] {
+  width: 480px;
+}
+
+.fix-ado-review-file-pending .fix-ado-review-card {
+  position: static;
+  width: auto;
+}
+
+.fix-ado-review-file-pending .fix-ado-review-card-note {
+  flex-basis: 60px;
+}
+
+/* A pending comment in the file tree: a dot in the "Pending" colour where a thread has a picture. */
+.fix-ado-review-tree-row {
+  cursor: pointer;
+}
+
+/* As wide as the arrow a thread's row keeps room for, and as tall as that row. */
+.fix-ado-review-tree-indent {
+  flex-shrink: 0;
+  width: 25px;
+}
+
+.fix-ado-review-tree-row .repos-file-explorer-tree-thread-item {
+  box-sizing: border-box;
+  height: 36px;
+}
+
+.fix-ado-review-pending-dot {
+  background-color: var(--status-warning-foreground, rgba(177, 133, 37, 1));
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 16px;
+  width: 16px;
+}
+
+/* "Submit review" in the pull request's tab bar. */
+.fix-ado-review-header {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.fix-ado-review-count {
+  background-color: var(--background-color, rgba(255, 255, 255, 1));
+  border-radius: 120px;
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  font-size: 0.75rem;
+  margin-left: 8px;
+  min-width: 12px;
+  padding: 0 6px;
+}
+
+/* "Finish your review". */
+.fix-ado-review-dialog {
+  background-color: var(--callout-background-color, rgba(255, 255, 255, 1));
+  border: 1px solid rgba(var(--palette-neutral-20, 200, 200, 200), 1);
+  border-radius: 4px;
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  max-height: 80vh;
+  padding: 20px;
+  width: min(560px, 90vw);
+}
+
+.fix-ado-review-dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.fix-ado-review-title {
+  font-size: 1.0625rem;
+  margin: 0 0 12px;
+}
+
+.fix-ado-review-votes {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.fix-ado-review-vote {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+}
+
+.fix-ado-review-vote span > * {
+  display: block;
+}
+
+.fix-ado-review-pending-list summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.fix-ado-review-pending-item {
+  border-top: 1px solid rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.fix-ado-review-status {
+  color: var(--status-error-foreground, rgba(205, 74, 69, 1));
+  margin: 12px 0 0;
+  min-height: 1.25rem;
+}
+
+.fix-ado-review-dialog-buttons {
+  align-items: flex-end;
+  display: flex;
+  justify-content: space-between;
+}
+`;
+
+  // azure-devops/src/features/review/index.ts
+  var MAX_REVIEW_AGE_MS = 2592e6, review = {
+    change: { kind: "new", version: "1.10.0" },
+    description: "Start a review on a pull request: collect comments that only you see, then post them in one go, with your vote.",
+    id: "review",
+    name: "Reviews",
+    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2)
+        return null;
+      let store = createReviewStore({
+        createId: () => crypto.randomUUID(),
+        now,
+        storage: {
+          keys: () => GM_listValues(),
+          load: (key) => GM_getValue(key, null),
+          remove: (key) => {
+            GM_deleteValue(key);
+          },
+          save: (key, stored) => {
+            GM_setValue(key, stored);
+          }
+        }
+      });
+      store.deleteOlderThan(MAX_REVIEW_AGE_MS);
+      let feature = createReview({
+        client,
+        // oxlint-disable-next-line eslint/no-alert -- one question before the owner's text is deleted
+        confirm: (question) => globalThis.confirm(question),
+        copy: (text) => {
+          navigator.clipboard.writeText(text);
+        },
+        document: document2,
+        keyOf: (pullRequest) => reviewKey(`${location.host}${basePath2}`, pullRequest),
+        reload: () => {
+          location.reload();
+        },
+        store
+      });
+      return {
+        sync({ page }) {
+          feature.sync(pullRequestOf(page));
+        }
+      };
+    },
+    styles: [style_default2]
+  };
+
+  // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
+  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE2 = "http://www.w3.org/2000/svg";
+  function element2(document2, tag, { className, text, attributes = {}, children = [] } = {}) {
+    let created = document2.createElement(tag);
+    className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text);
+    for (let [name, value] of Object.entries(attributes))
+      created.setAttribute(name, value);
+    return created.append(...children), created;
+  }
+  function fontIcon(document2, name, size) {
+    return element2(document2, "span", {
+      children: [
+        element2(document2, "span", {
+          attributes: { "aria-hidden": "true" },
+          className: `left-icon flex-noshrink fabric-icon ms-Icon--${name} ${size}`
+        })
+      ],
+      className: "fluent-icons-enabled"
+    });
+  }
+  function svgIcon(document2, className, pathData) {
+    let svg = document2.createElementNS(SVG_NAMESPACE2, "svg"), attributes = {
+      "aria-hidden": "true",
+      class: className,
+      height: "16",
+      viewBox: "0 0 16 16",
+      width: "16"
+    };
+    for (let [name, value] of Object.entries(attributes))
+      svg.setAttribute(name, value);
+    for (let data of pathData) {
+      let path = document2.createElementNS(SVG_NAMESPACE2, "path");
+      path.setAttribute("d", data), svg.append(path);
+    }
+    return svg;
+  }
+  function createSpinner(document2) {
+    return element2(document2, "span", {
+      attributes: { "aria-hidden": "true" },
+      className: "fix-ado-spinner"
+    });
+  }
+  function createStarButton(document2) {
+    return element2(document2, "button", {
+      attributes: { "aria-pressed": "false", type: "button" },
+      children: [svgIcon(document2, "fix-ado-star-icon", [STAR_PATH])],
+      className: `${STAR_BUTTON_CLASS} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`
+    });
+  }
+  function updateStarButton(button2, isStarred) {
+    button2.getAttribute("aria-pressed") !== String(isStarred) && (button2.setAttribute("aria-pressed", String(isStarred)), button2.setAttribute("aria-label", isStarred ? "Remove from starred" : "Add to starred"), button2.setAttribute("title", isStarred ? "Remove from starred" : "Add to starred"));
+  }
+  function detailOf(identity) {
+    return identity.isGroup ? "Group" : identity.signInAddress;
+  }
+  function createRequiredButton(document2, identity) {
+    return element2(document2, "button", {
+      attributes: {
+        "aria-label": `Add ${identity.displayName} as required reviewer`,
+        "data-fix-ado-add": "required",
+        title: "Add as required reviewer",
+        type: "button"
+      },
+      children: [svgIcon(document2, "fix-ado-required-icon", [REQUIRED_RING_PATH, PLUS_PATH])],
+      className: "bolt-split-button-option flex-self-stretch body-s bolt-button bolt-icon-button enabled icon-only bolt-focus-treatment"
+    });
+  }
+  function createNameColumn(document2, identity) {
+    let name = element2(document2, "div", {
+      className: "body-m flex-grow text-ellipsis",
+      text: identity.displayName
+    }), detail = element2(document2, "div", {
+      className: "fix-ado-starred-detail body-s secondary-text text-ellipsis",
+      text: detailOf(identity)
+    });
+    return element2(document2, "div", {
+      children: [name, detail],
+      className: "flex-column flex-grow text-ellipsis icon-large-margin"
+    });
+  }
+  function createAddSplitButton(document2, identity) {
+    return element2(document2, "div", {
+      children: [
+        element2(document2, "button", {
+          attributes: {
+            "aria-label": `Add ${identity.displayName} as optional reviewer`,
+            "data-fix-ado-add": "optional",
+            title: "Add as optional reviewer",
+            type: "button"
+          },
+          children: [fontIcon(document2, "Add", "small")],
+          className: "bolt-split-button-main bolt-button bolt-icon-button enabled icon-only bolt-focus-treatment"
+        }),
+        element2(document2, "div", { className: "bolt-split-button-divider flex-noshrink" }),
+        element2(document2, "div", {
+          children: [createRequiredButton(document2, identity)],
+          className: "inline-flex-row"
+        })
+      ],
+      className: "fix-ado-add-reviewer bolt-split-button inline-flex-row flex-noshrink icon-large-margin"
+    });
+  }
+  function createAvatar(document2, identity, imageUrl) {
+    return element2(document2, "div", {
+      children: [
+        element2(document2, "div", {
+          attributes: { "aria-label": identity.displayName },
+          children: [
+            element2(document2, "img", {
+              attributes: { alt: "", src: imageUrl },
+              className: "bolt-coin-content using-image size24"
+            })
+          ],
+          className: "bolt-coin flex-noshrink icon-large-margin size24"
+        })
+      ]
+    });
+  }
+  function createStarredRow(document2, identity, imageUrl) {
+    let star = createStarButton(document2);
+    return updateStarButton(star, !0), element2(document2, "div", {
+      attributes: { "data-fix-ado-identity": identity.id },
+      children: [
+        createAddSplitButton(document2, identity),
+        createAvatar(document2, identity, imageUrl),
+        createNameColumn(document2, identity),
+        star
+      ],
+      className: "repos-reviewer flex-row flex-center fix-ado-starred-reviewer"
+    });
+  }
+  var EMPTY_TEXT = "Put people/groups here you often add as pull requests, to add them more easily as optional reviewer";
+  function createEmptyWell(document2) {
+    return element2(document2, "div", {
+      className: "repos-pr-no-items-well fix-ado-starred-empty",
+      text: EMPTY_TEXT
+    });
+  }
+  function createStarSomeoneButton(document2) {
+    return element2(document2, "button", {
+      attributes: { type: "button" },
+      children: [
+        fontIcon(document2, "Add", "small"),
+        element2(document2, "span", {
+          className: "bolt-button-text body-s",
+          text: "Add person/group to starred"
+        })
+      ],
+      className: "fix-ado-star-someone bolt-button subtle enabled bolt-focus-treatment"
+    });
+  }
+  function createStarredSection(document2) {
+    return element2(document2, "div", {
+      children: [
+        element2(document2, "div", {
+          className: "margin-bottom-8 body-s secondary-text font-weight-semibold",
+          text: "Add starred as reviewer"
+        }),
+        element2(document2, "div", { className: "fix-ado-starred-list flex-column" }),
+        createStarSomeoneButton(document2)
+      ],
+      className: `flex-grow flex-column ${STARRED_SECTION_CLASS}`
+    });
+  }
+
+  // azure-devops/src/features/starred-reviewers/starred-reviewer-chips-markup.ts
+  var STARRED_CHIP_ROW_CLASS = "fix-ado-starred-chips", STARRED_CHIP_CLASS = "fix-ado-starred-chip";
+  function createStarredChip(document2, identity, imageUrl) {
+    let name = personOrTeamName(identity.displayName), image = element2(document2, "img", {
+      attributes: { alt: "", src: imageUrl },
+      className: "bolt-coin-content using-image size20"
+    });
+    return element2(document2, "button", {
+      attributes: {
+        "aria-label": `Add ${name} as reviewer`,
+        "data-fix-ado-identity": identity.id,
+        title: "Add as reviewer",
+        type: "button"
+      },
+      children: [
+        element2(document2, "div", {
+          children: [
+            element2(document2, "div", {
+              attributes: { "aria-hidden": "true" },
+              children: [image],
+              className: "bolt-coin flex-noshrink flex-row flex-center size20"
+            })
+          ],
+          className: "bolt-pill-filled-visual flex-noshrink"
+        }),
+        element2(document2, "div", { className: "bolt-pill-content text-ellipsis", text: name })
+      ],
+      className: `${STARRED_CHIP_CLASS} bolt-pill flex-row flex-center standard regular clickable has-filled-visual`
+    });
+  }
+  function showChipSpinner(document2, chip) {
+    chip.querySelector(".bolt-pill-filled-visual")?.replaceChildren(createSpinner(document2));
+  }
+  function createStarredChipRow(document2) {
+    return element2(document2, "div", {
+      attributes: { "aria-label": "Starred reviewers", role: "group" },
+      children: [
+        svgIcon(document2, "fix-ado-starred-chips-icon fix-ado-star-icon", [STAR_PATH]),
+        element2(document2, "div", { className: "fix-ado-starred-chip-list flex-row flex-wrap" })
+      ],
+      className: `${STARRED_CHIP_ROW_CLASS} flex-row flex-center`
+    });
+  }
+
+  // azure-devops/src/features/starred-reviewers/starred-reviewers-store.ts
+  function isIdentity(value) {
+    return typeof value == "object" && value !== null && "id" in value && typeof value.id == "string" && "displayName" in value && typeof value.displayName == "string" && "signInAddress" in value && typeof value.signInAddress == "string" && "isGroup" in value && typeof value.isGroup == "boolean";
+  }
+  function isNameOf(identity, name) {
+    let wanted = name.trim().toLowerCase();
+    return [identity.displayName, personOrTeamName(identity.displayName)].some(
+      (candidate) => candidate.trim().toLowerCase() === wanted
+    );
+  }
+  function createStarredReviewersStore(storage) {
+    function list() {
+      let stored = storage.load();
+      return Array.isArray(stored) ? stored.filter((value) => isIdentity(value)) : [];
+    }
+    return {
+      findByName: (name) => list().find((identity) => isNameOf(identity, name)) ?? null,
+      isStarred: (id) => list().some((identity) => identity.id === id),
+      list,
+      star(identity) {
+        let others = list().filter(({ id }) => id !== identity.id);
+        storage.save([...others, identity]);
+      },
+      unstar(id) {
+        storage.save(list().filter((identity) => identity.id !== id));
+      }
+    };
+  }
+
+  // azure-devops/src/features/starred-reviewers/reviewer-field.ts
+  var FIELD_LABEL_IDS = [
+    "__bolt-pr-optional-reviewers-label",
+    "__bolt-pr-required-reviewers-label"
+  ];
+  function reviewerFields(document2) {
+    let fields = [];
+    for (let labelId of FIELD_LABEL_IDS) {
+      let column = document2.querySelector(`#${labelId}`)?.parentElement?.parentElement, input = column?.querySelector(`input[aria-labelledby="${labelId}"]`);
+      column != null && input !== null && input !== void 0 && fields.push({ column, input });
+    }
+    return fields;
+  }
+  function namesInFields(document2) {
+    return [...document2.querySelectorAll(".bolt-identity-picker-pill .bolt-pill-content")].map(
+      (pill) => pill.textContent?.trim() ?? ""
+    );
+  }
+  function typeInto(input, text) {
+    input.focus();
+    let pageWindow = input.ownerDocument.defaultView;
+    Reflect.set((pageWindow?.HTMLInputElement ?? HTMLInputElement).prototype, "value", text, input);
+    let EventOfPage = pageWindow?.Event ?? Event;
+    input.dispatchEvent(new EventOfPage("input", { bubbles: !0 }));
+  }
+  function isSuggestionOf(option, identity) {
+    let name = option.querySelector(".bolt-picker-persona-name > :first-child")?.textContent ?? "", detail = option.querySelector(".bolt-picker-persona-name .secondary-text")?.textContent, address = identity.signInAddress.toLowerCase();
+    return address === "" ? isNameOf(identity, name) : detail?.trim().toLowerCase() === address;
+  }
+  function findSuggestion(document2, input, identity) {
+    let listboxId = input.getAttribute("aria-controls");
+    return [...(listboxId === null ? null : document2.querySelector(`[id="${listboxId}"]`))?.querySelectorAll('[role="option"]') ?? []].find(
+      (candidate) => isSuggestionOf(candidate, identity)
+    ) ?? null;
+  }
+  function isInField(document2, identity) {
+    return namesInFields(document2).some((name) => isNameOf(identity, name));
+  }
+  function pressMouseOn(element4) {
+    let pageWindow = element4.ownerDocument.defaultView, MouseEventOfPage = pageWindow?.MouseEvent ?? MouseEvent, PointerEventOfPage = pageWindow?.PointerEvent ?? MouseEventOfPage, init = { bubbles: !0, button: 0, cancelable: !0, composed: !0 };
+    element4.dispatchEvent(new PointerEventOfPage("pointerdown", init)), element4.dispatchEvent(new MouseEventOfPage("mousedown", init)), element4.dispatchEvent(new PointerEventOfPage("pointerup", init)), element4.dispatchEvent(new MouseEventOfPage("mouseup", init)), element4.dispatchEvent(new MouseEventOfPage("click", init));
+  }
+  function pressEnterIn(input) {
+    let KeyboardEventOfPage = input.ownerDocument.defaultView?.KeyboardEvent ?? KeyboardEvent, init = { bubbles: !0, cancelable: !0, code: "Enter", key: "Enter", keyCode: 13 };
+    input.dispatchEvent(new KeyboardEventOfPage("keydown", init)), input.dispatchEvent(new KeyboardEventOfPage("keyup", init));
+  }
+
+  // azure-devops/src/features/starred-reviewers/starred-reviewer-chips.ts
+  var SUGGESTION_POLL_MS = 250, PICK_TIMEOUT_MS = 5e3, PICKING_CLASS = "fix-ado-starred-picking", NOT_FOUND_TITLE = "Not found in the reviewer field's suggestions. Pick them there.";
+  function searchTextOf(identity) {
+    return identity.signInAddress === "" ? personOrTeamName(identity.displayName) : identity.signInAddress;
+  }
+  function isActive(state, { pickId }) {
+    return state.activePick?.pickId === pickId;
+  }
+  function finishPick(state, pendingPick, isPicked) {
+    isActive(state, pendingPick) && (log("Starred reviewers: chip pick finished", { isPicked }), isPicked || state.notFoundIds.add(pendingPick.identity.id), state.activePick = null, sync(state));
+  }
+  function runStep(state, pendingPick, step) {
+    if (isActive(state, pendingPick))
+      try {
+        step();
+      } catch (error) {
+        log("Starred reviewers: chip pick failed", {
+          message: error instanceof Error ? error.message : "unknown error"
+        }), finishPick(state, pendingPick, !1);
+      }
+  }
+  function nextStep(pendingPick, suggestion) {
+    if (pendingPick.step === "waiting")
+      return pressMouseOn(suggestion.querySelector(".bolt-suggestions-item") ?? suggestion), "clicked";
+    let { input } = pendingPick.field;
+    return pendingPick.step === "clicked" && input.getAttribute("aria-activedescendant") === suggestion.id ? (pressEnterIn(input), "entered") : null;
+  }
+  function pickSuggestion(state, pendingPick) {
+    let { document: document2, schedule: schedule2 } = state.options, { field, identity } = pendingPick, suggestion = isInField(document2, identity) ? null : findSuggestion(document2, field.input, identity), step = suggestion === null ? pendingPick.step : nextStep(pendingPick, suggestion);
+    if (log("Starred reviewers: chip pick", {
+      from: pendingPick.step,
+      hasSuggestion: suggestion !== null,
+      to: step
+    }), step === null || isInField(document2, identity)) {
+      finishPick(state, pendingPick, isInField(document2, identity));
+      return;
+    }
+    schedule2(() => {
+      runStep(state, pendingPick, () => {
+        pickSuggestion(state, { ...pendingPick, step });
+      });
+    }, SUGGESTION_POLL_MS);
+  }
+  function addThroughField(state, field, identity) {
+    if (state.activePick !== null)
+      return;
+    let { schedule: schedule2 } = state.options, pendingPick = { field, identity, pickId: state.nextPickId, step: "waiting" };
+    state.nextPickId += 1, state.activePick = { identityId: identity.id, pickId: pendingPick.pickId }, state.notFoundIds.delete(identity.id), sync(state), schedule2(() => {
+      isActive(state, pendingPick) && (log("Starred reviewers: chip pick timed out"), finishPick(state, pendingPick, !1));
+    }, PICK_TIMEOUT_MS), runStep(state, pendingPick, () => {
+      typeInto(field.input, searchTextOf(identity)), schedule2(() => {
+        runStep(state, pendingPick, () => {
+          pickSuggestion(state, pendingPick);
+        });
+      }, SUGGESTION_POLL_MS);
+    });
+  }
+  function onRowClick(state, field, event) {
+    let id = closestHtmlElement(event.target, `.${STARRED_CHIP_CLASS}`)?.dataset.fixAdoIdentity, identity = state.options.store.list().find((starred) => starred.id === id);
+    identity !== void 0 && addThroughField(state, field, identity);
+  }
+  function createChip(state, identity) {
+    let { document: document2, imageUrlOf } = state.options, chip = createStarredChip(document2, identity, imageUrlOf(identity));
+    return state.activePick !== null && (chip.setAttribute("disabled", ""), chip.classList.remove("clickable")), state.activePick?.identityId === identity.id && showChipSpinner(document2, chip), state.notFoundIds.has(identity.id) && (chip.title = NOT_FOUND_TITLE), chip;
+  }
+  function placeRow(state, field) {
+    let row = field.column.querySelector(`:scope > .${STARRED_CHIP_ROW_CLASS}`);
+    return row === null && (row = createStarredChipRow(state.options.document), row.addEventListener("click", (event) => {
+      onRowClick(state, field, event);
+    })), field.column.lastElementChild !== row && field.column.append(row), row;
+  }
+  function fillRow(state, field, shown) {
+    if (shown.length === 0) {
+      field.column.querySelector(`:scope > .${STARRED_CHIP_ROW_CLASS}`)?.remove();
+      return;
+    }
+    let list = placeRow(state, field).querySelector(".fix-ado-starred-chip-list"), signature = JSON.stringify([
+      state.activePick?.identityId,
+      shown.map(({ id }) => [id, state.notFoundIds.has(id)])
+    ]);
+    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip(state, identity))));
+  }
+  function removeChipRows(document2) {
+    for (let row of document2.querySelectorAll(`.${STARRED_CHIP_ROW_CLASS}`))
+      row.remove();
+  }
+  function sync(state) {
+    let { document: document2, store } = state.options, fields = reviewerFields(document2);
+    if (document2.body.classList.toggle(PICKING_CLASS, state.isCreatePage && state.activePick !== null), !state.isCreatePage) {
+      removeChipRows(document2);
+      return;
+    }
+    let names = namesInFields(document2), shown = store.list().filter((identity) => !names.some((name) => isNameOf(identity, name)));
+    for (let field of fields)
+      fillRow(state, field, shown);
+  }
+  function createStarredReviewerChips(options) {
+    let state = {
+      activePick: null,
+      isCreatePage: !1,
+      nextPickId: 1,
+      notFoundIds: /* @__PURE__ */ new Set(),
+      options
+    };
+    return {
+      sync(isCreatePage) {
+        state.isCreatePage = isCreatePage, sync(state);
+      }
+    };
+  }
+
+  // azure-devops/src/features/starred-reviewers/reviewer-stars.ts
+  var REVIEWER_SECTION_SELECTOR = ".pr-required-reviewers-section, .pr-optional-reviewers-section, .pr-declined-reviewers-section";
+  function reviewerRowsOf(document2) {
+    let rows = [];
+    for (let section of document2.querySelectorAll(REVIEWER_SECTION_SELECTOR))
+      rows.push(...section.querySelectorAll(":scope > .repos-reviewer"));
+    return rows;
+  }
+  function nameOfRow(row) {
+    return row.querySelector(".flex-column > .body-m")?.textContent?.trim() ?? "";
+  }
+  function reviewerRowOf(document2, identity) {
+    return reviewerRowsOf(document2).find((row) => isNameOf(identity, nameOfRow(row)));
+  }
+  function isOnPage(document2, identity) {
+    return reviewerRowOf(document2, identity) !== void 0;
+  }
+  function logShown(row) {
+    log("Starred reviewers: added reviewer shown", {
+      hasBox: row.getClientRects().length > 0,
+      isHidden: row.closest("[hidden], [aria-hidden='true']") !== null,
+      section: row.parentElement?.className ?? ""
+    });
+  }
+  function insertStar(document2, row, onClick2) {
+    let star = createStarButton(document2);
+    star.addEventListener("click", (event) => {
+      event.stopPropagation(), onClick2();
+    });
+    let reveal = row.querySelector(":scope > .repos-reviewer-reveal");
+    return reveal === null ? row.append(star) : reveal.before(star), star;
+  }
+  function addStars(document2, store, onStarClick) {
+    for (let row of reviewerRowsOf(document2)) {
+      let star = row.querySelector(`:scope > .${STAR_BUTTON_CLASS}`) ?? insertStar(document2, row, () => {
+        onStarClick(row);
+      });
+      updateStarButton(star, store.findByName(nameOfRow(row)) !== null);
+    }
+  }
+
+  // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
+  var COLLAPSE_ICONS = { collapsed: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
+  function setCollapsed(box, isCollapsed) {
+    box.toggleAttribute("data-collapsed", isCollapsed);
+    let button2 = box.querySelector(".fix-ado-issue-box-collapse");
+    button2?.setAttribute("aria-expanded", String(!isCollapsed));
+    let icon = button2?.querySelector(".fabric-icon");
+    icon?.classList.toggle(COLLAPSE_ICONS.collapsed, isCollapsed), icon?.classList.toggle(COLLAPSE_ICONS.open, !isCollapsed);
+  }
+  function createChevron(document2) {
+    let iconFont = document2.createElement("span");
+    iconFont.className = "fluent-icons-enabled";
+    let icon = document2.createElement("span");
+    return icon.className = "left-icon flex-noshrink fabric-icon small", icon.setAttribute("aria-hidden", "true"), iconFont.append(icon), iconFont;
+  }
+  function createCollapseButton(document2) {
+    let button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = "bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-issue-box-collapse", button2.setAttribute("aria-label", "Errors and warnings"), button2.append(createChevron(document2)), button2;
+  }
+  function addCollapseButton(box, header, collapse) {
+    let button2 = createCollapseButton(box.ownerDocument);
+    button2.addEventListener("click", () => {
+      let isCollapsed = !Object.hasOwn(box.dataset, "collapsed");
+      setCollapsed(box, isCollapsed), collapse.onToggle(isCollapsed);
+    }), header.prepend(button2), setCollapsed(box, collapse.isCollapsed);
+  }
+
+  // azure-devops/src/pipeline/pipeline-issues.ts
+  var NO_ISSUES = { errorCount: 0, warningCount: 0 }, COUNT_FIELDS = { error: "errorCount", warning: "warningCount" };
+  function isIssueKind(type) {
+    return type === "error" || type === "warning";
+  }
+  function issueKey(issue) {
+    return `${issue.type}
+${issue.message ?? ""}`;
+  }
+  function childrenByParentOf(records) {
+    let children = /* @__PURE__ */ new Map();
+    for (let record of records)
+      record.parentId !== null && children.set(record.parentId, [...children.get(record.parentId) ?? [], record]);
+    return children;
+  }
+  function descendantsOf(record, childrenByParent) {
+    let descendants = [];
+    for (let child of childrenByParent.get(record.id) ?? [])
+      descendants.push(child, ...descendantsOf(child, childrenByParent));
+    return descendants;
+  }
+  function ownIssuesOf(records) {
+    let childrenByParent = childrenByParentOf(records);
+    return new Map(
+      records.map((record) => {
+        let below = new Set(
+          descendantsOf(record, childrenByParent).flatMap(
+            (descendant) => (descendant.issues ?? []).map((issue) => issueKey(issue))
+          )
+        ), own = (record.issues ?? []).filter(
+          (issue) => isIssueKind(issue.type) && !below.has(issueKey(issue))
+        );
+        return [record.id, own];
+      })
+    );
+  }
+  function ownCountOf(record, own, kind) {
+    let listed = (record.issues ?? []).filter((issue) => issue.type === kind).length, repeated = listed - own.filter((issue) => issue.type === kind).length;
+    return Math.max(0, Math.max(record[COUNT_FIELDS[kind]] ?? 0, listed) - repeated);
+  }
+  function issueCountsOf(records) {
+    let childrenByParent = childrenByParentOf(records), ownIssues = ownIssuesOf(records), ownCounts = new Map(
+      records.map((record) => {
+        let own = ownIssues.get(record.id) ?? [];
+        return [
+          record.id,
+          {
+            errorCount: ownCountOf(record, own, "error"),
+            warningCount: ownCountOf(record, own, "warning")
+          }
+        ];
+      })
+    );
+    return new Map(
+      records.map((record) => [
+        record.id,
+        sumIssueCounts(
+          [record, ...descendantsOf(record, childrenByParent)].map(
+            ({ id }) => ownCounts.get(id) ?? NO_ISSUES
+          )
+        )
+      ])
+    );
+  }
+  function sumIssueCounts(counts) {
+    let total = { ...NO_ISSUES };
+    for (let count of counts)
+      total.errorCount += count.errorCount, total.warningCount += count.warningCount;
+    return total;
+  }
+  function runIssueOf(issue, spot) {
+    let place = (spot.job === null ? [spot.stage.name] : [spot.job.name, spot.step?.name]).filter((name) => name != null), lineNumber = Number(issue.data?.logFileLineNumber ?? Number.NaN);
+    return {
+      jobId: spot.job?.id ?? null,
+      kind: issue.type,
+      lineNumber: Number.isInteger(lineNumber) ? lineNumber : null,
+      message: issue.message ?? "",
+      place,
+      stageId: spot.stage.id,
+      stepId: spot.step?.id ?? null
+    };
+  }
+  function runIssuesAt(spot, issues) {
+    return issues.flatMap(
+      (issue) => isIssueKind(issue.type) ? [runIssueOf({ ...issue, type: issue.type }, spot)] : []
+    );
+  }
+  function runIssuesOf(stages) {
+    let issues = stages.flatMap((stage) => stage.issues);
+    return [
+      ...issues.filter((issue) => issue.kind === "error"),
+      ...issues.filter((issue) => issue.kind === "warning")
+    ];
+  }
+
+  // azure-devops/src/pipeline/pipeline-issue-list.ts
+  var SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", ICON_SIZES = {
+    large: { className: " margin-4", drawing: 32, pixels: 24 },
+    small: { className: "", drawing: 16, pixels: 16 }
+  }, ICON_MARKS = {
+    error: {
+      large: "M21.99 9.99a1.5 1.5 0 0 0-2.122 0L16 13.856 12.132 9.99a1.5 1.5 0 0 0-2.121 2.122l3.868 3.868-3.89 3.889a1.5 1.5 0 0 0 2.122 2.121L16 18.1l3.89 3.89a1.5 1.5 0 0 0 2.12-2.122l-3.889-3.89 3.868-3.867a1.5 1.5 0 0 0 0-2.122z",
+      small: "M10.984 5.004a.9.9 0 0 1 0 1.272L9.27 7.99l1.74 1.741a.9.9 0 1 1-1.272 1.273l-1.74-1.741-1.742 1.74a.9.9 0 1 1-1.272-1.272l1.74-1.74-1.713-1.714a.9.9 0 0 1 1.273-1.273l1.713 1.713 1.714-1.713a.9.9 0 0 1 1.273 0z"
+    },
+    warning: {
+      large: "M16 7a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 16 7zm-1.5 16a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z",
+      small: "M8.91 3.9a.9.9 0 0 0-1.8 0v4.7a.9.9 0 1 0 1.8 0V3.9zm-.95 8.65a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8z"
+    }
+  }, KIND_STATUSES = { error: "failed", warning: "warning" }, KIND_LABELS = { error: "Error", warning: "Warning" }, LIST_ROW_WRAPPERS = [
+    { className: "bolt-list-cell-content flex-row", tag: "div" },
+    { className: "bolt-list-cell", tag: "td" },
+    { className: "bolt-list-row first-row", role: "listitem", tag: "tr" },
+    { className: "relative", tag: "tbody" },
+    {
+      className: "preview-check-list bolt-list body-m relative scroll-hidden",
+      role: "list",
+      tag: "table"
+    },
+    { className: "status-details-container fix-ado-issue-box", tag: "div" }
+  ];
+  function countText(count, kind) {
+    return `${count} ${kind}${count === 1 ? "" : "s"}`;
+  }
+  function issueSummary(parts) {
+    let { errorCount, warningCount } = sumIssueCounts(parts);
+    return [
+      ...errorCount > 0 ? [countText(errorCount, "error")] : [],
+      ...warningCount > 0 ? [countText(warningCount, "warning")] : []
+    ].join(", ");
+  }
+  function worstKindOf(issues) {
+    return issues.some((issue) => issue.kind === "error") ? "error" : "warning";
+  }
+  function createElement(document2, { className, role, tag, text }) {
+    let created = document2.createElement(tag);
+    return created.className = className, text !== void 0 && (created.textContent = text), role !== void 0 && created.setAttribute("role", role), created;
+  }
+  function wrapIn(document2, content, wrappers) {
+    let wrapped = content;
+    for (let wrapper of wrappers) {
+      let outer = createElement(document2, wrapper);
+      outer.append(wrapped), wrapped = outer;
+    }
+    return wrapped;
+  }
+  function setAttributes2(element4, attributes) {
+    for (let [name, value] of Object.entries(attributes))
+      element4.setAttribute(name, value);
+  }
+  function createKindIcon(document2, kind, size) {
+    let { className, drawing, pixels: pixels2 } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE3, "svg");
+    setAttributes2(icon, {
+      "aria-label": KIND_LABELS[kind],
+      class: `bolt-status flex-noshrink ${KIND_STATUSES[kind]}${className} fix-ado-kind-icon`,
+      "data-kind": kind,
+      height: String(pixels2),
+      role: "img",
+      viewBox: `0 0 ${drawing} ${drawing}`,
+      width: String(pixels2)
+    });
+    let circle = document2.createElementNS(SVG_NAMESPACE3, "circle"), middle = String(drawing / 2);
+    setAttributes2(circle, { cx: middle, cy: middle, r: middle });
+    let mark = document2.createElementNS(SVG_NAMESPACE3, "path");
+    return setAttributes2(mark, { d: ICON_MARKS[kind][size], fill: "#fff" }), icon.append(circle, mark), icon;
+  }
+  function createIssueCounts(document2, counts) {
+    return ["error", "warning"].flatMap((kind) => {
+      let count = kind === "error" ? counts.errorCount : counts.warningCount;
+      if (count === 0)
+        return [];
+      let text = String(count), badge = createElement(document2, { className: "fix-ado-issue-count", tag: "span", text });
+      return badge.dataset.kind = kind, badge.setAttribute("aria-label", countText(count, kind)), badge.title = countText(count, kind), [badge];
+    });
+  }
+  function createOutputLine(document2, issue) {
+    let line2 = createElement(document2, {
+      className: "flex-row monospaced-m dark-build-output fix-ado-issue-output",
+      tag: "div"
+    });
+    issue.lineNumber !== null && line2.append(createElement(document2, { className: "line-number padding-horizontal-16", tag: "div", text: String(issue.lineNumber) }));
+    let className = `${issue.kind === "error" ? "error-text" : "fix-ado-warning-text"} word-break fix-ado-issue-message`;
+    return line2.append(createElement(document2, { className, tag: "div", text: issue.message })), line2;
+  }
+  function fillIssueLink(link, issue) {
+    let { ownerDocument: document2 } = link;
+    link.className = "bolt-table-link full-width-link-no-padding no-underline-link bolt-link fix-ado-issue", link.dataset.kind = issue.kind;
+    let place = createElement(document2, {
+      className: "padding-horizontal-16 padding-vertical-8 text-ellipsis separator-line-top secondary-text body-s fix-ado-issue-place",
+      tag: "div",
+      text: issue.place.join(" / ")
+    }), output = createElement(document2, { className: "flex-column", tag: "div" });
+    return output.append(createOutputLine(document2, issue)), link.append(place, output), link;
+  }
+  function createBoxHeader(document2, box) {
+    let text = createElement(document2, {
+      className: "pr-completion-status-header flex-row flex-center flex-grow rhythm-horizontal-8 text-ellipsis",
+      tag: "div"
+    }), { title } = box;
+    text.append(
+      createElement(document2, {
+        className: "text-ellipsis fix-ado-issue-box-title",
+        tag: "span",
+        text: title
+      })
+    ), box.details !== null && text.append(createElement(document2, { className: "secondary-text fix-ado-issue-box-details", tag: "span", text: box.details }));
+    let header = createElement(document2, {
+      className: "flex-row flex-grow flex-center padding-horizontal-16 rhythm-horizontal-8 fix-ado-issue-box-header",
+      tag: "div"
+    });
+    return header.append(createKindIcon(document2, worstKindOf(box.issues), "small"), text), header;
+  }
+  function createIssueBox(document2, box) {
+    let content = createElement(document2, {
+      className: "flex-column flex-grow text-ellipsis",
+      tag: "div"
+    }), links = box.issues.map((issue) => box.createLink(issue)), header = createBoxHeader(document2, box);
+    content.append(header, ...links);
+    let wrapped = wrapIn(document2, content, LIST_ROW_WRAPPERS);
+    return box.collapse !== void 0 && addCollapseButton(wrapped, header, box.collapse), wrapped;
+  }
+
+  // azure-devops/src/features/starred-reviewers/star-picker.ts
+  var SEARCH_DELAY_MS = 300, SUGGESTED_CLASS = "bolt-suggestions-isSuggested";
+  function div(className) {
+    return { className, tag: "div" };
+  }
+  function createPersonaName(document2, identity) {
+    let detail = element2(document2, "div", {
+      className: "fontSize secondary-text text-ellipsis",
+      text: detailOf(identity)
+    });
+    return element2(document2, "div", {
+      children: [
+        element2(document2, "div", {
+          className: "fontSizeM text-ellipsis",
+          text: identity.displayName
+        }),
+        element2(document2, "div", { children: [detail], className: "flex-row" })
+      ],
+      className: "bolt-picker-persona-name flex-column flex-grow"
+    });
+  }
+  function createSuggestion(options, identity) {
+    let { document: document2 } = options, text = element2(document2, "div", {
+      children: [
+        createAvatar(document2, identity, options.imageUrlOf(identity)),
+        createPersonaName(document2, identity)
+      ],
+      className: "bolt-picker-suggesteditem-text flex-row flex-grow flex-center text-ellipsis"
+    }), item = wrapIn(document2, text, [
+      div("bolt-suggestions-item-button flex-row flex-grow scroll-hidden"),
+      div(
+        "bolt-identitypickerdropdown-item bolt-suggestions-item flex-row flex-grow cursor-pointer scroll-hidden"
+      )
+    ]);
+    return item.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    }), item.addEventListener("click", () => {
+      options.onPick(identity);
+    }), element2(document2, "div", {
+      attributes: { role: "option" },
+      children: [item],
+      className: "flex-noshrink"
+    });
+  }
+  function createNoResults(document2) {
+    let text = element2(document2, "div", {
+      className: "bolt-identitypickerdropdown-noresults flex-row flex-grow flex-center",
+      text: "No identities found"
+    });
+    return element2(document2, "div", {
+      attributes: { role: "alert" },
+      children: [text],
+      className: "bolt-suggestions-none-region flex-row flex-grow"
+    });
+  }
+  function createCallout(document2) {
+    let list = element2(document2, "div", {
+      attributes: { role: "listbox" },
+      className: "bolt-suggestions-container flex-column flex-grow v-scroll-auto h-scroll-hidden"
+    }), callout = wrapIn(document2, list, [
+      div("bolt-identitypickerdropdown-list bolt-suggestions flex-row flex-grow"),
+      div(
+        "bolt-identitypickerdropdown-callout-content flex-row flex-grow bolt-callout-content bolt-callout-shadow"
+      ),
+      div("fix-ado-star-picker-callout bolt-identitypickerdropdown-callout bolt-callout flex-row")
+    ]);
+    return callout.hidden = !0, { callout, list };
+  }
+  function createSearchInput(document2) {
+    let input = document2.createElement("input");
+    return input.className = "bolt-textfield-input flex-grow bolt-textfield-input-with-prefix", input.type = "text", input.placeholder = "Search people and groups", input.setAttribute("role", "combobox"), input.setAttribute("aria-label", "Search people and groups to star"), input.setAttribute("aria-autocomplete", "list"), input.setAttribute("aria-expanded", "false"), input;
+  }
+  function createField(document2) {
+    let input = createSearchInput(document2), prefix = fontIcon(document2, "Contact", "medium");
+    return prefix.firstElementChild?.classList.add("prefix", "bolt-textfield-no-text"), { field: element2(document2, "div", {
+      children: [prefix, input],
+      className: "repos-reviewers-identity-picker bolt-identitypickerdropdown-textField flex-row flex-center bolt-textfield focus-treatment focused"
+    }), input };
+  }
+  function showFound(parts, found) {
+    let { options, list, callout, input } = parts, unstarred = found.filter(({ id }) => !options.isStarred(id));
+    list.replaceChildren(
+      ...unstarred.length === 0 ? [createNoResults(options.document)] : unstarred.map((identity) => createSuggestion(options, identity))
+    ), callout.hidden = !1, input.setAttribute("aria-expanded", "true");
+  }
+  async function search(parts, query) {
+    parts.searchCount += 1;
+    let thisSearch = parts.searchCount, found = await parts.options.search(query).catch(() => []);
+    thisSearch === parts.searchCount && parts.input.value.trim() === query && showFound(parts, found);
+  }
+  function stopSearch(parts) {
+    parts.searchCount += 1, parts.cancelSearch?.(), parts.cancelSearch = null;
+  }
+  function onInput(parts) {
+    stopSearch(parts);
+    let query = parts.input.value.trim();
+    if (query === "") {
+      parts.callout.hidden = !0;
+      return;
+    }
+    parts.cancelSearch = parts.options.schedule(() => {
+      search(parts, query);
+    }, SEARCH_DELAY_MS);
+  }
+  function moveSuggestion(list, step) {
+    let items = [...list.querySelectorAll(".bolt-suggestions-item")], current = items.findIndex((item) => item.classList.contains(SUGGESTED_CLASS)), next = Math.min(Math.max(current + step, 0), items.length - 1);
+    items[current]?.classList.remove(SUGGESTED_CLASS), items[next]?.classList.add(SUGGESTED_CLASS);
+  }
+  function onKeyDown(parts, event) {
+    event.key === "Escape" ? parts.options.onClose() : event.key === "ArrowDown" || event.key === "ArrowUp" ? (event.preventDefault(), moveSuggestion(parts.list, event.key === "ArrowDown" ? 1 : -1)) : event.key === "Enter" && (event.preventDefault(), parts.list.querySelector(`.${SUGGESTED_CLASS}`)?.click());
+  }
+  function createStarPicker(options) {
+    let { document: document2 } = options, { field, input } = createField(document2), { callout, list } = createCallout(document2), parts = { callout, cancelSearch: null, input, list, options, searchCount: 0 };
+    input.addEventListener("input", () => {
+      onInput(parts);
+    }), input.addEventListener("keydown", (event) => {
+      onKeyDown(parts, event);
+    }), input.addEventListener("blur", () => {
+      stopSearch(parts), options.onClose();
+    });
+    let dropdown = wrapIn(document2, field, [
+      div("flex-column bolt-identitypickerdropdown-container flex-grow"),
+      div("bolt-identitypickerdropdown flex-row flex-grow")
+    ]);
+    return { element: element2(document2, "div", {
+      children: [dropdown, callout],
+      className: "fix-ado-star-picker margin-bottom-8"
+    }), input };
+  }
+
+  // azure-devops/src/features/starred-reviewers/starred-reviewers.ts
+  var ADDED_REVIEWER_WAIT_MS = 4e3;
+  function messageOf(error) {
+    return error instanceof Error ? error.message : "unknown error";
+  }
+  async function toggleStar(state, row) {
+    let { store, client } = state.options, name = nameOfRow(row), starred = store.findByName(name);
+    if (starred !== null)
+      store.unstar(starred.id);
+    else if (state.pullRequest !== null) {
+      let reviewer = (await client.getPullRequestReviewers(state.pullRequest)).find((identity) => isNameOf(identity, name));
+      reviewer !== void 0 && store.star(reviewer);
+    }
+    sync2(state);
+  }
+  function waitUntilShown(state, identity) {
+    let { document: document2, schedule: schedule2, reload } = state.options;
+    log("Starred reviewers: reviewer added, waiting for Azure DevOps to show them"), state.addedIds.add(identity.id), schedule2(() => {
+      isOnPage(document2, identity) || reload();
+    }, ADDED_REVIEWER_WAIT_MS);
+  }
+  function markBusy(state, id, isBusy2) {
+    isBusy2 ? (state.busyIds.add(id), state.errorsById.delete(id)) : state.busyIds.delete(id), sync2(state);
+  }
+  async function addReviewer(state, identity, isRequired) {
+    let { pullRequest } = state;
+    if (!(pullRequest === null || state.busyIds.has(identity.id))) {
+      markBusy(state, identity.id, !0);
+      try {
+        await state.options.client.addPullRequestReviewer(pullRequest, {
+          isRequired,
+          reviewerId: identity.id
+        }), waitUntilShown(state, identity);
+      } catch (error) {
+        state.errorsById.set(identity.id, `Could not add: ${messageOf(error)}`);
+      } finally {
+        markBusy(state, identity.id, !1);
+      }
+    }
+  }
+  function openPicker(state, opener) {
+    let { document: document2, store, client, imageUrlOf, schedule: schedule2 } = state.options, close = null, picker = createStarPicker({
+      document: document2,
+      imageUrlOf,
+      isStarred: (id) => store.isStarred(id),
+      onClose: () => {
+        close?.();
+      },
+      onPick: (identity) => {
+        store.star(identity), close?.(), sync2(state);
+      },
+      schedule: schedule2,
+      search: async (query) => client.searchIdentities(query)
+    });
+    close = () => {
+      close = null, picker.element.remove(), opener.hidden = !1;
+    }, opener.hidden = !0, opener.before(picker.element), picker.input.focus();
+  }
+  function identityOfRow(state, target) {
+    let id = closestHtmlElement(target, "[data-fix-ado-identity]")?.dataset.fixAdoIdentity;
+    return state.options.store.list().find((identity) => identity.id === id) ?? null;
+  }
+  function onRowButton(state, button2, identity) {
+    button2.classList.contains(STAR_BUTTON_CLASS) ? (state.options.store.unstar(identity.id), sync2(state)) : addReviewer(state, identity, button2.dataset.fixAdoAdd === "required");
+  }
+  function onSectionClick(state, event) {
+    let opener = closestHtmlElement(event.target, ".fix-ado-star-someone");
+    if (opener !== null) {
+      openPicker(state, opener);
+      return;
+    }
+    let identity = identityOfRow(state, event.target), button2 = closestHtmlElement(event.target, `[data-fix-ado-add], .${STAR_BUTTON_CLASS}`);
+    identity !== null && button2 !== null && onRowButton(state, button2, identity);
+  }
+  function placeSection(state, anchor) {
+    let { document: document2 } = state.options, section = document2.querySelector(`.${STARRED_SECTION_CLASS}`);
+    return section === null && (section = createStarredSection(document2), section.addEventListener("click", (event) => {
+      onSectionClick(state, event);
+    })), anchor.nextElementSibling !== section && anchor.after(section), section;
+  }
+  function showAdding(document2, row) {
+    for (let button2 of row.querySelectorAll("[data-fix-ado-add]"))
+      button2.classList.replace("enabled", "disabled"), button2.setAttribute("disabled", "");
+    let addButton = row.querySelector(".fix-ado-add-reviewer");
+    addButton?.classList.add("fix-ado-adding"), addButton?.append(createSpinner(document2));
+  }
+  function showError(row, error) {
+    let detail = row.querySelector(".fix-ado-starred-detail");
+    detail !== null && (detail.textContent = error, detail.classList.replace("secondary-text", "error-text"));
+  }
+  function createShownRow(state, identity) {
+    let { document: document2, imageUrlOf } = state.options, row = createStarredRow(document2, identity, imageUrlOf(identity));
+    (state.busyIds.has(identity.id) || state.addedIds.has(identity.id)) && showAdding(document2, row);
+    let error = state.errorsById.get(identity.id);
+    return error !== void 0 && showError(row, error), row;
+  }
+  function shownIdentities(state, starred) {
+    let { document: document2 } = state.options;
+    for (let identity of starred) {
+      let row = state.addedIds.has(identity.id) ? reviewerRowOf(document2, identity) : void 0;
+      row !== void 0 && (logShown(row), state.addedIds.delete(identity.id));
+    }
+    return starred.filter((identity) => !isOnPage(document2, identity));
+  }
+  function fillList(state, section) {
+    let list = section.querySelector(".fix-ado-starred-list"), starred = state.options.store.list(), shown = shownIdentities(state, starred), signature = JSON.stringify([
+      starred.length,
+      shown.map(({ id }) => [
+        id,
+        state.busyIds.has(id) || state.addedIds.has(id),
+        state.errorsById.get(id) ?? ""
+      ])
+    ]);
+    list === null || list.dataset.fixAdoSignature === signature || (list.dataset.fixAdoSignature = signature, list.replaceChildren(
+      ...starred.length === 0 ? [createEmptyWell(state.options.document)] : shown.map((identity) => createShownRow(state, identity))
+    ));
+  }
+  function sync2(state) {
+    let { document: document2 } = state.options, anchor = document2.querySelector(".pr-optional-reviewers-section") ?? document2.querySelector(".pr-required-reviewers-section");
+    state.pullRequest === null || anchor === null || (addStars(document2, state.options.store, (row) => {
+      toggleStar(state, row);
+    }), fillList(state, placeSection(state, anchor)));
+  }
+  function createStarredReviewers(options) {
+    let state = {
+      addedIds: /* @__PURE__ */ new Set(),
+      busyIds: /* @__PURE__ */ new Set(),
+      errorsById: /* @__PURE__ */ new Map(),
+      options,
+      pullRequest: null
+    };
+    return {
+      sync(pullRequest) {
+        state.pullRequest = pullRequest, sync2(state);
+      }
+    };
+  }
+
+  // azure-devops/src/features/starred-reviewers/style.css
+  var style_default3 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
+.repos-reviewer > .fix-ado-star {
+  visibility: hidden;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  padding: 4px;
+}
+.repos-reviewer:hover > .fix-ado-star,
+.repos-reviewer.focused > .fix-ado-star,
+.repos-reviewer > .fix-ado-star:focus-visible,
+.repos-reviewer > .fix-ado-star[aria-pressed="true"] {
+  visibility: visible;
+}
+.fix-ado-star-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.fix-ado-star[aria-pressed="true"] {
+  color: var(--communication-foreground, rgba(0, 90, 158, 1));
+}
+.fix-ado-star[aria-pressed="true"] .fix-ado-star-icon path {
+  fill: currentColor;
+}
+
+.fix-ado-starred-reviewers {
+  margin-top: 16px;
+}
+/* The + split button sits where Azure DevOps shows the vote icon, so it stays small. */
+.fix-ado-add-reviewer .bolt-split-button-main {
+  padding: 3px 5px;
+}
+.fix-ado-add-reviewer .bolt-split-button-option {
+  padding: 3px 4px;
+}
+/* While a + button adds its reviewer: a spinner on top, the buttons hidden but in place, so the row keeps its size. */
+.fix-ado-add-reviewer.fix-ado-adding {
+  position: relative;
+}
+.fix-ado-adding > :not(.fix-ado-spinner) {
+  visibility: hidden;
+}
+.fix-ado-adding > .fix-ado-spinner {
+  position: absolute;
+  inset: 0;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+}
+.fix-ado-required-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+.fix-ado-required-icon path:first-child {
+  stroke: var(--communication-background, rgb(0, 120, 212));
+}
+.fix-ado-starred-empty {
+  margin-bottom: 8px;
+}
+.fix-ado-star-someone {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 6px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+.fix-ado-star-someone[hidden] {
+  display: none;
+}
+.fix-ado-star-someone .bolt-button-text {
+  padding-left: 4px;
+}
+.fix-ado-star-picker {
+  position: relative;
+}
+.fix-ado-star-picker-callout {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+.fix-ado-star-picker-callout .bolt-suggestions-container {
+  max-height: 320px;
+}
+
+/* On the create pull request page: a chip per starred reviewer under each reviewer field. */
+.fix-ado-starred-chips {
+  gap: 8px;
+  align-items: flex-start;
+}
+.fix-ado-starred-chips-icon {
+  flex-shrink: 0;
+  margin-top: 6px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+.fix-ado-starred-chip-list {
+  gap: 4px;
+}
+.fix-ado-starred-chip[disabled] {
+  cursor: progress;
+}
+.fix-ado-spinner {
+  display: block;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--palette-black-alpha-10, rgba(128, 128, 128, 0.3));
+  border-top-color: var(--communication-foreground, rgba(0, 90, 158, 1));
+  border-radius: 50%;
+  animation: fix-ado-spin 0.8s linear infinite;
+}
+@keyframes fix-ado-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* While a chip picks its reviewer: the field's dropdown and typed text stay out of sight.
+   Hidden, not removed, so the chip can still press the suggestion; the field keeps its focus. */
+.fix-ado-starred-picking #__bolt-tag-picker-callout {
+  visibility: hidden;
+}
+.fix-ado-starred-picking .bolt-tag-picker-input {
+  color: transparent;
+  caret-color: transparent;
+}
+`;
+
+  // azure-devops/src/features/starred-reviewers/index.ts
+  function schedule(callback, delayMs) {
+    let timer = setTimeout(callback, delayMs);
+    return () => {
+      clearTimeout(timer);
+    };
+  }
+  var starredReviewers = {
+    change: { kind: "updated", version: "1.9.0" },
+    description: "Star reviewers, then add a starred one as optional or required reviewer in one click, also on a new pull request.",
+    id: "starred-reviewers",
+    name: "Starred reviewers",
+    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let storageKey = `starred-reviewers:${location.host}${basePath2}`, imageUrlOf = ({ id }) => `${location.origin}${basePath2}/_api/_common/identityImage?id=${encodeURIComponent(id)}`, store = createStarredReviewersStore({
+        load: () => GM_getValue(storageKey, []),
+        save: (list) => {
+          GM_setValue(storageKey, list);
+        }
+      }), starred = createStarredReviewers({
+        client,
+        document: document2,
+        imageUrlOf,
+        reload: () => {
+          location.reload();
+        },
+        schedule,
+        store
+      }), chips = createStarredReviewerChips({ document: document2, imageUrlOf, schedule, store });
+      return {
+        sync({ page }) {
+          starred.sync(pullRequestOf(page)), chips.sync(page.kind === "pull-request-create");
+        }
+      };
+    },
+    styles: [style_default3]
+  };
+
+  // azure-devops/src/features/reviewing-features.ts
+  var REVIEWING_FEATURES = [requiredReviewers, starredReviewers, review];
+
+  // azure-devops/src/features/avatar-initials/style.css
+  var style_default4 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+[data-fix-ado-initials] {
+  position: relative;
+  border-radius: 50%;
+  background: hsl(var(--fix-ado-hue, 210) 45% 38%);
+}
+
+[data-fix-ado-initials] > .bolt-coin-content,
+[data-fix-ado-initials] > .vss-Persona-content {
+  visibility: hidden;
+}
+
+[data-fix-ado-initials]::after {
+  content: attr(data-fix-ado-initials);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: calc(var(--fix-ado-avatar-size, 24px) * 0.42);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+`;
+
+  // azure-devops/src/features/avatar-initials/index.ts
+  var avatarInitials = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Initials on avatars, in a colour per person.",
+    // The key of the earlier menu setting, so the owner's choice stays.
+    id: "avatar-initials",
+    name: "Avatar initials",
+    start: ({ document: document2 }) => ({
+      sync() {
+        showInitialsOnAvatars(document2);
+      }
+    }),
+    styles: [style_default4]
+  };
+
+  // azure-devops/src/features/days-in-column/days-in-column.ts
+  var CARD_SELECTOR2 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS = "fix-ado-days-in-column";
+  function columnEnteredAt(updates) {
+    for (let update2 of updates.toReversed()) {
+      let columnChange = update2.fields?.["System.BoardColumn"];
+      if (columnChange !== void 0 && columnChange.newValue !== columnChange.oldValue) {
+        let changedDate = update2.fields?.["System.ChangedDate"]?.newValue;
+        return typeof changedDate == "string" ? changedDate : null;
+      }
+    }
+    return null;
+  }
+  function daysSince(enteredAt, now) {
+    return Math.max(0, Math.floor((now - Date.parse(enteredAt)) / 864e5));
+  }
+  function dotAge(day) {
+    return day <= 7 ? "fresh" : day <= 14 ? "aging" : "old";
+  }
+  var LOADING_DOT_COUNT = 3;
+  function dotsFor(document2, days) {
+    return (days === null ? Array.from({ length: LOADING_DOT_COUNT }, () => "loading") : Array.from({ length: Math.min(days, 30) }, (_entry, index) => dotAge(index + 1))).map((age) => {
+      let dot = document2.createElement("span");
+      return dot.dataset.age = age, dot;
+    });
+  }
+  function captionFor(days) {
+    return days === null ? "" : days === 0 ? "Less than a day in this column" : `${days} ${days === 1 ? "day" : "days"} in this column`;
+  }
+  function createDotBar(document2, days) {
+    let bar = document2.createElement("div");
+    return bar.className = BAR_CLASS, bar.dataset.days = String(days), bar.title = captionFor(days), days === null ? bar.setAttribute("aria-hidden", "true") : (bar.setAttribute("aria-label", bar.title), bar.setAttribute("role", "img")), bar.append(...dotsFor(document2, days)), bar;
+  }
+  function showDaysInColumn(card, days) {
+    let existing = card.querySelector(`.${BAR_CLASS}`);
+    existing?.dataset.days !== String(days) && (existing?.remove(), (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days)));
+  }
+  function findCards(document2) {
+    let cards = /* @__PURE__ */ new Map();
+    for (let card of document2.querySelectorAll(CARD_SELECTOR2)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && cards.set(id, [...cards.get(id) ?? [], card]);
+    }
+    return cards;
+  }
+  function columnIdOf(card) {
+    return card.closest(COLUMN_SELECTOR)?.dataset.column ?? null;
+  }
+  function noteMoves(tracker, cards) {
+    for (let [id, [element4]] of cards) {
+      let columnId = columnIdOf(element4), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
+      lastColumnId !== void 0 && lastColumnId !== columnId && entry !== void 0 && (entry.enteredAt = new Date(tracker.now()).toISOString()), tracker.columnIds.set(id, columnId);
+    }
+  }
+  function showBars(tracker, cards) {
+    noteMoves(tracker, cards);
+    for (let [id, elements] of cards) {
+      let entry = tracker.entries.get(id), enteredAt = entry?.enteredAt ?? null, days = null;
+      entry !== void 0 && (days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now()));
+      for (let element4 of elements)
+        showDaysInColumn(element4, days);
+    }
+  }
+  function pauseIfAsked(tracker, retryAfterSeconds) {
+    return retryAfterSeconds === null ? !1 : (tracker.pausedUntil = tracker.now() + retryAfterSeconds * 1e3, !0);
+  }
+  async function fetchChangedCards(tracker, ids) {
+    let { workItems, retryAfterSeconds } = await tracker.client.getWorkItems(ids);
+    if (pauseIfAsked(tracker, retryAfterSeconds))
+      return;
+    let changed = workItems.filter(({ id, rev }) => tracker.entries.get(id)?.rev !== rev);
+    for (let { id, rev } of changed) {
+      let response = await tracker.client.getWorkItemUpdates(id);
+      if (tracker.entries.set(id, { enteredAt: columnEnteredAt(response.updates), rev }), pauseIfAsked(tracker, response.retryAfterSeconds))
+        return;
+    }
+  }
+  function isCheckDue(tracker, ids) {
+    let now = tracker.now(), isDue = ids.some((id) => !tracker.entries.has(id)) || now - tracker.lastCheckAt >= 6e4;
+    return !tracker.isChecking && ids.length > 0 && isDue && now >= tracker.pausedUntil;
+  }
+  async function check(tracker, ids) {
+    tracker.isChecking = !0, tracker.lastCheckAt = tracker.now();
+    try {
+      await fetchChangedCards(tracker, ids);
+    } catch {
+      tracker.pausedUntil = tracker.now() + 6e4;
+    } finally {
+      tracker.isChecking = !1;
+    }
+  }
+  function createDaysInColumn(options) {
+    let tracker = {
+      client: options.client,
+      columnIds: /* @__PURE__ */ new Map(),
+      entries: /* @__PURE__ */ new Map(),
+      isChecking: !1,
+      lastCheckAt: Number.NEGATIVE_INFINITY,
+      now: options.now,
+      pausedUntil: Number.NEGATIVE_INFINITY
+    };
+    return {
+      async sync() {
+        let cards = findCards(options.document);
+        showBars(tracker, cards);
+        let ids = [...cards.keys()];
+        isCheckDue(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
+      }
+    };
+  }
+
+  // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
+  var HEADER_SELECTOR = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS = "fix-ado-days-toggle";
+  function showColumnState(column, toggle, isHidden) {
+    Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
+    let pressed = String(!isHidden);
+    toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", toggle.title));
+  }
+  function createToggle(document2, onClick2) {
+    let toggle = document2.createElement("button");
+    return toggle.type = "button", toggle.className = TOGGLE_CLASS, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
+      event.preventDefault(), event.stopPropagation(), onClick2();
+    }), toggle;
+  }
+  function findOrAddToggle(header, onClick2) {
+    let existing = header.querySelector(`.${TOGGLE_CLASS}`);
+    if (existing !== null)
+      return existing;
+    let toggle = createToggle(header.ownerDocument, onClick2);
+    return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
+  }
+  function createDaysInColumnToggles(options) {
+    let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
+    function flip(columnId) {
+      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync4();
+    }
+    function sync4() {
+      let headers = [...document2.querySelectorAll(HEADER_SELECTOR)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
+      if (headers.length === columns.length)
+        for (let [index, header] of headers.entries()) {
+          let column = columns[index], columnId = column?.dataset.column;
+          if (column !== void 0 && columnId !== void 0) {
+            let toggle = findOrAddToggle(header, () => {
+              flip(columnId);
+            });
+            showColumnState(column, toggle, hiddenColumnIds.has(columnId));
+          }
+        }
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/days-in-column/style.css
+  var style_default5 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+.fix-ado-days-in-column {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  /* One row of dots, also when empty, so a card keeps its height. */
+  min-height: 5px;
+  margin-top: 6px;
+}
+
+.fix-ado-days-in-column > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  /* Azure DevOps keeps its palette as bare "r, g, b" values, so it follows the theme. */
+  background: rgb(var(--palette-neutral-20, 200, 200, 200));
+}
+
+.fix-ado-days-in-column > span[data-age="aging"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+.fix-ado-days-in-column > span[data-age="old"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
+}
+
+/* Skeleton while the day count loads: three grey dots that pulse one after another. */
+.fix-ado-days-in-column > span[data-age="loading"] {
+  animation: fix-ado-pulse 1.2s ease-in-out infinite;
+}
+.fix-ado-days-in-column > span[data-age="loading"]:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.fix-ado-days-in-column > span[data-age="loading"]:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes fix-ado-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-days-in-column > span[data-age="loading"] {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.kanban-board-column[data-fix-ado-days-hidden] .fix-ado-days-in-column {
+  display: none;
+}
+
+/* The days-in-column toggle in a column header. It shows while the header is hovered, or
+   while something in it has keyboard focus. A click also focuses the toggle; that focus must
+   not keep it showing once the pointer leaves. */
+.fix-ado-days-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.kanban-board-column-header:is(:hover, :has(:focus-visible)) .fix-ado-days-toggle {
+  opacity: 1;
+}
+
+.fix-ado-days-toggle:hover {
+  background: rgba(var(--palette-black-alpha-6, 0, 0, 0, 0.06));
+}
+
+.fix-ado-days-toggle > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+/* Off: hollow dots. */
+.fix-ado-days-toggle[aria-pressed="false"] > span {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
+}
+`;
+
+  // azure-devops/src/features/days-in-column/index.ts
+  var HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns", daysInColumn = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "A dot per day a card has been in its board column, with a toggle per column.",
+    id: "days-in-column",
+    name: "Days in column",
+    start({ client, document: document2, now }) {
+      let days = createDaysInColumn({ client, document: document2, now }), toggles = createDaysInColumnToggles({
+        document: document2,
+        storage: {
+          load: () => GM_getValue(HIDDEN_COLUMNS_KEY, []),
+          save: (columnIds) => {
+            GM_setValue(HIDDEN_COLUMNS_KEY, columnIds);
+          }
+        }
+      });
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          page.kind === "board" && (toggles.sync(), isTabActive2 && days.sync());
+        }
+      };
+    },
+    styles: [style_default5]
+  };
+
+  // azure-devops/src/features/system-theme/system-theme.ts
+  var LIGHT_THEME_ID = "ms.vss-web.vsts-theme", DARK_THEME_ID = "ms.vss-web.vsts-theme-dark", THEME_CLASS_PREFIX = "ms-vss-web-vsts-theme", PALETTE_VARIABLE = "--palette-neutral-0", LIGHT_THEME_CLASS = "ms-vss-web-vsts-theme", DARK_THEME_CLASS = "ms-vss-web-vsts-theme-dark";
+  function currentThemeId(document2) {
+    let { body } = document2;
+    if (body.dataset.theme !== void 0)
+      return body.dataset.theme;
+    let themeClasses = [...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX));
+    if (!themeClasses.some((name) => name !== LIGHT_THEME_CLASS && name !== DARK_THEME_CLASS))
+      return themeClasses.includes(DARK_THEME_CLASS) ? DARK_THEME_ID : themeClasses.includes(LIGHT_THEME_CLASS) ? LIGHT_THEME_ID : void 0;
+  }
+  function isFollowedTheme(themeId) {
+    return themeId === LIGHT_THEME_ID || themeId === DARK_THEME_ID;
+  }
+  function findRootStyle(document2) {
+    return [...document2.head.querySelectorAll("style")].find((style) => {
+      let text = style.textContent.trimStart();
+      return text.startsWith(":root") && text.includes(PALETTE_VARIABLE);
+    }) ?? null;
+  }
+  function readLook(document2) {
+    let rootStyle = findRootStyle(document2);
+    return rootStyle === null ? null : {
+      bodyClasses: [...document2.body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX)),
+      rootStyle: rootStyle.textContent
+    };
+  }
+  function applyLook(document2, themeId, look) {
+    let rootStyle = findRootStyle(document2);
+    if (rootStyle === null)
+      return !1;
+    rootStyle.textContent = look.rootStyle;
+    let { body } = document2;
+    return body.classList.remove(
+      ...[...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX))
+    ), body.classList.add(...look.bodyClasses), body.dataset.theme = themeId, !0;
+  }
+  function rememberLook({ document: document2, looks }) {
+    let themeId = currentThemeId(document2), look = readLook(document2);
+    if (!isFollowedTheme(themeId) || look === null)
+      return;
+    let stored = looks.load();
+    JSON.stringify(stored[themeId]) !== JSON.stringify(look) && looks.save({ ...stored, [themeId]: look });
+  }
+  function themeToSwitchTo(options) {
+    let current = currentThemeId(options.document), wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
+    return isFollowedTheme(current) && current !== wanted ? wanted : null;
+  }
+  async function trySaveTheme(options, themeId) {
+    try {
+      return await options.saveTheme(themeId), !0;
+    } catch (error) {
+      return log("System theme: Azure DevOps refused the theme save", {
+        httpStatus: error instanceof AdoRequestError ? error.httpStatus : null
+      }), !1;
+    }
+  }
+  async function switchToSystemTheme(options, isPageLoad) {
+    let wanted = themeToSwitchTo(options);
+    if (log("System theme: checked", {
+      current: currentThemeId(options.document) ?? null,
+      isPageLoad,
+      prefersDark: options.prefersDark(),
+      rememberedThemes: Object.keys(options.looks.load())
+    }), wanted === null || !await trySaveTheme(options, wanted))
+      return;
+    let look = options.looks.load()[wanted], isSwitched = look !== void 0 && applyLook(options.document, wanted, look);
+    log("System theme: saved", {
+      hasRootStyle: findRootStyle(options.document) !== null,
+      isSwitched,
+      wanted
+    }), !isSwitched && isPageLoad && options.reload();
+  }
+  function createSystemTheme(options) {
+    let lastSwitch = Promise.resolve(), seenPrefersDark = options.prefersDark(), isWaitingForTheme = !1;
+    function queueSwitch(isPageLoad) {
+      lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, isPageLoad));
+    }
+    function onPageChange() {
+      rememberLook(options), isWaitingForTheme && currentThemeId(options.document) !== void 0 && (isWaitingForTheme = !1, queueSwitch(!0));
+    }
+    function onSystemThemeChange() {
+      onPageChange();
+      let prefersDark = options.prefersDark();
+      prefersDark !== seenPrefersDark && (seenPrefersDark = prefersDark, queueSwitch(!1));
+    }
+    return options.onSystemThemeChange(() => {
+      log("System theme: the system's theme changed"), onSystemThemeChange();
+    }), {
+      onPageChange,
+      settled: async () => lastSwitch,
+      async start() {
+        seenPrefersDark = options.prefersDark(), rememberLook(options), isWaitingForTheme = currentThemeId(options.document) === void 0, isWaitingForTheme || queueSwitch(!0), await lastSwitch;
+      }
+    };
+  }
+
+  // azure-devops/src/features/system-theme/index.ts
+  var THEME_LOOKS_KEY = "system-theme-looks", SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)", followSystemTheme = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Azure DevOps shows Light or Dark to match the system.",
+    // The key of the earlier menu setting, so the owner's choice stays.
+    id: "follow-system-theme",
+    name: "Follow system theme",
+    start({ client, document: document2, isInFrame: isInFrame2, reloadWhenIdle: reloadWhenIdle2 }) {
+      if (isInFrame2)
+        return null;
+      let systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY), theme = createSystemTheme({
+        document: document2,
+        looks: {
+          load: () => GM_getValue(THEME_LOOKS_KEY, {}),
+          save: (looks) => {
+            GM_setValue(THEME_LOOKS_KEY, looks);
+          }
+        },
+        onSystemThemeChange: (listener) => {
+          systemDark.addEventListener("change", listener);
+        },
+        prefersDark: () => systemDark.matches,
+        reload: reloadWhenIdle2,
+        saveTheme: async (themeId) => client.saveTheme(themeId)
+      });
+      return new MutationObserver(() => {
+        theme.onPageChange();
+      }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), theme.start(), null;
+    },
+    styles: []
+  };
+
+  // azure-devops/src/pipeline/pipeline-run-link.ts
+  var RUN_PATH_END = "/_build/results";
+  function parsePipelineRunLocation(location2) {
+    let query = new URLSearchParams(location2.search), buildId = Number(query.get("buildId") ?? Number.NaN);
+    if (!location2.pathname.endsWith(RUN_PATH_END) || !Number.isInteger(buildId))
+      return null;
+    let jobId = query.get("j"), stepId = query.get("t");
+    return query.get("view") !== "logs" ? { buildId, jobId: null, stepId: null, view: "summary" } : jobId !== null && stepId !== null ? { buildId, jobId, stepId, view: "log" } : { buildId, jobId: null, stepId: null, view: "steps" };
+  }
+  function pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) {
+    let step = `j=${encodeURIComponent(jobId)}&t=${encodeURIComponent(stepId)}`;
+    return `${apiBasePath2}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs&${step}`;
+  }
+
+  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues-card.ts
+  var OVERVIEW_ISSUES_CLASS = "fix-ado-overview-issues";
+  function runLinkOf({ apiBasePath: apiBasePath2, project }, buildId, { jobId, stepId }) {
+    return jobId !== null && stepId !== null ? pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) : `${apiBasePath2}/${encodeURIComponent(project)}/_build/results?buildId=${buildId}`;
+  }
+  function createCheckIssueBox(document2, content, { check: check2, counts, issues }) {
+    return createIssueBox(document2, {
+      createLink: (issue) => {
+        let link = document2.createElement("a");
+        return link.href = runLinkOf(content, check2.buildId, issue), fillIssueLink(link, issue);
+      },
+      details: issueSummary([counts]),
+      issues,
+      title: check2.name
+    });
+  }
+  function headingOf(checks) {
+    let runs = checks.length === 1 ? "the latest run" : "the latest runs";
+    return `${issueSummary(checks.map(({ counts }) => counts))} in ${runs}`;
+  }
+  var CARD_WRAPPERS = [
+    { className: "flex-column flex-grow scroll-hidden", tag: "div" },
+    { className: "bolt-card-content flex-row flex-grow bolt-default-horizontal-spacing", tag: "div" },
+    {
+      className: `bolt-table-card bolt-card flex-column depth-8 bolt-card-white ${OVERVIEW_ISSUES_CLASS}`,
+      role: "region",
+      tag: "section"
+    }
+  ];
+  function createHeading(document2, checks) {
+    let heading = createElement(document2, {
+      className: "fix-ado-overview-issues-heading",
+      tag: "span",
+      text: headingOf(checks)
+    }), text = wrapIn(document2, heading, [
+      { className: "flex-column flex-grow scroll-hidden", tag: "div" }
+    ]), row = createElement(document2, {
+      className: "flex-row flex-center rhythm-horizontal-8",
+      tag: "div"
+    }), kind = worstKindOf(checks.flatMap(({ issues }) => issues));
+    return row.append(createKindIcon(document2, kind, "large"), text), row;
+  }
+  function createIssuesCard(document2, content) {
+    let { checks } = content, rows = createElement(document2, {
+      className: "padding-vertical-16 padding-horizontal-20 rhythm-vertical-16",
+      tag: "div"
+    });
+    rows.append(
+      createHeading(document2, checks),
+      ...checks.map((checkIssues) => createCheckIssueBox(document2, content, checkIssues))
+    );
+    let block = wrapIn(document2, rows, CARD_WRAPPERS);
+    return block.setAttribute("aria-label", "Pipeline warnings and errors"), block.dataset.fixAdoRendered = JSON.stringify(checks), block;
+  }
+
+  // azure-devops/src/pipeline/pipeline-checks.ts
+  function checkNameOf(evaluation, fallback) {
+    return evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? fallback;
+  }
+  function pipelineCheckOf(evaluation) {
+    let buildId = evaluation.context?.buildId ?? 0;
+    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId <= 0 ? null : {
+      buildId,
+      isRequired: evaluation.configuration.isBlocking,
+      name: checkNameOf(evaluation, `Run ${buildId}`),
+      startedAt: evaluation.context?.buildStartedUtc ?? null,
+      status: pipelineStatusOf([evaluation])
+    };
+  }
+  function startedAtMs(check2) {
+    return check2.startedAt === null ? 0 : Date.parse(check2.startedAt);
+  }
+  function pipelineChecksOf(evaluations) {
+    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check2) => check2 !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
+  }
+  function startableChecksOf(evaluations) {
+    return evaluations.flatMap(
+      ({ evaluationId, ...evaluation }) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && evaluationId !== void 0 ? [
+        {
+          evaluationId,
+          isRequired: evaluation.configuration.isBlocking,
+          name: checkNameOf(evaluation, "Build check")
+        }
+      ] : []
+    );
+  }
+
+  // azure-devops/src/pipeline/pipeline-timeline.ts
+  var RESULT_STATUSES = {
+    abandoned: { label: "Canceled", status: "notStarted" },
+    canceled: { label: "Canceled", status: "notStarted" },
+    failed: { label: "Failed", status: "failed" },
+    skipped: { label: "Skipped", status: "notStarted" },
+    succeeded: { label: "Succeeded", status: "succeeded" },
+    succeededWithIssues: { label: "Succeeded with warnings", status: "expired" }
+  };
+  function recordStatusOf({ result, state }) {
+    return state === "inProgress" ? { label: "Running", status: "running" } : (result === null ? void 0 : RESULT_STATUSES[result]) ?? { label: "Not started", status: "notStarted" };
+  }
+  var NO_STAGE_ID = "", DEFAULT_STAGE_NAME = "__default";
+  function inRunOrder(records) {
+    return records.toSorted((first, second) => (first.order ?? 0) - (second.order ?? 0));
+  }
+  function stageIdOf(record, byId) {
+    let parent = record.parentId === null ? void 0 : byId.get(record.parentId);
+    for (; parent !== void 0 && parent.type !== "Stage"; )
+      parent = parent.parentId === null ? void 0 : byId.get(parent.parentId);
+    return parent?.id ?? NO_STAGE_ID;
+  }
+  function countsOf(index, id) {
+    return index.counts.get(id) ?? NO_ISSUES;
+  }
+  function jobOf(job, index) {
+    let steps = inRunOrder(
+      index.records.filter((record) => record.type === "Task" && record.parentId === job.id)
+    ).map(({ id, name, result, state }) => {
+      let { errorCount, warningCount } = countsOf(index, id);
+      return { errorCount, id, jobId: job.id, name, result, state, warningCount };
+    });
+    return {
+      id: job.id,
+      name: job.name,
+      result: job.result,
+      state: job.state,
+      steps,
+      ...countsOf(index, job.id)
+    };
+  }
+  function stageIssuesOf(stage, jobs, index) {
+    let ownOf = (id) => index.ownIssues.get(id) ?? [], stageSpot = {
+      job: null,
+      stage: {
+        id: stage.id,
+        name: stage.id === NO_STAGE_ID || stage.name === DEFAULT_STAGE_NAME ? null : stage.name
+      },
+      step: null
+    };
+    return [
+      ...index.records.filter(
+        (record) => record.type !== "Job" && record.type !== "Task" && (record.id === stage.id || stageIdOf(record, index.byId) === stage.id)
+      ).flatMap((record) => runIssuesAt(stageSpot, ownOf(record.id))),
+      ...jobs.flatMap((job) => {
+        let jobSpot = { ...stageSpot, job };
+        return [
+          ...runIssuesAt(jobSpot, ownOf(job.id)),
+          ...job.steps.flatMap((step) => runIssuesAt({ ...jobSpot, step }, ownOf(step.id)))
+        ];
+      })
+    ];
+  }
+  function stagesOf(records) {
+    let index = {
+      byId: new Map(records.map((record) => [record.id, record])),
+      counts: issueCountsOf(records),
+      ownIssues: ownIssuesOf(records),
+      records
+    }, jobs = inRunOrder(records.filter((record) => record.type === "Job")), stages = inRunOrder(records.filter((record) => record.type === "Stage"));
+    return (stages.length > 0 || jobs.length === 0 ? stages : [{ id: NO_STAGE_ID, name: "Jobs", result: null, state: "" }]).map((stage) => {
+      let stageJobs = jobs.filter((job) => stageIdOf(job, index.byId) === stage.id).map((job) => jobOf(job, index)), { errorCount, warningCount } = stage.id === NO_STAGE_ID ? sumIssueCounts(stageJobs) : countsOf(index, stage.id);
+      return {
+        errorCount,
+        id: stage.id,
+        issues: stageIssuesOf(stage, stageJobs, index),
+        jobs: stageJobs,
+        name: stage.name,
+        result: stage.result,
+        state: stage.state,
+        warningCount
+      };
+    });
+  }
+  function defaultStepOf(stages) {
+    let steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
+    return steps.find((step) => step.state === "inProgress") ?? steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
+  }
+
+  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues.ts
+  var REFRESH_MS = 3e4, DESCRIPTION_SELECTOR = ".repos-pr-description-card", CHECKS_AREA_ERROR_SELECTOR = ".dark-build-output .error-text", RUN_LINK_SELECTOR = 'a[href*="/_build/results?"]';
+  function isBusy(check2) {
+    return check2.status === "running" || check2.status === "queued";
+  }
+  function isTimelineDue(data, check2, now) {
+    let loaded = data.timelines.get(check2.buildId);
+    return loaded === void 0 || loaded.checkStatus !== check2.status || isBusy(check2) && now - loaded.loadedAt >= REFRESH_MS;
+  }
+  function checksAreaErrorsOf(document2) {
+    let errors = /* @__PURE__ */ new Map();
+    for (let line2 of document2.querySelectorAll(CHECKS_AREA_ERROR_SELECTOR)) {
+      let href = line2.closest(RUN_LINK_SELECTOR)?.getAttribute("href"), run = href == null || line2.closest(`.${OVERVIEW_ISSUES_CLASS}`) !== null ? null : parsePipelineRunLocation(new URL(href, document2.baseURI));
+      run !== null && errors.set(run.buildId, (errors.get(run.buildId) ?? /* @__PURE__ */ new Set()).add(line2.textContent.trim()));
+    }
+    return errors;
+  }
+  function checkIssuesOf(check2, stages, shownErrors) {
+    let all = runIssuesOf(stages), issues = all.filter(
+      (issue) => issue.kind !== "error" || !shownErrors.has(issue.message.trim())
+    ), { errorCount, warningCount } = sumIssueCounts(stages), hiddenCount = all.length - issues.length;
+    return {
+      check: check2,
+      counts: { errorCount: Math.max(0, errorCount - hiddenCount), warningCount },
+      issues
+    };
+  }
+  function checksWithIssues(data, document2) {
+    let checksAreaErrors = checksAreaErrorsOf(document2);
+    return data.checks.flatMap((check2) => {
+      let stages = data.timelines.get(check2.buildId)?.stages ?? [], shownErrors = checksAreaErrors.get(check2.buildId) ?? /* @__PURE__ */ new Set(), checkIssues = checkIssuesOf(check2, stages, shownErrors);
+      return checkIssues.issues.length > 0 ? [checkIssues] : [];
+    });
+  }
+  function isBlockShown(block, checks, description) {
+    return block?.dataset.fixAdoRendered === JSON.stringify(checks) && block.nextElementSibling === description;
+  }
+  function render2(state) {
+    let { data, options } = state, description = options.document.querySelector(DESCRIPTION_SELECTOR), existing = options.document.querySelector(`.${OVERVIEW_ISSUES_CLASS}`), checks = data === null ? [] : checksWithIssues(data, options.document);
+    if (description === null || data === null || checks.length === 0) {
+      existing?.remove();
+      return;
+    }
+    isBlockShown(existing, checks, description) || (existing?.remove(), description.before(createCard2(options, data, checks)));
+  }
+  function createCard2({ apiBasePath: apiBasePath2, document: document2 }, data, checks) {
+    return createIssuesCard(document2, { apiBasePath: apiBasePath2, checks, project: data.pullRequest.project });
+  }
+  function showIfCurrent(state, data) {
+    state.data === data && render2(state);
+  }
+  async function loadTimeline(state, data, check2) {
+    let { options } = state, loaded = {
+      checkStatus: check2.status,
+      loadedAt: options.now(),
+      stages: data.timelines.get(check2.buildId)?.stages ?? null
+    };
+    data.timelines.set(check2.buildId, loaded);
+    try {
+      loaded.stages = stagesOf(await options.getTimeline(data.pullRequest.project, check2.buildId));
+    } catch {
+    }
+    showIfCurrent(state, data);
+  }
+  async function loadChecks(state, data) {
+    let { options } = state;
+    data.checksLoadedAt = options.now();
+    try {
+      data.checks = pipelineChecksOf(await options.getEvaluations(data.pullRequest));
+    } catch {
+      return;
+    }
+    let now = options.now();
+    for (let check2 of data.checks.filter((candidate) => isTimelineDue(data, candidate, now)))
+      loadTimeline(state, data, check2);
+    showIfCurrent(state, data);
+  }
+  function syncOverview(state, pullRequest, canFetch) {
+    JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest) && (state.data = pullRequest === null ? null : {
+      checks: [],
+      checksLoadedAt: Number.NEGATIVE_INFINITY,
+      pullRequest,
+      timelines: /* @__PURE__ */ new Map()
+    }), render2(state);
+    let { data, options } = state, isOnOverview = options.document.querySelector(DESCRIPTION_SELECTOR) !== null;
+    data !== null && canFetch && isOnOverview && options.now() - data.checksLoadedAt >= REFRESH_MS && loadChecks(state, data);
+  }
+  function createOverviewPipelineIssues(options) {
+    let state = { data: null, options };
+    return {
+      sync: (pullRequest, canFetch) => {
+        syncOverview(state, pullRequest, canFetch);
+      }
+    };
+  }
+
+  // azure-devops/src/pipeline/pipeline-issue-list.css
+  var pipeline_issue_list_default = `/* A run's warnings and errors, in a box like Azure DevOps's check list on a pull
+   request's Overview. Azure DevOps's own classes on it style it there; these rules keep
+   the look where they do not reach, such as the Pipeline tab. */
+.fix-ado-issue-box {
+  border: 1px solid rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+  border-radius: 4px;
+  background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+.fix-ado-issue-box > table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fix-ado-issue-box td {
+  padding: 0;
+  border: 0;
+}
+
+.fix-ado-issue-box-header {
+  min-height: 48px;
+}
+
+/* A collapsed box keeps its header row. */
+.fix-ado-issue-box[data-collapsed] .fix-ado-issue {
+  display: none;
+}
+
+.fix-ado-issue-box-collapse {
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+
+.fix-ado-issue {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fix-ado-issue:hover {
+  background: var(--component-grid-row-hover-color, rgba(0, 0, 0, 0.02));
+}
+
+.fix-ado-issue-output {
+  padding: 8px 0;
+  background: rgb(30, 30, 30);
+  color: rgb(212, 212, 212);
+}
+
+.fix-ado-issue-output > .line-number {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* A long message wraps, and keeps its own line breaks. */
+.fix-ado-issue-message {
+  min-width: 0;
+  padding-right: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Without a line number, the message keeps the line number's left padding. */
+.fix-ado-issue-message:first-child {
+  padding-left: 16px;
+}
+
+.fix-ado-issue-output > .error-text {
+  color: rgb(241, 112, 112);
+}
+
+.fix-ado-warning-text {
+  color: rgb(240, 190, 90);
+}
+
+.fix-ado-kind-icon[data-kind="error"] {
+  fill: var(--component-status-error, rgb(205, 74, 69));
+}
+
+.fix-ado-kind-icon[data-kind="warning"] {
+  fill: var(--component-status-warning, rgb(214, 127, 60));
+}
+
+/* The counts of warnings and errors on a stage, job or step in the run tree. */
+.fix-ado-issue-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.fix-ado-issue-count + .fix-ado-issue-count {
+  margin-left: 0;
+}
+
+.fix-ado-issue-count[data-kind="error"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
+}
+
+.fix-ado-issue-count[data-kind="warning"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+`;
+
+  // azure-devops/src/features/overview-pipeline-issues/index.ts
+  var overviewPipelineIssues = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "The warnings and errors of each check's latest run, above the pull request description.",
+    id: "overview-pipeline-issues",
+    name: "Warnings and errors on the Overview",
+    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2)
+        return null;
+      let issues = createOverviewPipelineIssues({
+        apiBasePath: basePath2,
+        document: document2,
+        getEvaluations: async (pullRequest) => {
+          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
+          return evaluations;
+        },
+        getTimeline: async (project, buildId) => {
+          let { records } = await client.getTimeline(project, buildId);
+          return records;
+        },
+        now
+      });
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          issues.sync(pullRequestOf(page), isTabActive2);
+        }
+      };
+    },
+    styles: [pipeline_issue_list_default]
+  };
 
   // azure-devops/src/pipeline/pipeline-status-icon.css
   var pipeline_status_icon_default = `.fix-ado-pipeline-status {
@@ -1781,26 +4491,11 @@ ${issue.message ?? ""}`;
     };
   }
 
-  // azure-devops/src/core/closest-element.ts
-  function isElement(target) {
-    return target !== null && "nodeType" in target && target.nodeType === 1;
-  }
-  function closestElement(target, selector) {
-    return isElement(target) ? target.closest(selector) : null;
-  }
-  function isHtmlElement(element3) {
-    return "dataset" in element3;
-  }
-  function closestHtmlElement(target, selector) {
-    let found = closestElement(target, selector);
-    return found !== null && isHtmlElement(found) ? found : null;
-  }
-
   // azure-devops/src/features/pipeline-tab/pipeline-tab-tree.ts
   var DATE_FORMAT = { dateStyle: "short", timeStyle: "short" }, NAME_CLASS = "fix-ado-pipeline-item-name";
   function textElement(document2, className, text) {
-    let element3 = document2.createElement("span");
-    return element3.className = className, element3.textContent = text, element3;
+    let element4 = document2.createElement("span");
+    return element4.className = className, element4.textContent = text, element4;
   }
   function createItemText(document2, item) {
     let text = textElement(document2, "fix-ado-pipeline-item-text", "");
@@ -1814,7 +4509,7 @@ ${issue.message ?? ""}`;
     let { pick } = context;
     return { ...pick, folded: pick.folded === level ? null : level };
   }
-  function createItem(context, item) {
+  function createItem2(context, item) {
     let { document: document2 } = context, button2 = document2.createElement("button");
     return button2.type = "button", button2.className = `fix-ado-pipeline-item ${item.className}`, button2.setAttribute("aria-current", String(item.isCurrent)), button2.append(...createItemParts(document2, item)), button2.addEventListener("click", () => {
       let { level } = item;
@@ -1829,12 +4524,12 @@ ${issue.message ?? ""}`;
     return [...run.status?.status === "cancelling" ? ["Cancelling"] : [], kind, ...started].join(" · ");
   }
   function group(document2, className, children) {
-    let element3 = document2.createElement("div");
-    return element3.className = className, element3.append(...children), element3;
+    let element4 = document2.createElement("div");
+    return element4.className = className, element4.append(...children), element4;
   }
   function createJobSteps(context, job) {
     let { run, stage, step } = context.shown, steps = job.steps.map(
-      (candidate) => createItem(context, {
+      (candidate) => createItem2(context, {
         className: "fix-ado-pipeline-step",
         isCurrent: candidate.id === step?.id,
         issueCounts: candidate,
@@ -1853,9 +4548,9 @@ ${issue.message ?? ""}`;
     return group(context.document, "fix-ado-pipeline-steps", steps);
   }
   function createJob(context, job) {
-    let { shown } = context, isCurrent = shown.step?.jobId === job.id, item = createItem(context, {
+    let { shown } = context, isCurrent2 = shown.step?.jobId === job.id, item = createItem2(context, {
       className: "fix-ado-pipeline-job",
-      isCurrent,
+      isCurrent: isCurrent2,
       issueCounts: job,
       level: "job",
       name: job.name,
@@ -1868,7 +4563,7 @@ ${issue.message ?? ""}`;
       },
       status: recordStatusOf(job)
     });
-    return isCurrent && context.pick.folded === "job" ? [item] : [item, createJobSteps(context, job)];
+    return isCurrent2 && context.pick.folded === "job" ? [item] : [item, createJobSteps(context, job)];
   }
   function createJobs(context) {
     let items = (context.shown.stage?.jobs ?? []).flatMap((job) => createJob(context, job));
@@ -1878,9 +4573,9 @@ ${issue.message ?? ""}`;
     return stage.name === DEFAULT_STAGE_NAME ? "Jobs" : stage.name;
   }
   function createStage(context, stage) {
-    let { shown } = context, isCurrent = stage.id === shown.stage?.id, item = createItem(context, {
+    let { shown } = context, isCurrent2 = stage.id === shown.stage?.id, item = createItem2(context, {
       className: "fix-ado-pipeline-stage",
-      isCurrent,
+      isCurrent: isCurrent2,
       issueCounts: stage,
       level: "stage",
       name: stageName(stage),
@@ -1893,7 +4588,7 @@ ${issue.message ?? ""}`;
       },
       status: recordStatusOf(stage)
     });
-    return isCurrent && context.pick.folded !== "stage" ? [item, createJobs(context)] : [item];
+    return isCurrent2 && context.pick.folded !== "stage" ? [item, createJobs(context)] : [item];
   }
   function createStages(context) {
     let { document: document2, shown } = context;
@@ -1905,16 +4600,16 @@ ${issue.message ?? ""}`;
     return group(document2, "fix-ado-pipeline-stages", items);
   }
   function createRun(context, run) {
-    let isCurrent = run.buildId === context.shown.run.buildId, item = createItem(context, {
+    let isCurrent2 = run.buildId === context.shown.run.buildId, item = createItem2(context, {
       className: "fix-ado-pipeline-run",
       details: runDetails(run),
-      isCurrent,
+      isCurrent: isCurrent2,
       level: "run",
       name: run.name,
       pick: { buildId: run.buildId, folded: null, jobId: null, stageId: null, stepId: null },
       status: run.status
     });
-    return isCurrent && context.pick.folded !== "run" ? [item, createStages(context)] : [item];
+    return isCurrent2 && context.pick.folded !== "run" ? [item, createStages(context)] : [item];
   }
   function showCutOffNames(tree) {
     tree.addEventListener("mouseover", (event) => {
@@ -1937,8 +4632,8 @@ ${issue.message ?? ""}`;
     start: { failed: "Could not start the run.", idle: "Start new run", waiting: "Starting…" }
   }, LOOKS = { cancel: "danger", start: "primary" };
   function textElement2(document2, className, text) {
-    let element3 = document2.createElement("span");
-    return element3.className = className, element3.textContent = text, element3;
+    let element4 = document2.createElement("span");
+    return element4.className = className, element4.textContent = text, element4;
   }
   function createChoice(context, choice) {
     let { document: document2 } = context, row = document2.createElement("button");
@@ -1978,7 +4673,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/pipeline-log-frame.ts
-  var LOG_TITLE_SELECTOR = ".logs-view .log-header .job-header .title-m", TREE_ROW_SELECTOR = ".run-logs-tree .bolt-tree-row", ROW_NAME_SELECTOR = ".job-name-area [role=button]";
+  var LOG_TITLE_SELECTOR = ".logs-view .log-header .job-header .title-m", TREE_ROW_SELECTOR3 = ".run-logs-tree .bolt-tree-row", ROW_NAME_SELECTOR = ".job-name-area [role=button]";
   function load(frame, log2) {
     frame.setAttribute("src", log2.path);
   }
@@ -1989,7 +4684,7 @@ ${issue.message ?? ""}`;
     return shownStepName(frame) === stepName;
   }
   function stepInTree(document2, log2) {
-    let names = [...document2.querySelectorAll(TREE_ROW_SELECTOR)].map((row) => row.querySelector(ROW_NAME_SELECTOR)).filter((name) => name !== null), jobIndex = names.findIndex((name) => name.textContent.trim() === log2.jobName), isStep = (name) => name.textContent.trim() === log2.stepName;
+    let names = [...document2.querySelectorAll(TREE_ROW_SELECTOR3)].map((row) => row.querySelector(ROW_NAME_SELECTOR)).filter((name) => name !== null), jobIndex = names.findIndex((name) => name.textContent.trim() === log2.jobName), isStep = (name) => name.textContent.trim() === log2.stepName;
     return names.slice(jobIndex + 1).find((name) => isStep(name)) ?? names.find((name) => isStep(name)) ?? null;
   }
   function waitForSwitch(frame, log2, schedule2) {
@@ -2030,7 +4725,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/pipeline-tab-panel.ts
-  var PANEL_CLASS = "fix-ado-pipeline-panel", TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree", FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame", LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note", ISSUES_SELECTOR = ":scope > .fix-ado-issue-box", ISSUES_COLLAPSED_ATTRIBUTE = "data-fix-ado-issues-collapsed";
+  var PANEL_CLASS = "fix-ado-pipeline-panel", TREE_SELECTOR3 = ":scope > .fix-ado-pipeline-tree", FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame", LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note", ISSUES_SELECTOR = ":scope > .fix-ado-issue-box", ISSUES_COLLAPSED_ATTRIBUTE = "data-fix-ado-issues-collapsed";
   function message(panel, text) {
     let note = panel.ownerDocument.createElement("p");
     note.className = "fix-ado-pipeline-message", note.textContent = text, panel.replaceChildren(note);
@@ -2096,7 +4791,7 @@ ${issue.message ?? ""}`;
   }
   function placeTree(panel, tree) {
     panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
-    let oldTree = panel.querySelector(TREE_SELECTOR);
+    let oldTree = panel.querySelector(TREE_SELECTOR3);
     oldTree === null ? panel.prepend(tree) : oldTree.replaceWith(tree);
   }
   function runActionOf(runs, checks) {
@@ -2312,7 +5007,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/pipeline-tab.ts
-  var TAB_CLASS = "fix-ado-pipeline-tab", TAB_LABEL = "Pipeline", OPEN_ATTRIBUTE = "data-fix-ado-pipeline-tab-open", PAGE_SELECTOR = ".repos-pr-details-page", TABBAR_SELECTOR = ".repos-pr-details-page-tabbar", CHECKS_PANEL_SELECTOR = ".bolt-panel", RUN_LINK = 'a[href*="/_build/results?"]', RUN_LINK_SELECTOR2 = `${PAGE_SELECTOR} ${RUN_LINK}, ${CHECKS_PANEL_SELECTOR} ${RUN_LINK}`;
+  var TAB_CLASS = "fix-ado-pipeline-tab", TAB_LABEL = "Pipeline", OPEN_ATTRIBUTE = "data-fix-ado-pipeline-tab-open", PAGE_SELECTOR = ".repos-pr-details-page", TABBAR_SELECTOR2 = ".repos-pr-details-page-tabbar", CHECKS_PANEL_SELECTOR = ".bolt-panel", RUN_LINK = 'a[href*="/_build/results?"]', RUN_LINK_SELECTOR2 = `${PAGE_SELECTOR} ${RUN_LINK}, ${CHECKS_PANEL_SELECTOR} ${RUN_LINK}`;
   function createTab(document2) {
     let tab = document2.createElement("a");
     return tab.className = `bolt-tab focus-treatment flex-noshrink ${TAB_CLASS}`, tab.setAttribute("role", "tab"), tab.href = "#", tab.innerHTML = `<span class="bolt-tab-inner-container"><span class="bolt-tab-text" data-content="${TAB_LABEL}">${TAB_LABEL}</span></span>`, setSelected(tab, !1), tab;
@@ -2324,13 +5019,13 @@ ${issue.message ?? ""}`;
     return JSON.stringify(data?.pullRequest ?? null) === JSON.stringify(pullRequest);
   }
   function panelOf(state, page) {
-    let existing = page.querySelector(`.${PANEL_CLASS}`), tabbar = page.querySelector(TABBAR_SELECTOR);
+    let existing = page.querySelector(`.${PANEL_CLASS}`), tabbar = page.querySelector(TABBAR_SELECTOR2);
     if (existing !== null || tabbar === null)
       return existing;
     let panel = createPanel(state.options.document);
     return tabbar.after(panel), panel;
   }
-  function render2(state) {
+  function render3(state) {
     let { data } = state, page = state.options.document.querySelector(PAGE_SELECTOR), panel = page === null ? null : panelOf(state, page);
     if (!state.isOpen || data === null || page === null || panel === null)
       return;
@@ -2374,7 +5069,7 @@ ${issue.message ?? ""}`;
   }
   function update(state) {
     let { data } = state;
-    !state.isOpen || data === null || (render2(state), loadWhatIsDue(loaderOf(state, data)));
+    !state.isOpen || data === null || (render3(state), loadWhatIsDue(loaderOf(state, data)));
   }
   function selectTab(state) {
     let { document: document2 } = state.options, tab = document2.querySelector(`.${TAB_CLASS}`);
@@ -2415,7 +5110,7 @@ ${issue.message ?? ""}`;
     isPipelineTab || run !== null ? (event.preventDefault(), event.stopPropagation(), openTab(state, run), closeChecksPanel(event.target)) : state.isOpen && closestElement(event.target, "[role=tablist] [role=tab]") !== null && closeTab(state);
   }
   function addTab(document2) {
-    let tablist = document2.querySelector(`${TABBAR_SELECTOR} [role=tablist]`);
+    let tablist = document2.querySelector(`${TABBAR_SELECTOR2} [role=tablist]`);
     return tablist === null ? !1 : (tablist.querySelector(`.${TAB_CLASS}`) === null && tablist.append(createTab(document2)), !0);
   }
   function syncTab(state, pullRequest) {
@@ -2437,7 +5132,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/style.css
-  var style_default3 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+  var style_default6 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
 .repos-pr-details-page[data-fix-ado-pipeline-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
   display: none !important;
@@ -2658,7 +5353,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         }
       };
     },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default3]
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default6]
   };
 
   // azure-devops/src/features/reload-on-changes/page-reloader.ts
@@ -2785,995 +5480,12 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     styles: []
   };
 
-  // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
-  var REVIEWER_REFRESH_INTERVAL_MS = 12e4, listKey = ({ project, repository }, status) => JSON.stringify([project, repository, status]);
-  function dueRepositories(options, nextFetchAtByList) {
-    let status = options.listStatus(), due = /* @__PURE__ */ new Map();
-    for (let pullRequest of options.findPullRequests()) {
-      let key = listKey(pullRequest, status);
-      (nextFetchAtByList.get(key) ?? 0) <= options.now() && due.set(key, pullRequest);
-    }
-    return [...due.values()];
-  }
-  function createReviewerFetcher(options) {
-    let nextFetchAtByList = /* @__PURE__ */ new Map(), isFetching = !1;
-    async function fetchRepository(pullRequest) {
-      let status = options.listStatus(), key = listKey(pullRequest, status);
-      try {
-        let { pullRequests } = await options.client.getPullRequests({
-          project: pullRequest.project,
-          repository: pullRequest.repository,
-          status
-        });
-        for (let listed of pullRequests)
-          options.reviewersByPullRequestId.set(listed.pullRequestId, listed.reviewers ?? []);
-        nextFetchAtByList.set(key, options.now() + REVIEWER_REFRESH_INTERVAL_MS);
-      } catch {
-        nextFetchAtByList.set(key, options.now() + FAILED_REQUEST_RETRY_MS);
-      }
-    }
-    return {
-      async sync() {
-        if (!isFetching) {
-          isFetching = !0;
-          try {
-            for (let pullRequest of dueRepositories(options, nextFetchAtByList))
-              await fetchRepository(pullRequest);
-          } finally {
-            isFetching = !1;
-          }
-        }
-      }
-    };
-  }
-
-  // azure-devops/src/features/required-reviewers/required-reviewers.ts
-  function createRequiredReviewerMarker(options) {
-    let reviewersByPullRequestId = /* @__PURE__ */ new Map(), reviewerFetcher = createReviewerFetcher({
-      client: options.client,
-      findPullRequests: () => options.findRows().map(({ pullRequest }) => pullRequest),
-      listStatus: options.listStatus,
-      now: options.now,
-      reviewersByPullRequestId
-    });
-    function markAll() {
-      for (let { row, pullRequest } of options.findRows()) {
-        let reviewers = reviewersByPullRequestId.get(pullRequest.pullRequestId);
-        reviewers && markRequiredReviewers(row, reviewers);
-      }
-    }
-    return {
-      markAll,
-      async sync() {
-        await reviewerFetcher.sync(), markAll();
-      }
-    };
-  }
-
-  // azure-devops/src/features/required-reviewers/style.css
-  var style_default4 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
-
-/* A glow that spills outside the circle, so the circle keeps its full size. */
-.pr-reviewer[data-fix-ado-required] .bolt-coin {
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 2px var(--communication-background, rgb(0, 120, 212)),
-    0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
-}
-
-/* Required reviewers first. Even spacing whatever the visual order. */
-[data-fix-ado-reviewers] > .pr-reviewer {
-  margin: 0 8px 0 0 !important;
-}
-
-[data-fix-ado-reviewers] > .pr-reviewer[data-fix-ado-required] {
-  order: -1;
-}
-`;
-
-  // azure-devops/src/features/required-reviewers/index.ts
-  var requiredReviewers = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "Required reviewers come first in pull request lists, with a glow.",
-    id: "required-reviewers",
-    name: "Required reviewers first",
-    start({ basePath: basePath2, client, document: document2, now }) {
-      let shownPage = { kind: "other" }, marker = createRequiredReviewerMarker({
-        client,
-        findRows: () => findPullRequestRows(document2, basePath2),
-        listStatus: () => shownPage.kind === "pull-request-list" ? shownPage.listPage.status : "active",
-        now
-      });
-      return {
-        sync({ page, isTabActive: isTabActive2 }) {
-          shownPage = page, marker.markAll(), (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") && isTabActive2 && marker.sync();
-        }
-      };
-    },
-    styles: [style_default4]
-  };
-
-  // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
-  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE3 = "http://www.w3.org/2000/svg";
-  function element(document2, tag, { className, text, attributes = {}, children = [] } = {}) {
-    let created = document2.createElement(tag);
-    className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text);
-    for (let [name, value] of Object.entries(attributes))
-      created.setAttribute(name, value);
-    return created.append(...children), created;
-  }
-  function fontIcon(document2, name, size) {
-    return element(document2, "span", {
-      children: [
-        element(document2, "span", {
-          attributes: { "aria-hidden": "true" },
-          className: `left-icon flex-noshrink fabric-icon ms-Icon--${name} ${size}`
-        })
-      ],
-      className: "fluent-icons-enabled"
-    });
-  }
-  function svgIcon(document2, className, pathData) {
-    let svg = document2.createElementNS(SVG_NAMESPACE3, "svg"), attributes = {
-      "aria-hidden": "true",
-      class: className,
-      height: "16",
-      viewBox: "0 0 16 16",
-      width: "16"
-    };
-    for (let [name, value] of Object.entries(attributes))
-      svg.setAttribute(name, value);
-    for (let data of pathData) {
-      let path = document2.createElementNS(SVG_NAMESPACE3, "path");
-      path.setAttribute("d", data), svg.append(path);
-    }
-    return svg;
-  }
-  function createSpinner(document2) {
-    return element(document2, "span", {
-      attributes: { "aria-hidden": "true" },
-      className: "fix-ado-spinner"
-    });
-  }
-  function createStarButton(document2) {
-    return element(document2, "button", {
-      attributes: { "aria-pressed": "false", type: "button" },
-      children: [svgIcon(document2, "fix-ado-star-icon", [STAR_PATH])],
-      className: `${STAR_BUTTON_CLASS} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`
-    });
-  }
-  function updateStarButton(button2, isStarred) {
-    button2.getAttribute("aria-pressed") !== String(isStarred) && (button2.setAttribute("aria-pressed", String(isStarred)), button2.setAttribute("aria-label", isStarred ? "Remove from starred" : "Add to starred"), button2.setAttribute("title", isStarred ? "Remove from starred" : "Add to starred"));
-  }
-  function detailOf(identity) {
-    return identity.isGroup ? "Group" : identity.signInAddress;
-  }
-  function createRequiredButton(document2, identity) {
-    return element(document2, "button", {
-      attributes: {
-        "aria-label": `Add ${identity.displayName} as required reviewer`,
-        "data-fix-ado-add": "required",
-        title: "Add as required reviewer",
-        type: "button"
-      },
-      children: [svgIcon(document2, "fix-ado-required-icon", [REQUIRED_RING_PATH, PLUS_PATH])],
-      className: "bolt-split-button-option flex-self-stretch body-s bolt-button bolt-icon-button enabled icon-only bolt-focus-treatment"
-    });
-  }
-  function createNameColumn(document2, identity) {
-    let name = element(document2, "div", {
-      className: "body-m flex-grow text-ellipsis",
-      text: identity.displayName
-    }), detail = element(document2, "div", {
-      className: "fix-ado-starred-detail body-s secondary-text text-ellipsis",
-      text: detailOf(identity)
-    });
-    return element(document2, "div", {
-      children: [name, detail],
-      className: "flex-column flex-grow text-ellipsis icon-large-margin"
-    });
-  }
-  function createAddSplitButton(document2, identity) {
-    return element(document2, "div", {
-      children: [
-        element(document2, "button", {
-          attributes: {
-            "aria-label": `Add ${identity.displayName} as optional reviewer`,
-            "data-fix-ado-add": "optional",
-            title: "Add as optional reviewer",
-            type: "button"
-          },
-          children: [fontIcon(document2, "Add", "small")],
-          className: "bolt-split-button-main bolt-button bolt-icon-button enabled icon-only bolt-focus-treatment"
-        }),
-        element(document2, "div", { className: "bolt-split-button-divider flex-noshrink" }),
-        element(document2, "div", {
-          children: [createRequiredButton(document2, identity)],
-          className: "inline-flex-row"
-        })
-      ],
-      className: "fix-ado-add-reviewer bolt-split-button inline-flex-row flex-noshrink icon-large-margin"
-    });
-  }
-  function createAvatar(document2, identity, imageUrl) {
-    return element(document2, "div", {
-      children: [
-        element(document2, "div", {
-          attributes: { "aria-label": identity.displayName },
-          children: [
-            element(document2, "img", {
-              attributes: { alt: "", src: imageUrl },
-              className: "bolt-coin-content using-image size24"
-            })
-          ],
-          className: "bolt-coin flex-noshrink icon-large-margin size24"
-        })
-      ]
-    });
-  }
-  function createStarredRow(document2, identity, imageUrl) {
-    let star = createStarButton(document2);
-    return updateStarButton(star, !0), element(document2, "div", {
-      attributes: { "data-fix-ado-identity": identity.id },
-      children: [
-        createAddSplitButton(document2, identity),
-        createAvatar(document2, identity, imageUrl),
-        createNameColumn(document2, identity),
-        star
-      ],
-      className: "repos-reviewer flex-row flex-center fix-ado-starred-reviewer"
-    });
-  }
-  var EMPTY_TEXT = "Put people/groups here you often add as pull requests, to add them more easily as optional reviewer";
-  function createEmptyWell(document2) {
-    return element(document2, "div", {
-      className: "repos-pr-no-items-well fix-ado-starred-empty",
-      text: EMPTY_TEXT
-    });
-  }
-  function createStarSomeoneButton(document2) {
-    return element(document2, "button", {
-      attributes: { type: "button" },
-      children: [
-        fontIcon(document2, "Add", "small"),
-        element(document2, "span", {
-          className: "bolt-button-text body-s",
-          text: "Add person/group to starred"
-        })
-      ],
-      className: "fix-ado-star-someone bolt-button subtle enabled bolt-focus-treatment"
-    });
-  }
-  function createStarredSection(document2) {
-    return element(document2, "div", {
-      children: [
-        element(document2, "div", {
-          className: "margin-bottom-8 body-s secondary-text font-weight-semibold",
-          text: "Add starred as reviewer"
-        }),
-        element(document2, "div", { className: "fix-ado-starred-list flex-column" }),
-        createStarSomeoneButton(document2)
-      ],
-      className: `flex-grow flex-column ${STARRED_SECTION_CLASS}`
-    });
-  }
-
-  // azure-devops/src/features/starred-reviewers/starred-reviewer-chips-markup.ts
-  var STARRED_CHIP_ROW_CLASS = "fix-ado-starred-chips", STARRED_CHIP_CLASS = "fix-ado-starred-chip";
-  function createStarredChip(document2, identity, imageUrl) {
-    let name = personOrTeamName(identity.displayName), image = element(document2, "img", {
-      attributes: { alt: "", src: imageUrl },
-      className: "bolt-coin-content using-image size20"
-    });
-    return element(document2, "button", {
-      attributes: {
-        "aria-label": `Add ${name} as reviewer`,
-        "data-fix-ado-identity": identity.id,
-        title: "Add as reviewer",
-        type: "button"
-      },
-      children: [
-        element(document2, "div", {
-          children: [
-            element(document2, "div", {
-              attributes: { "aria-hidden": "true" },
-              children: [image],
-              className: "bolt-coin flex-noshrink flex-row flex-center size20"
-            })
-          ],
-          className: "bolt-pill-filled-visual flex-noshrink"
-        }),
-        element(document2, "div", { className: "bolt-pill-content text-ellipsis", text: name })
-      ],
-      className: `${STARRED_CHIP_CLASS} bolt-pill flex-row flex-center standard regular clickable has-filled-visual`
-    });
-  }
-  function showChipSpinner(document2, chip) {
-    chip.querySelector(".bolt-pill-filled-visual")?.replaceChildren(createSpinner(document2));
-  }
-  function createStarredChipRow(document2) {
-    return element(document2, "div", {
-      attributes: { "aria-label": "Starred reviewers", role: "group" },
-      children: [
-        svgIcon(document2, "fix-ado-starred-chips-icon fix-ado-star-icon", [STAR_PATH]),
-        element(document2, "div", { className: "fix-ado-starred-chip-list flex-row flex-wrap" })
-      ],
-      className: `${STARRED_CHIP_ROW_CLASS} flex-row flex-center`
-    });
-  }
-
-  // azure-devops/src/features/starred-reviewers/starred-reviewers-store.ts
-  function isIdentity(value) {
-    return typeof value == "object" && value !== null && "id" in value && typeof value.id == "string" && "displayName" in value && typeof value.displayName == "string" && "signInAddress" in value && typeof value.signInAddress == "string" && "isGroup" in value && typeof value.isGroup == "boolean";
-  }
-  function isNameOf(identity, name) {
-    let wanted = name.trim().toLowerCase();
-    return [identity.displayName, personOrTeamName(identity.displayName)].some(
-      (candidate) => candidate.trim().toLowerCase() === wanted
-    );
-  }
-  function createStarredReviewersStore(storage) {
-    function list() {
-      let stored = storage.load();
-      return Array.isArray(stored) ? stored.filter((value) => isIdentity(value)) : [];
-    }
-    return {
-      findByName: (name) => list().find((identity) => isNameOf(identity, name)) ?? null,
-      isStarred: (id) => list().some((identity) => identity.id === id),
-      list,
-      star(identity) {
-        let others = list().filter(({ id }) => id !== identity.id);
-        storage.save([...others, identity]);
-      },
-      unstar(id) {
-        storage.save(list().filter((identity) => identity.id !== id));
-      }
-    };
-  }
-
-  // azure-devops/src/features/starred-reviewers/reviewer-field.ts
-  var FIELD_LABEL_IDS = [
-    "__bolt-pr-optional-reviewers-label",
-    "__bolt-pr-required-reviewers-label"
-  ];
-  function reviewerFields(document2) {
-    let fields = [];
-    for (let labelId of FIELD_LABEL_IDS) {
-      let column = document2.querySelector(`#${labelId}`)?.parentElement?.parentElement, input = column?.querySelector(`input[aria-labelledby="${labelId}"]`);
-      column != null && input !== null && input !== void 0 && fields.push({ column, input });
-    }
-    return fields;
-  }
-  function namesInFields(document2) {
-    return [...document2.querySelectorAll(".bolt-identity-picker-pill .bolt-pill-content")].map(
-      (pill) => pill.textContent?.trim() ?? ""
-    );
-  }
-  function typeInto(input, text) {
-    input.focus();
-    let pageWindow = input.ownerDocument.defaultView;
-    Reflect.set((pageWindow?.HTMLInputElement ?? HTMLInputElement).prototype, "value", text, input);
-    let EventOfPage = pageWindow?.Event ?? Event;
-    input.dispatchEvent(new EventOfPage("input", { bubbles: !0 }));
-  }
-  function isSuggestionOf(option, identity) {
-    let name = option.querySelector(".bolt-picker-persona-name > :first-child")?.textContent ?? "", detail = option.querySelector(".bolt-picker-persona-name .secondary-text")?.textContent, address = identity.signInAddress.toLowerCase();
-    return address === "" ? isNameOf(identity, name) : detail?.trim().toLowerCase() === address;
-  }
-  function findSuggestion(document2, input, identity) {
-    let listboxId = input.getAttribute("aria-controls");
-    return [...(listboxId === null ? null : document2.querySelector(`[id="${listboxId}"]`))?.querySelectorAll('[role="option"]') ?? []].find(
-      (candidate) => isSuggestionOf(candidate, identity)
-    ) ?? null;
-  }
-  function isInField(document2, identity) {
-    return namesInFields(document2).some((name) => isNameOf(identity, name));
-  }
-  function pressMouseOn(element3) {
-    let pageWindow = element3.ownerDocument.defaultView, MouseEventOfPage = pageWindow?.MouseEvent ?? MouseEvent, PointerEventOfPage = pageWindow?.PointerEvent ?? MouseEventOfPage, init = { bubbles: !0, button: 0, cancelable: !0, composed: !0 };
-    element3.dispatchEvent(new PointerEventOfPage("pointerdown", init)), element3.dispatchEvent(new MouseEventOfPage("mousedown", init)), element3.dispatchEvent(new PointerEventOfPage("pointerup", init)), element3.dispatchEvent(new MouseEventOfPage("mouseup", init)), element3.dispatchEvent(new MouseEventOfPage("click", init));
-  }
-  function pressEnterIn(input) {
-    let KeyboardEventOfPage = input.ownerDocument.defaultView?.KeyboardEvent ?? KeyboardEvent, init = { bubbles: !0, cancelable: !0, code: "Enter", key: "Enter", keyCode: 13 };
-    input.dispatchEvent(new KeyboardEventOfPage("keydown", init)), input.dispatchEvent(new KeyboardEventOfPage("keyup", init));
-  }
-
-  // azure-devops/src/features/starred-reviewers/starred-reviewer-chips.ts
-  var SUGGESTION_POLL_MS = 250, PICK_TIMEOUT_MS = 5e3, PICKING_CLASS = "fix-ado-starred-picking", NOT_FOUND_TITLE = "Not found in the reviewer field's suggestions. Pick them there.";
-  function searchTextOf(identity) {
-    return identity.signInAddress === "" ? personOrTeamName(identity.displayName) : identity.signInAddress;
-  }
-  function isActive(state, { pickId }) {
-    return state.activePick?.pickId === pickId;
-  }
-  function finishPick(state, pendingPick, isPicked) {
-    isActive(state, pendingPick) && (log("Starred reviewers: chip pick finished", { isPicked }), isPicked || state.notFoundIds.add(pendingPick.identity.id), state.activePick = null, sync(state));
-  }
-  function runStep(state, pendingPick, step) {
-    if (isActive(state, pendingPick))
-      try {
-        step();
-      } catch (error) {
-        log("Starred reviewers: chip pick failed", {
-          message: error instanceof Error ? error.message : "unknown error"
-        }), finishPick(state, pendingPick, !1);
-      }
-  }
-  function nextStep(pendingPick, suggestion) {
-    if (pendingPick.step === "waiting")
-      return pressMouseOn(suggestion.querySelector(".bolt-suggestions-item") ?? suggestion), "clicked";
-    let { input } = pendingPick.field;
-    return pendingPick.step === "clicked" && input.getAttribute("aria-activedescendant") === suggestion.id ? (pressEnterIn(input), "entered") : null;
-  }
-  function pickSuggestion(state, pendingPick) {
-    let { document: document2, schedule: schedule2 } = state.options, { field, identity } = pendingPick, suggestion = isInField(document2, identity) ? null : findSuggestion(document2, field.input, identity), step = suggestion === null ? pendingPick.step : nextStep(pendingPick, suggestion);
-    if (log("Starred reviewers: chip pick", {
-      from: pendingPick.step,
-      hasSuggestion: suggestion !== null,
-      to: step
-    }), step === null || isInField(document2, identity)) {
-      finishPick(state, pendingPick, isInField(document2, identity));
-      return;
-    }
-    schedule2(() => {
-      runStep(state, pendingPick, () => {
-        pickSuggestion(state, { ...pendingPick, step });
-      });
-    }, SUGGESTION_POLL_MS);
-  }
-  function addThroughField(state, field, identity) {
-    if (state.activePick !== null)
-      return;
-    let { schedule: schedule2 } = state.options, pendingPick = { field, identity, pickId: state.nextPickId, step: "waiting" };
-    state.nextPickId += 1, state.activePick = { identityId: identity.id, pickId: pendingPick.pickId }, state.notFoundIds.delete(identity.id), sync(state), schedule2(() => {
-      isActive(state, pendingPick) && (log("Starred reviewers: chip pick timed out"), finishPick(state, pendingPick, !1));
-    }, PICK_TIMEOUT_MS), runStep(state, pendingPick, () => {
-      typeInto(field.input, searchTextOf(identity)), schedule2(() => {
-        runStep(state, pendingPick, () => {
-          pickSuggestion(state, pendingPick);
-        });
-      }, SUGGESTION_POLL_MS);
-    });
-  }
-  function onRowClick(state, field, event) {
-    let id = closestHtmlElement(event.target, `.${STARRED_CHIP_CLASS}`)?.dataset.fixAdoIdentity, identity = state.options.store.list().find((starred) => starred.id === id);
-    identity !== void 0 && addThroughField(state, field, identity);
-  }
-  function createChip(state, identity) {
-    let { document: document2, imageUrlOf } = state.options, chip = createStarredChip(document2, identity, imageUrlOf(identity));
-    return state.activePick !== null && (chip.setAttribute("disabled", ""), chip.classList.remove("clickable")), state.activePick?.identityId === identity.id && showChipSpinner(document2, chip), state.notFoundIds.has(identity.id) && (chip.title = NOT_FOUND_TITLE), chip;
-  }
-  function placeRow(state, field) {
-    let row = field.column.querySelector(`:scope > .${STARRED_CHIP_ROW_CLASS}`);
-    return row === null && (row = createStarredChipRow(state.options.document), row.addEventListener("click", (event) => {
-      onRowClick(state, field, event);
-    })), field.column.lastElementChild !== row && field.column.append(row), row;
-  }
-  function fillRow(state, field, shown) {
-    if (shown.length === 0) {
-      field.column.querySelector(`:scope > .${STARRED_CHIP_ROW_CLASS}`)?.remove();
-      return;
-    }
-    let list = placeRow(state, field).querySelector(".fix-ado-starred-chip-list"), signature = JSON.stringify([
-      state.activePick?.identityId,
-      shown.map(({ id }) => [id, state.notFoundIds.has(id)])
-    ]);
-    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip(state, identity))));
-  }
-  function removeChipRows(document2) {
-    for (let row of document2.querySelectorAll(`.${STARRED_CHIP_ROW_CLASS}`))
-      row.remove();
-  }
-  function sync(state) {
-    let { document: document2, store } = state.options, fields = reviewerFields(document2);
-    if (document2.body.classList.toggle(PICKING_CLASS, state.isCreatePage && state.activePick !== null), !state.isCreatePage) {
-      removeChipRows(document2);
-      return;
-    }
-    let names = namesInFields(document2), shown = store.list().filter((identity) => !names.some((name) => isNameOf(identity, name)));
-    for (let field of fields)
-      fillRow(state, field, shown);
-  }
-  function createStarredReviewerChips(options) {
-    let state = {
-      activePick: null,
-      isCreatePage: !1,
-      nextPickId: 1,
-      notFoundIds: /* @__PURE__ */ new Set(),
-      options
-    };
-    return {
-      sync(isCreatePage) {
-        state.isCreatePage = isCreatePage, sync(state);
-      }
-    };
-  }
-
-  // azure-devops/src/features/starred-reviewers/reviewer-stars.ts
-  var REVIEWER_SECTION_SELECTOR = ".pr-required-reviewers-section, .pr-optional-reviewers-section, .pr-declined-reviewers-section";
-  function reviewerRowsOf(document2) {
-    let rows = [];
-    for (let section of document2.querySelectorAll(REVIEWER_SECTION_SELECTOR))
-      rows.push(...section.querySelectorAll(":scope > .repos-reviewer"));
-    return rows;
-  }
-  function nameOfRow(row) {
-    return row.querySelector(".flex-column > .body-m")?.textContent?.trim() ?? "";
-  }
-  function reviewerRowOf(document2, identity) {
-    return reviewerRowsOf(document2).find((row) => isNameOf(identity, nameOfRow(row)));
-  }
-  function isOnPage(document2, identity) {
-    return reviewerRowOf(document2, identity) !== void 0;
-  }
-  function logShown(row) {
-    log("Starred reviewers: added reviewer shown", {
-      hasBox: row.getClientRects().length > 0,
-      isHidden: row.closest("[hidden], [aria-hidden='true']") !== null,
-      section: row.parentElement?.className ?? ""
-    });
-  }
-  function insertStar(document2, row, onClick2) {
-    let star = createStarButton(document2);
-    star.addEventListener("click", (event) => {
-      event.stopPropagation(), onClick2();
-    });
-    let reveal = row.querySelector(":scope > .repos-reviewer-reveal");
-    return reveal === null ? row.append(star) : reveal.before(star), star;
-  }
-  function addStars(document2, store, onStarClick) {
-    for (let row of reviewerRowsOf(document2)) {
-      let star = row.querySelector(`:scope > .${STAR_BUTTON_CLASS}`) ?? insertStar(document2, row, () => {
-        onStarClick(row);
-      });
-      updateStarButton(star, store.findByName(nameOfRow(row)) !== null);
-    }
-  }
-
-  // azure-devops/src/features/starred-reviewers/star-picker.ts
-  var SEARCH_DELAY_MS = 300, SUGGESTED_CLASS = "bolt-suggestions-isSuggested";
-  function div(className) {
-    return { className, tag: "div" };
-  }
-  function createPersonaName(document2, identity) {
-    let detail = element(document2, "div", {
-      className: "fontSize secondary-text text-ellipsis",
-      text: detailOf(identity)
-    });
-    return element(document2, "div", {
-      children: [
-        element(document2, "div", {
-          className: "fontSizeM text-ellipsis",
-          text: identity.displayName
-        }),
-        element(document2, "div", { children: [detail], className: "flex-row" })
-      ],
-      className: "bolt-picker-persona-name flex-column flex-grow"
-    });
-  }
-  function createSuggestion(options, identity) {
-    let { document: document2 } = options, text = element(document2, "div", {
-      children: [
-        createAvatar(document2, identity, options.imageUrlOf(identity)),
-        createPersonaName(document2, identity)
-      ],
-      className: "bolt-picker-suggesteditem-text flex-row flex-grow flex-center text-ellipsis"
-    }), item = wrapIn(document2, text, [
-      div("bolt-suggestions-item-button flex-row flex-grow scroll-hidden"),
-      div(
-        "bolt-identitypickerdropdown-item bolt-suggestions-item flex-row flex-grow cursor-pointer scroll-hidden"
-      )
-    ]);
-    return item.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-    }), item.addEventListener("click", () => {
-      options.onPick(identity);
-    }), element(document2, "div", {
-      attributes: { role: "option" },
-      children: [item],
-      className: "flex-noshrink"
-    });
-  }
-  function createNoResults(document2) {
-    let text = element(document2, "div", {
-      className: "bolt-identitypickerdropdown-noresults flex-row flex-grow flex-center",
-      text: "No identities found"
-    });
-    return element(document2, "div", {
-      attributes: { role: "alert" },
-      children: [text],
-      className: "bolt-suggestions-none-region flex-row flex-grow"
-    });
-  }
-  function createCallout(document2) {
-    let list = element(document2, "div", {
-      attributes: { role: "listbox" },
-      className: "bolt-suggestions-container flex-column flex-grow v-scroll-auto h-scroll-hidden"
-    }), callout = wrapIn(document2, list, [
-      div("bolt-identitypickerdropdown-list bolt-suggestions flex-row flex-grow"),
-      div(
-        "bolt-identitypickerdropdown-callout-content flex-row flex-grow bolt-callout-content bolt-callout-shadow"
-      ),
-      div("fix-ado-star-picker-callout bolt-identitypickerdropdown-callout bolt-callout flex-row")
-    ]);
-    return callout.hidden = !0, { callout, list };
-  }
-  function createSearchInput(document2) {
-    let input = document2.createElement("input");
-    return input.className = "bolt-textfield-input flex-grow bolt-textfield-input-with-prefix", input.type = "text", input.placeholder = "Search people and groups", input.setAttribute("role", "combobox"), input.setAttribute("aria-label", "Search people and groups to star"), input.setAttribute("aria-autocomplete", "list"), input.setAttribute("aria-expanded", "false"), input;
-  }
-  function createField(document2) {
-    let input = createSearchInput(document2), prefix = fontIcon(document2, "Contact", "medium");
-    return prefix.firstElementChild?.classList.add("prefix", "bolt-textfield-no-text"), { field: element(document2, "div", {
-      children: [prefix, input],
-      className: "repos-reviewers-identity-picker bolt-identitypickerdropdown-textField flex-row flex-center bolt-textfield focus-treatment focused"
-    }), input };
-  }
-  function showFound(parts, found) {
-    let { options, list, callout, input } = parts, unstarred = found.filter(({ id }) => !options.isStarred(id));
-    list.replaceChildren(
-      ...unstarred.length === 0 ? [createNoResults(options.document)] : unstarred.map((identity) => createSuggestion(options, identity))
-    ), callout.hidden = !1, input.setAttribute("aria-expanded", "true");
-  }
-  async function search(parts, query) {
-    parts.searchCount += 1;
-    let thisSearch = parts.searchCount, found = await parts.options.search(query).catch(() => []);
-    thisSearch === parts.searchCount && parts.input.value.trim() === query && showFound(parts, found);
-  }
-  function stopSearch(parts) {
-    parts.searchCount += 1, parts.cancelSearch?.(), parts.cancelSearch = null;
-  }
-  function onInput(parts) {
-    stopSearch(parts);
-    let query = parts.input.value.trim();
-    if (query === "") {
-      parts.callout.hidden = !0;
-      return;
-    }
-    parts.cancelSearch = parts.options.schedule(() => {
-      search(parts, query);
-    }, SEARCH_DELAY_MS);
-  }
-  function moveSuggestion(list, step) {
-    let items = [...list.querySelectorAll(".bolt-suggestions-item")], current = items.findIndex((item) => item.classList.contains(SUGGESTED_CLASS)), next = Math.min(Math.max(current + step, 0), items.length - 1);
-    items[current]?.classList.remove(SUGGESTED_CLASS), items[next]?.classList.add(SUGGESTED_CLASS);
-  }
-  function onKeyDown(parts, event) {
-    event.key === "Escape" ? parts.options.onClose() : event.key === "ArrowDown" || event.key === "ArrowUp" ? (event.preventDefault(), moveSuggestion(parts.list, event.key === "ArrowDown" ? 1 : -1)) : event.key === "Enter" && (event.preventDefault(), parts.list.querySelector(`.${SUGGESTED_CLASS}`)?.click());
-  }
-  function createStarPicker(options) {
-    let { document: document2 } = options, { field, input } = createField(document2), { callout, list } = createCallout(document2), parts = { callout, cancelSearch: null, input, list, options, searchCount: 0 };
-    input.addEventListener("input", () => {
-      onInput(parts);
-    }), input.addEventListener("keydown", (event) => {
-      onKeyDown(parts, event);
-    }), input.addEventListener("blur", () => {
-      stopSearch(parts), options.onClose();
-    });
-    let dropdown = wrapIn(document2, field, [
-      div("flex-column bolt-identitypickerdropdown-container flex-grow"),
-      div("bolt-identitypickerdropdown flex-row flex-grow")
-    ]);
-    return { element: element(document2, "div", {
-      children: [dropdown, callout],
-      className: "fix-ado-star-picker margin-bottom-8"
-    }), input };
-  }
-
-  // azure-devops/src/features/starred-reviewers/starred-reviewers.ts
-  var ADDED_REVIEWER_WAIT_MS = 4e3;
-  function messageOf(error) {
-    return error instanceof Error ? error.message : "unknown error";
-  }
-  async function toggleStar(state, row) {
-    let { store, client } = state.options, name = nameOfRow(row), starred = store.findByName(name);
-    if (starred !== null)
-      store.unstar(starred.id);
-    else if (state.pullRequest !== null) {
-      let reviewer = (await client.getPullRequestReviewers(state.pullRequest)).find((identity) => isNameOf(identity, name));
-      reviewer !== void 0 && store.star(reviewer);
-    }
-    sync2(state);
-  }
-  function waitUntilShown(state, identity) {
-    let { document: document2, schedule: schedule2, reload } = state.options;
-    log("Starred reviewers: reviewer added, waiting for Azure DevOps to show them"), state.addedIds.add(identity.id), schedule2(() => {
-      isOnPage(document2, identity) || reload();
-    }, ADDED_REVIEWER_WAIT_MS);
-  }
-  function markBusy(state, id, isBusy2) {
-    isBusy2 ? (state.busyIds.add(id), state.errorsById.delete(id)) : state.busyIds.delete(id), sync2(state);
-  }
-  async function addReviewer(state, identity, isRequired) {
-    let { pullRequest } = state;
-    if (!(pullRequest === null || state.busyIds.has(identity.id))) {
-      markBusy(state, identity.id, !0);
-      try {
-        await state.options.client.addPullRequestReviewer(pullRequest, {
-          isRequired,
-          reviewerId: identity.id
-        }), waitUntilShown(state, identity);
-      } catch (error) {
-        state.errorsById.set(identity.id, `Could not add: ${messageOf(error)}`);
-      } finally {
-        markBusy(state, identity.id, !1);
-      }
-    }
-  }
-  function openPicker(state, opener) {
-    let { document: document2, store, client, imageUrlOf, schedule: schedule2 } = state.options, close = null, picker = createStarPicker({
-      document: document2,
-      imageUrlOf,
-      isStarred: (id) => store.isStarred(id),
-      onClose: () => {
-        close?.();
-      },
-      onPick: (identity) => {
-        store.star(identity), close?.(), sync2(state);
-      },
-      schedule: schedule2,
-      search: async (query) => client.searchIdentities(query)
-    });
-    close = () => {
-      close = null, picker.element.remove(), opener.hidden = !1;
-    }, opener.hidden = !0, opener.before(picker.element), picker.input.focus();
-  }
-  function identityOfRow(state, target) {
-    let id = closestHtmlElement(target, "[data-fix-ado-identity]")?.dataset.fixAdoIdentity;
-    return state.options.store.list().find((identity) => identity.id === id) ?? null;
-  }
-  function onRowButton(state, button2, identity) {
-    button2.classList.contains(STAR_BUTTON_CLASS) ? (state.options.store.unstar(identity.id), sync2(state)) : addReviewer(state, identity, button2.dataset.fixAdoAdd === "required");
-  }
-  function onSectionClick(state, event) {
-    let opener = closestHtmlElement(event.target, ".fix-ado-star-someone");
-    if (opener !== null) {
-      openPicker(state, opener);
-      return;
-    }
-    let identity = identityOfRow(state, event.target), button2 = closestHtmlElement(event.target, `[data-fix-ado-add], .${STAR_BUTTON_CLASS}`);
-    identity !== null && button2 !== null && onRowButton(state, button2, identity);
-  }
-  function placeSection(state, anchor) {
-    let { document: document2 } = state.options, section = document2.querySelector(`.${STARRED_SECTION_CLASS}`);
-    return section === null && (section = createStarredSection(document2), section.addEventListener("click", (event) => {
-      onSectionClick(state, event);
-    })), anchor.nextElementSibling !== section && anchor.after(section), section;
-  }
-  function showAdding(document2, row) {
-    for (let button2 of row.querySelectorAll("[data-fix-ado-add]"))
-      button2.classList.replace("enabled", "disabled"), button2.setAttribute("disabled", "");
-    let addButton = row.querySelector(".fix-ado-add-reviewer");
-    addButton?.classList.add("fix-ado-adding"), addButton?.append(createSpinner(document2));
-  }
-  function showError(row, error) {
-    let detail = row.querySelector(".fix-ado-starred-detail");
-    detail !== null && (detail.textContent = error, detail.classList.replace("secondary-text", "error-text"));
-  }
-  function createShownRow(state, identity) {
-    let { document: document2, imageUrlOf } = state.options, row = createStarredRow(document2, identity, imageUrlOf(identity));
-    (state.busyIds.has(identity.id) || state.addedIds.has(identity.id)) && showAdding(document2, row);
-    let error = state.errorsById.get(identity.id);
-    return error !== void 0 && showError(row, error), row;
-  }
-  function shownIdentities(state, starred) {
-    let { document: document2 } = state.options;
-    for (let identity of starred) {
-      let row = state.addedIds.has(identity.id) ? reviewerRowOf(document2, identity) : void 0;
-      row !== void 0 && (logShown(row), state.addedIds.delete(identity.id));
-    }
-    return starred.filter((identity) => !isOnPage(document2, identity));
-  }
-  function fillList(state, section) {
-    let list = section.querySelector(".fix-ado-starred-list"), starred = state.options.store.list(), shown = shownIdentities(state, starred), signature = JSON.stringify([
-      starred.length,
-      shown.map(({ id }) => [
-        id,
-        state.busyIds.has(id) || state.addedIds.has(id),
-        state.errorsById.get(id) ?? ""
-      ])
-    ]);
-    list === null || list.dataset.fixAdoSignature === signature || (list.dataset.fixAdoSignature = signature, list.replaceChildren(
-      ...starred.length === 0 ? [createEmptyWell(state.options.document)] : shown.map((identity) => createShownRow(state, identity))
-    ));
-  }
-  function sync2(state) {
-    let { document: document2 } = state.options, anchor = document2.querySelector(".pr-optional-reviewers-section") ?? document2.querySelector(".pr-required-reviewers-section");
-    state.pullRequest === null || anchor === null || (addStars(document2, state.options.store, (row) => {
-      toggleStar(state, row);
-    }), fillList(state, placeSection(state, anchor)));
-  }
-  function createStarredReviewers(options) {
-    let state = {
-      addedIds: /* @__PURE__ */ new Set(),
-      busyIds: /* @__PURE__ */ new Set(),
-      errorsById: /* @__PURE__ */ new Map(),
-      options,
-      pullRequest: null
-    };
-    return {
-      sync(pullRequest) {
-        state.pullRequest = pullRequest, sync2(state);
-      }
-    };
-  }
-
-  // azure-devops/src/features/starred-reviewers/style.css
-  var style_default5 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
-.repos-reviewer > .fix-ado-star {
-  visibility: hidden;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  padding: 4px;
-}
-.repos-reviewer:hover > .fix-ado-star,
-.repos-reviewer.focused > .fix-ado-star,
-.repos-reviewer > .fix-ado-star:focus-visible,
-.repos-reviewer > .fix-ado-star[aria-pressed="true"] {
-  visibility: visible;
-}
-.fix-ado-star-icon path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.2;
-  stroke-linejoin: round;
-}
-.fix-ado-star[aria-pressed="true"] {
-  color: var(--communication-foreground, rgba(0, 90, 158, 1));
-}
-.fix-ado-star[aria-pressed="true"] .fix-ado-star-icon path {
-  fill: currentColor;
-}
-
-.fix-ado-starred-reviewers {
-  margin-top: 16px;
-}
-/* The + split button sits where Azure DevOps shows the vote icon, so it stays small. */
-.fix-ado-add-reviewer .bolt-split-button-main {
-  padding: 3px 5px;
-}
-.fix-ado-add-reviewer .bolt-split-button-option {
-  padding: 3px 4px;
-}
-/* While a + button adds its reviewer: a spinner on top, the buttons hidden but in place, so the row keeps its size. */
-.fix-ado-add-reviewer.fix-ado-adding {
-  position: relative;
-}
-.fix-ado-adding > :not(.fix-ado-spinner) {
-  visibility: hidden;
-}
-.fix-ado-adding > .fix-ado-spinner {
-  position: absolute;
-  inset: 0;
-  width: 16px;
-  height: 16px;
-  margin: auto;
-}
-.fix-ado-required-icon path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-}
-.fix-ado-required-icon path:first-child {
-  stroke: var(--communication-background, rgb(0, 120, 212));
-}
-.fix-ado-starred-empty {
-  margin-bottom: 8px;
-}
-.fix-ado-star-someone {
-  align-self: flex-start;
-  margin-top: 4px;
-  padding: 2px 6px;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-}
-.fix-ado-star-someone[hidden] {
-  display: none;
-}
-.fix-ado-star-someone .bolt-button-text {
-  padding-left: 4px;
-}
-.fix-ado-star-picker {
-  position: relative;
-}
-.fix-ado-star-picker-callout {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-}
-.fix-ado-star-picker-callout .bolt-suggestions-container {
-  max-height: 320px;
-}
-
-/* On the create pull request page: a chip per starred reviewer under each reviewer field. */
-.fix-ado-starred-chips {
-  gap: 8px;
-  align-items: flex-start;
-}
-.fix-ado-starred-chips-icon {
-  flex-shrink: 0;
-  margin-top: 6px;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-}
-.fix-ado-starred-chip-list {
-  gap: 4px;
-}
-.fix-ado-starred-chip[disabled] {
-  cursor: progress;
-}
-.fix-ado-spinner {
-  display: block;
-  box-sizing: border-box;
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--palette-black-alpha-10, rgba(128, 128, 128, 0.3));
-  border-top-color: var(--communication-foreground, rgba(0, 90, 158, 1));
-  border-radius: 50%;
-  animation: fix-ado-spin 0.8s linear infinite;
-}
-@keyframes fix-ado-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-/* While a chip picks its reviewer: the field's dropdown and typed text stay out of sight.
-   Hidden, not removed, so the chip can still press the suggestion; the field keeps its focus. */
-.fix-ado-starred-picking #__bolt-tag-picker-callout {
-  visibility: hidden;
-}
-.fix-ado-starred-picking .bolt-tag-picker-input {
-  color: transparent;
-  caret-color: transparent;
-}
-`;
-
-  // azure-devops/src/features/starred-reviewers/index.ts
-  function schedule(callback, delayMs) {
-    let timer = setTimeout(callback, delayMs);
-    return () => {
-      clearTimeout(timer);
-    };
-  }
-  var starredReviewers = {
-    change: { kind: "updated", version: "1.9.0" },
-    description: "Star reviewers, then add a starred one as optional or required reviewer in one click, also on a new pull request.",
-    id: "starred-reviewers",
-    name: "Starred reviewers",
-    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2 }) {
-      if (isInFrame2)
-        return null;
-      let storageKey = `starred-reviewers:${location.host}${basePath2}`, imageUrlOf = ({ id }) => `${location.origin}${basePath2}/_api/_common/identityImage?id=${encodeURIComponent(id)}`, store = createStarredReviewersStore({
-        load: () => GM_getValue(storageKey, []),
-        save: (list) => {
-          GM_setValue(storageKey, list);
-        }
-      }), starred = createStarredReviewers({
-        client,
-        document: document2,
-        imageUrlOf,
-        reload: () => {
-          location.reload();
-        },
-        schedule,
-        store
-      }), chips = createStarredReviewerChips({ document: document2, imageUrlOf, schedule, store });
-      return {
-        sync({ page }) {
-          starred.sync(pullRequestOf(page)), chips.sync(page.kind === "pull-request-create");
-        }
-      };
-    },
-    styles: [style_default5]
-  };
-
   // azure-devops/src/features/index.ts
   var FEATURES = [
     pipelineStatusOnPullRequests,
     pipelineTab,
     overviewPipelineIssues,
-    requiredReviewers,
-    starredReviewers,
+    ...REVIEWING_FEATURES,
     avatarInitials,
     followSystemTheme,
     daysInColumn,
@@ -3814,13 +5526,13 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/core/settings-panel.ts
-  var TITLE = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
-  function element2(document2, tag, { className, text }) {
+  var TITLE3 = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS2 = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
+  function element3(document2, tag, { className, text }) {
     let created = document2.createElement(tag);
     return created.className = className, text !== void 0 && (created.textContent = text), created;
   }
   function button(document2, parts, onClick2) {
-    let created = element2(document2, "button", parts);
+    let created = element3(document2, "button", parts);
     return created.type = "button", created.addEventListener("click", onClick2), created;
   }
   function svgElement(document2, tag, attributes) {
@@ -3850,11 +5562,11 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     return options.seenChangeVersion(feature) === null ? "new" : feature.change?.kind ?? "new";
   }
   function unseenCountBadge(document2, unseenCount) {
-    let badge = element2(document2, "span", { className: BADGE_CLASS, text: String(unseenCount) });
+    let badge = element3(document2, "span", { className: BADGE_CLASS, text: String(unseenCount) });
     return badge.setAttribute("aria-label", `${unseenCount} new or updated`), badge;
   }
   function createButtonItem(document2, open, unseenCount) {
-    let item = element2(document2, "div", { className: `${BUTTON_ITEM_CLASS} flex-row flex-center` });
+    let item = element3(document2, "div", { className: `${BUTTON_ITEM_CLASS} flex-row flex-center` });
     item.setAttribute("role", "menuitem");
     let settingsButton = button(
       document2,
@@ -3863,27 +5575,27 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       },
       open
     );
-    return settingsButton.title = TITLE, settingsButton.setAttribute("aria-label", TITLE), settingsButton.append(puzzleIcon(document2)), unseenCount > 0 && settingsButton.append(unseenCountBadge(document2, unseenCount)), item.append(settingsButton), item;
+    return settingsButton.title = TITLE3, settingsButton.setAttribute("aria-label", TITLE3), settingsButton.append(puzzleIcon(document2)), unseenCount > 0 && settingsButton.append(unseenCountBadge(document2, unseenCount)), item.append(settingsButton), item;
   }
   function featureName(document2, feature, chip) {
-    let name = element2(document2, "span", {
+    let name = element3(document2, "span", {
       className: "fix-ado-settings-feature-name",
       text: feature.name
     });
     return chip && name.append(
-      element2(document2, "span", {
+      element3(document2, "span", {
         className: `fix-ado-settings-chip fix-ado-settings-chip-${chip}`,
         text: CHIP_TEXT[chip]
       })
     ), name;
   }
   function featureRow(document2, { feature, isOn: isOn2, chip }) {
-    let row = element2(document2, "label", { className: "fix-ado-settings-feature" }), checkbox = element2(document2, "input", { className: "fix-ado-settings-checkbox" });
+    let row = element3(document2, "label", { className: "fix-ado-settings-feature" }), checkbox = element3(document2, "input", { className: "fix-ado-settings-checkbox" });
     checkbox.type = "checkbox", checkbox.checked = isOn2, checkbox.dataset.featureId = feature.id;
-    let text = element2(document2, "span", { className: "fix-ado-settings-feature-text" });
+    let text = element3(document2, "span", { className: "fix-ado-settings-feature-text" });
     return text.append(
       featureName(document2, feature, chip),
-      element2(document2, "span", {
+      element3(document2, "span", {
         className: "fix-ado-settings-feature-description",
         text: feature.description
       })
@@ -3899,7 +5611,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     }
     return changed;
   }
-  function createButtons(dialog, options) {
+  function createButtons2(dialog, options) {
     let { document: document2 } = options, cancel = button(
       document2,
       { className: "bolt-button enabled bolt-focus-treatment", text: "Cancel" },
@@ -3914,11 +5626,11 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       }
     );
     save.disabled = !0;
-    let buttons = element2(document2, "div", { className: "fix-ado-settings-buttons" });
+    let buttons = element3(document2, "div", { className: "fix-ado-settings-buttons" });
     return buttons.append(cancel, save), { buttons, save };
   }
   function featureList(options, unseen) {
-    let list = element2(options.document, "div", { className: "fix-ado-settings-features" });
+    let list = element3(options.document, "div", { className: "fix-ado-settings-features" });
     return list.append(
       ...options.features.map(
         (feature) => featureRow(options.document, {
@@ -3929,19 +5641,19 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
       )
     ), list;
   }
-  function createDialog(options, unseen) {
-    let { document: document2 } = options, dialog = element2(document2, "dialog", { className: DIALOG_CLASS });
-    dialog.setAttribute("aria-label", TITLE);
-    let warning = element2(document2, "p", {
+  function createDialog2(options, unseen) {
+    let { document: document2 } = options, dialog = element3(document2, "dialog", { className: DIALOG_CLASS2 });
+    dialog.setAttribute("aria-label", TITLE3);
+    let warning = element3(document2, "p", {
       className: "fix-ado-settings-warning",
       text: RELOAD_WARNING
     });
     warning.setAttribute("role", "note");
-    let { buttons, save } = createButtons(dialog, options);
+    let { buttons, save } = createButtons2(dialog, options);
     return dialog.addEventListener("change", () => {
       save.disabled = changedChoices(dialog, options).size === 0;
     }), dialog.append(
-      element2(document2, "h2", { className: "fix-ado-settings-title", text: TITLE }),
+      element3(document2, "h2", { className: "fix-ado-settings-title", text: TITLE3 }),
       featureList(options, unseen),
       warning,
       buttons
@@ -3950,8 +5662,8 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   function createSettingsPanel(options) {
     let { document: document2 } = options;
     function open() {
-      document2.querySelector(`dialog.${DIALOG_CLASS}`)?.remove();
-      let unseen = featuresWithUnseenChange(options), dialog = createDialog(options, unseen);
+      document2.querySelector(`dialog.${DIALOG_CLASS2}`)?.remove();
+      let unseen = featuresWithUnseenChange(options), dialog = createDialog2(options, unseen);
       document2.body.append(dialog), dialog.showModal(), unseen.length > 0 && (options.markChangesSeen(unseen), document2.querySelector(`.${BUTTON_ITEM_CLASS} .${BADGE_CLASS}`)?.remove());
     }
     return {
