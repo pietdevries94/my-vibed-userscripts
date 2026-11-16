@@ -1,0 +1,10 @@
+/* Lines that add a reviewer, joined to one. The newest row of a run shows the joined line in
+   place of Azure DevOps's own; the other rows hide. */
+[data-fix-ado-joined="hidden"] {
+  /* The sort order of the feed sets a display on its rows. */
+  display: none !important;
+}
+
+[data-fix-ado-joined="line"] .activity-card-subtle:not(.fix-ado-joined-line) {
+  display: none;
+}
