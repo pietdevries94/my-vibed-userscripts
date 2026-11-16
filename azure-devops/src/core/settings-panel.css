@@ -143,9 +143,16 @@
 
 .fix-ado-settings-buttons {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 20px;
+}
+
+/* The issue link sits left of the buttons, on the same row. */
+.fix-ado-settings-issue-link {
+  margin-right: auto;
+  color: var(--communication-foreground, rgb(0, 90, 158));
 }
 
 .fix-ado-settings-buttons .bolt-button:disabled {

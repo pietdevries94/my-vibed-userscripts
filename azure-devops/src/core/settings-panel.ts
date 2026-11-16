@@ -2,6 +2,8 @@ import type { Feature, FeatureChange } from "./feature.ts";
 
 const TITLE = "Fix Azure DevOps settings";
 const RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.";
+const ISSUE_LINK_TEXT = "Found a bug or have a suggestion?";
+const NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new";
 const TOP_BAR_SELECTOR = ".region-header-menubar";
 const BUTTON_ITEM_CLASS = "fix-ado-settings-item";
 const DIALOG_CLASS = "fix-ado-settings";
@@ -182,6 +184,18 @@ function changedChoices(dialog: HTMLElement, options: SettingsPanelOptions): Map
   return changed;
 }
 
+/** Opens a new issue on the script's GitHub repository, in a new tab. */
+function issueLink(document: Document): HTMLAnchorElement {
+  const link = element(document, "a", {
+    className: "fix-ado-settings-issue-link",
+    text: ISSUE_LINK_TEXT,
+  });
+  link.href = NEW_ISSUE_URL;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  return link;
+}
+
 function createButtons(
   dialog: HTMLDialogElement,
   options: SettingsPanelOptions,
@@ -204,7 +218,7 @@ function createButtons(
   );
   save.disabled = true;
   const buttons = element(document, "div", { className: "fix-ado-settings-buttons" });
-  buttons.append(cancel, save);
+  buttons.append(issueLink(document), cancel, save);
   return { buttons, save };
 }
 

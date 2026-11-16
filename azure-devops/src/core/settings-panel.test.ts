@@ -255,3 +255,13 @@ test("a feature the owner never saw shows New, even when its change is an update
   page.panel.open();
   assert.equal(chip(page, "dots"), "New");
 });
+
+test("the panel links to a new GitHub issue, opened in a new tab", () => {
+  const page = pageWith(TOP_BAR);
+  page.panel.open();
+  const link = page.document.querySelector<HTMLAnchorElement>("dialog a");
+  assert.equal(link?.textContent, "Found a bug or have a suggestion?");
+  assert.equal(link.href, "https://github.com/pietdevries94/my-vibed-userscripts/issues/new");
+  assert.equal(link.target, "_blank");
+  assert.equal(link.rel, "noopener noreferrer");
+});
