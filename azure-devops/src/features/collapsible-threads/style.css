@@ -4,7 +4,7 @@
 }
 
 /* A collapsed thread shows the header of its first comment: who wrote it, when, and the
-   thread's status. Its text, the other comments and the reply box hide. */
+   thread's Resolved chip. Its text, the other comments and the reply box hide. */
 [data-fix-ado-thread="collapsed"] .repos-comment-viewer:not(:first-child),
 [data-fix-ado-thread="collapsed"] .repos-discussion-thread-reply,
 [data-fix-ado-thread="collapsed"] .repos-discussion-comment-header ~ * {
@@ -13,6 +13,30 @@
 
 [data-fix-ado-thread="collapsed"] .repos-discussion-comment-header {
   margin-bottom: 0;
+}
+
+/* The actions at the end of the header hide too. The status dropdown among them stays in
+   the page, where the script reads the thread's status. */
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header > :not(:first-child) {
+  display: none;
+}
+
+/* The card stays, with little room around the one line that is left. */
+[data-fix-ado-thread="collapsed"] .repos-comment-viewer {
+  padding: 0 12px;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment {
+  padding: 4px 20px;
+  border-bottom: 0;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment > .flex-column > .flex-row {
+  align-items: center;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-comment-header-persona {
+  margin-top: 0;
 }
 
 /* A collapsed thread on a file hides the file's name and code too. */
