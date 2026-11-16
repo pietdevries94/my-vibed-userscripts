@@ -1,0 +1,44 @@
+/* The button that scrolls a pull request's Overview to its bottom: round, in the corner of the window. */
+.fix-ado-scroll-to-bottom {
+  position: fixed;
+  right: 32px;
+  bottom: 32px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 50%;
+  background: var(--callout-background-color, rgb(255, 255, 255));
+  box-shadow: 0 3px 8px var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  cursor: pointer;
+}
+
+.fix-ado-scroll-to-bottom[hidden] {
+  display: none;
+}
+
+.fix-ado-scroll-to-bottom:hover {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  color: var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-scroll-to-bottom:focus-visible {
+  outline: 2px solid var(--communication-background, rgb(0, 120, 212));
+  outline-offset: 2px;
+}
+
+/* The arrow, drawn like Azure DevOps's line icons. */
+.fix-ado-scroll-to-bottom svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
