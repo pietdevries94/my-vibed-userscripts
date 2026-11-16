@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.10.1
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.11.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -3548,8 +3548,153 @@ ${issue.message ?? ""}`;
   // azure-devops/src/features/reviewing-features.ts
   var REVIEWING_FEATURES = [requiredReviewers, starredReviewers, review];
 
+  // azure-devops/src/features/activity-order/activity-order.ts
+  var FEED_SELECTOR = ".activity-feed-list", FILTER_SELECTOR = ".repos-activity-filter-dropdown", BUTTON_CLASS3 = "fix-ado-activity-order", TEXT_CLASS = "bolt-button-text", SVG_NAMESPACE4 = "http://www.w3.org/2000/svg", SORT_ICON_PATHS = ["M5 13V3M2.5 5.5L5 3l2.5 2.5", "M11 3v10M8.5 10.5L11 13l2.5-2.5"], DEFAULT_ORDER = "oldest-first", LABELS2 = {
+    "newest-first": "Newest first",
+    "oldest-first": "Oldest first"
+  }, flipped = (order) => order === "oldest-first" ? "newest-first" : "oldest-first";
+  function sortIcon(document2) {
+    let svg = document2.createElementNS(SVG_NAMESPACE4, "svg");
+    svg.setAttribute("aria-hidden", "true"), svg.setAttribute("class", "fix-ado-activity-order-icon"), svg.setAttribute("viewBox", "0 0 16 16");
+    for (let data of SORT_ICON_PATHS) {
+      let path = document2.createElementNS(SVG_NAMESPACE4, "path");
+      path.setAttribute("d", data), svg.append(path);
+    }
+    return svg;
+  }
+  function createButton(document2, onClick2) {
+    let button2 = document2.createElement("button");
+    button2.type = "button", button2.className = `${BUTTON_CLASS3} bolt-button enabled bolt-focus-treatment`;
+    let text = document2.createElement("span");
+    return text.className = TEXT_CLASS, button2.append(sortIcon(document2), text), button2.addEventListener("click", onClick2), button2;
+  }
+  function spacingBox(button2) {
+    let box = button2.ownerDocument.createElement("div");
+    return box.className = "margin-bottom-16 margin-right-8 inline-flex-row", box.append(button2), box;
+  }
+  function findOrAddButton(document2, onClick2) {
+    let existing = document2.querySelector(`.${BUTTON_CLASS3}`);
+    if (existing !== null)
+      return existing;
+    let filters = document2.querySelector(FILTER_SELECTOR)?.parentElement;
+    if (filters == null)
+      return null;
+    let button2 = createButton(document2, onClick2);
+    return filters.prepend(spacingBox(button2)), button2;
+  }
+  function showOrder(feed, button2, order) {
+    feed.dataset.fixAdoActivityOrder !== order && (feed.dataset.fixAdoActivityOrder = order);
+    let text = button2?.querySelector(`.${TEXT_CLASS}`);
+    button2 !== null && text !== null && text !== void 0 && text.textContent !== LABELS2[order] && (text.textContent = LABELS2[order], button2.title = `Show ${LABELS2[flipped(order)].toLowerCase()}`);
+  }
+  function createActivityOrder(options) {
+    let { document: document2, storage } = options, order = storage.load() ?? DEFAULT_ORDER;
+    function flip() {
+      order = flipped(order), storage.save(order), sync4();
+    }
+    function sync4() {
+      let feed = document2.querySelector(FEED_SELECTOR);
+      feed !== null && showOrder(feed, findOrAddButton(document2, flip), order);
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/activity-order/style.css
+  var style_default4 = `/* The activity feed on a pull request's Overview, oldest first. Azure DevOps renders the rows
+   newest first and keeps them that way in the DOM; the feed lays them out bottom to top. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] {
+  display: block;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody > tr {
+  display: block;
+}
+
+/* The timeline line ends at the row that is now on top, and at the one now at the bottom. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-prefix,
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-last-row
+  .bolt-timeline-icon-suffix {
+  visibility: visible;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-suffix,
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-last-row
+  .bolt-timeline-icon-prefix {
+  visibility: hidden;
+}
+
+/* The dashed piece of the line leads to the comment box, which is now the bottom row. */
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-row:nth-child(4)
+  .bolt-timeline-icon-prefix {
+  border-left-style: solid;
+}
+
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-prefix,
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  + .bolt-timeline-row
+  .bolt-timeline-icon-suffix {
+  border-left-style: dashed;
+}
+
+/* The sort button's icon, drawn like Azure DevOps's line icons. */
+.fix-ado-activity-order-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+`;
+
+  // azure-devops/src/features/activity-order/index.ts
+  var ORDER_KEY = "activity-order", activityOrder = {
+    change: { kind: "new", version: "1.11.0" },
+    description: "The comments and updates on a pull request's Overview run from old to new, with a button to flip them.",
+    id: "activity-order",
+    name: "Oldest first on the Overview",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let order = createActivityOrder({
+        document: document2,
+        storage: {
+          load: () => GM_getValue(ORDER_KEY, null),
+          save: (picked) => {
+            GM_setValue(ORDER_KEY, picked);
+          }
+        }
+      });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && order.sync();
+        }
+      };
+    },
+    styles: [style_default4]
+  };
+
   // azure-devops/src/features/avatar-initials/style.css
-  var style_default4 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+  var style_default5 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
 [data-fix-ado-initials] {
   position: relative;
   border-radius: 50%;
@@ -3588,7 +3733,7 @@ ${issue.message ?? ""}`;
         showInitialsOnAvatars(document2);
       }
     }),
-    styles: [style_default4]
+    styles: [style_default5]
   };
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
@@ -3743,7 +3888,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/days-in-column/style.css
-  var style_default5 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+  var style_default6 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
 .fix-ado-days-in-column {
   display: flex;
   flex-wrap: wrap;
@@ -3861,7 +4006,7 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default5]
+    styles: [style_default6]
   };
 
   // azure-devops/src/features/system-theme/system-theme.ts
@@ -4623,7 +4768,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/pipeline-tab-run-action.ts
-  var LABELS2 = {
+  var LABELS3 = {
     cancel: {
       failed: "Could not cancel the run.",
       idle: "Cancel current run",
@@ -4654,12 +4799,12 @@ ${issue.message ?? ""}`;
     let [onlyChoice] = choices;
     choices.length === 1 && onlyChoice !== void 0 ? onPick(action, onlyChoice.key) : onToggleList(state !== "choosing");
   }
-  function createButton(context) {
+  function createButton2(context) {
     let { action, choices, document: document2, state } = context, isWaiting = state === "waiting", button2 = Object.assign(document2.createElement("button"), {
       className: `bolt-button ${LOOKS[action]} bolt-focus-treatment ${isWaiting ? "disabled" : "enabled"} fix-ado-pipeline-run-action`,
       disabled: isWaiting,
       type: "button"
-    }), label = LABELS2[action][isWaiting ? "waiting" : "idle"];
+    }), label = LABELS3[action][isWaiting ? "waiting" : "idle"];
     return button2.append(textElement2(document2, "bolt-button-text body-m", label)), choices.length > 1 && button2.setAttribute("aria-expanded", String(state === "choosing")), button2.addEventListener("click", () => {
       onButtonClick(context);
     }), button2;
@@ -4668,8 +4813,8 @@ ${issue.message ?? ""}`;
     let { action, choices, document: document2, state } = context;
     if (choices.length === 0)
       return null;
-    let button2 = createButton(context);
-    return state === "choosing" ? [button2, createChoices(context)] : state === "failed" ? [button2, textElement2(document2, "fix-ado-pipeline-note", LABELS2[action].failed)] : [button2];
+    let button2 = createButton2(context);
+    return state === "choosing" ? [button2, createChoices(context)] : state === "failed" ? [button2, textElement2(document2, "fix-ado-pipeline-note", LABELS3[action].failed)] : [button2];
   }
 
   // azure-devops/src/features/pipeline-tab/pipeline-log-frame.ts
@@ -5132,7 +5277,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/style.css
-  var style_default6 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+  var style_default7 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
 .repos-pr-details-page[data-fix-ado-pipeline-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
   display: none !important;
@@ -5353,7 +5498,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         }
       };
     },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default6]
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default7]
   };
 
   // azure-devops/src/features/reload-on-changes/page-reloader.ts
@@ -5485,6 +5630,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     pipelineStatusOnPullRequests,
     pipelineTab,
     overviewPipelineIssues,
+    activityOrder,
     ...REVIEWING_FEATURES,
     avatarInitials,
     followSystemTheme,
@@ -5526,7 +5672,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/core/settings-panel.ts
-  var TITLE3 = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", ISSUE_LINK_TEXT = "Found a bug or have a suggestion?", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS2 = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg";
+  var TITLE3 = "Fix Azure DevOps settings", RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.", ISSUE_LINK_TEXT = "Found a bug or have a suggestion?", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new", TOP_BAR_SELECTOR = ".region-header-menubar", BUTTON_ITEM_CLASS = "fix-ado-settings-item", DIALOG_CLASS2 = "fix-ado-settings", BADGE_CLASS = "fix-ado-settings-badge", CHIP_TEXT = { new: "New", updated: "Updated" }, SVG_NAMESPACE5 = "http://www.w3.org/2000/svg";
   function element3(document2, tag, { className, text }) {
     let created = document2.createElement(tag);
     return created.className = className, text !== void 0 && (created.textContent = text), created;
@@ -5536,7 +5682,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     return created.type = "button", created.addEventListener("click", onClick2), created;
   }
   function svgElement(document2, tag, attributes) {
-    let created = document2.createElementNS(SVG_NAMESPACE4, tag);
+    let created = document2.createElementNS(SVG_NAMESPACE5, tag);
     for (let [name, value] of Object.entries(attributes))
       created.setAttribute(name, value);
     return created;
