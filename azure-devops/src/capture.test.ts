@@ -272,3 +272,12 @@ test("the capture keeps the file tree's layout: kinds, row numbers and pixels", 
   const scrubbed = scrubJson({ data }, captureDefinition.rules, createPseudonyms());
   assert.deepEqual(scrubbed, { data });
 });
+
+test("the capture keeps the activity feed's layout: kinds of rows and pixels", async () => {
+  const { captureDefinition } = await import("./capture.ts");
+  const data = {
+    feedLayout: { rows: ["push-folded:1245:1245:1245:1245:1236:auto", "row:52:52:52:52:0:set"] },
+  };
+  const scrubbed = scrubJson({ data }, captureDefinition.rules, createPseudonyms());
+  assert.deepEqual(scrubbed, { data });
+});

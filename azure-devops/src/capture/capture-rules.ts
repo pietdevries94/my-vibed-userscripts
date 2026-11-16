@@ -58,6 +58,8 @@ const rules: ScrubRules = {
     { path: /(?:^|\.)editorProbe\./u, value: /^[\w$.:-]{0,80}$/u },
     // The file tree's layout: kinds of rows, row numbers and pixels. Never content.
     { path: /(?:^|\.)treeLayout\./u, value: /^[\w:-]{0,40}$/u },
+    // The activity feed's layout: kinds of rows and pixels. Never content.
+    { path: /(?:^|\.)feedLayout\./u, value: /^[\w:-]{0,60}$/u },
     // Where a thread sits in a file: line and column. Small numbers that name nothing.
     {
       path: /(?:threadContext|trackingCriteria)\.(?:orig)?(?:Left|Right|left|right)File(?:Start|End)\.(?:line|offset)$/u,

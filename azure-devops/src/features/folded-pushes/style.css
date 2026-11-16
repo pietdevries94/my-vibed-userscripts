@@ -45,8 +45,23 @@
 }
 
 [data-fix-ado-push="folded"] .iteration-header {
-  padding: 6px 0;
+  padding: 2px 0;
   border-bottom: 0;
+}
+
+/* The push number in the timeline needs more room than a dot. A folded push gives it less
+   line above and below, so the row is as tall as the feed's other updates and the number
+   sits level with the avatar. */
+.bolt-timeline-row:has([data-fix-ado-push="folded"])
+  .activity-feed-sequence
+  .bolt-timeline-icon-prefix {
+  min-height: 3px;
+}
+
+.bolt-timeline-row:has([data-fix-ado-push="folded"])
+  .activity-feed-sequence
+  .bolt-timeline-icon-suffix {
+  min-height: 0;
 }
 
 [data-fix-ado-push="folded"] .iteration-card-header ~ * {
