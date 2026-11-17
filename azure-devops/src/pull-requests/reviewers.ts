@@ -8,6 +8,8 @@ interface Reviewer {
 }
 
 const EMAIL_ADDRESS = /^(?<localPart>[^\s@]+)@[^\s@]+$/u;
+/** A sign-in address after a name, with or without angle brackets: "Holt, Mira <mira@example.com>". */
+const TRAILING_SIGN_IN_ADDRESS = /\s+<?[^\s<>@]+@[^\s<>@]+>?$/u;
 // FNV-1a, so that names that differ in one character get very different hues.
 const FNV_OFFSET_BASIS = 2_166_136_261;
 const FNV_PRIME = 16_777_619;
@@ -31,14 +33,23 @@ function firstCharacter(word: string | undefined): string {
 }
 
 /**
+ * The name in a label, without a sign-in address after it, a company suffix or a team
+ * prefix. A label that is only a sign-in address gives its name part:
+ * "tomas.van.elst@example.com" gives "tomas van elst".
+ */
+function nameInLabel(label: string): string {
+  const localPart = EMAIL_ADDRESS.exec(label.trim())?.groups?.localPart;
+  return localPart === undefined
+    ? personOrTeamName(label.trim().replace(TRAILING_SIGN_IN_ADDRESS, ""))
+    : localPart.replaceAll(/[._-]+/gu, " ");
+}
+
+/**
  * First letter of the first name and of the surname.
  * "Tomas van Elst", "Elst, Tomas van" and "tomas.van.elst@example.com" all give "TE".
  */
 function initialsOf(displayName: string): string {
-  // Some avatars are labelled with the sign-in address: "tomas.van.elst@example.com".
-  const localPart = EMAIL_ADDRESS.exec(displayName.trim())?.groups?.localPart;
-  const name =
-    localPart === undefined ? personOrTeamName(displayName) : localPart.replaceAll(/[._-]+/gu, " ");
+  const name = nameInLabel(displayName);
   const commaIndex = name.indexOf(",");
   const isSurnameFirst = commaIndex !== -1;
   const firstNames = wordsOf(isSurnameFirst ? name.slice(commaIndex + 1) : name);
@@ -49,10 +60,17 @@ function initialsOf(displayName: string): string {
     .toUpperCase();
 }
 
-/** A stable colour per name, as a hue from 0 to 359. */
-function hueOf(name: string): number {
+/**
+ * A stable colour per person, as a hue from 0 to 359. It hashes the words of the name in
+ * sorted order, so "Elst, Tomas van", "Tomas van Elst" and "tomas.van.elst@example.com"
+ * get the same hue.
+ */
+function hueOf(label: string): number {
+  const nameKey = wordsOf(nameInLabel(label).replaceAll(",", " ").toLowerCase())
+    .toSorted()
+    .join(" ");
   let hash = FNV_OFFSET_BASIS;
-  for (const character of name.trim().toLowerCase()) {
+  for (const character of nameKey) {
     // oxlint-disable-next-line eslint/no-bitwise -- TODO(lint): FNV-1a is defined with xor and an unsigned shift; other arithmetic would change every hue
     hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), FNV_PRIME) >>> 0;
   }

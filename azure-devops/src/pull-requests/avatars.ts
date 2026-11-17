@@ -3,19 +3,12 @@ import { hueOf, initialsOf } from "./reviewers.ts";
 // ADO has two avatar components: bolt-coin (pull requests) and vss-Persona (boards).
 // A project's picture is a vss-Persona too, and is not a person.
 const AVATAR_SELECTOR = ".bolt-coin, .vss-Persona:not(.project-persona)";
-/** A sign-in address after a name, with or without angle brackets: "Holt, Mira <mira@example.com>". */
-const TRAILING_SIGN_IN_ADDRESS = /\s+<?[^\s<>@]+@[^\s<>@]+>?$/u;
 
 /** The name ADO labels an avatar with. Decorative avatars have none. */
 function avatarName(avatar: Element): string {
   const label = avatar.getAttribute("aria-label") ?? "";
   const imageAlt = avatar.querySelector("img")?.getAttribute("alt") ?? "";
   return (label === "" ? imageAlt : label).trim();
-}
-
-/** The name without a sign-in address after it, so that it gets the colour of the name alone. */
-function withoutSignInAddress(name: string): string {
-  return name.replace(TRAILING_SIGN_IN_ADDRESS, "");
 }
 
 function markAvatar(avatar: HTMLElement, initials: string, hue: string): void {
@@ -42,7 +35,7 @@ function showInitialsOnAvatars(root: ParentNode): void {
     const name = avatarName(avatar);
     const initials = initialsOf(name);
     const shownInitials = avatar.dataset.fixAdoInitials ?? "";
-    const hue = initials ? String(hueOf(withoutSignInAddress(name))) : "";
+    const hue = initials ? String(hueOf(name)) : "";
     const isUpToDate =
       shownInitials === initials && avatar.style.getPropertyValue("--fix-ado-hue") === hue;
     if (!isUpToDate) {

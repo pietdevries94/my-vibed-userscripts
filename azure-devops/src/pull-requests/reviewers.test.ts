@@ -35,6 +35,25 @@ test("a sign-in address gives the initials of its name part", () => {
   assert.equal(initialsOf("mira@example.com"), "M");
 });
 
+test("a sign-in address after a name is not part of the initials", () => {
+  assert.equal(initialsOf("Tomas van Elst <tomas.van.elst@example.com>"), "TE");
+  assert.equal(initialsOf("Elst, Tomas van tomas.van.elst@example.com"), "TE");
+});
+
+test("every way a person's name is written gives one hue", () => {
+  const hue = hueOf("Elst, Tomas van");
+  for (const name of [
+    "Tomas van Elst",
+    "Elst, Tomas van <tomas.van.elst@example.com>",
+    "Tomas van Elst tomas.van.elst@example.com",
+    "tomas.van.elst@example.com",
+    "Tomas van Elst (Acme)",
+  ]) {
+    assert.equal(hueOf(name), hue, name);
+  }
+  assert.notEqual(hueOf("Holt, Mira"), hue);
+});
+
 test("a name keeps the same hue", () => {
   assert.equal(hueOf("Elst, Tomas van"), hueOf(" elst, tomas van "));
   assert.notEqual(hueOf("reviewer-1"), hueOf("reviewer-2"));
