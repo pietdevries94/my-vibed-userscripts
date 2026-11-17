@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.13.3
+// @version      1.13.4
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse and a Resolved chip on resolved ones, which start collapsed, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -50,19 +50,25 @@
     let button2 = createButton(document2, onClick2);
     return filters.prepend(spacingBox(button2)), button2;
   }
+  function renderAllRows(document2) {
+    let view = document2.defaultView;
+    view !== null && document2.dispatchEvent(
+      new view.KeyboardEvent("keydown", { altKey: !0, bubbles: !0, ctrlKey: !0, key: "v" })
+    );
+  }
   function showOrder(feed, button2, order) {
     feed.dataset.fixAdoActivityOrder !== order && (feed.dataset.fixAdoActivityOrder = order);
     let text = button2?.querySelector(`.${TEXT_CLASS}`);
     button2 !== null && text !== null && text !== void 0 && text.textContent !== LABELS[order] && (text.textContent = LABELS[order], button2.title = `Show ${LABELS[flipped(order)].toLowerCase()}`);
   }
   function createActivityOrder(options) {
-    let { document: document2, storage } = options, order = storage.load() ?? DEFAULT_ORDER;
+    let { document: document2, storage } = options, order = storage.load() ?? DEFAULT_ORDER, fullyRenderedFeeds = /* @__PURE__ */ new WeakSet();
     function flip() {
       order = flipped(order), storage.save(order), sync4();
     }
     function sync4() {
       let feed = document2.querySelector(FEED_SELECTOR);
-      feed !== null && showOrder(feed, findOrAddButton(document2, flip), order);
+      feed !== null && (order === "oldest-first" && !fullyRenderedFeeds.has(feed) && (fullyRenderedFeeds.add(feed), renderAllRows(document2)), showOrder(feed, findOrAddButton(document2, flip), order));
     }
     return { sync: sync4 };
   }
@@ -188,27 +194,38 @@
     let header = thread.querySelector(HEADER_SELECTOR), nameAndTime = header?.firstElementChild ?? null;
     if (header === null || nameAndTime === null)
       return null;
-    let status = header.querySelector(STATUS_SELECTOR)?.textContent.trim();
-    return { header, isResolved: status === RESOLVED_STATUS, nameAndTime, thread };
+    let timeBox = nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime, status = header.querySelector(STATUS_SELECTOR)?.textContent.trim();
+    return { header, isResolved: status === RESOLVED_STATUS, thread, timeBox };
   }
   var feedThreadElements = (document2) => [
     ...document2.querySelectorAll(FEED_THREAD_SELECTOR)
   ];
 
   // azure-devops/src/features/collapsible-threads/collapsible-threads.ts
-  var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u;
+  var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u, FILE_HEADER_SELECTOR = ".comment-file-header", FILE_TITLE_SELECTOR = ".comment-file-header-title", AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
   function threadIdOf(thread) {
     let field = thread.querySelector(".repos-discussion-thread-reply input");
     return THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id ?? null;
   }
-  function findOrAddToggle({ header, nameAndTime, thread }, onClick2) {
-    let existing = header.querySelector(`.${TOGGLE_CLASS}`);
-    if (existing !== null)
+  function fileHeaderOf(thread) {
+    let before = thread.previousElementSibling;
+    return before?.matches(FILE_HEADER_SELECTOR) === !0 ? before : null;
+  }
+  function findOrCreateToggle({ header, thread }, onClick2) {
+    let existing = thread.querySelector(`.${TOGGLE_CLASS}`) ?? fileHeaderOf(thread)?.querySelector(`.${TOGGLE_CLASS}`);
+    if (existing != null)
       return existing;
-    let toggle = createFoldToggle(thread.ownerDocument, TOGGLE_CLASS);
+    let toggle = createFoldToggle(header.ownerDocument, TOGGLE_CLASS);
     return toggle.addEventListener("click", () => {
       onClick2(thread);
-    }), nameAndTime.append(toggle), toggle;
+    }), toggle;
+  }
+  function toggleBoxOf({ header, thread }, state) {
+    let fileTitle = fileHeaderOf(thread)?.querySelector(FILE_TITLE_SELECTOR) ?? null;
+    return state === "open" && fileTitle !== null ? fileTitle : header.closest(AUTHOR_COLUMN_SELECTOR)?.parentElement ?? header;
+  }
+  function placeToggle(toggle, box) {
+    box.firstElementChild !== toggle && box.prepend(toggle);
   }
   function createCollapsibleThreads({ document: document2 }) {
     let pickedStates = /* @__PURE__ */ new Map();
@@ -221,7 +238,9 @@
     }
     function syncThread2(feedThread) {
       let state = stateOf(feedThread);
-      feedThread.thread.dataset.fixAdoThread !== state && (feedThread.thread.dataset.fixAdoThread = state), showFoldToggleState(findOrAddToggle(feedThread, flip), state === "open", TOGGLE_LABELS);
+      feedThread.thread.dataset.fixAdoThread !== state && (feedThread.thread.dataset.fixAdoThread = state);
+      let toggle = findOrCreateToggle(feedThread, flip);
+      placeToggle(toggle, toggleBoxOf(feedThread, state)), showFoldToggleState(toggle, state === "open", TOGGLE_LABELS);
     }
     function sync4() {
       for (let thread of feedThreadElements(document2)) {
@@ -233,9 +252,27 @@
   }
 
   // azure-devops/src/features/collapsible-threads/style.css
-  var style_default2 = `.fix-ado-thread-toggle {
+  var style_default2 = `/* The toggle sits before the author of the first comment, level with the avatar, or before the
+   file's icon on an open thread on a file. The box it is in gives up some room on the left. */
+.fix-ado-thread-toggle {
   flex: none;
-  margin-left: 4px;
+  align-self: flex-start;
+  margin-right: 4px;
+}
+
+.comment-file-header-title > .fix-ado-thread-toggle {
+  align-self: center;
+}
+
+.repos-discussion-comment:has(> .flex-column > .flex-row > .fix-ado-thread-toggle),
+.comment-file-header-title:has(> .fix-ado-thread-toggle) {
+  padding-left: 8px;
+}
+
+/* Before the author, the toggle keeps the offset it has before a file's icon: the comment's own
+   box sits 16px further in (a 4px margin and 12px padding). */
+.repos-discussion-comment .fix-ado-thread-toggle {
+  margin-left: -16px;
 }
 
 /* A collapsed thread shows the header of its first comment: who wrote it, when, and the
@@ -270,6 +307,16 @@
   align-items: center;
 }
 
+[data-fix-ado-thread="collapsed"] .fix-ado-thread-toggle {
+  align-self: center;
+}
+
+/* One line, also in a narrow window, where Azure DevOps puts the time under the name. */
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header > :first-child {
+  flex-direction: row;
+  align-items: center;
+}
+
 [data-fix-ado-thread="collapsed"] .repos-comment-header-persona {
   margin-top: 0;
 }
@@ -277,6 +324,12 @@
 /* A collapsed thread on a file hides the file's name and code too. */
 .comment-file-header:has(+ [data-fix-ado-thread="collapsed"]) {
   display: none;
+}
+
+/* Azure DevOps keeps the height a thread had when it loaded, as a min-height on its row. A
+   collapsed thread drops it. */
+.activity-feed-list [style*="min-height"]:has([data-fix-ado-thread="collapsed"]) {
+  min-height: 0 !important;
 }
 `;
 
@@ -308,7 +361,7 @@
     let pushedAt = header.querySelector("time")?.getAttribute("datetime") ?? null;
     return { card, header, pushedAt };
   }
-  function findOrAddToggle2({ header }, onClick2) {
+  function findOrAddToggle({ header }, onClick2) {
     let existing = header.querySelector(`.${TOGGLE_CLASS2}`);
     if (existing !== null)
       return existing;
@@ -329,7 +382,7 @@
     function syncPush(push) {
       let hasCommits = push.card.querySelector(COMMITS_SELECTOR) !== null, state = hasCommits && push.pushedAt !== null && openPushes.has(push.pushedAt) ? "open" : "folded";
       if (push.card.dataset.fixAdoPush !== state && (push.card.dataset.fixAdoPush = state), hasCommits) {
-        let toggle = findOrAddToggle2(push, flip);
+        let toggle = findOrAddToggle(push, flip);
         toggle !== null && showFoldToggleState(toggle, state === "open", TOGGLE_LABELS2);
       } else
         push.header.querySelector(`.${TOGGLE_CLASS2}`)?.remove();
@@ -412,6 +465,12 @@
 
 [data-fix-ado-push="folded"] .iteration-card-header ~ * {
   display: none;
+}
+
+/* Azure DevOps keeps the height a push had when it loaded, as a min-height on its row. A
+   folded push drops it. */
+.activity-feed-list [style*="min-height"]:has([data-fix-ado-push="folded"]) {
+  min-height: 0 !important;
 }
 `;
 
@@ -1367,7 +1426,7 @@ ${issue.message ?? ""}`;
   }
   function syncThread(thread) {
     let feedThread = feedThreadOf(thread), chip = thread.querySelector(`.${CHIP_CLASS}`);
-    feedThread?.isResolved !== !0 ? chip?.remove() : chip === null && feedThread.nameAndTime.append(createChip(thread.ownerDocument));
+    feedThread?.isResolved !== !0 ? chip?.remove() : chip === null && feedThread.timeBox.append(createChip(thread.ownerDocument));
   }
   function createResolvedThreadChips({ document: document2 }) {
     function sync4() {
@@ -5600,7 +5659,7 @@ ${content}`
       event.preventDefault(), event.stopPropagation(), onClick2();
     }), toggle;
   }
-  function findOrAddToggle3(header, onClick2) {
+  function findOrAddToggle2(header, onClick2) {
     let existing = header.querySelector(`.${TOGGLE_CLASS3}`);
     if (existing !== null)
       return existing;
@@ -5618,7 +5677,7 @@ ${content}`
         for (let [index, header] of headers.entries()) {
           let column = columns[index], columnId = column?.dataset.column;
           if (column !== void 0 && columnId !== void 0) {
-            let toggle = findOrAddToggle3(header, () => {
+            let toggle = findOrAddToggle2(header, () => {
               flip(columnId);
             });
             showColumnState(column, toggle, hiddenColumnIds.has(columnId));
