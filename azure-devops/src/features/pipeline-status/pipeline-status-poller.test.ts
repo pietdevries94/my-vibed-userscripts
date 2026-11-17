@@ -140,10 +140,10 @@ test("a running pull request is fetched again sooner and the shown status follow
 
 test("a row shows a skeleton until its status arrives", async () => {
   const { list, poller } = pollerOnFakeList([1, 2]);
-  const shownWhileFetching: ShownStatus[] = [];
+  const shownWhileFetching: (ShownStatus | undefined)[] = [];
   list.respond = (pullRequestId): ReturnType<Respond> => {
     if (pullRequestId === 1) {
-      shownWhileFetching.push(list.shown.get(1) ?? null, list.shown.get(2) ?? null);
+      shownWhileFetching.push(list.shown.get(1), list.shown.get(2));
     }
     return { evaluations: [buildEvaluation("approved")], retryAfterSeconds: null };
   };
@@ -193,13 +193,13 @@ test("a failed request keeps the shown status and is retried later", async () =>
   assert.equal(list.fetchedIds.length, 3);
 });
 
-test("a pull request that never loaded loses its skeleton", async () => {
+test("a pull request that never loaded shows a grey circle", async () => {
   const { list, poller } = pollerOnFakeList([1]);
   list.respond = (): never => {
     throw new AdoRequestError(403, null);
   };
   await poller.sync();
-  assert.equal(list.shown.get(1), null);
+  assert.equal(list.shown.get(1), "none");
 });
 
 test("Retry-After pauses all requests", async () => {

@@ -29,25 +29,22 @@ function findPullRequestRows(root: ParentNode, apiBasePath: string): PullRequest
 }
 
 /**
- * Puts the status icon after the pull request title. A "loading" skeleton holds
- * its place until the status arrives, so the title line does not shift. Safe to call repeatedly:
- * it only touches the DOM when the row shows something else. ADO reuses row
- * elements for other pull requests, so the icon records which one it belongs to.
+ * Puts the status icon after the pull request title. While the status loads, or
+ * when there is none, a grey circle holds its place, so the title line does not
+ * shift. Safe to call repeatedly: it only touches the DOM when the row shows
+ * something else. ADO reuses row elements for other pull requests, so the icon
+ * records which one it belongs to.
  */
 function showPipelineStatus(row: HTMLElement, pullRequestId: number, status: ShownStatus): void {
   const shownIcon = row.querySelector<SVGElement>(`.${PIPELINE_STATUS_ICON_CLASS}`);
-  const isUpToDate = shownIcon
-    ? shownIcon.dataset.status === status &&
-      shownIcon.dataset.pullRequestId === String(pullRequestId)
-    : status === null;
-  if (isUpToDate) {
+  if (
+    shownIcon?.dataset.status === status &&
+    shownIcon.dataset.pullRequestId === String(pullRequestId)
+  ) {
     return;
   }
 
   shownIcon?.remove();
-  if (status === null) {
-    return;
-  }
   const title = row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild;
   title?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
 }

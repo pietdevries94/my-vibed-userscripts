@@ -26,17 +26,11 @@
   animation: fix-ado-spin 1.5s linear infinite;
 }
 
-/* A skeleton that holds the icon's place while the status loads. */
-.fix-ado-pipeline-status[data-status="loading"] {
+/* A grey circle that holds the icon's place while the status loads, or when there is none. */
+.fix-ado-pipeline-status[data-status="loading"],
+.fix-ado-pipeline-status[data-status="none"] {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
   opacity: 0.25;
-  animation: fix-ado-pulse 1.2s ease-in-out infinite alternate;
-}
-
-@keyframes fix-ado-pulse {
-  to {
-    opacity: 0.1;
-  }
 }
 
 @keyframes fix-ado-spin {
@@ -46,8 +40,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fix-ado-pipeline-status[data-status="running"],
-  .fix-ado-pipeline-status[data-status="loading"] {
+  .fix-ado-pipeline-status[data-status="running"] {
     animation: none;
   }
 }

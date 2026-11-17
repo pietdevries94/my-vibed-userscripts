@@ -38,7 +38,7 @@ interface PollerState<Row> {
 function showStatuses<Row>(state: PollerState<Row>): void {
   for (const { row, pullRequest } of state.options.findRows()) {
     const polled = state.polledPullRequests.get(pullRequest.pullRequestId);
-    const status = polled?.hasBeenFetched === true ? polled.status : "loading";
+    const status = polled?.hasBeenFetched === true ? (polled.status ?? "none") : "loading";
     state.options.showStatus(row, pullRequest.pullRequestId, status);
   }
 }

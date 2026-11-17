@@ -131,11 +131,14 @@ test("a skeleton holds the icon's place until the status arrives", { skip: fixtu
   );
 });
 
-test("no status removes the icon", { skip: fixtures.skip }, () => {
+test("no status shows a grey circle in the icon's place", { skip: fixtures.skip }, () => {
   const row = capturedRow("pr-list", 1001);
   showPipelineStatus(row, 1001, "succeeded");
-  showPipelineStatus(row, 1001, null);
-  assert.deepEqual(shownIcons(row), []);
+  showPipelineStatus(row, 1001, "none");
+  const [circle] = shownIcons(row);
+  assert.equal(circle?.dataset.status, "none");
+  assert.equal(circle?.getAttribute("aria-label"), "No pipeline status");
+  assert.equal(shownIcons(row).length, 1);
 });
 
 /** The captured row with three reviewers, and which of its reviewers are marked required. */
