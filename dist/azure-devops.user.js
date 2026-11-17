@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.15.1
+// @version      1.15.2
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -1686,6 +1686,8 @@ ${issue.message ?? ""}`;
     cancelling: "Pipeline cancelling",
     expired: "Pipeline result expired",
     failed: "Pipeline failed",
+    loading: "Pipeline status loading",
+    none: "No pipeline status",
     notStarted: "Pipeline not started",
     queued: "Pipeline queued",
     running: "Pipeline running",
@@ -1719,6 +1721,8 @@ ${issue.message ?? ""}`;
     cancelling: [RING, line("M5 11l6-6", "currentColor")],
     expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
     failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
+    loading: [DISC],
+    none: [DISC],
     notStarted: [RING],
     queued: [RING, line("M8 4.5V8l2.5 1.5", "currentColor")],
     running: [SPINNER],
@@ -2726,6 +2730,13 @@ ${issue.message ?? ""}`;
 
 .fix-ado-pipeline-status[data-status="running"] {
   animation: fix-ado-spin 1.5s linear infinite;
+}
+
+/* A grey circle that holds the icon's place while the status loads, or when there is none. */
+.fix-ado-pipeline-status[data-status="loading"],
+.fix-ado-pipeline-status[data-status="none"] {
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  opacity: 0.25;
 }
 
 @keyframes fix-ado-spin {
@@ -6031,9 +6042,9 @@ ${content}`
   }
   function showPipelineStatus(row, pullRequestId, status) {
     let shownIcon = row.querySelector(`.${PIPELINE_STATUS_ICON_CLASS}`);
-    if ((shownIcon ? shownIcon.dataset.status === status && shownIcon.dataset.pullRequestId === String(pullRequestId) : status === null) || (shownIcon?.remove(), status === null))
+    if (shownIcon?.dataset.status === status && shownIcon.dataset.pullRequestId === String(pullRequestId))
       return;
-    row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
+    shownIcon?.remove(), row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
   }
   var REVIEWER_SELECTOR = ".pr-reviewer";
   function markRequiredReviewers(row, reviewers) {
@@ -6045,10 +6056,10 @@ ${content}`
 
   // azure-devops/src/features/pipeline-status/pipeline-status-poller.ts
   var IN_PROGRESS_POLL_INTERVAL_MS = 2e4, SETTLED_POLL_INTERVAL_MS = 18e4, FAILED_REQUEST_RETRY_MS = 6e4, MS_PER_SECOND = 1e3;
-  function showFetchedStatuses(state) {
+  function showStatuses(state) {
     for (let { row, pullRequest } of state.options.findRows()) {
-      let polled = state.polledPullRequests.get(pullRequest.pullRequestId);
-      polled?.hasBeenFetched === !0 && state.options.showStatus(row, pullRequest.pullRequestId, polled.status);
+      let polled = state.polledPullRequests.get(pullRequest.pullRequestId), status = polled?.hasBeenFetched === !0 ? polled.status ?? "none" : "loading";
+      state.options.showStatus(row, pullRequest.pullRequestId, status);
     }
   }
   function duePullRequests(state) {
@@ -6070,7 +6081,7 @@ ${content}`
       let response = await state.options.client.getPolicyEvaluations(pullRequest);
       ({ retryAfterSeconds } = response), recordStatus(state, polled, response.evaluations);
     } catch (error) {
-      error instanceof AdoRequestError && ({ retryAfterSeconds } = error), polled.nextPollAt = state.options.now() + FAILED_REQUEST_RETRY_MS;
+      error instanceof AdoRequestError && ({ retryAfterSeconds } = error), polled.hasBeenFetched = !0, polled.nextPollAt = state.options.now() + FAILED_REQUEST_RETRY_MS;
     }
     return retryAfterSeconds;
   }
@@ -6088,7 +6099,7 @@ ${content}`
     for (let pullRequest of duePullRequests(state)) {
       if (state.options.now() < state.pausedUntil)
         break;
-      await fetchStatus(state, pullRequest), showFetchedStatuses(state);
+      await fetchStatus(state, pullRequest), showStatuses(state);
     }
   }
   function createPipelineStatusPoller(options) {
@@ -6100,7 +6111,7 @@ ${content}`
     };
     return {
       async sync() {
-        if (showFetchedStatuses(state), !state.isFetching) {
+        if (showStatuses(state), !state.isFetching) {
           state.isFetching = !0;
           try {
             await fetchDueStatuses(state);
