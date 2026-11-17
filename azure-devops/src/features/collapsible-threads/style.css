@@ -77,3 +77,10 @@
 .activity-feed-list [style*="min-height"]:has([data-fix-ado-thread="collapsed"]) {
   min-height: 0 !important;
 }
+
+/* Expand all threads sits on the left of the bar above the feed. The bar puts its filters on
+   the right. */
+.fix-ado-expand-all-threads-box {
+  order: -1;
+  margin-right: auto;
+}

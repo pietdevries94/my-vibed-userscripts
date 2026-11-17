@@ -39,15 +39,23 @@ interface OverviewPage {
   sync: () => void;
   states: () => (string | undefined)[];
   toggles: () => HTMLButtonElement[];
+  expandAllButtons: () => HTMLButtonElement[];
   setStatus: (index: number, status: string) => void;
 }
 
 function overviewPage(rows: string): OverviewPage {
-  const html = `<table class="activity-feed-list"><tbody>${rows}</tbody></table>`;
+  const html = `<div class="flex-row flex-wrap justify-end">
+      <div class="margin-bottom-16 margin-right-8 bolt-dropdown-expandable"><button>Active</button></div>
+      <div class="repos-activity-filter-dropdown bolt-dropdown-expandable"><button>All activity</button></div>
+    </div>
+    <table class="activity-feed-list"><tbody>${rows}</tbody></table>`;
   const { document } = new JSDOM(`<!doctype html><body>${html}</body>`).window;
   const { sync } = createCollapsibleThreads({ document });
   return {
     document,
+    expandAllButtons: () => [
+      ...document.querySelectorAll<HTMLButtonElement>(".fix-ado-expand-all-threads"),
+    ],
     setStatus: (index, status) => {
       const label = document.querySelectorAll(".bolt-dropdown-expandable-button-label")[index];
       assert.ok(label !== undefined);
@@ -139,4 +147,49 @@ test("a thread whose first comment is still loading is left alone", () => {
   page.sync();
   assert.deepEqual(page.states(), [undefined]);
   assert.equal(page.toggles().length, 0);
+});
+
+test("the bar above the feed gets one Expand all threads button, as its first item", () => {
+  const page = overviewPage(thread(11, "Resolved"));
+  page.sync();
+  page.sync();
+  const [button] = page.expandAllButtons();
+  assert.equal(page.expandAllButtons().length, 1);
+  assert.equal(button?.textContent, "Expand all threads");
+  const bar = page.document.querySelector(".repos-activity-filter-dropdown")?.parentElement;
+  assert.ok(bar?.firstElementChild?.contains(button ?? null) === true);
+});
+
+test("Expand all threads opens every thread, also one the owner collapsed", () => {
+  const page = overviewPage(thread(11, "Resolved") + thread(12, "Active"));
+  page.sync();
+  page.toggles()[1]?.click();
+  assert.deepEqual(page.states(), ["collapsed", "collapsed"]);
+  page.expandAllButtons()[0]?.click();
+  assert.deepEqual(page.states(), ["open", "open"]);
+});
+
+test("after Expand all threads, a resolved thread that renders later opens too", () => {
+  const page = overviewPage(thread(11, "Resolved"));
+  page.sync();
+  page.expandAllButtons()[0]?.click();
+  page.document.querySelector("tbody")?.insertAdjacentHTML("beforeend", thread(12, "Resolved"));
+  page.sync();
+  assert.deepEqual(page.states(), ["open", "open"]);
+});
+
+test("after Expand all threads, the owner can still collapse one thread", () => {
+  const page = overviewPage(thread(11, "Resolved") + thread(12, "Active"));
+  page.sync();
+  page.expandAllButtons()[0]?.click();
+  page.toggles()[0]?.click();
+  assert.deepEqual(page.states(), ["collapsed", "open"]);
+});
+
+test("a page without the bar above the feed gets no Expand all threads button", () => {
+  const { document } = new JSDOM(
+    `<!doctype html><body><table class="activity-feed-list"><tbody>${thread(11, "Resolved")}</tbody></table></body>`,
+  ).window;
+  createCollapsibleThreads({ document }).sync();
+  assert.equal(document.querySelector(".fix-ado-expand-all-threads"), null);
 });

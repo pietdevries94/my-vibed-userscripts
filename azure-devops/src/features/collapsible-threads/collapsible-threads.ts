@@ -10,6 +10,10 @@ const FILE_HEADER_SELECTOR = ".comment-file-header";
 const FILE_TITLE_SELECTOR = ".comment-file-header-title";
 /** The column of a comment with its header and text. The author's avatar sits before it. */
 const AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
+/** The feed's filter, in the bar above the feed. */
+const FILTER_SELECTOR = ".repos-activity-filter-dropdown";
+const EXPAND_ALL_CLASS = "fix-ado-expand-all-threads";
+const EXPAND_ALL_LABEL = "Expand all threads";
 
 type ThreadState = "collapsed" | "open";
 
@@ -63,17 +67,55 @@ function placeToggle(toggle: HTMLButtonElement, box: Element): void {
 }
 
 /**
+ * The Expand all threads button, in a box with the margins each filter has. Azure DevOps's
+ * button style drops a margin on the button itself.
+ */
+function createExpandAllBox(document: Document, onClick: () => void): HTMLElement {
+  const text = Object.assign(document.createElement("span"), {
+    className: "bolt-button-text",
+    textContent: EXPAND_ALL_LABEL,
+  });
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `${EXPAND_ALL_CLASS} bolt-button enabled bolt-focus-treatment`;
+  button.append(text);
+  button.addEventListener("click", onClick);
+  const box = Object.assign(document.createElement("div"), {
+    className: `${EXPAND_ALL_CLASS}-box margin-bottom-16 inline-flex-row`,
+  });
+  box.append(button);
+  return box;
+}
+
+/** Adds Expand all threads first in the bar above the feed, when it is not there yet (style.css puts it left). */
+function addExpandAllButton(document: Document, onClick: () => void): void {
+  const bar = document.querySelector(FILTER_SELECTOR)?.parentElement;
+  if (bar !== null && bar !== undefined && bar.querySelector(`.${EXPAND_ALL_CLASS}`) === null) {
+    bar.prepend(createExpandAllBox(document, onClick));
+  }
+}
+
+/**
  * The threads in the activity feed of a pull request's Overview, each with a toggle before its
  * author that collapses it to the header of its first comment, also a thread on a file (style.css). A resolved thread starts
  * collapsed. A thread the owner opened or collapsed stays that way until a reload.
+ * Expand all threads, above the feed, opens every thread, also the ones Azure DevOps renders
+ * later, until a reload.
  */
 function createCollapsibleThreads({ document }: { document: Document }): { sync: () => void } {
   /** The state the owner picked, by thread id. */
   const pickedStates = new Map<string, ThreadState>();
+  let isAllExpanded = false;
 
   function stateOf({ isResolved, thread }: FeedThread): ThreadState {
     const picked = pickedStates.get(threadIdOf(thread) ?? "");
-    return picked ?? (isResolved ? "collapsed" : "open");
+    return picked ?? (isResolved && !isAllExpanded ? "collapsed" : "open");
+  }
+
+  function expandAll(): void {
+    pickedStates.clear();
+    isAllExpanded = true;
+    sync();
   }
 
   function flip(thread: HTMLElement): void {
@@ -95,6 +137,7 @@ function createCollapsibleThreads({ document }: { document: Document }): { sync:
   }
 
   function sync(): void {
+    addExpandAllButton(document, expandAll);
     for (const thread of feedThreadElements(document)) {
       const feedThread = feedThreadOf(thread);
       if (feedThread !== null) {
