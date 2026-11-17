@@ -44,6 +44,7 @@ function syncedPage(page: string): Document {
   const chips = createStarredReviewerChips({
     document,
     imageUrlOf: () => "",
+    onNextDomChange: () => (): void => undefined,
     schedule: () => (): void => undefined,
     store: createStarredReviewersStore({
       load: () => saved,

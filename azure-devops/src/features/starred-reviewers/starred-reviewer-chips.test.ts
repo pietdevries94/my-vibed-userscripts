@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
 import { createStarredReviewerChips } from "./starred-reviewer-chips.ts";
 import { createStarredReviewersStore } from "./starred-reviewers-store.ts";
+import { onNextDomChange } from "../../core/next-dom-change.ts";
 import { test } from "node:test";
 
 const QUILL: Identity = {
@@ -42,6 +43,7 @@ function setUp(starred: Identity[], html: string, isCreatePage = true): Harness 
   const chips = createStarredReviewerChips({
     document,
     imageUrlOf: ({ id }) => `/avatars/${id}`,
+    onNextDomChange: (callback) => onNextDomChange(document, callback),
     schedule: (callback, delayMs): (() => void) => {
       const entry = { callback, dueAt: now + delayMs };
       scheduled.push(entry);
@@ -184,6 +186,15 @@ test("a click searches the field by sign-in address and picks that person", asyn
   for (const row of chipRows(harness.document)) {
     assert.deepEqual(chipNames(row), ["Marren Tolk"]);
   }
+});
+
+test("a click picks the reviewer as soon as the suggestions show, before a poll", async () => {
+  const harness = setUp([QUILL], page([], null));
+  attachPicker(harness.document, OPTIONAL);
+  chip(chipRows(harness.document)[0], "Quill Barrow").click();
+  await settle();
+  assert.deepEqual(pillNames(harness.document, OPTIONAL), ["Quill Barrow"]);
+  assert.equal(harness.document.body.classList.contains("fix-ado-starred-picking"), false);
 });
 
 test("a team is searched by its own name", async () => {

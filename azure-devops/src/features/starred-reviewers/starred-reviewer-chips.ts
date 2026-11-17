@@ -24,8 +24,10 @@ import { closestHtmlElement } from "../../core/closest-element.ts";
 import { isNameOf } from "./starred-reviewers-store.ts";
 import { log } from "../../../../shared/runtime/script-log.ts";
 import { personOrTeamName } from "../../pull-requests/reviewers.ts";
+import { stopNothing } from "../../core/next-dom-change.ts";
 
-const SUGGESTION_POLL_MS = 250;
+/** A pick steps on as soon as the page changes, but gives up on a step only after this long. */
+const STEP_WAIT_MS = 250;
 /** A pick that has not finished by then ends as failed, whatever held it up. */
 const PICK_TIMEOUT_MS = 5000;
 /** On the body while a chip picks: style.css hides the field's dropdown and typed text then. */
@@ -38,6 +40,8 @@ interface StarredReviewerChipsOptions {
   imageUrlOf: (identity: Identity) => string;
   /** Runs `callback` after `delayMs`; returns a function that cancels it. */
   schedule: (callback: () => void, delayMs: number) => () => void;
+  /** Runs `callback` once, on the next change to the page; returns a function that cancels it. */
+  onNextDomChange: (callback: () => void) => () => void;
 }
 
 interface StarredReviewerChips {
@@ -50,7 +54,7 @@ interface ChipsState {
   isCreatePage: boolean;
   /** The one pick going on, if any. Other chips wait for it. */
   activePick: { identityId: string; pickId: number } | null;
-  /** The number the next pick gets, so a poll of an ended pick knows to stop. */
+  /** The number the next pick gets, so a check of an ended pick knows to stop. */
   nextPickId: number;
   notFoundIds: Set<string>;
 }
@@ -122,28 +126,59 @@ function nextStep(pendingPick: PendingPick, suggestion: Element): PendingPick["s
   return null;
 }
 
-/** Looks for the suggestion and takes the next step, until the reviewer is in the field or it gives up. */
-function pickSuggestion(state: ChipsState, pendingPick: PendingPick): void {
-  const { document, schedule } = state.options;
-  const { field, identity } = pendingPick;
-  const suggestion = isInField(document, identity)
-    ? null
-    : findSuggestion(document, field.input, identity);
+/** Looks for the suggestion and takes the next step. The step the pick is at then, or null when it is stuck. */
+function takeNextStep(state: ChipsState, pendingPick: PendingPick): PendingPick["step"] | null {
+  const suggestion = findSuggestion(
+    state.options.document,
+    pendingPick.field.input,
+    pendingPick.identity,
+  );
   const step = suggestion === null ? pendingPick.step : nextStep(pendingPick, suggestion);
   log("Starred reviewers: chip pick", {
     from: pendingPick.step,
     hasSuggestion: suggestion !== null,
     to: step,
   });
-  if (step === null || isInField(document, identity)) {
-    finishPick(state, pendingPick, isInField(document, identity));
+  return step;
+}
+
+/**
+ * Checks the pick on every change to the page, and once more after STEP_WAIT_MS. It ends when
+ * the reviewer is in the field. A stuck pick ends as failed on that last check only.
+ */
+function waitForNextStep(state: ChipsState, pendingPick: PendingPick): void {
+  const { document, onNextDomChange, schedule } = state.options;
+  // A field that takes the click at once has the reviewer before the page changes again.
+  if (isInField(document, pendingPick.identity)) {
+    finishPick(state, pendingPick, true);
     return;
   }
-  schedule(() => {
+  let stopWatching = stopNothing;
+  let stopTimer = stopNothing;
+  const check = (isLastCheck: boolean): void => {
     runStep(state, pendingPick, () => {
-      pickSuggestion(state, { ...pendingPick, step });
+      const isPicked = isInField(document, pendingPick.identity);
+      const step = isPicked ? pendingPick.step : takeNextStep(state, pendingPick);
+      if (isPicked || (step !== null && (step !== pendingPick.step || isLastCheck))) {
+        stopTimer();
+        waitForNextStep(state, { ...pendingPick, step: step ?? pendingPick.step });
+      } else if (isLastCheck) {
+        finishPick(state, pendingPick, false);
+      } else {
+        stopWatching = onNextDomChange(() => {
+          check(false);
+        });
+      }
     });
-  }, SUGGESTION_POLL_MS);
+  };
+  stopWatching = onNextDomChange(() => {
+    check(false);
+  });
+  stopTimer = schedule(() => {
+    stopTimer = stopNothing;
+    stopWatching();
+    check(true);
+  }, STEP_WAIT_MS);
 }
 
 function addThroughField(state: ChipsState, field: ReviewerField, identity: Identity): void {
@@ -164,11 +199,7 @@ function addThroughField(state: ChipsState, field: ReviewerField, identity: Iden
   }, PICK_TIMEOUT_MS);
   runStep(state, pendingPick, () => {
     typeInto(field.input, searchTextOf(identity));
-    schedule(() => {
-      runStep(state, pendingPick, () => {
-        pickSuggestion(state, pendingPick);
-      });
-    }, SUGGESTION_POLL_MS);
+    waitForNextStep(state, pendingPick);
   });
 }
 

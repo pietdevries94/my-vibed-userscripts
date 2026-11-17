@@ -3,6 +3,7 @@ import type { Identity } from "../../pull-requests/reviewer-requests.ts";
 import { createStarredReviewerChips } from "./starred-reviewer-chips.ts";
 import { createStarredReviewers } from "./starred-reviewers.ts";
 import { createStarredReviewersStore } from "./starred-reviewers-store.ts";
+import { onNextDomChange } from "../../core/next-dom-change.ts";
 import { pullRequestOf } from "../../core/page.ts";
 import style from "./style.css";
 
@@ -43,7 +44,13 @@ const starredReviewers: Feature = {
       schedule,
       store,
     });
-    const chips = createStarredReviewerChips({ document, imageUrlOf, schedule, store });
+    const chips = createStarredReviewerChips({
+      document,
+      imageUrlOf,
+      onNextDomChange: (callback) => onNextDomChange(document, callback),
+      schedule,
+      store,
+    });
     return {
       sync({ page }) {
         starred.sync(pullRequestOf(page));
