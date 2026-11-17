@@ -3,9 +3,9 @@ import {
   PIPELINE_STATUS_ICON_CLASS,
   createPipelineStatusIcon,
 } from "../pipeline/pipeline-status-icon.ts";
-import type { PipelineStatus } from "../pipeline/pipeline-status.ts";
 import type { PullRequestRef } from "./pull-request-link.ts";
 import type { Reviewer } from "./reviewers.ts";
+import type { ShownStatus } from "../pipeline/pipeline-status-icon.ts";
 import { findReviewerByLabel } from "./reviewers.ts";
 import { parsePullRequestHref } from "./pull-request-link.ts";
 
@@ -29,15 +29,12 @@ function findPullRequestRows(root: ParentNode, apiBasePath: string): PullRequest
 }
 
 /**
- * Puts the status icon after the pull request title. Safe to call repeatedly:
+ * Puts the status icon after the pull request title. A "loading" skeleton holds
+ * its place until the status arrives, so the title line does not shift. Safe to call repeatedly:
  * it only touches the DOM when the row shows something else. ADO reuses row
  * elements for other pull requests, so the icon records which one it belongs to.
  */
-function showPipelineStatus(
-  row: HTMLElement,
-  pullRequestId: number,
-  status: PipelineStatus | null,
-): void {
+function showPipelineStatus(row: HTMLElement, pullRequestId: number, status: ShownStatus): void {
   const shownIcon = row.querySelector<SVGElement>(`.${PIPELINE_STATUS_ICON_CLASS}`);
   const isUpToDate = shownIcon
     ? shownIcon.dataset.status === status &&

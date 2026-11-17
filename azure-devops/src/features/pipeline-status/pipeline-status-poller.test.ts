@@ -4,11 +4,12 @@ import {
   SETTLED_POLL_INTERVAL_MS,
   createPipelineStatusPoller,
 } from "./pipeline-status-poller.ts";
-import type { PipelineStatus, PolicyEvaluation } from "../../pipeline/pipeline-status.ts";
 import type { AdoClient } from "../../core/ado-client.ts";
 import { AdoRequestError } from "../../core/ado-client.ts";
 import { BUILD_POLICY_TYPE_ID } from "../../pipeline/pipeline-status.ts";
 import type { PipelineStatusPoller } from "./pipeline-status-poller.ts";
+import type { PolicyEvaluation } from "../../pipeline/pipeline-status.ts";
+import type { ShownStatus } from "../../pipeline/pipeline-status-icon.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -28,7 +29,7 @@ interface FakeList {
   fetchedIds: number[];
   listedIds: number[];
   respond: Respond;
-  shown: Map<number, PipelineStatus | null>;
+  shown: Map<number, ShownStatus>;
 }
 
 async function notUsedByThePoller(): Promise<never> {
@@ -58,7 +59,7 @@ function pollerOnFakeList(pullRequestIds: number[]): {
       evaluations: [buildEvaluation("approved")],
       retryAfterSeconds: null,
     }),
-    shown: new Map<number, PipelineStatus | null>(),
+    shown: new Map<number, ShownStatus>(),
   };
   const client: AdoClient = {
     ...UNUSED_REVIEW_REQUESTS,
@@ -137,6 +138,26 @@ test("a running pull request is fetched again sooner and the shown status follow
   assert.equal(list.shown.get(1), "succeeded");
 });
 
+test("a row shows a skeleton until its status arrives", async () => {
+  const { list, poller } = pollerOnFakeList([1, 2]);
+  const shownWhileFetching: ShownStatus[] = [];
+  list.respond = (pullRequestId): ReturnType<Respond> => {
+    if (pullRequestId === 1) {
+      shownWhileFetching.push(list.shown.get(1) ?? null, list.shown.get(2) ?? null);
+    }
+    return { evaluations: [buildEvaluation("approved")], retryAfterSeconds: null };
+  };
+  await poller.sync();
+  assert.deepEqual(shownWhileFetching, ["loading", "loading"]);
+  assert.deepEqual(
+    [...list.shown],
+    [
+      [1, "succeeded"],
+      [2, "succeeded"],
+    ],
+  );
+});
+
 test("a pull request listed twice is fetched once", async () => {
   const { list, poller } = pollerOnFakeList([1, 1]);
   await poller.sync();
@@ -172,13 +193,13 @@ test("a failed request keeps the shown status and is retried later", async () =>
   assert.equal(list.fetchedIds.length, 3);
 });
 
-test("a pull request that never loaded shows no icon", async () => {
+test("a pull request that never loaded loses its skeleton", async () => {
   const { list, poller } = pollerOnFakeList([1]);
   list.respond = (): never => {
     throw new AdoRequestError(403, null);
   };
   await poller.sync();
-  assert.equal(list.shown.has(1), false);
+  assert.equal(list.shown.get(1), null);
 });
 
 test("Retry-After pauses all requests", async () => {

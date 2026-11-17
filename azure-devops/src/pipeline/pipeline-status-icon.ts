@@ -1,7 +1,10 @@
 import type { PipelineStatus } from "./pipeline-status.ts";
 
-/** A pipeline status, or a run that is being cancelled. */
-type IconStatus = PipelineStatus | "cancelling";
+/** A pipeline status, a run that is being cancelled, or a status still loading. */
+type IconStatus = PipelineStatus | "cancelling" | "loading";
+
+/** What a pull request row shows: a status, a skeleton while it loads, or nothing. */
+type ShownStatus = PipelineStatus | "loading" | null;
 
 const PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status";
 
@@ -11,6 +14,7 @@ const LABELS: Record<IconStatus, string> = {
   cancelling: "Pipeline cancelling",
   expired: "Pipeline result expired",
   failed: "Pipeline failed",
+  loading: "Pipeline status loading",
   notStarted: "Pipeline not started",
   queued: "Pipeline queued",
   running: "Pipeline running",
@@ -53,6 +57,7 @@ const SHAPES: Record<IconStatus, Shape[]> = {
   cancelling: [RING, line("M5 11l6-6", "currentColor")],
   expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
   failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
+  loading: [DISC],
   notStarted: [RING],
   queued: [RING, line("M8 4.5V8l2.5 1.5", "currentColor")],
   running: [SPINNER],
@@ -96,7 +101,7 @@ function createStatusIcon(
 
 function createPipelineStatusIcon(
   document: Document,
-  status: PipelineStatus,
+  status: Exclude<ShownStatus, null>,
   pullRequestId: number,
 ): SVGElement {
   const icon = createStatusIcon(document, status);
@@ -104,5 +109,5 @@ function createPipelineStatusIcon(
   return icon;
 }
 
-export type { IconStatus };
+export type { IconStatus, ShownStatus };
 export { PIPELINE_STATUS_ICON_CLASS, createPipelineStatusIcon, createStatusIcon };

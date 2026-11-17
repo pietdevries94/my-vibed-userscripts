@@ -3,6 +3,7 @@ import { isInProgress, pipelineStatusOf } from "../../pipeline/pipeline-status.t
 import type { AdoClient } from "../../core/ado-client.ts";
 import { AdoRequestError } from "../../core/ado-client.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
+import type { ShownStatus } from "../../pipeline/pipeline-status-icon.ts";
 
 const IN_PROGRESS_POLL_INTERVAL_MS = 20_000;
 const SETTLED_POLL_INTERVAL_MS = 180_000;
@@ -13,7 +14,7 @@ interface PollerOptions<Row> {
   client: AdoClient;
   now: () => number;
   findRows: () => { row: Row; pullRequest: PullRequestRef }[];
-  showStatus: (row: Row, pullRequestId: number, status: PipelineStatus | null) => void;
+  showStatus: (row: Row, pullRequestId: number, status: ShownStatus) => void;
 }
 
 interface PipelineStatusPoller {
@@ -22,6 +23,7 @@ interface PipelineStatusPoller {
 
 interface PolledPullRequest {
   status: PipelineStatus | null;
+  /** A fetch has ended, with a status or with an error. */
   hasBeenFetched: boolean;
   nextPollAt: number;
 }
@@ -33,12 +35,11 @@ interface PollerState<Row> {
   isFetching: boolean;
 }
 
-function showFetchedStatuses<Row>(state: PollerState<Row>): void {
+function showStatuses<Row>(state: PollerState<Row>): void {
   for (const { row, pullRequest } of state.options.findRows()) {
     const polled = state.polledPullRequests.get(pullRequest.pullRequestId);
-    if (polled?.hasBeenFetched === true) {
-      state.options.showStatus(row, pullRequest.pullRequestId, polled.status);
-    }
+    const status = polled?.hasBeenFetched === true ? polled.status : "loading";
+    state.options.showStatus(row, pullRequest.pullRequestId, status);
   }
 }
 
@@ -81,6 +82,7 @@ async function fetchAndRecordStatus<Row>(
     if (error instanceof AdoRequestError) {
       ({ retryAfterSeconds } = error);
     }
+    polled.hasBeenFetched = true;
     polled.nextPollAt = state.options.now() + FAILED_REQUEST_RETRY_MS;
   }
   return retryAfterSeconds;
@@ -109,7 +111,7 @@ async function fetchDueStatuses<Row>(state: PollerState<Row>): Promise<void> {
     }
     // oxlint-disable-next-line eslint/no-await-in-loop -- TODO(lint): one request at a time, so Retry-After can pause the rest; parallel requests would change that
     await fetchStatus(state, pullRequest);
-    showFetchedStatuses(state);
+    showStatuses(state);
   }
 }
 
@@ -126,7 +128,7 @@ function createPipelineStatusPoller<Row>(options: PollerOptions<Row>): PipelineS
   };
   return {
     async sync() {
-      showFetchedStatuses(state);
+      showStatuses(state);
       if (state.isFetching) {
         return;
       }

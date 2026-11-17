@@ -118,6 +118,19 @@ test(
   },
 );
 
+test("a skeleton holds the icon's place until the status arrives", { skip: fixtures.skip }, () => {
+  const row = capturedRow("pr-list", 1001);
+  showPipelineStatus(row, 1001, "loading");
+  const [skeleton] = shownIcons(row);
+  assert.equal(skeleton?.dataset.status, "loading");
+  assert.equal(skeleton?.getAttribute("aria-label"), "Pipeline status loading");
+  showPipelineStatus(row, 1001, "succeeded");
+  assert.deepEqual(
+    shownIcons(row).map((icon) => icon.dataset.status),
+    ["succeeded"],
+  );
+});
+
 test("no status removes the icon", { skip: fixtures.skip }, () => {
   const row = capturedRow("pr-list", 1001);
   showPipelineStatus(row, 1001, "succeeded");
