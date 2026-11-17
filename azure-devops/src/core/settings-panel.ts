@@ -7,7 +7,6 @@ import {
 import type { Feature, FeatureCategory, FeatureChange } from "./feature.ts";
 import { button, element } from "./settings-panel-markup.ts";
 
-const RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.";
 const ISSUE_LINK_TEXT = "Found a bug or have a suggestion?";
 const NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new";
 const TOP_BAR_SELECTOR = ".region-header-menubar";
@@ -140,7 +139,7 @@ function createButtons(
   );
   const save = button(
     document,
-    { className: "bolt-button enabled primary bolt-focus-treatment", text: "Save and reload" },
+    { className: "bolt-button enabled primary bolt-focus-treatment", text: "Save and reload page" },
     () => {
       options.save(changedChoices(dialog, options));
       options.reload();
@@ -181,11 +180,6 @@ function createDialog(options: SettingsPanelOptions, unseen: Feature[]): HTMLDia
   const { document } = options;
   const dialog = element(document, "dialog", { className: DIALOG_CLASS });
   dialog.setAttribute("aria-label", SETTINGS_TITLE);
-  const warning = element(document, "p", {
-    className: "fix-ado-settings-warning",
-    text: RELOAD_WARNING,
-  });
-  warning.setAttribute("role", "note");
   const { buttons, save } = createButtons(dialog, options);
   dialog.addEventListener("change", () => {
     save.disabled = changedChoices(dialog, options).size === 0;
@@ -193,7 +187,6 @@ function createDialog(options: SettingsPanelOptions, unseen: Feature[]): HTMLDia
   dialog.append(
     element(document, "h2", { className: "fix-ado-settings-title", text: SETTINGS_TITLE }),
     ...options.categories.map((category) => categorySection(category, options, unseen)),
-    warning,
     buttons,
   );
   return dialog;

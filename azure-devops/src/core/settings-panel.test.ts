@@ -69,23 +69,22 @@ test("a choice in a later category is saved too", () => {
   });
   page.panel.open();
   flip(page.checkbox("dots"));
-  page.button("Save and reload").click();
+  page.button("Save and reload page").click();
   assert.deepEqual(page.saved, [new Map([["dots", false]])]);
 });
 
-test("the panel warns that saving reloads the page", () => {
+test("the panel has no warning; the save button says that it reloads the page", () => {
   const page = pageWith(TOP_BAR);
   page.panel.open();
-  assert.match(
-    page.dialog()?.textContent ?? "",
-    /Saving reloads this page\. Anything you typed and did not save is lost\./u,
-  );
+  assert.equal(page.document.querySelector("dialog [role=note]"), null);
+  assert.doesNotMatch(page.dialog()?.textContent ?? "", /is lost/u);
+  assert.equal(page.button("Save and reload page").disabled, true);
 });
 
-test("Save and reload stays off until a choice changes, and back off when it is undone", () => {
+test("Save and reload page stays off until a choice changes, and back off when it is undone", () => {
   const page = pageWith(TOP_BAR);
   page.panel.open();
-  const save = page.button("Save and reload");
+  const save = page.button("Save and reload page");
   assert.equal(save.disabled, true);
   flip(page.checkbox("dots"));
   assert.equal(save.disabled, false);
@@ -93,11 +92,11 @@ test("Save and reload stays off until a choice changes, and back off when it is 
   assert.equal(save.disabled, true);
 });
 
-test("Save and reload stores only the changed choices, then reloads", () => {
+test("Save and reload page stores only the changed choices, then reloads", () => {
   const page = pageWith(TOP_BAR);
   page.panel.open();
   flip(page.checkbox("dots"));
-  page.button("Save and reload").click();
+  page.button("Save and reload page").click();
   assert.deepEqual(page.saved, [new Map([["dots", false]])]);
   assert.equal(page.reloads, 1);
 });

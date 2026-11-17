@@ -147,26 +147,6 @@
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
 }
 
-/* Big on purpose: saving reloads the page and loses what the owner typed. */
-.fix-ado-settings-warning {
-  margin: 20px 0 0;
-  padding: 16px 20px;
-  border: 2px solid var(--status-warning-foreground, rgb(214, 127, 60));
-  border-radius: 6px;
-  background: var(--status-warning-background, rgb(251, 242, 236));
-  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.4;
-}
-
-.fix-ado-settings-warning::before {
-  content: "⚠";
-  margin-right: 8px;
-  font-size: 22px;
-  vertical-align: -2px;
-}
-
 .fix-ado-settings-buttons {
   display: flex;
   align-items: center;
