@@ -21,6 +21,14 @@ Change only the parts the owner names. When a word could mean two parts of the p
 
 Code that only this script needs stays in `<script>/src/`. A file moves to `shared/` only when a second script needs it, never as a copy.
 
+## Timing
+
+A script is event-driven: it changes the page before the browser paints what the site rendered, so the owner never sees the page change twice.
+
+- Re-apply after a DOM change in the next animation frame, as `azure-devops/src/core/sync-before-paint.ts` does. A settle delay shows the site's version first.
+- To wait for the page, check on every DOM change (`azure-devops/src/core/next-dom-change.ts`). A timer is only the deadline to give up.
+- Poll on a timer only what sends no event, such as the REST API.
+
 ## Fake site
 
 Build `<script>/fake-site/` only for a sealed script, or for a feature that reacts to change over time (polling, reloads). It runs on `http://localhost:8787` on the shared base in `shared/dev/fake-site`, with routes, state, named actions under `/__dev`, and stand-in labels for masked names. Check every feature there in the `fake-site` browser. Details: `docs/spec/sealed-workflow.md`, section "Fake site".
