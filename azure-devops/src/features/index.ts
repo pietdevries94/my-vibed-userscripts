@@ -1,23 +1,23 @@
-import type { Feature } from "../core/feature.ts";
+import type { Feature, FeatureCategory } from "../core/feature.ts";
 import { OVERVIEW_FEATURES } from "./overview-features.ts";
-import { REVIEWING_FEATURES } from "./reviewing-features.ts";
+import { PULL_REQUEST_FEATURES } from "./pull-request-features.ts";
 import { avatarInitials } from "./avatar-initials/index.ts";
 import { daysInColumn } from "./days-in-column/index.ts";
 import { followSystemTheme } from "./system-theme/index.ts";
 import { pipelineStatusOnPullRequests } from "./pipeline-status/index.ts";
-import { pipelineTab } from "./pipeline-tab/index.ts";
 import { reloadOnChanges } from "./reload-on-changes/index.ts";
+import { requiredReviewers } from "./required-reviewers/index.ts";
 
-/** Every feature, in the order the settings panel lists them. */
-const FEATURES: Feature[] = [
-  pipelineStatusOnPullRequests,
-  pipelineTab,
-  ...OVERVIEW_FEATURES,
-  ...REVIEWING_FEATURES,
-  avatarInitials,
-  followSystemTheme,
-  daysInColumn,
-  reloadOnChanges,
+/** Every feature, by the place in Azure DevOps where it shows, in the settings panel's order. */
+const FEATURE_CATEGORIES: FeatureCategory[] = [
+  { features: [pipelineStatusOnPullRequests, requiredReviewers], name: "Pull request lists" },
+  { features: PULL_REQUEST_FEATURES, name: "Pull request" },
+  { features: OVERVIEW_FEATURES, name: "Pull request Overview" },
+  { features: [daysInColumn], name: "Boards" },
+  { features: [avatarInitials, followSystemTheme, reloadOnChanges], name: "Everywhere" },
 ];
 
-export { FEATURES };
+/** Every feature, in the order they start. */
+const FEATURES: Feature[] = FEATURE_CATEGORIES.flatMap((category) => category.features);
+
+export { FEATURES, FEATURE_CATEGORIES };

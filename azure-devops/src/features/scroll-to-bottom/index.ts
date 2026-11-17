@@ -7,7 +7,7 @@ const scrollToBottom: Feature = {
   description:
     "A button in the corner of a pull request's Overview scrolls to its bottom. It keeps up while more content loads, and hides once you are there.",
   id: "scroll-to-bottom",
-  name: "Scroll to bottom on the Overview",
+  name: "Scroll to bottom",
   start({ document, isInFrame, now }) {
     if (isInFrame) {
       return null;

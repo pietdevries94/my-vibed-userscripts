@@ -88,6 +88,10 @@ _Avoid_: Clean mode, minimal view
 The script's own dialog on Azure DevOps where the owner turns each feature on or off. Saving reloads the page. Opened from a button the script adds to Azure DevOps's top bar.
 _Avoid_: Options, preferences, config screen
 
+**Feature category**:
+A heading in the settings panel with the features that show in one place in Azure DevOps, such as "Pull request Overview" or "Boards". Every feature is in one category.
+_Avoid_: Group, section, tab
+
 **Review**:
 The owner's pending comments on one pull request, kept by the script until the owner submits them in one go, with a vote. Started from a comment box with "Start a review".
 _Avoid_: Draft (a pull request state in Azure DevOps), batch

@@ -1,20 +1,23 @@
-import type { Feature, FeatureChange } from "./feature.ts";
+import {
+  BADGE_CLASS,
+  BUTTON_ITEM_CLASS,
+  SETTINGS_TITLE,
+  createSettingsButtonItem,
+} from "./settings-button.ts";
+import type { Feature, FeatureCategory, FeatureChange } from "./feature.ts";
+import { button, element } from "./settings-panel-markup.ts";
 
-const TITLE = "Fix Azure DevOps settings";
 const RELOAD_WARNING = "Saving reloads this page. Anything you typed and did not save is lost.";
 const ISSUE_LINK_TEXT = "Found a bug or have a suggestion?";
 const NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new";
 const TOP_BAR_SELECTOR = ".region-header-menubar";
-const BUTTON_ITEM_CLASS = "fix-ado-settings-item";
 const DIALOG_CLASS = "fix-ado-settings";
-const BADGE_CLASS = "fix-ado-settings-badge";
 const CHIP_TEXT = { new: "New", updated: "Updated" } as const;
-const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 interface SettingsPanelOptions {
   document: Document;
   /** In the order the panel lists them. */
-  features: Feature[];
+  categories: FeatureCategory[];
   isOn: (feature: Feature) => boolean;
   /** The version of the feature's latest change the owner has seen, or null when none. */
   seenChangeVersion: (feature: Feature) => string | null;
@@ -31,57 +34,13 @@ interface SettingsPanel {
   open: () => void;
 }
 
-interface ElementParts {
-  className: string;
-  text?: string;
-}
-
-function element<Tag extends keyof HTMLElementTagNameMap>(
-  document: Document,
-  tag: Tag,
-  { className, text }: ElementParts,
-): HTMLElementTagNameMap[Tag] {
-  const created = document.createElement(tag);
-  created.className = className;
-  if (text !== undefined) {
-    created.textContent = text;
-  }
-  return created;
-}
-
-function button(document: Document, parts: ElementParts, onClick: () => void): HTMLButtonElement {
-  const created = element(document, "button", parts);
-  created.type = "button";
-  created.addEventListener("click", onClick);
-  return created;
-}
-
-function svgElement(document: Document, tag: string, attributes: Record<string, string>): Element {
-  const created = document.createElementNS(SVG_NAMESPACE, tag);
-  for (const [name, value] of Object.entries(attributes)) {
-    created.setAttribute(name, value);
-  }
-  return created;
-}
-
-/** A puzzle piece outline: the script's own mark, drawn like the line icons next to it. */
-function puzzleIcon(document: Document): Element {
-  const svg = svgElement(document, "svg", {
-    "aria-hidden": "true",
-    class: "fix-ado-settings-icon",
-    viewBox: "0 0 16 16",
-  });
-  svg.append(
-    svgElement(document, "path", {
-      d: "M1.5 4H4.6A2.1 2.1 0 1 1 8.4 4H11.5V7.35A2.1 2.1 0 1 1 11.5 11.15V14.5H1.5Z",
-    }),
-  );
-  return svg;
+function allFeatures({ categories }: SettingsPanelOptions): Feature[] {
+  return categories.flatMap((category) => category.features);
 }
 
 /** The features with a change the owner has not seen. */
 function featuresWithUnseenChange(options: SettingsPanelOptions): Feature[] {
-  return options.features.filter(
+  return allFeatures(options).filter(
     (feature) =>
       feature.change !== undefined && options.seenChangeVersion(feature) !== feature.change.version,
   );
@@ -93,35 +52,6 @@ function chipKind(feature: Feature, options: SettingsPanelOptions): FeatureChang
     return "new";
   }
   return feature.change?.kind ?? "new";
-}
-
-/** The count of unseen feature changes, on the settings button's corner. */
-function unseenCountBadge(document: Document, unseenCount: number): HTMLElement {
-  const badge = element(document, "span", { className: BADGE_CLASS, text: String(unseenCount) });
-  badge.setAttribute("aria-label", `${unseenCount} new or updated`);
-  return badge;
-}
-
-/** The top bar item, shaped like Azure DevOps's own icon buttons next to it. */
-function createButtonItem(document: Document, open: () => void, unseenCount: number): HTMLElement {
-  const item = element(document, "div", { className: `${BUTTON_ITEM_CLASS} flex-row flex-center` });
-  item.setAttribute("role", "menuitem");
-  const settingsButton = button(
-    document,
-    {
-      className:
-        "fix-ado-settings-button bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment",
-    },
-    open,
-  );
-  settingsButton.title = TITLE;
-  settingsButton.setAttribute("aria-label", TITLE);
-  settingsButton.append(puzzleIcon(document));
-  if (unseenCount > 0) {
-    settingsButton.append(unseenCountBadge(document, unseenCount));
-  }
-  item.append(settingsButton);
-  return item;
 }
 
 /** The feature's name, with a New or Updated chip while its change is unseen. */
@@ -173,7 +103,7 @@ function featureRow(document: Document, { feature, isOn, chip }: FeatureRowParts
 /** The choices that differ from the stored ones, by feature id. */
 function changedChoices(dialog: HTMLElement, options: SettingsPanelOptions): Map<string, boolean> {
   const changed = new Map<string, boolean>();
-  for (const feature of options.features) {
+  for (const feature of allFeatures(options)) {
     const checkbox = dialog.querySelector<HTMLInputElement>(
       `input[data-feature-id="${feature.id}"]`,
     );
@@ -222,24 +152,35 @@ function createButtons(
   return { buttons, save };
 }
 
-function featureList(options: SettingsPanelOptions, unseen: Feature[]): HTMLElement {
-  const list = element(options.document, "div", { className: "fix-ado-settings-features" });
-  list.append(
-    ...options.features.map((feature) =>
-      featureRow(options.document, {
+/** A category's name as a heading, above a card per feature. */
+function categorySection(
+  category: FeatureCategory,
+  options: SettingsPanelOptions,
+  unseen: Feature[],
+): HTMLElement {
+  const { document } = options;
+  const section = element(document, "section", { className: "fix-ado-settings-category" });
+  const cards = element(document, "div", { className: "fix-ado-settings-features" });
+  cards.append(
+    ...category.features.map((feature) =>
+      featureRow(document, {
         chip: unseen.includes(feature) ? chipKind(feature, options) : null,
         feature,
         isOn: options.isOn(feature),
       }),
     ),
   );
-  return list;
+  section.append(
+    element(document, "h3", { className: "fix-ado-settings-category-name", text: category.name }),
+    cards,
+  );
+  return section;
 }
 
 function createDialog(options: SettingsPanelOptions, unseen: Feature[]): HTMLDialogElement {
   const { document } = options;
   const dialog = element(document, "dialog", { className: DIALOG_CLASS });
-  dialog.setAttribute("aria-label", TITLE);
+  dialog.setAttribute("aria-label", SETTINGS_TITLE);
   const warning = element(document, "p", {
     className: "fix-ado-settings-warning",
     text: RELOAD_WARNING,
@@ -250,8 +191,8 @@ function createDialog(options: SettingsPanelOptions, unseen: Feature[]): HTMLDia
     save.disabled = changedChoices(dialog, options).size === 0;
   });
   dialog.append(
-    element(document, "h2", { className: "fix-ado-settings-title", text: TITLE }),
-    featureList(options, unseen),
+    element(document, "h2", { className: "fix-ado-settings-title", text: SETTINGS_TITLE }),
+    ...options.categories.map((category) => categorySection(category, options, unseen)),
     warning,
     buttons,
   );
@@ -281,7 +222,9 @@ function createSettingsPanel(options: SettingsPanelOptions): SettingsPanel {
     sync() {
       const topBar = document.querySelector(TOP_BAR_SELECTOR);
       if (topBar && !topBar.querySelector(`.${BUTTON_ITEM_CLASS}`)) {
-        topBar.prepend(createButtonItem(document, open, featuresWithUnseenChange(options).length));
+        topBar.prepend(
+          createSettingsButtonItem(document, open, featuresWithUnseenChange(options).length),
+        );
       }
     },
   };

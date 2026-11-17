@@ -1,110 +1,13 @@
-import type { Feature } from "./feature.ts";
-import { JSDOM } from "jsdom";
+import { TOP_BAR, featureNamed, flip, pageWith } from "./settings-panel.test-page.ts";
+import type { TestPage } from "./settings-panel.test-page.ts";
 import assert from "node:assert/strict";
-import { createSettingsPanel } from "./settings-panel.ts";
 import { test } from "node:test";
 
-const TOP_BAR = `
-  <div class="region-header-menubar" role="menubar">
-    <div role="menuitem"><button aria-label="Help"></button></div>
-  </div>`;
-
-const featureNamed = (id: string, name: string, change?: Feature["change"]): Feature => ({
-  change,
-  description: `What ${name} does.`,
-  id,
-  name,
-  start: () => null,
-  styles: [],
-});
-const FEATURES = [featureNamed("tab", "Pipeline tab"), featureNamed("dots", "Days in column")];
 const CHANGED_FEATURES = [
   featureNamed("tab", "Pipeline tab", { kind: "new", version: "2.0.0" }),
   featureNamed("dots", "Days in column", { kind: "updated", version: "2.1.0" }),
   featureNamed("stars", "Starred reviewers"),
 ];
-
-interface TestPage {
-  document: Document;
-  reloads: number;
-  saved: Map<string, boolean>[];
-  /** The change version the owner has seen, by feature id. */
-  seen: Map<string, string>;
-  panel: ReturnType<typeof createSettingsPanel>;
-  checkbox: (id: string) => HTMLInputElement;
-  button: (text: string) => HTMLButtonElement;
-  dialog: () => HTMLDialogElement | null;
-}
-
-function openDialog(this: HTMLDialogElement): void {
-  this.open = true;
-}
-
-function closeDialog(this: HTMLDialogElement): void {
-  this.open = false;
-}
-
-interface PageSetup {
-  onIds?: string[];
-  features?: Feature[];
-  seen?: Map<string, string>;
-}
-
-function pageWith(
-  body: string,
-  { onIds = ["tab", "dots"], features = FEATURES, seen = new Map() }: PageSetup = {},
-): TestPage {
-  const { window } = new JSDOM(`<!doctype html><body>${body}</body>`);
-  // The test DOM has no modal dialogs.
-  window.HTMLDialogElement.prototype.showModal = openDialog;
-  window.HTMLDialogElement.prototype.close = closeDialog;
-  const { document } = window;
-  const page: TestPage = {
-    button: (text) => {
-      const found = [...document.querySelectorAll("dialog button")].find(
-        (button) => button.textContent === text,
-      );
-      assert.ok(found instanceof window.HTMLButtonElement, `no button ${text}`);
-      return found;
-    },
-    checkbox: (id) => {
-      const found = document.querySelector(`dialog input[data-feature-id="${id}"]`);
-      assert.ok(found instanceof window.HTMLInputElement, `no checkbox ${id}`);
-      return found;
-    },
-    dialog: () => document.querySelector("dialog"),
-    document,
-    panel: createSettingsPanel({
-      document,
-      features,
-      isOn: ({ id }) => onIds.includes(id),
-      markChangesSeen: (seenFeatures) => {
-        for (const { id, change } of seenFeatures) {
-          if (change) {
-            page.seen.set(id, change.version);
-          }
-        }
-      },
-      reload: () => {
-        page.reloads += 1;
-      },
-      save: (choices) => {
-        page.saved.push(choices);
-      },
-      seenChangeVersion: ({ id }) => page.seen.get(id) ?? null,
-    }),
-    reloads: 0,
-    saved: [],
-    seen,
-  };
-  return page;
-}
-
-function flip(checkbox: HTMLInputElement): void {
-  checkbox.checked = !checkbox.checked;
-  const { Event } = checkbox.ownerDocument.defaultView ?? globalThis;
-  checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-}
 
 test("adds one settings button at the start of Azure DevOps's top bar", () => {
   const page = pageWith(TOP_BAR);
@@ -131,6 +34,43 @@ test("the button opens the panel with a checkbox per feature, checked when on", 
   assert.equal(page.checkbox("tab").checked, true);
   assert.equal(page.checkbox("dots").checked, false);
   assert.match(page.dialog()?.textContent ?? "", /Pipeline tab.*What Pipeline tab does\./su);
+});
+
+test("the panel lists each category's features under a heading with its name", () => {
+  const page = pageWith(TOP_BAR, {
+    categories: [
+      { features: [featureNamed("tab", "Pipeline tab")], name: "Pull request" },
+      {
+        features: [featureNamed("dots", "Days in column"), featureNamed("lanes", "Lane totals")],
+        name: "Boards",
+      },
+    ],
+  });
+  page.panel.open();
+  const sections = [...page.document.querySelectorAll("dialog section")];
+  assert.deepEqual(
+    sections.map((section) => section.querySelector("h3")?.textContent),
+    ["Pull request", "Boards"],
+  );
+  assert.deepEqual(
+    sections.map((section) =>
+      [...section.querySelectorAll("input")].map((checkbox) => checkbox.dataset.featureId),
+    ),
+    [["tab"], ["dots", "lanes"]],
+  );
+});
+
+test("a choice in a later category is saved too", () => {
+  const page = pageWith(TOP_BAR, {
+    categories: [
+      { features: [featureNamed("tab", "Pipeline tab")], name: "Pull request" },
+      { features: [featureNamed("dots", "Days in column")], name: "Boards" },
+    ],
+  });
+  page.panel.open();
+  flip(page.checkbox("dots"));
+  page.button("Save and reload").click();
+  assert.deepEqual(page.saved, [new Map([["dots", false]])]);
 });
 
 test("the panel warns that saving reloads the page", () => {

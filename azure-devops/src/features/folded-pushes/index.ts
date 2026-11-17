@@ -7,7 +7,7 @@ const foldedPushes: Feature = {
   description:
     "A push on a pull request's Overview is one line, like its other updates, with a button that shows its commits.",
   id: "folded-pushes",
-  name: "Folded pushes on the Overview",
+  name: "Folded pushes",
   start({ document, isInFrame }) {
     if (isInFrame) {
       return null;

@@ -51,4 +51,19 @@ interface Feature {
   start: (context: FeatureContext) => FeatureRun | null;
 }
 
-export type { Feature, FeatureChange, FeatureContext, FeatureRun, SyncReason, Tick };
+/** The features the settings panel lists under one heading. */
+interface FeatureCategory {
+  /** Its heading in the settings panel: the place in Azure DevOps where its features show. */
+  name: string;
+  features: Feature[];
+}
+
+export type {
+  Feature,
+  FeatureCategory,
+  FeatureChange,
+  FeatureContext,
+  FeatureRun,
+  SyncReason,
+  Tick,
+};

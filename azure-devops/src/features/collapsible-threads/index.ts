@@ -7,7 +7,7 @@ const collapsibleThreads: Feature = {
   description:
     "A button on every thread on a pull request's Overview collapses it. Resolved threads start collapsed.",
   id: "collapsible-threads",
-  name: "Collapsible threads on the Overview",
+  name: "Collapsible threads",
   start({ document, isInFrame }) {
     if (isInFrame) {
       return null;

@@ -8,7 +8,7 @@ const overviewPipelineIssues: Feature = {
   description:
     "The warnings and errors of each check's latest run, above the pull request description.",
   id: "overview-pipeline-issues",
-  name: "Warnings and errors on the Overview",
+  name: "Warnings and errors",
   start({ basePath, client, document, isInFrame, now }) {
     if (isInFrame) {
       return null;

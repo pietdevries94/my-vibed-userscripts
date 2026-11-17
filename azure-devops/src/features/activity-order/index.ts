@@ -10,7 +10,7 @@ const activityOrder: Feature = {
   description:
     "The comments and updates on a pull request's Overview run from old to new, with a button to flip them.",
   id: "activity-order",
-  name: "Oldest first on the Overview",
+  name: "Oldest first",
   start({ document, isInFrame }) {
     if (isInFrame) {
       return null;

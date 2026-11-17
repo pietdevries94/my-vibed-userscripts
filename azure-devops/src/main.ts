@@ -1,5 +1,5 @@
+import { FEATURES, FEATURE_CATEGORIES } from "./features/index.ts";
 import type { Feature, SyncReason } from "./core/feature.ts";
-import { FEATURES } from "./features/index.ts";
 import { apiBasePath } from "./pull-requests/pull-request-link.ts";
 import { createAdoClient } from "./core/ado-client.ts";
 import { createFeatureRunner } from "./core/feature-runner.ts";
@@ -22,8 +22,8 @@ const seenChangeKey = ({ id }: Feature): string => `${id}-seen-change`;
 const settingsPanel = isInFrame
   ? null
   : createSettingsPanel({
+      categories: FEATURE_CATEGORIES,
       document,
-      features: FEATURES,
       isOn,
       markChangesSeen: (features) => {
         for (const feature of features) {
