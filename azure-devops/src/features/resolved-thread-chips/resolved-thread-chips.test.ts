@@ -50,11 +50,11 @@ test("a resolved thread gets a Resolved chip, a thread with another status gets 
   assert.deepEqual(page.chips(), [["Resolved"], [], [], []]);
 });
 
-test("the chip sits after the name and time of the first comment", () => {
+test("the chip sits after the time of the first comment", () => {
   const page = overviewPage(thread("Resolved"));
   page.sync();
   const chip = page.document.querySelector(".fix-ado-resolved-chip");
-  assert.ok(chip?.previousElementSibling?.querySelector("time") !== null);
+  assert.equal(chip?.previousElementSibling?.tagName, "TIME");
   assert.equal(chip?.closest(".repos-comment-viewer")?.previousElementSibling, null);
 });
 

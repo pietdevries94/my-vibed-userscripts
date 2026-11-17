@@ -53,3 +53,16 @@ test(
     assert.ok(fileHeader?.classList.contains("comment-file-header") === true);
   },
 );
+
+test(
+  "in the captured narrow Overview, a toggle sits beside the time, not on a line of its own",
+  { skip: fixtures.skip },
+  () => {
+    const { document } = loadCapturedPullRequest("pr-detail-small");
+    document.querySelector(".fix-ado-thread-toggle")?.remove();
+    createCollapsibleThreads({ document }).sync();
+    const toggle = document.querySelector(".fix-ado-thread-toggle");
+    assert.ok(toggle?.parentElement?.querySelector("time") !== null);
+    assert.ok(toggle?.parentElement?.classList.contains("flex-row") === true);
+  },
+);

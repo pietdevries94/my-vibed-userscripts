@@ -43,3 +43,9 @@
 .comment-file-header:has(+ [data-fix-ado-thread="collapsed"]) {
   display: none;
 }
+
+/* Azure DevOps keeps the height a thread had when it loaded, as a min-height on its row. A
+   collapsed thread drops it. */
+.activity-feed-list [style*="min-height"]:has([data-fix-ado-thread="collapsed"]) {
+  min-height: 0 !important;
+}

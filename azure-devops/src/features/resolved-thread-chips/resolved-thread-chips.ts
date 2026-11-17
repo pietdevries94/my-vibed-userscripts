@@ -23,13 +23,13 @@ function syncThread(thread: HTMLElement): void {
   if (feedThread?.isResolved !== true) {
     chip?.remove();
   } else if (chip === null) {
-    feedThread.nameAndTime.append(createChip(thread.ownerDocument));
+    feedThread.timeBox.append(createChip(thread.ownerDocument));
   }
 }
 
 /**
  * A Resolved chip on every resolved thread in the activity feed of a pull request's Overview,
- * next to the name of who wrote its first comment. The status comes from the thread's own
+ * after the time of its first comment. The status comes from the thread's own
  * status dropdown, so the chip follows it at once.
  */
 function createResolvedThreadChips({ document }: { document: Document }): { sync: () => void } {

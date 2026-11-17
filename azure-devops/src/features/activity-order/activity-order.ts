@@ -71,6 +71,20 @@ function findOrAddButton(document: Document, onClick: () => void): HTMLButtonEle
   return button;
 }
 
+/**
+ * Azure DevOps renders only the rows of the feed near the scroll position, and works out which
+ * from the rows' places top to bottom. Turned around, the feed shows the wrong rows and blank
+ * space. Ctrl+Alt+V is Azure DevOps's own key that has a list render all its rows.
+ */
+function renderAllRows(document: Document): void {
+  const view = document.defaultView;
+  if (view !== null) {
+    document.dispatchEvent(
+      new view.KeyboardEvent("keydown", { altKey: true, bubbles: true, ctrlKey: true, key: "v" }),
+    );
+  }
+}
+
 /** Writes only what changed, to keep the page's mutation observer quiet. */
 function showOrder(
   feed: HTMLElement,
@@ -95,12 +109,15 @@ function showOrder(
 /**
  * The activity feed on a pull request's Overview, oldest first, with a sort button that flips it.
  * The rows keep their place in the DOM; the order mark on the feed turns them around (style.css).
+ * Shown oldest first, the feed renders all its rows, or the turn shows the wrong ones.
  */
 function createActivityOrder(options: { document: Document; storage: ActivityOrderStorage }): {
   sync: () => void;
 } {
   const { document, storage } = options;
   let order = storage.load() ?? DEFAULT_ORDER;
+  /** Feeds that render all their rows. */
+  const fullyRenderedFeeds = new WeakSet<HTMLElement>();
 
   function flip(): void {
     order = flipped(order);
@@ -110,9 +127,14 @@ function createActivityOrder(options: { document: Document; storage: ActivityOrd
 
   function sync(): void {
     const feed = document.querySelector<HTMLElement>(FEED_SELECTOR);
-    if (feed !== null) {
-      showOrder(feed, findOrAddButton(document, flip), order);
+    if (feed === null) {
+      return;
     }
+    if (order === "oldest-first" && !fullyRenderedFeeds.has(feed)) {
+      fullyRenderedFeeds.add(feed);
+      renderAllRows(document);
+    }
+    showOrder(feed, findOrAddButton(document, flip), order);
   }
 
   return { sync };

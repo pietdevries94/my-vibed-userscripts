@@ -15,9 +15,9 @@ function threadIdOf(thread: HTMLElement): string | null {
   return THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id ?? null;
 }
 
-/** The toggle of a thread, added after the name and time of its first comment when it is not there yet. */
+/** The toggle of a thread, added after the time of its first comment when it is not there yet. */
 function findOrAddToggle(
-  { header, nameAndTime, thread }: FeedThread,
+  { header, thread, timeBox }: FeedThread,
   onClick: (thread: HTMLElement) => void,
 ): HTMLButtonElement {
   const existing = header.querySelector<HTMLButtonElement>(`.${TOGGLE_CLASS}`);
@@ -28,7 +28,7 @@ function findOrAddToggle(
   toggle.addEventListener("click", () => {
     onClick(thread);
   });
-  nameAndTime.append(toggle);
+  timeBox.append(toggle);
   return toggle;
 }
 

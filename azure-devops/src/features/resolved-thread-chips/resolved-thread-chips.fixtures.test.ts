@@ -40,9 +40,8 @@ test(
     const chips = document.querySelectorAll(".fix-ado-resolved-chip");
     assert.equal(chips.length, 1);
     const [chip] = chips;
-    assert.ok(
-      chip?.parentElement?.parentElement === status.closest(".repos-discussion-comment-header"),
-    );
+    const header = status.closest(".repos-discussion-comment-header");
+    assert.ok(chip?.parentElement?.parentElement?.parentElement === header);
     assert.ok(chip.previousElementSibling?.querySelector("time") !== null);
   },
 );

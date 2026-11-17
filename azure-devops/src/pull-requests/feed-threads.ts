@@ -12,8 +12,11 @@ interface FeedThread {
   thread: HTMLElement;
   /** The header of its first comment: who wrote it, when, and the thread's status dropdown. */
   header: HTMLElement;
-  /** The name and time in that header. The script adds its chip and toggle after them. */
-  nameAndTime: Element;
+  /**
+   * The box of the time in that header. The script adds its chip and toggle there, after the
+   * time. In a narrow window the time sits under the name, and so do they.
+   */
+  timeBox: Element;
   isResolved: boolean;
 }
 
@@ -23,8 +26,9 @@ function feedThreadOf(thread: HTMLElement): FeedThread | null {
   if (header === null || nameAndTime === null) {
     return null;
   }
+  const timeBox = nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime;
   const status = header.querySelector(STATUS_SELECTOR)?.textContent.trim();
-  return { header, isResolved: status === RESOLVED_STATUS, nameAndTime, thread };
+  return { header, isResolved: status === RESOLVED_STATUS, thread, timeBox };
 }
 
 /** Every thread element of the feed, also one whose comments are still loading. */

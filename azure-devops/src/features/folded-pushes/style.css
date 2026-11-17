@@ -67,3 +67,9 @@
 [data-fix-ado-push="folded"] .iteration-card-header ~ * {
   display: none;
 }
+
+/* Azure DevOps keeps the height a push had when it loaded, as a min-height on its row. A
+   folded push drops it. */
+.activity-feed-list [style*="min-height"]:has([data-fix-ado-push="folded"]) {
+  min-height: 0 !important;
+}

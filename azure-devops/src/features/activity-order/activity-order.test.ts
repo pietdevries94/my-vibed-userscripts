@@ -119,3 +119,41 @@ test("a page without an activity feed gets no button", () => {
   page.sync();
   assert.equal(page.document.querySelector(".fix-ado-activity-order"), null);
 });
+
+/** How often the page heard Ctrl+Alt+V, Azure DevOps's key that renders every row of a list. */
+function renderAllPresses(document: Document): () => number {
+  let presses = 0;
+  document.addEventListener("keydown", (event) => {
+    if (event.ctrlKey && event.altKey && event.key === "v") {
+      presses += 1;
+    }
+  });
+  return () => presses;
+}
+
+test("a feed shown oldest first has Azure DevOps render all its rows, once", () => {
+  const page = overviewPage();
+  const presses = renderAllPresses(page.document);
+  page.sync();
+  page.sync();
+  assert.equal(presses(), 1);
+});
+
+test("a feed shown newest first keeps Azure DevOps's partial rendering until it flips", () => {
+  const page = overviewPage("newest-first");
+  const presses = renderAllPresses(page.document);
+  page.sync();
+  assert.equal(presses(), 0);
+  page.button().click();
+  page.button().click();
+  assert.equal(presses(), 1);
+});
+
+test("a feed that Azure DevOps rendered again has all its rows rendered again", () => {
+  const page = overviewPage();
+  const presses = renderAllPresses(page.document);
+  page.sync();
+  page.document.body.innerHTML = OVERVIEW;
+  page.sync();
+  assert.equal(presses(), 2);
+});
