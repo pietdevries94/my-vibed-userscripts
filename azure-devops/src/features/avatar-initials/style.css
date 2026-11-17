@@ -23,3 +23,10 @@
   font-weight: 600;
   letter-spacing: 0.02em;
 }
+
+/* A text field's prefix pads the avatar on the left, which stretches the circle into an oval.
+   Margin keeps the avatar in the same spot. Azure DevOps sets padding-left 4px, margin-left 7px. */
+.bolt-textfield .prefix[data-fix-ado-initials] {
+  padding-left: 0;
+  margin-left: 11px;
+}

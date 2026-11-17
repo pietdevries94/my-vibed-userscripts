@@ -1,6 +1,6 @@
 // The fake Azure DevOps, on the shared fake-site base. `npm run dev azure-devops` starts it.
 // Pages: the board, the repository pull request list, the pull request inbox, a pull
-// request and a pipeline run's views, from the fixtures. API: the GET requests the script sends, answered from the fixtures and
+// request, a work item and a pipeline run's views, from the fixtures. API: the GET requests the script sends, answered from the fixtures and
 // the state the actions change. Open http://localhost:8787/__dev for links.
 import { BOARD_STYLE, PULL_REQUEST_STYLE, RUN_STYLE } from "./styles.ts";
 import type { FakeRequest, FakeResponse } from "../../shared/dev/fake-site/server.ts";
@@ -28,6 +28,7 @@ const HTTP_NOT_FOUND = 404;
 const BOARD_PATH = "/fake-org/text-2/_boards/board/t/text-3/Stories";
 const INBOX_PATH = "/fake-org/_pulls";
 const CREATE_PATH = "/fake-org/fake-project/_git/fake-repository/pullrequestcreate";
+const WORK_ITEM_PATH = "/fake-org/fake-project/_workitems/edit/1001/";
 const RUN_PAGES = {
   log: "pipeline-log",
   steps: "pipeline-steps",
@@ -41,6 +42,7 @@ const PAGE_PATHS: [Page, (pathname: string) => boolean][] = [
   ["pr-create", (pathname) => /\/_git\/[^/]+\/pullrequestcreate$/u.test(pathname)],
   ["pr-inbox", (pathname) => pathname.endsWith("/_pulls")],
   ["board", (pathname) => pathname.includes("/_boards/board/")],
+  ["work-item", (pathname) => /\/_workitems\/edit\/\d+\/?$/u.test(pathname)],
 ];
 
 /** The page at a URL, or null for an API path or an unknown page. */
@@ -68,7 +70,7 @@ function styleOf(page: Page): string {
   if (page === "pr-list" || page === "pr-inbox") {
     return `${PULL_REQUEST_STYLE}\n${statusColorStyle(page)}`;
   }
-  if (page === "pr-detail" || page === "pr-files" || page === "pr-create") {
+  if (page === "pr-detail" || page === "pr-files" || page === "pr-create" || page === "work-item") {
     return pageCss(page) ?? PULL_REQUEST_STYLE;
   }
   return RUN_STYLE;
@@ -246,6 +248,7 @@ const PAGES: Page[] = [
   "pipeline-summary",
   "pipeline-steps",
   "pipeline-log",
+  "work-item",
 ];
 
 function respond(request: FakeRequest): FakeResponse | null {
@@ -280,6 +283,7 @@ startFakeSite(
         path: `${pullRequestDetailPath() ?? "/fake-org/text-16/_git/text-17/pullrequest/1003"}?_a=files`,
       },
       { label: "New pull request", path: CREATE_PATH },
+      { label: "Work item", path: WORK_ITEM_PATH },
       { label: "Theme panel", path: THEME_PATH },
       { label: "Theme panel closed", path: `${THEME_PATH}?panel=closed` },
     ],

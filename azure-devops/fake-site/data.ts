@@ -19,7 +19,8 @@ type Page =
   | "pr-create"
   | "pipeline-summary"
   | "pipeline-steps"
-  | "pipeline-log";
+  | "pipeline-log"
+  | "work-item";
 
 /** A policy evaluations response as the capture recorded it. */
 interface CapturedEvaluations {
@@ -76,6 +77,8 @@ const PAGE_FIXTURES: Partial<Record<Page, string>> = {
   "pr-detail": "pr-detail-warnings",
   // The Files tab with a comment box open on a line.
   "pr-files": "pr-files-composer",
+  // A user story, with the assignee's avatar in the header.
+  "work-item": "work-item-work-item-header",
 };
 const DEFAULT_PULL_REQUEST_CAPTURE = "warnings";
 const DEFAULT_FILES_CAPTURE = "composer";

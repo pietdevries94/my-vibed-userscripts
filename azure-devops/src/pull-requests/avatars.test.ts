@@ -43,6 +43,19 @@ test("the same name has the same colour everywhere", () => {
   assert.notEqual(first, "");
 });
 
+test("a name with the sign-in address after it has the colour of the name alone", () => {
+  const page = pageWith(`
+    <div class="bolt-coin" aria-label="Holt, Mira"></div>
+    <div class="bolt-coin" aria-label="Holt, Mira <mira.holt@example.com>"></div>
+    <div class="bolt-coin" aria-label="Holt, Mira mira.holt@example.com"></div>
+  `);
+  showInitialsOnAvatars(page.document);
+  const [nameOnly, withBrackets, withAddress] = page.hues();
+  assert.equal(withBrackets, nameOnly);
+  assert.equal(withAddress, nameOnly);
+  assert.deepEqual(page.initials(), ["MH", "MH", "MH"]);
+});
+
 test("the name comes from the image when the avatar has no label", () => {
   const page = pageWith(
     `<div class="bolt-coin"><img class="bolt-coin-content" alt="Holt, Mira"></div>`,
