@@ -1,6 +1,18 @@
+/* The toggle sits before the author of the first comment, level with the avatar, or before the
+   file's icon on an open thread on a file. The box it is in gives up some room on the left. */
 .fix-ado-thread-toggle {
   flex: none;
-  margin-left: 4px;
+  align-self: flex-start;
+  margin-right: 4px;
+}
+
+.comment-file-header-title > .fix-ado-thread-toggle {
+  align-self: center;
+}
+
+.repos-discussion-comment:has(> .flex-column > .flex-row > .fix-ado-thread-toggle),
+.comment-file-header-title:has(> .fix-ado-thread-toggle) {
+  padding-left: 8px;
 }
 
 /* A collapsed thread shows the header of its first comment: who wrote it, when, and the
@@ -32,6 +44,16 @@
 }
 
 [data-fix-ado-thread="collapsed"] .repos-discussion-comment > .flex-column > .flex-row {
+  align-items: center;
+}
+
+[data-fix-ado-thread="collapsed"] .fix-ado-thread-toggle {
+  align-self: center;
+}
+
+/* One line, also in a narrow window, where Azure DevOps puts the time under the name. */
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header > :first-child {
+  flex-direction: row;
   align-items: center;
 }
 

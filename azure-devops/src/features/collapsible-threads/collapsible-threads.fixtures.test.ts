@@ -55,14 +55,14 @@ test(
 );
 
 test(
-  "in the captured narrow Overview, a toggle sits beside the time, not on a line of its own",
+  "in the captured narrow Overview, an open thread on a file has its toggle before the file's icon",
   { skip: fixtures.skip },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail-small");
     document.querySelector(".fix-ado-thread-toggle")?.remove();
     createCollapsibleThreads({ document }).sync();
     const toggle = document.querySelector(".fix-ado-thread-toggle");
-    assert.ok(toggle?.parentElement?.querySelector("time") !== null);
-    assert.ok(toggle?.parentElement?.classList.contains("flex-row") === true);
+    assert.ok(toggle?.parentElement?.classList.contains("comment-file-header-title") === true);
+    assert.equal(toggle.previousElementSibling, null);
   },
 );

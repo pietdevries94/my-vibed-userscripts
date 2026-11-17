@@ -8,15 +8,27 @@ function comment(author: string, status: string | null): string {
     status === null
       ? ""
       : `<div class="bolt-dropdown-expandable"><button><div class="bolt-dropdown-expandable-button-label">${status}</div></button></div>`;
-  return `<div class="repos-comment-viewer"><div class="repos-discussion-comment-header flex-row">
-    <div class="scroll-hidden flex-row flex-center"><span>${author}</span><div><time>an hour ago</time></div></div>
-    <div class="flex-row justify-end">${statusDropdown}</div>
-  </div><p>Should the total include tax?</p></div>`;
+  return `<div class="repos-comment-viewer"><div class="repos-discussion-comment"><div class="flex-column"><div class="flex-row">
+    <div><div class="bolt-coin repos-comment-header-persona"></div></div>
+    <div class="repos-comment-editor-fit flex-column">
+      <div class="repos-discussion-comment-header flex-row">
+        <div class="scroll-hidden flex-row flex-center"><span>${author}</span><div><time>an hour ago</time></div></div>
+        <div class="flex-row justify-end">${statusDropdown}</div>
+      </div><p>Should the total include tax?</p>
+    </div>
+  </div></div></div></div>`;
 }
 
-/** A thread of two comments with its reply box. Only the first comment has the status dropdown. */
-function thread(threadId: number, status: string): string {
-  return `<tr class="bolt-timeline-row"><td><div class="repos-discussion-thread">
+/**
+ * A thread of two comments with its reply box. Only the first comment has the status dropdown.
+ * A thread on a file has the file's header before it.
+ */
+function thread(threadId: number, status: string, isOnFile = false): string {
+  const fileHeader = isOnFile
+    ? `<div class="comment-file-header"><div class="comment-file-header-title flex-row">
+        <div class="file-icon"></div><a>invoice.ts</a></div></div>`
+    : "";
+  return `<tr class="bolt-timeline-row"><td>${fileHeader}<div class="repos-discussion-thread">
     ${comment("Quill Barrow", status)}${comment("Marren Tolk", null)}
     <div class="repos-discussion-thread-reply"><input class="threadId-${threadId} bolt-textfield-input"></div>
   </div></td></tr>`;
@@ -56,7 +68,7 @@ test("a resolved thread starts collapsed, any other thread starts open", () => {
   assert.deepEqual(page.states(), ["collapsed", "open", "open"]);
 });
 
-test("every thread has one toggle, in the header of its first comment", () => {
+test("every thread has one toggle, before the author of its first comment", () => {
   const page = overviewPage(thread(11, "Resolved") + thread(12, "Active"));
   page.sync();
   page.sync();
@@ -66,8 +78,24 @@ test("every thread has one toggle, in the header of its first comment", () => {
   assert.equal(collapsed?.title, "Expand thread");
   assert.equal(open?.getAttribute("aria-expanded"), "true");
   assert.equal(open?.title, "Collapse thread");
-  const header = collapsed?.closest(".repos-discussion-comment-header");
-  assert.equal(header?.closest(".repos-comment-viewer")?.previousElementSibling, null);
+  for (const toggle of [collapsed, open]) {
+    assert.ok(toggle?.nextElementSibling?.querySelector(".repos-comment-header-persona") !== null);
+    assert.equal(toggle?.closest(".repos-comment-viewer")?.previousElementSibling, null);
+  }
+});
+
+test("an open thread on a file has its toggle before the file's icon, a collapsed one before the author", () => {
+  const page = overviewPage(thread(11, "Active", true));
+  page.sync();
+  const [toggle] = page.toggles();
+  assert.equal(toggle?.parentElement?.className, "comment-file-header-title flex-row");
+  assert.equal(toggle?.nextElementSibling?.className, "file-icon");
+  toggle?.click();
+  assert.deepEqual(page.states(), ["collapsed"]);
+  assert.ok(toggle?.nextElementSibling?.querySelector(".repos-comment-header-persona") !== null);
+  toggle?.click();
+  assert.equal(toggle?.nextElementSibling?.className, "file-icon");
+  assert.equal(page.toggles().length, 1);
 });
 
 test("a click on the toggle collapses an open thread and opens a collapsed one", () => {

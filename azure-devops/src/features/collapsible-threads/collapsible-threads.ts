@@ -6,6 +6,10 @@ const TOGGLE_CLASS = "fix-ado-thread-toggle";
 const TOGGLE_LABELS = { folded: "Expand thread", open: "Collapse thread" };
 /** The reply box's field carries the thread's id in a class name. */
 const THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u;
+const FILE_HEADER_SELECTOR = ".comment-file-header";
+const FILE_TITLE_SELECTOR = ".comment-file-header-title";
+/** The column of a comment with its header and text. The author's avatar sits before it. */
+const AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
 
 type ThreadState = "collapsed" | "open";
 
@@ -15,26 +19,52 @@ function threadIdOf(thread: HTMLElement): string | null {
   return THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id ?? null;
 }
 
-/** The toggle of a thread, added after the time of its first comment when it is not there yet. */
-function findOrAddToggle(
-  { header, thread, timeBox }: FeedThread,
+/** The header with the file's name above a thread on a file, or null for a thread on the pull request. */
+function fileHeaderOf(thread: HTMLElement): Element | null {
+  const before = thread.previousElementSibling;
+  return before?.matches(FILE_HEADER_SELECTOR) === true ? before : null;
+}
+
+/** The toggle of a thread, made when it has none yet. Where it goes depends on the thread's state. */
+function findOrCreateToggle(
+  { header, thread }: FeedThread,
   onClick: (thread: HTMLElement) => void,
 ): HTMLButtonElement {
-  const existing = header.querySelector<HTMLButtonElement>(`.${TOGGLE_CLASS}`);
-  if (existing !== null) {
+  const existing =
+    thread.querySelector<HTMLButtonElement>(`.${TOGGLE_CLASS}`) ??
+    fileHeaderOf(thread)?.querySelector<HTMLButtonElement>(`.${TOGGLE_CLASS}`);
+  if (existing !== null && existing !== undefined) {
     return existing;
   }
-  const toggle = createFoldToggle(thread.ownerDocument, TOGGLE_CLASS);
+  const toggle = createFoldToggle(header.ownerDocument, TOGGLE_CLASS);
   toggle.addEventListener("click", () => {
     onClick(thread);
   });
-  timeBox.append(toggle);
   return toggle;
 }
 
 /**
- * The threads in the activity feed of a pull request's Overview, each with a toggle that
- * collapses it to the header of its first comment, also a thread on a file (style.css). A resolved thread starts
+ * Where the toggle goes: before the file's icon on an open thread on a file, or else before
+ * the author of the first comment. A collapsed thread hides its file's header.
+ */
+function toggleBoxOf({ header, thread }: FeedThread, state: ThreadState): Element {
+  const fileTitle = fileHeaderOf(thread)?.querySelector(FILE_TITLE_SELECTOR) ?? null;
+  if (state === "open" && fileTitle !== null) {
+    return fileTitle;
+  }
+  return header.closest(AUTHOR_COLUMN_SELECTOR)?.parentElement ?? header;
+}
+
+/** Puts the toggle first in its box. Moves it only when it is somewhere else, to keep the page's mutation observer quiet. */
+function placeToggle(toggle: HTMLButtonElement, box: Element): void {
+  if (box.firstElementChild !== toggle) {
+    box.prepend(toggle);
+  }
+}
+
+/**
+ * The threads in the activity feed of a pull request's Overview, each with a toggle before its
+ * author that collapses it to the header of its first comment, also a thread on a file (style.css). A resolved thread starts
  * collapsed. A thread the owner opened or collapsed stays that way until a reload.
  */
 function createCollapsibleThreads({ document }: { document: Document }): { sync: () => void } {
@@ -59,7 +89,9 @@ function createCollapsibleThreads({ document }: { document: Document }): { sync:
     if (feedThread.thread.dataset.fixAdoThread !== state) {
       feedThread.thread.dataset.fixAdoThread = state;
     }
-    showFoldToggleState(findOrAddToggle(feedThread, flip), state === "open", TOGGLE_LABELS);
+    const toggle = findOrCreateToggle(feedThread, flip);
+    placeToggle(toggle, toggleBoxOf(feedThread, state));
+    showFoldToggleState(toggle, state === "open", TOGGLE_LABELS);
   }
 
   function sync(): void {
