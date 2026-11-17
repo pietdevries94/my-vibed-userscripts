@@ -4,11 +4,11 @@ import { apiBasePath } from "./pull-requests/pull-request-link.ts";
 import { createAdoClient } from "./core/ado-client.ts";
 import { createFeatureRunner } from "./core/feature-runner.ts";
 import { createSettingsPanel } from "./core/settings-panel.ts";
+import { createSyncBeforePaint } from "./core/sync-before-paint.ts";
 import { parsePage } from "./core/page.ts";
 import { reloadWhenIdle } from "./core/reload-when-idle.ts";
 import settingsPanelStyle from "./core/settings-panel.css";
 
-const DOM_SETTLE_MS = 200;
 const TIMER_INTERVAL_MS = 5000;
 const IS_ON_BY_DEFAULT = true;
 
@@ -79,14 +79,17 @@ const sync = (reason: SyncReason): void => {
   runner.sync(reason);
 };
 
-// ADO is a single-page app that re-renders its content. Re-apply after every DOM change.
-let settleTimer: ReturnType<typeof setTimeout> | null = null;
-new MutationObserver(() => {
-  if (settleTimer !== null) {
-    clearTimeout(settleTimer);
-  }
-  settleTimer = setTimeout(sync, DOM_SETTLE_MS, "dom-change");
-}).observe(document.body, { childList: true, subtree: true });
+// ADO is a single-page app that re-renders its content. Re-apply after every DOM change,
+// before the browser paints it. A hidden tab runs no animation frames; it syncs when it shows.
+const syncOnDomChange = createSyncBeforePaint(
+  (callback) => {
+    requestAnimationFrame(callback);
+  },
+  () => {
+    sync("dom-change");
+  },
+);
+new MutationObserver(syncOnDomChange).observe(document.body, { childList: true, subtree: true });
 
 setInterval(sync, TIMER_INTERVAL_MS, "timer");
 document.addEventListener("visibilitychange", () => {
