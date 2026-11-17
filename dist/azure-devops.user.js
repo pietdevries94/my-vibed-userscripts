@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.13.2
+// @version      1.13.3
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse and a Resolved chip on resolved ones, which start collapsed, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -4662,7 +4662,7 @@ ${content}`
   }
 
   // azure-devops/src/pull-requests/reviewers.ts
-  var EMAIL_ADDRESS = /^(?<localPart>[^\s@]+)@[^\s@]+$/u;
+  var EMAIL_ADDRESS = /^(?<localPart>[^\s@]+)@[^\s@]+$/u, TRAILING_SIGN_IN_ADDRESS = /\s+<?[^\s<>@]+@[^\s<>@]+>?$/u;
   function personOrTeamName(displayName) {
     return displayName.replace(/^\[[^\]]*\]\\/u, "").replaceAll(/\([^)]*\)/gu, "").trim();
   }
@@ -4673,13 +4673,17 @@ ${content}`
     let codePoint = (word ?? "").codePointAt(0);
     return codePoint === void 0 ? "" : String.fromCodePoint(codePoint);
   }
+  function nameInLabel(label) {
+    let localPart = EMAIL_ADDRESS.exec(label.trim())?.groups?.localPart;
+    return localPart === void 0 ? personOrTeamName(label.trim().replace(TRAILING_SIGN_IN_ADDRESS, "")) : localPart.replaceAll(/[._-]+/gu, " ");
+  }
   function initialsOf(displayName) {
-    let localPart = EMAIL_ADDRESS.exec(displayName.trim())?.groups?.localPart, name = localPart === void 0 ? personOrTeamName(displayName) : localPart.replaceAll(/[._-]+/gu, " "), commaIndex = name.indexOf(","), isSurnameFirst = commaIndex !== -1, firstNames = wordsOf(isSurnameFirst ? name.slice(commaIndex + 1) : name), surnameWords = isSurnameFirst ? wordsOf(name.slice(0, commaIndex)) : firstNames.slice(1);
+    let name = nameInLabel(displayName), commaIndex = name.indexOf(","), isSurnameFirst = commaIndex !== -1, firstNames = wordsOf(isSurnameFirst ? name.slice(commaIndex + 1) : name), surnameWords = isSurnameFirst ? wordsOf(name.slice(0, commaIndex)) : firstNames.slice(1);
     return [firstNames[0], surnameWords.at(-1)].map((word) => firstCharacter(word)).join("").toUpperCase();
   }
-  function hueOf(name) {
-    let hash = 2166136261;
-    for (let character of name.trim().toLowerCase())
+  function hueOf(label) {
+    let nameKey = wordsOf(nameInLabel(label).replaceAll(",", " ").toLowerCase()).toSorted().join(" "), hash = 2166136261;
+    for (let character of nameKey)
       hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16777619) >>> 0;
     return hash % 360;
   }
@@ -5408,20 +5412,17 @@ ${content}`
   var PULL_REQUEST_FEATURES = [pipelineTab, starredReviewers, review];
 
   // azure-devops/src/pull-requests/avatars.ts
-  var AVATAR_SELECTOR = ".bolt-coin, .vss-Persona:not(.project-persona)", TRAILING_SIGN_IN_ADDRESS = /\s+<?[^\s<>@]+@[^\s<>@]+>?$/u;
+  var AVATAR_SELECTOR = ".bolt-coin, .vss-Persona:not(.project-persona)";
   function avatarName(avatar) {
     let label = avatar.getAttribute("aria-label") ?? "", imageAlt = avatar.querySelector("img")?.getAttribute("alt") ?? "";
     return (label === "" ? imageAlt : label).trim();
-  }
-  function withoutSignInAddress(name) {
-    return name.replace(TRAILING_SIGN_IN_ADDRESS, "");
   }
   function markAvatar(avatar, initials, hue) {
     initials ? avatar.dataset.fixAdoInitials = initials : delete avatar.dataset.fixAdoInitials, avatar.style.setProperty("--fix-ado-hue", hue || null), initials && avatar.offsetWidth > 0 && avatar.style.setProperty("--fix-ado-avatar-size", `${avatar.offsetWidth}px`);
   }
   function showInitialsOnAvatars(root) {
     for (let avatar of root.querySelectorAll(AVATAR_SELECTOR)) {
-      let name = avatarName(avatar), initials = initialsOf(name), shownInitials = avatar.dataset.fixAdoInitials ?? "", hue = initials ? String(hueOf(withoutSignInAddress(name))) : "";
+      let name = avatarName(avatar), initials = initialsOf(name), shownInitials = avatar.dataset.fixAdoInitials ?? "", hue = initials ? String(hueOf(name)) : "";
       shownInitials === initials && avatar.style.getPropertyValue("--fix-ado-hue") === hue || markAvatar(avatar, initials, hue);
     }
   }
