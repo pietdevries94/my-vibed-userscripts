@@ -15,6 +15,12 @@
   padding-left: 8px;
 }
 
+/* Before the author, the toggle keeps the offset it has before a file's icon: the comment's own
+   box sits 16px further in (a 4px margin and 12px padding). */
+.repos-discussion-comment .fix-ado-thread-toggle {
+  margin-left: -16px;
+}
+
 /* A collapsed thread shows the header of its first comment: who wrote it, when, and the
    thread's Resolved chip. Its text, the other comments and the reply box hide. */
 [data-fix-ado-thread="collapsed"] .repos-comment-viewer:not(:first-child),
