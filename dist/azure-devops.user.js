@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.13.4
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse and a Resolved chip on resolved ones, which start collapsed, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.14.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, a Resolved chip on resolved ones, which start collapsed, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -189,13 +189,19 @@
   }
 
   // azure-devops/src/pull-requests/feed-threads.ts
-  var FEED_THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread", HEADER_SELECTOR = ".repos-discussion-comment-header", STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label", RESOLVED_STATUS = "Resolved";
+  var FEED_THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread", HEADER_SELECTOR = ".repos-discussion-comment-header", STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label", RESOLVED_STATUS = "Resolved", UNRESOLVED_STATUSES = /* @__PURE__ */ new Set(["Active", "Pending"]);
   function feedThreadOf(thread) {
     let header = thread.querySelector(HEADER_SELECTOR), nameAndTime = header?.firstElementChild ?? null;
     if (header === null || nameAndTime === null)
       return null;
-    let timeBox = nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime, status = header.querySelector(STATUS_SELECTOR)?.textContent.trim();
-    return { header, isResolved: status === RESOLVED_STATUS, thread, timeBox };
+    let timeBox = nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime, status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "";
+    return {
+      header,
+      isResolved: status === RESOLVED_STATUS,
+      isUnresolved: UNRESOLVED_STATUSES.has(status),
+      thread,
+      timeBox
+    };
   }
   var feedThreadElements = (document2) => [
     ...document2.querySelectorAll(FEED_THREAD_SELECTOR)
@@ -276,7 +282,7 @@
 }
 
 /* A collapsed thread shows the header of its first comment: who wrote it, when, and the
-   thread's Resolved chip. Its text, the other comments and the reply box hide. */
+   thread's Resolved or Unresolved chip. Its text, the other comments and the reply box hide. */
 [data-fix-ado-thread="collapsed"] .repos-comment-viewer:not(:first-child),
 [data-fix-ado-thread="collapsed"] .repos-discussion-thread-reply,
 [data-fix-ado-thread="collapsed"] .repos-discussion-comment-header ~ * {
@@ -1417,16 +1423,19 @@ ${issue.message ?? ""}`;
   };
 
   // azure-devops/src/features/resolved-thread-chips/resolved-thread-chips.ts
-  var CHIP_CLASS = "fix-ado-resolved-chip";
-  function createChip(document2) {
+  var CHIP_CLASS = "fix-ado-thread-chip", UNRESOLVED_LABEL = "Unresolved", RESOLVED_CHIP = { className: "fix-ado-resolved-chip", label: RESOLVED_STATUS }, UNRESOLVED_CHIP = { className: "fix-ado-unresolved-chip", label: UNRESOLVED_LABEL };
+  function chipKindOf(feedThread) {
+    return feedThread?.isResolved === !0 ? RESOLVED_CHIP : feedThread?.isUnresolved === !0 ? UNRESOLVED_CHIP : null;
+  }
+  function createChip(document2, { className, label }) {
     let chip = document2.createElement("div");
-    chip.className = `${CHIP_CLASS} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
+    chip.className = `${CHIP_CLASS} ${className} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
     let content = document2.createElement("div");
-    return content.className = "bolt-pill-content text-ellipsis", content.textContent = RESOLVED_STATUS, chip.append(content), chip;
+    return content.className = "bolt-pill-content text-ellipsis", content.textContent = label, chip.append(content), chip;
   }
   function syncThread(thread) {
-    let feedThread = feedThreadOf(thread), chip = thread.querySelector(`.${CHIP_CLASS}`);
-    feedThread?.isResolved !== !0 ? chip?.remove() : chip === null && feedThread.timeBox.append(createChip(thread.ownerDocument));
+    let feedThread = feedThreadOf(thread), kind = chipKindOf(feedThread), chip = thread.querySelector(`.${CHIP_CLASS}`);
+    kind !== null && chip?.classList.contains(kind.className) === !0 || (chip?.remove(), feedThread !== null && kind !== null && feedThread.timeBox.append(createChip(thread.ownerDocument, kind)));
   }
   function createResolvedThreadChips({ document: document2 }) {
     function sync4() {
@@ -1437,20 +1446,29 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/resolved-thread-chips/style.css
-  var style_default5 = `/* The Resolved chip on a resolved thread: Azure DevOps's pill, in its colour for success. */
+  var style_default5 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success,
+   Unresolved in its colour for warnings. */
+.bolt-pill.fix-ado-thread-chip {
+  font-weight: 600;
+}
+
 .bolt-pill.fix-ado-resolved-chip {
   border-color: var(--component-status-success, rgb(85, 163, 98));
   color: var(--component-status-success, rgb(85, 163, 98));
-  font-weight: 600;
+}
+
+.bolt-pill.fix-ado-unresolved-chip {
+  border-color: var(--status-warning-text, rgba(184, 94, 6, 1));
+  color: var(--status-warning-text, rgba(184, 94, 6, 1));
 }
 `;
 
   // azure-devops/src/features/resolved-thread-chips/index.ts
   var resolvedThreadChips = {
-    change: { kind: "new", version: "1.12.0" },
-    description: "A Resolved chip on every resolved thread on a pull request's Overview.",
+    change: { kind: "updated", version: "1.14.0" },
+    description: "A Resolved chip on every resolved thread on a pull request's Overview, and an Unresolved chip on every active or pending one.",
     id: "resolved-thread-chips",
-    name: "Resolved chip on threads",
+    name: "Resolved and Unresolved chips on threads",
     start({ document: document2, isInFrame: isInFrame2 }) {
       if (isInFrame2)
         return null;
