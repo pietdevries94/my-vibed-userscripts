@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.14.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, a Resolved chip on resolved ones, which start collapsed, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.15.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -208,7 +208,7 @@
   ];
 
   // azure-devops/src/features/collapsible-threads/collapsible-threads.ts
-  var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u, FILE_HEADER_SELECTOR = ".comment-file-header", FILE_TITLE_SELECTOR = ".comment-file-header-title", AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
+  var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u, FILE_HEADER_SELECTOR = ".comment-file-header", FILE_TITLE_SELECTOR = ".comment-file-header-title", AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit", FILTER_SELECTOR2 = ".repos-activity-filter-dropdown", EXPAND_ALL_CLASS = "fix-ado-expand-all-threads", EXPAND_ALL_LABEL = "Expand all threads";
   function threadIdOf(thread) {
     let field = thread.querySelector(".repos-discussion-thread-reply input");
     return THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id ?? null;
@@ -233,10 +233,28 @@
   function placeToggle(toggle, box) {
     box.firstElementChild !== toggle && box.prepend(toggle);
   }
+  function createExpandAllBox(document2, onClick2) {
+    let text = Object.assign(document2.createElement("span"), {
+      className: "bolt-button-text",
+      textContent: EXPAND_ALL_LABEL
+    }), button2 = document2.createElement("button");
+    button2.type = "button", button2.className = `${EXPAND_ALL_CLASS} bolt-button enabled bolt-focus-treatment`, button2.append(text), button2.addEventListener("click", onClick2);
+    let box = Object.assign(document2.createElement("div"), {
+      className: `${EXPAND_ALL_CLASS}-box margin-bottom-16 inline-flex-row`
+    });
+    return box.append(button2), box;
+  }
+  function addExpandAllButton(document2, onClick2) {
+    let bar = document2.querySelector(FILTER_SELECTOR2)?.parentElement;
+    bar != null && bar.querySelector(`.${EXPAND_ALL_CLASS}`) === null && bar.prepend(createExpandAllBox(document2, onClick2));
+  }
   function createCollapsibleThreads({ document: document2 }) {
-    let pickedStates = /* @__PURE__ */ new Map();
+    let pickedStates = /* @__PURE__ */ new Map(), isAllExpanded = !1;
     function stateOf({ isResolved, thread }) {
-      return pickedStates.get(threadIdOf(thread) ?? "") ?? (isResolved ? "collapsed" : "open");
+      return pickedStates.get(threadIdOf(thread) ?? "") ?? (isResolved && !isAllExpanded ? "collapsed" : "open");
+    }
+    function expandAll() {
+      pickedStates.clear(), isAllExpanded = !0, sync4();
     }
     function flip(thread) {
       let threadId = threadIdOf(thread);
@@ -249,6 +267,7 @@
       placeToggle(toggle, toggleBoxOf(feedThread, state)), showFoldToggleState(toggle, state === "open", TOGGLE_LABELS);
     }
     function sync4() {
+      addExpandAllButton(document2, expandAll);
       for (let thread of feedThreadElements(document2)) {
         let feedThread = feedThreadOf(thread);
         feedThread !== null && syncThread2(feedThread);
@@ -337,12 +356,19 @@
 .activity-feed-list [style*="min-height"]:has([data-fix-ado-thread="collapsed"]) {
   min-height: 0 !important;
 }
+
+/* Expand all threads sits on the left of the bar above the feed. The bar puts its filters on
+   the right. */
+.fix-ado-expand-all-threads-box {
+  order: -1;
+  margin-right: auto;
+}
 `;
 
   // azure-devops/src/features/collapsible-threads/index.ts
   var collapsibleThreads = {
-    change: { kind: "new", version: "1.12.0" },
-    description: "A button on every thread on a pull request's Overview collapses it. Resolved threads start collapsed.",
+    change: { kind: "updated", version: "1.15.0" },
+    description: "A button on every thread on a pull request's Overview collapses it. Resolved threads start collapsed. Expand all threads, above the feed, opens every thread, also ones that load later.",
     id: "collapsible-threads",
     name: "Collapsible threads",
     start({ document: document2, isInFrame: isInFrame2 }) {
