@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.15.0
+// @version      1.15.1
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -4922,8 +4922,28 @@ ${content}`
     input.dispatchEvent(new KeyboardEventOfPage("keydown", init)), input.dispatchEvent(new KeyboardEventOfPage("keyup", init));
   }
 
+  // azure-devops/src/core/next-dom-change.ts
+  function stopNothing() {
+  }
+  function onNextDomChange(document2, callback) {
+    let view = document2.defaultView;
+    if (view === null)
+      return stopNothing;
+    let observer = new view.MutationObserver(() => {
+      observer.disconnect(), callback();
+    });
+    return observer.observe(document2, {
+      attributes: !0,
+      characterData: !0,
+      childList: !0,
+      subtree: !0
+    }), () => {
+      observer.disconnect();
+    };
+  }
+
   // azure-devops/src/features/starred-reviewers/starred-reviewer-chips.ts
-  var SUGGESTION_POLL_MS = 250, PICK_TIMEOUT_MS = 5e3, PICKING_CLASS = "fix-ado-starred-picking", NOT_FOUND_TITLE = "Not found in the reviewer field's suggestions. Pick them there.";
+  var STEP_WAIT_MS = 250, PICK_TIMEOUT_MS = 5e3, PICKING_CLASS = "fix-ado-starred-picking", NOT_FOUND_TITLE = "Not found in the reviewer field's suggestions. Pick them there.";
   function searchTextOf(identity) {
     return identity.signInAddress === "" ? personOrTeamName(identity.displayName) : identity.signInAddress;
   }
@@ -4949,21 +4969,37 @@ ${content}`
     let { input } = pendingPick.field;
     return pendingPick.step === "clicked" && input.getAttribute("aria-activedescendant") === suggestion.id ? (pressEnterIn(input), "entered") : null;
   }
-  function pickSuggestion(state, pendingPick) {
-    let { document: document2, schedule: schedule2 } = state.options, { field, identity } = pendingPick, suggestion = isInField(document2, identity) ? null : findSuggestion(document2, field.input, identity), step = suggestion === null ? pendingPick.step : nextStep(pendingPick, suggestion);
-    if (log("Starred reviewers: chip pick", {
+  function takeNextStep(state, pendingPick) {
+    let suggestion = findSuggestion(
+      state.options.document,
+      pendingPick.field.input,
+      pendingPick.identity
+    ), step = suggestion === null ? pendingPick.step : nextStep(pendingPick, suggestion);
+    return log("Starred reviewers: chip pick", {
       from: pendingPick.step,
       hasSuggestion: suggestion !== null,
       to: step
-    }), step === null || isInField(document2, identity)) {
-      finishPick(state, pendingPick, isInField(document2, identity));
+    }), step;
+  }
+  function waitForNextStep(state, pendingPick) {
+    let { document: document2, onNextDomChange: onNextDomChange2, schedule: schedule2 } = state.options;
+    if (isInField(document2, pendingPick.identity)) {
+      finishPick(state, pendingPick, !0);
       return;
     }
-    schedule2(() => {
+    let stopWatching = stopNothing, stopTimer = stopNothing, check2 = (isLastCheck) => {
       runStep(state, pendingPick, () => {
-        pickSuggestion(state, { ...pendingPick, step });
+        let isPicked = isInField(document2, pendingPick.identity), step = isPicked ? pendingPick.step : takeNextStep(state, pendingPick);
+        isPicked || step !== null && (step !== pendingPick.step || isLastCheck) ? (stopTimer(), waitForNextStep(state, { ...pendingPick, step: step ?? pendingPick.step })) : isLastCheck ? finishPick(state, pendingPick, !1) : stopWatching = onNextDomChange2(() => {
+          check2(!1);
+        });
       });
-    }, SUGGESTION_POLL_MS);
+    };
+    stopWatching = onNextDomChange2(() => {
+      check2(!1);
+    }), stopTimer = schedule2(() => {
+      stopTimer = stopNothing, stopWatching(), check2(!0);
+    }, STEP_WAIT_MS);
   }
   function addThroughField(state, field, identity) {
     if (state.activePick !== null)
@@ -4972,11 +5008,7 @@ ${content}`
     state.nextPickId += 1, state.activePick = { identityId: identity.id, pickId: pendingPick.pickId }, state.notFoundIds.delete(identity.id), sync(state), schedule2(() => {
       isActive(state, pendingPick) && (log("Starred reviewers: chip pick timed out"), finishPick(state, pendingPick, !1));
     }, PICK_TIMEOUT_MS), runStep(state, pendingPick, () => {
-      typeInto(field.input, searchTextOf(identity)), schedule2(() => {
-        runStep(state, pendingPick, () => {
-          pickSuggestion(state, pendingPick);
-        });
-      }, SUGGESTION_POLL_MS);
+      typeInto(field.input, searchTextOf(identity)), waitForNextStep(state, pendingPick);
     });
   }
   function onRowClick(state, field, event) {
@@ -5501,7 +5533,13 @@ ${content}`
         },
         schedule,
         store
-      }), chips = createStarredReviewerChips({ document: document2, imageUrlOf, schedule, store });
+      }), chips = createStarredReviewerChips({
+        document: document2,
+        imageUrlOf,
+        onNextDomChange: (callback) => onNextDomChange(document2, callback),
+        schedule,
+        store
+      });
       return {
         sync({ page }) {
           starred.sync(pullRequestOf(page)), chips.sync(page.kind === "pull-request-create");
@@ -6534,6 +6572,16 @@ ${content}`
     };
   }
 
+  // azure-devops/src/core/sync-before-paint.ts
+  function createSyncBeforePaint(requestAnimationFrame2, sync4) {
+    let isPending2 = !1;
+    return () => {
+      isPending2 || (isPending2 = !0, requestAnimationFrame2(() => {
+        isPending2 = !1, sync4();
+      }));
+    };
+  }
+
   // azure-devops/src/core/reload-when-idle.ts
   var LAST_RELOAD_STORAGE_KEY = "fix-ado-last-page-reload";
   function isOwnerBusy(document2) {
@@ -6723,7 +6771,7 @@ ${content}`
 `;
 
   // azure-devops/src/main.ts
-  var DOM_SETTLE_MS = 200, TIMER_INTERVAL_MS = 5e3, IS_ON_BY_DEFAULT = !0, basePath = apiBasePath(location), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, isOn = ({ id }) => GM_getValue(id, IS_ON_BY_DEFAULT), seenChangeKey = ({ id }) => `${id}-seen-change`, settingsPanel = isInFrame ? null : createSettingsPanel({
+  var TIMER_INTERVAL_MS = 5e3, IS_ON_BY_DEFAULT = !0, basePath = apiBasePath(location), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, isOn = ({ id }) => GM_getValue(id, IS_ON_BY_DEFAULT), seenChangeKey = ({ id }) => `${id}-seen-change`, settingsPanel = isInFrame ? null : createSettingsPanel({
     categories: FEATURE_CATEGORIES,
     document,
     isOn,
@@ -6771,10 +6819,15 @@ ${content}`
     }
   }), sync3 = (reason) => {
     settingsPanel?.sync(), runner.sync(reason);
-  }, settleTimer = null;
-  new MutationObserver(() => {
-    settleTimer !== null && clearTimeout(settleTimer), settleTimer = setTimeout(sync3, DOM_SETTLE_MS, "dom-change");
-  }).observe(document.body, { childList: !0, subtree: !0 });
+  }, syncOnDomChange = createSyncBeforePaint(
+    (callback) => {
+      requestAnimationFrame(callback);
+    },
+    () => {
+      sync3("dom-change");
+    }
+  );
+  new MutationObserver(syncOnDomChange).observe(document.body, { childList: !0, subtree: !0 });
   setInterval(sync3, TIMER_INTERVAL_MS, "timer");
   document.addEventListener("visibilitychange", () => {
     isTabActive() && sync3("tab-shown");
