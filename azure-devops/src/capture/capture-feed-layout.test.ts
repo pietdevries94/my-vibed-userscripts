@@ -25,6 +25,7 @@ test("the feed layout names the kind of each row and whether its height is set, 
       "push-folded:0:0:0:0:0:auto",
       "push-open:0:0:0:0:0:set",
     ],
+    windowWidth: 1024,
   });
 });
 

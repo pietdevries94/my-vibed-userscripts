@@ -3,6 +3,8 @@
 // keeps its height when a folded push leaves a gap. Kinds and pixels, never content. Dev file only.
 
 interface FeedLayout {
+  /** The width of the window, since Azure DevOps lays the feed out differently on a narrow one. */
+  windowWidth: number;
   /**
    * Each row of the feed, in order, as "kind:row:cell:timeline:content:card:set or auto".
    * The numbers are heights. "set" is a row or cell with a height in its style.
@@ -46,7 +48,7 @@ function feedLayoutOf(document: Document): FeedLayout | null {
     );
     return [kindOf(row), ...heights, isHeightSet(row) ? "set" : "auto"].join(":");
   });
-  return { rows };
+  return { rows, windowWidth: document.defaultView?.innerWidth ?? 0 };
 }
 
 export { feedLayoutOf };
