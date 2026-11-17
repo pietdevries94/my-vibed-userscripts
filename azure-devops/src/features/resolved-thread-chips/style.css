@@ -1,6 +1,15 @@
-/* The Resolved chip on a resolved thread: Azure DevOps's pill, in its colour for success. */
+/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success,
+   Unresolved in its colour for warnings. */
+.bolt-pill.fix-ado-thread-chip {
+  font-weight: 600;
+}
+
 .bolt-pill.fix-ado-resolved-chip {
   border-color: var(--component-status-success, rgb(85, 163, 98));
   color: var(--component-status-success, rgb(85, 163, 98));
-  font-weight: 600;
+}
+
+.bolt-pill.fix-ado-unresolved-chip {
+  border-color: var(--status-warning-text, rgba(184, 94, 6, 1));
+  color: var(--status-warning-text, rgba(184, 94, 6, 1));
 }

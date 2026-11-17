@@ -6,6 +6,8 @@ const HEADER_SELECTOR = ".repos-discussion-comment-header";
 const STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label";
 /** The word Azure DevOps shows as the status of a resolved thread. */
 const RESOLVED_STATUS = "Resolved";
+/** The statuses of a thread that still waits on someone. Won't fix and Closed are done too. */
+const UNRESOLVED_STATUSES = new Set(["Active", "Pending"]);
 
 /** A thread whose first comment Azure DevOps has rendered. */
 interface FeedThread {
@@ -18,6 +20,7 @@ interface FeedThread {
    */
   timeBox: Element;
   isResolved: boolean;
+  isUnresolved: boolean;
 }
 
 function feedThreadOf(thread: HTMLElement): FeedThread | null {
@@ -27,8 +30,14 @@ function feedThreadOf(thread: HTMLElement): FeedThread | null {
     return null;
   }
   const timeBox = nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime;
-  const status = header.querySelector(STATUS_SELECTOR)?.textContent.trim();
-  return { header, isResolved: status === RESOLVED_STATUS, thread, timeBox };
+  const status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "";
+  return {
+    header,
+    isResolved: status === RESOLVED_STATUS,
+    isUnresolved: UNRESOLVED_STATUSES.has(status),
+    thread,
+    timeBox,
+  };
 }
 
 /** Every thread element of the feed, also one whose comments are still loading. */

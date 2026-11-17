@@ -22,7 +22,7 @@
 }
 
 /* A collapsed thread shows the header of its first comment: who wrote it, when, and the
-   thread's Resolved chip. Its text, the other comments and the reply box hide. */
+   thread's Resolved or Unresolved chip. Its text, the other comments and the reply box hide. */
 [data-fix-ado-thread="collapsed"] .repos-comment-viewer:not(:first-child),
 [data-fix-ado-thread="collapsed"] .repos-discussion-thread-reply,
 [data-fix-ado-thread="collapsed"] .repos-discussion-comment-header ~ * {

@@ -17,14 +17,17 @@ function capturedThreads(): { document: Document; statuses: Element[] } {
   return { document, statuses };
 }
 
-test("the captured active threads get no chip", { skip: fixtures.skip }, () => {
+test("the captured active threads get an Unresolved chip", { skip: fixtures.skip }, () => {
   const { document, statuses } = capturedThreads();
   assert.deepEqual(
     statuses.map((status) => status.textContent),
     ["Active", "Active"],
   );
   createResolvedThreadChips({ document }).sync();
-  assert.equal(document.querySelector(".fix-ado-resolved-chip"), null);
+  assert.deepEqual(
+    [...document.querySelectorAll(".fix-ado-thread-chip")].map((chip) => chip.textContent),
+    ["Unresolved", "Unresolved"],
+  );
 });
 
 test(
@@ -38,6 +41,7 @@ test(
     createResolvedThreadChips({ document }).sync();
 
     const chips = document.querySelectorAll(".fix-ado-resolved-chip");
+    assert.equal(document.querySelectorAll(".fix-ado-unresolved-chip").length, 1);
     assert.equal(chips.length, 1);
     const [chip] = chips;
     const header = status.closest(".repos-discussion-comment-header");

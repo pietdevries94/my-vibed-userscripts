@@ -35,25 +35,36 @@ function overviewPage(rows: string): OverviewPage {
   return {
     chips: () =>
       [...document.querySelectorAll(".repos-discussion-thread")].map((shown) =>
-        [...shown.querySelectorAll(".fix-ado-resolved-chip")].map((chip) => chip.textContent),
+        [...shown.querySelectorAll(".fix-ado-thread-chip")].map((chip) => chip.textContent),
       ),
     document,
     sync,
   };
 }
 
-test("a resolved thread gets a Resolved chip, a thread with another status gets none", () => {
+test("a resolved thread gets a Resolved chip, an active or pending one an Unresolved chip", () => {
   const page = overviewPage(
-    thread("Resolved") + thread("Active") + thread("Won't fix") + thread("Closed"),
+    thread("Resolved") +
+      thread("Active") +
+      thread("Pending") +
+      thread("Won't fix") +
+      thread("Closed"),
   );
   page.sync();
-  assert.deepEqual(page.chips(), [["Resolved"], [], [], []]);
+  assert.deepEqual(page.chips(), [["Resolved"], ["Unresolved"], ["Unresolved"], [], []]);
+});
+
+test("each chip has its own class for its colour", () => {
+  const page = overviewPage(thread("Resolved") + thread("Active"));
+  page.sync();
+  assert.equal(page.document.querySelectorAll(".fix-ado-resolved-chip").length, 1);
+  assert.equal(page.document.querySelectorAll(".fix-ado-unresolved-chip").length, 1);
 });
 
 test("the chip sits after the time of the first comment", () => {
   const page = overviewPage(thread("Resolved"));
   page.sync();
-  const chip = page.document.querySelector(".fix-ado-resolved-chip");
+  const chip = page.document.querySelector(".fix-ado-thread-chip");
   assert.equal(chip?.previousElementSibling?.tagName, "TIME");
   assert.equal(chip?.closest(".repos-comment-viewer")?.previousElementSibling, null);
 });
@@ -65,12 +76,15 @@ test("syncing again adds no second chip", () => {
   assert.deepEqual(page.chips(), [["Resolved"]]);
 });
 
-test("a thread that is active again loses its chip, and gets it back when resolved", () => {
+test("a thread whose status changes gets the chip of its new status", () => {
   const page = overviewPage(thread("Resolved"));
   page.sync();
   const status = page.document.querySelector(".bolt-dropdown-expandable-button-label");
   assert.ok(status !== null);
   status.textContent = "Active";
+  page.sync();
+  assert.deepEqual(page.chips(), [["Unresolved"]]);
+  status.textContent = "Closed";
   page.sync();
   assert.deepEqual(page.chips(), [[]]);
   status.textContent = "Resolved";
