@@ -281,3 +281,15 @@ test("the capture keeps the activity feed's layout: kinds of rows and pixels", a
   const scrubbed = scrubJson({ data }, captureDefinition.rules, createPseudonyms());
   assert.deepEqual(scrubbed, { data });
 });
+
+test("a work item capture describes its avatars without their names", async () => {
+  const workItemUrl = `https://dev.azure.com/${ORGANISATION}/${PROJECT}/_workitems/edit/${BUILD_ID}/`;
+  const avatar = `<div class="vss-Persona" aria-label="Barrow, Quill"><img alt="${PERSON}"></div>`;
+  const { files } = await runCapture(`<!doctype html><body>${avatar}</body>`, workItemUrl);
+  const json = files.get("azure-devops--work-item.json") ?? "";
+  assert.ok(files.has("azure-devops--work-item.css"));
+  assert.ok(!json.includes("Barrow"));
+  assertNoRealValue(files);
+  const shape = json.replaceAll(/\s/gu, "");
+  assert.match(shape, /"hasComma":true,.*"isScriptAvatar":true,"nameSource":"aria-label",/u);
+});
