@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.16.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each listed pull request was published, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.17.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each listed pull request was published, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -191,13 +191,18 @@
   }
 
   // azure-devops/src/pull-requests/feed-threads.ts
-  var FEED_THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread", HEADER_SELECTOR = ".repos-discussion-comment-header", STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label", RESOLVED_STATUS = "Resolved", UNRESOLVED_STATUSES = /* @__PURE__ */ new Set(["Active", "Pending"]);
+  var FEED_THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread", HEADER_SELECTOR = ".repos-discussion-comment-header", STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label", RESOLVED_STATUS = "Resolved", UNREAD_COMMENT_MARKER_SELECTOR = ".repos-unread-comment-marker", UNRESOLVED_STATUSES = /* @__PURE__ */ new Set(["Active", "Pending"]);
+  function timeBoxOf(header) {
+    let nameAndTime = header.firstElementChild;
+    return nameAndTime === null ? null : nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime;
+  }
   function feedThreadOf(thread) {
-    let header = thread.querySelector(HEADER_SELECTOR), nameAndTime = header?.firstElementChild ?? null;
-    if (header === null || nameAndTime === null)
+    let header = thread.querySelector(HEADER_SELECTOR), timeBox = header === null ? null : timeBoxOf(header);
+    if (header === null || timeBox === null)
       return null;
-    let timeBox = nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime, status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "";
+    let status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "";
     return {
+      hasUnreadComment: thread.querySelector(UNREAD_COMMENT_MARKER_SELECTOR) !== null,
       header,
       isResolved: status === RESOLVED_STATUS,
       isUnresolved: UNRESOLVED_STATUSES.has(status),
@@ -252,8 +257,8 @@
   }
   function createCollapsibleThreads({ document: document2 }) {
     let pickedStates = /* @__PURE__ */ new Map(), isAllExpanded = !1;
-    function stateOf({ isResolved, thread }) {
-      return pickedStates.get(threadIdOf(thread) ?? "") ?? (isResolved && !isAllExpanded ? "collapsed" : "open");
+    function stateOf({ hasUnreadComment, isResolved, thread }) {
+      return pickedStates.get(threadIdOf(thread) ?? "") ?? (isResolved && !hasUnreadComment && !isAllExpanded ? "collapsed" : "open");
     }
     function expandAll() {
       pickedStates.clear(), isAllExpanded = !0, sync4();
@@ -372,8 +377,8 @@
 
   // azure-devops/src/features/collapsible-threads/index.ts
   var collapsibleThreads = {
-    change: { kind: "updated", version: "1.15.0" },
-    description: "A button on every thread on a pull request's Overview collapses it. Resolved threads start collapsed. Expand all threads, above the feed, opens every thread, also ones that load later.",
+    change: { kind: "updated", version: "1.17.0" },
+    description: "A button on every thread on a pull request's Overview collapses it. Resolved threads start collapsed, unless one of their comments is unread. Expand all threads, above the feed, opens every thread, also ones that load later.",
     id: "collapsible-threads",
     name: "Collapsible threads",
     start({ document: document2, isInFrame: isInFrame2 }) {
@@ -1523,9 +1528,13 @@ ${issue.message ?? ""}`;
     styles: [style_default5]
   };
 
+  // azure-devops/src/core/scroll-behavior.ts
+  function scrollBehaviorOf(document2) {
+    return document2.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? !1 ? "instant" : "smooth";
+  }
+
   // azure-devops/src/features/scroll-to-bottom/scroll-to-bottom.ts
-  var FEED_SELECTOR2 = ".activity-feed-list", SCROLLER_SELECTOR = ".v-scroll-auto", BUTTON_CLASS2 = "fix-ado-scroll-to-bottom", LABEL = "Scroll to bottom";
-  var SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", ARROW_DOWN_PATH = "M8 3v10M3.5 8.5L8 13l4.5-4.5";
+  var FEED_SELECTOR2 = ".activity-feed-list", SCROLLER_SELECTOR = ".v-scroll-auto", BUTTON_CLASS2 = "fix-ado-scroll-to-bottom", LABEL = "Scroll to bottom", BOTTOM_MARGIN = 16, FOLLOW_QUIET_MS = 2e3, SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", ARROW_DOWN_PATH = "M8 3v10M3.5 8.5L8 13l4.5-4.5";
   function arrowDownIcon(document2) {
     let svg = document2.createElementNS(SVG_NAMESPACE3, "svg");
     svg.setAttribute("aria-hidden", "true"), svg.setAttribute("viewBox", "0 0 16 16");
@@ -1546,22 +1555,22 @@ ${issue.message ?? ""}`;
     let feed = document2.querySelector(FEED_SELECTOR2);
     return feed === null ? null : scrollerOf(feed);
   }
-  var isAtBottom = (scroller) => scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= 16;
+  var isAtBottom = (scroller) => scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= BOTTOM_MARGIN;
   function shouldShowButton(scroller, button2) {
     let hasFocus = button2 !== null && button2.ownerDocument.activeElement === button2;
     return scroller !== null && (!isAtBottom(scroller) || hasFocus);
-  }
-  function scrollBehaviorOf(scroller) {
-    return scroller.ownerDocument.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? !1 ? "instant" : "smooth";
   }
   var OWNER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "pointerdown"];
   function createBottomFollow(now) {
     let followed = null;
     function start(scroller) {
-      followed = { height: scroller.scrollHeight, lastActiveAt: now() }, scroller.scrollTo({ behavior: scrollBehaviorOf(scroller), top: scroller.scrollHeight });
+      followed = { height: scroller.scrollHeight, lastActiveAt: now() }, scroller.scrollTo({
+        behavior: scrollBehaviorOf(scroller.ownerDocument),
+        top: scroller.scrollHeight
+      });
     }
     function step(scroller, isScrollEvent) {
-      followed !== null && (scroller === null || now() - followed.lastActiveAt > 2e3 ? followed = null : scroller.scrollHeight !== followed.height ? start(scroller) : isScrollEvent && (followed.lastActiveAt = now()));
+      followed !== null && (scroller === null || now() - followed.lastActiveAt > FOLLOW_QUIET_MS ? followed = null : scroller.scrollHeight !== followed.height ? start(scroller) : isScrollEvent && (followed.lastActiveAt = now()));
     }
     return {
       start,
@@ -1669,6 +1678,251 @@ ${issue.message ?? ""}`;
     styles: [style_default6]
   };
 
+  // azure-devops/src/features/unread-comments/unread-comments.ts
+  var FEED_SELECTOR3 = ".activity-feed-list", ROW_SELECTOR2 = ".bolt-timeline-row", THREAD_SELECTOR = ".repos-discussion-thread", COMMENT_SELECTOR = ".repos-comment-viewer", NEW_ROW_SELECTOR = ".activity-feed-sequence.new", STICKY_TAB_BAR_SELECTOR = ".bolt-tabbar.sticky", FILTER_SELECTOR3 = ".repos-activity-filter-dropdown", FIRST_UNREAD_CLASS = "fix-ado-first-unread", FIRST_UNREAD_LABEL = "Go to first unread", NEXT_UNREAD_CLASS = "fix-ado-next-unread", NEXT_UNREAD_LABEL = "Go to next unread";
+  function rowsAsShown(feed) {
+    let rows = [...feed.querySelectorAll(ROW_SELECTOR2)];
+    return feed.dataset.fixAdoActivityOrder === "oldest-first" ? rows.toReversed() : rows;
+  }
+  function unreadGroupsOf(thread) {
+    let groups = [], group2 = [];
+    for (let comment of thread.querySelectorAll(COMMENT_SELECTOR))
+      comment.querySelector(UNREAD_COMMENT_MARKER_SELECTOR) === null ? group2 = [] : (group2.length === 0 && groups.push(group2), group2.push(comment));
+    return groups;
+  }
+  function markOf(index, size) {
+    return size === 1 ? "only" : index === 0 ? "first" : index === size - 1 ? "last" : "middle";
+  }
+  function markUnreadGroups(document2, groups) {
+    let marked = /* @__PURE__ */ new Set();
+    for (let group2 of groups)
+      for (let [index, comment] of group2.entries()) {
+        let mark = markOf(index, group2.length);
+        comment.dataset.fixAdoUnread !== mark && (comment.dataset.fixAdoUnread = mark), marked.add(comment);
+      }
+    for (let comment of document2.querySelectorAll("[data-fix-ado-unread]"))
+      marked.has(comment) || delete comment.dataset.fixAdoUnread;
+  }
+  function stopOfGroup(comments) {
+    let [first] = comments;
+    return first === void 0 ? [] : [{ comments, target: first }];
+  }
+  function stopsOfRow(row) {
+    let thread = row.querySelector(THREAD_SELECTOR);
+    return thread === null ? [] : thread.querySelector(HEADER_SELECTOR) === null ? row.querySelector(NEW_ROW_SELECTOR) === null ? [] : [{ comments: [], target: row }] : unreadGroupsOf(thread).flatMap((comments) => stopOfGroup(comments));
+  }
+  function readStops(document2) {
+    let feed = document2.querySelector(FEED_SELECTOR3);
+    return feed === null ? [] : rowsAsShown(feed).flatMap((row) => stopsOfRow(row));
+  }
+  function createButton3(document2, className, label) {
+    let text = Object.assign(document2.createElement("span"), {
+      className: "bolt-button-text",
+      textContent: label
+    }), button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = `${className} bolt-button enabled bolt-focus-treatment`, button2.append(text), button2;
+  }
+  function createFirstUnreadBox(document2, onClick2) {
+    let button2 = createButton3(document2, FIRST_UNREAD_CLASS, FIRST_UNREAD_LABEL);
+    button2.addEventListener("click", onClick2);
+    let box = Object.assign(document2.createElement("div"), {
+      className: `${FIRST_UNREAD_CLASS}-box margin-bottom-16 margin-right-8 inline-flex-row`
+    });
+    return box.append(button2), box;
+  }
+  function findOrAddFirstUnreadButton(document2, onClick2) {
+    let bar = document2.querySelector(FILTER_SELECTOR3)?.parentElement;
+    return bar == null ? null : (bar.querySelector(`.${FIRST_UNREAD_CLASS}`) === null && bar.prepend(createFirstUnreadBox(document2, onClick2)), bar.querySelector(`.${FIRST_UNREAD_CLASS}`));
+  }
+  var lastCommentOf = ({ comments }) => comments.at(-1) ?? null;
+  function findOrAddNextUnreadButton(comment, onClick2) {
+    let existing = comment.querySelector(`:scope > .${NEXT_UNREAD_CLASS}`), button2 = existing ?? createButton3(comment.ownerDocument, NEXT_UNREAD_CLASS, NEXT_UNREAD_LABEL);
+    return existing === null && button2.addEventListener("click", onClick2), comment.lastElementChild !== button2 && comment.append(button2), button2;
+  }
+  async function scrollIntoViewAndWait(element4, options) {
+    let scrolled = element4.scrollIntoView(options);
+    scrolled instanceof Promise && await scrolled;
+  }
+  function leaveRoomForTabBar(document2) {
+    let height = `${document2.querySelector(STICKY_TAB_BAR_SELECTOR)?.offsetHeight ?? 0}px`, feed = document2.querySelector(FEED_SELECTOR3);
+    feed !== null && feed.style.getPropertyValue("--fix-ado-sticky-height") !== height && feed.style.setProperty("--fix-ado-sticky-height", height);
+  }
+  function shownPartOf(target) {
+    return target.checkVisibility() ? target : target.closest(THREAD_SELECTOR) ?? target;
+  }
+  function createStopScroller(document2) {
+    let scrollCount = 0;
+    return async (stop) => {
+      if (stop === void 0)
+        return;
+      scrollCount += 1;
+      let scroll = scrollCount, { target } = stop;
+      leaveRoomForTabBar(document2), await scrollIntoViewAndWait(shownPartOf(target), {
+        behavior: scrollBehaviorOf(document2),
+        block: "start"
+      }), scroll === scrollCount && (target.tabIndex = -1, target.focus({ preventScroll: !0 }));
+    };
+  }
+  function removeNextUnreadButtons(document2, kept) {
+    for (let button2 of document2.querySelectorAll(`.${NEXT_UNREAD_CLASS}`))
+      kept.has(button2) || button2.remove();
+  }
+  function createUnreadComments({ document: document2 }) {
+    let goTo = createStopScroller(document2);
+    function goToNextAfter(target) {
+      let stops = readStops(document2), index = stops.findIndex((stop) => stop.target === target);
+      goTo(index === -1 ? void 0 : stops[index + 1]);
+    }
+    function syncNextUnreadButtons(stops) {
+      let kept = /* @__PURE__ */ new Set();
+      for (let stop of stops.slice(0, -1)) {
+        let lastComment = lastCommentOf(stop);
+        lastComment !== null && kept.add(
+          findOrAddNextUnreadButton(lastComment, () => {
+            goToNextAfter(stop.target);
+          })
+        );
+      }
+      removeNextUnreadButtons(document2, kept);
+    }
+    function sync4() {
+      let stops = readStops(document2);
+      markUnreadGroups(
+        document2,
+        stops.map((stop) => stop.comments)
+      ), syncNextUnreadButtons(stops);
+      let firstUnread = findOrAddFirstUnreadButton(document2, () => {
+        goTo(readStops(document2)[0]);
+      });
+      firstUnread !== null && firstUnread.disabled !== (stops.length === 0) && (firstUnread.disabled = stops.length === 0);
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/unread-comments/style.css
+  var style_default7 = `/* Unread comments glow like a required reviewer, one glow around each group of unread comments
+   that follow each other. The thread clips what spills outside it, so the glow sits inside. Each
+   comment of a group draws its piece: across the 4px gap to a neighbour in the group, and cut off
+   there, so no edge shows between them. */
+[data-fix-ado-unread] {
+  --fix-ado-unread-glow: var(--communication-background, rgb(0, 120, 212));
+  position: relative;
+}
+
+/* A scroll to a stop ends 16px under the tab bar that sticks to the top. The script measures the
+   bar. A stop is a group's first comment, or the row of a thread that is not rendered yet. */
+.activity-feed-list [data-fix-ado-unread],
+.activity-feed-list .bolt-timeline-row {
+  scroll-margin-top: calc(var(--fix-ado-sticky-height, 0px) + 16px);
+}
+
+[data-fix-ado-unread]::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  box-shadow:
+    inset 0 0 0 2px var(--fix-ado-unread-glow),
+    inset 0 0 6px 3px var(--fix-ado-unread-glow);
+  content: "";
+  pointer-events: none;
+}
+
+/* A comment after another of its group reaches 16px up: 4px across the gap, 12px it cuts off. */
+[data-fix-ado-unread="middle"]::after,
+[data-fix-ado-unread="last"]::after {
+  top: -16px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  clip-path: inset(12px 0 0 0);
+}
+
+/* A comment before another of its group reaches 16px down the same way. */
+[data-fix-ado-unread="first"]::after,
+[data-fix-ado-unread="middle"]::after {
+  bottom: -16px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  clip-path: inset(0 0 12px 0);
+}
+
+[data-fix-ado-unread="middle"]::after {
+  clip-path: inset(12px 0);
+}
+
+/* Go to first unread sits left of every other button in the bar above the feed, and glows while
+   there is something unread. */
+.fix-ado-first-unread-box {
+  order: -2;
+}
+
+.fix-ado-first-unread:not(:disabled) {
+  box-shadow:
+    0 0 0 2px var(--communication-background, rgb(0, 120, 212)),
+    0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-first-unread:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Go to next unread spans the bottom of a group's last comment, inside the glow. */
+.fix-ado-next-unread {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin: 8px 0 12px;
+}
+
+/* Forced colors drop box shadows, so the glows become outlines there. */
+@media (forced-colors: active) {
+  [data-fix-ado-unread]::after {
+    border-inline: 2px solid Highlight;
+    box-shadow: none;
+  }
+
+  [data-fix-ado-unread="only"]::after,
+  [data-fix-ado-unread="first"]::after {
+    border-top: 2px solid Highlight;
+  }
+
+  [data-fix-ado-unread="only"]::after,
+  [data-fix-ado-unread="last"]::after {
+    border-bottom: 2px solid Highlight;
+  }
+
+  .fix-ado-first-unread:not(:disabled) {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+
+  .fix-ado-first-unread:disabled {
+    border-color: GrayText;
+    color: GrayText;
+    opacity: 1;
+  }
+}
+`;
+
+  // azure-devops/src/features/unread-comments/index.ts
+  var unreadComments = {
+    change: { kind: "new", version: "1.17.0" },
+    description: "Unread comments on a pull request's Overview glow, one glow around comments that follow each other. Go to first unread, above the feed, and Go to next unread, on each group, scroll to them.",
+    id: "unread-comments",
+    name: "Unread comments",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let comments = createUnreadComments({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && comments.sync();
+        }
+      };
+    },
+    styles: [style_default7]
+  };
+
   // azure-devops/src/features/overview-features.ts
   var OVERVIEW_FEATURES = [
     overviewPipelineIssues,
@@ -1677,7 +1931,8 @@ ${issue.message ?? ""}`;
     foldedPushes,
     joinedReviewerLines,
     resolvedThreadChips,
-    collapsibleThreads
+    collapsibleThreads,
+    unreadComments
   ];
 
   // azure-devops/src/features/pipeline-tab/pipeline-run-frame.ts
@@ -1963,7 +2218,7 @@ ${issue.message ?? ""}`;
     let [onlyChoice] = choices;
     choices.length === 1 && onlyChoice !== void 0 ? onPick(action, onlyChoice.key) : onToggleList(state !== "choosing");
   }
-  function createButton3(context) {
+  function createButton4(context) {
     let { action, choices, document: document2, state } = context, isWaiting = state === "waiting", button2 = Object.assign(document2.createElement("button"), {
       className: `bolt-button ${LOOKS[action]} bolt-focus-treatment ${isWaiting ? "disabled" : "enabled"} fix-ado-pipeline-run-action`,
       disabled: isWaiting,
@@ -1983,7 +2238,7 @@ ${issue.message ?? ""}`;
     let { action, choices, document: document2, state } = context;
     if (choices.length === 0)
       return null;
-    let button2 = createButton3(context);
+    let button2 = createButton4(context);
     return state === "choosing" ? [button2, createChoices(context)] : state === "failed" ? [button2, failedNote(document2, action)] : [button2];
   }
 
@@ -2815,7 +3070,7 @@ ${issue.message ?? ""}`;
 `;
 
   // azure-devops/src/features/pipeline-tab/style.css
-  var style_default7 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+  var style_default8 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
 .repos-pr-details-page[data-fix-ado-pipeline-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
   display: none !important;
@@ -3043,7 +3298,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         }
       };
     },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default7]
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default8]
   };
 
   // azure-devops/src/features/review/review-store.ts
@@ -3355,7 +3610,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/pending-cards.ts
-  var CARD_ROW_CLASS = "fix-ado-review-card-row", THREAD_SELECTOR = ".repos-diff-discussion", LINE_CELL_CLASS = "repos-line-content";
+  var CARD_ROW_CLASS = "fix-ado-review-card-row", THREAD_SELECTOR2 = ".repos-diff-discussion", LINE_CELL_CLASS = "repos-line-content";
   function cardCell(document2, comment) {
     let cell2 = element(document2, "div", { className: "fix-ado-review-card-cell body-m" });
     return cell2.append(createCard2(document2, comment, ONLY_YOU_NOTE)), cell2;
@@ -3371,7 +3626,7 @@ ${content}`
     return row.append(cardCell(document2, comment)), row;
   }
   function isThreadRow(row) {
-    return row?.querySelector(`:scope > ${THREAD_SELECTOR}`) !== null && row !== null;
+    return row?.querySelector(`:scope > ${THREAD_SELECTOR2}`) !== null && row !== null;
   }
   function isCardRow(row) {
     return row?.classList.contains(CARD_ROW_CLASS) === !0;
@@ -4406,7 +4661,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/style.css
-  var style_default8 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
+  var style_default9 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
    reads "Add single comment". Its aria-label carries that name, so the text here is
    left out of what a screen reader reads. */
 .repos-discussion-thread-reply
@@ -4739,7 +4994,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default8]
+    styles: [style_default9]
   };
 
   // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
@@ -5561,7 +5816,7 @@ ${content}`
   }
 
   // azure-devops/src/features/starred-reviewers/style.css
-  var style_default9 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
+  var style_default10 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
    Hidden by opacity, not visibility, so the keyboard can still reach it. */
 .repos-reviewer > .fix-ado-star {
   opacity: 0;
@@ -5739,7 +5994,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default9]
+    styles: [style_default10]
   };
 
   // azure-devops/src/features/pull-request-features.ts
@@ -5768,7 +6023,7 @@ ${content}`
   }
 
   // azure-devops/src/features/avatar-initials/style.css
-  var style_default10 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+  var style_default11 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
 [data-fix-ado-initials] {
   position: relative;
   border-radius: 50%;
@@ -5815,7 +6070,7 @@ ${content}`
         showInitialsOnAvatars(document2);
       }
     }),
-    styles: [style_default10]
+    styles: [style_default11]
   };
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
@@ -5970,7 +6225,7 @@ ${content}`
   }
 
   // azure-devops/src/features/days-in-column/style.css
-  var style_default11 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+  var style_default12 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
 .fix-ado-days-in-column {
   display: flex;
   flex-wrap: wrap;
@@ -6088,7 +6343,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default11]
+    styles: [style_default12]
   };
 
   // azure-devops/src/features/system-theme/system-theme.ts
@@ -6427,7 +6682,7 @@ ${content}`
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default12 = `/* The publish time column in pull request lists. pr-list.ts adds the cell and its column. */
+  var style_default13 = `/* The publish time column in pull request lists. pr-list.ts adds the cell and its column. */
 col.fix-ado-published-since {
   width: 12rem;
 }
@@ -6461,7 +6716,7 @@ td.fix-ado-published-since {
         }
       };
     },
-    styles: [style_default12]
+    styles: [style_default13]
   };
 
   // azure-devops/src/features/reload-on-changes/page-reloader.ts
@@ -6654,7 +6909,7 @@ td.fix-ado-published-since {
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default13 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default14 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -6701,7 +6956,7 @@ td.fix-ado-published-since {
         }
       };
     },
-    styles: [style_default13]
+    styles: [style_default14]
   };
 
   // azure-devops/src/features/index.ts
