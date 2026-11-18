@@ -1,3 +1,4 @@
+import { pressEscape, stubDialogMethods } from "./dialog.test-page.ts";
 import { JSDOM } from "jsdom";
 import type { SubmitResult } from "./review-submit.ts";
 import assert from "node:assert/strict";
@@ -12,32 +13,6 @@ interface DialogPage {
   dialog: HTMLDialogElement;
   /** Ends the running submit with this result. */
   finishSubmit: (result: SubmitResult) => void;
-  /** Presses Esc on the open dialog, as the browser does. True when the dialog let it close. */
-  pressEscape: () => boolean;
-}
-
-/** JSDOM has no dialog methods. */
-function stubDialogMethods(window: JSDOM["window"]): void {
-  Object.assign(window.HTMLDialogElement.prototype, {
-    close(this: HTMLDialogElement) {
-      this.open = false;
-      this.dispatchEvent(new window.Event("close"));
-    },
-    showModal(this: HTMLDialogElement) {
-      this.open = true;
-    },
-  });
-}
-
-function escapePresser(window: JSDOM["window"], dialog: HTMLDialogElement): () => boolean {
-  return () => {
-    const cancel = new window.Event("cancel", { cancelable: true });
-    dialog.dispatchEvent(cancel);
-    if (!cancel.defaultPrevented) {
-      dialog.close();
-    }
-    return !cancel.defaultPrevented;
-  };
 }
 
 function openDialogPage(): DialogPage {
@@ -66,7 +41,6 @@ function openDialogPage(): DialogPage {
       assert.ok(finishSubmit !== null, "a submit is running");
       finishSubmit(result);
     },
-    pressEscape: escapePresser(window, dialog),
   };
 }
 
@@ -85,9 +59,9 @@ async function settle(): Promise<void> {
 }
 
 test("Esc does not close the dialog while the review is being posted", async () => {
-  const { dialog, finishSubmit, pressEscape } = openDialogPage();
+  const { dialog, finishSubmit } = openDialogPage();
   button(dialog, "Submit review").click();
-  assert.equal(pressEscape(), false);
+  assert.equal(pressEscape(dialog), false);
   assert.ok(dialog.isConnected);
   finishSubmit({ failures: [{ httpStatus: 500, id: "1" }], vote: "skipped" });
   await settle();
@@ -95,8 +69,8 @@ test("Esc does not close the dialog while the review is being posted", async () 
 });
 
 test("Esc closes the dialog when nothing is being posted", () => {
-  const { dialog, pressEscape } = openDialogPage();
-  assert.equal(pressEscape(), true);
+  const { dialog } = openDialogPage();
+  assert.equal(pressEscape(dialog), true);
   assert.equal(dialog.isConnected, false);
 });
 

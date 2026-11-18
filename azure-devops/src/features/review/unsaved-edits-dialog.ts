@@ -11,6 +11,7 @@ interface UnsavedEditsOptions {
 }
 
 const BUTTON_CLASS = "bolt-button enabled bolt-focus-treatment";
+const TITLE_ID = "fix-ado-review-unsaved-title";
 
 function answerButton(dialog: HTMLDialogElement, text: string, answer: () => void): HTMLElement {
   const button = element(dialog.ownerDocument, "button", {
@@ -20,17 +21,26 @@ function answerButton(dialog: HTMLDialogElement, text: string, answer: () => voi
   button.type = "button";
   button.addEventListener("click", () => {
     dialog.close();
-    dialog.remove();
     answer();
   });
   return button;
 }
 
-/** Asks "Save your edits?" with "Yes", "No" and "Cancel". */
+/** Asks "Save your edits?" with "Yes", "No" and "Cancel". Esc is Cancel. */
 function openUnsavedEditsDialog({ count, document, onAnswer }: UnsavedEditsOptions): void {
   const dialog = element(document, "dialog", {
     className: "fix-ado-review-dialog fix-ado-review-unsaved",
   });
+  dialog.setAttribute("aria-labelledby", TITLE_ID);
+  // Every way out closes the dialog, Esc included; it is built fresh each time.
+  dialog.addEventListener("close", () => {
+    dialog.remove();
+  });
+  const title = element(document, "h2", {
+    className: "fix-ado-review-title",
+    text: "Save your edits?",
+  });
+  title.id = TITLE_ID;
   const buttons = element(document, "div", { className: "fix-ado-review-buttons" });
   buttons.append(
     answerButton(dialog, "Cancel", () => {
@@ -44,7 +54,7 @@ function openUnsavedEditsDialog({ count, document, onAnswer }: UnsavedEditsOptio
     }),
   );
   dialog.append(
-    element(document, "h2", { className: "fix-ado-review-title", text: "Save your edits?" }),
+    title,
     element(document, "p", {
       text: `You are still editing ${pendingCountText(count)}. "No" drops the edits and keeps the comments as they were.`,
     }),
