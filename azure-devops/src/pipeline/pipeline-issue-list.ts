@@ -142,6 +142,8 @@ function createIssueCounts(document: Document, counts: IssueCounts): HTMLElement
     const text = String(count);
     const badge = createElement(document, { className: "fix-ado-issue-count", tag: "span", text });
     badge.dataset.kind = kind;
+    // A plain span's label is not read; as an image the badge reads "2 errors", not "2".
+    badge.setAttribute("role", "img");
     badge.setAttribute("aria-label", countText(count, kind));
     badge.title = countText(count, kind);
     return [badge];

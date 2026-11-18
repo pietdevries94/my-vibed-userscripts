@@ -57,10 +57,11 @@ const issueRows = (document: Document): string[] =>
       `${row.dataset.kind ?? ""}: ${row.querySelector(".fix-ado-issue-place")?.textContent ?? ""}: ${row.querySelector(".fix-ado-issue-message")?.textContent ?? ""}`,
   );
 
-/** The issue counts on a tree item, as their labels. */
+/** The issue counts on a tree item, as a screen reader names them: an image with its label. */
 const countLabels = (document: Document, kind: string, name: string): string[] =>
   [...(pickItem(document, kind, name)?.querySelectorAll(".fix-ado-issue-count") ?? [])].map(
-    (count) => count.getAttribute("aria-label") ?? "",
+    (count) =>
+      count.getAttribute("role") === "img" ? (count.getAttribute("aria-label") ?? "") : "unnamed",
   );
 
 test("the tab lists the shown run's errors, then its warnings, with where each one is", async () => {
