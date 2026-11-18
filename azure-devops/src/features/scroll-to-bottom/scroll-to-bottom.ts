@@ -55,7 +55,7 @@ const isAtBottom = (scroller: HTMLElement): boolean =>
   scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= BOTTOM_MARGIN;
 
 /** True while there is more below, or while the button has focus, so focus does not fall to the page. */
-function isButtonWanted(scroller: HTMLElement | null, button: HTMLButtonElement | null): boolean {
+function shouldShowButton(scroller: HTMLElement | null, button: HTMLButtonElement | null): boolean {
   const hasFocus = button !== null && button.ownerDocument.activeElement === button;
   return scroller !== null && (!isAtBottom(scroller) || hasFocus);
 }
@@ -151,7 +151,7 @@ function createScrollToBottom(options: { document: Document; now: () => number }
 
   /** Writes only what changed, to keep the page's mutation observer quiet. */
   function showOrHideButton(scroller: HTMLElement | null): void {
-    const isShown = isButtonWanted(scroller, button);
+    const isShown = shouldShowButton(scroller, button);
     if (button === null && !isShown) {
       return;
     }
