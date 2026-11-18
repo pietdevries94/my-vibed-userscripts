@@ -128,14 +128,15 @@ async function postFrom(
   }
 }
 
-async function submitFrom(dialog: HTMLDialogElement, options: FinishDialogOptions): Promise<void> {
-  const problem = await postFrom(dialog, options);
-  if (problem === null || options.pending().length === 0) {
-    dialog.close();
-    options.onSubmitted();
-    return;
-  }
+/** Shows what went wrong, with the comments still pending, ready for a retry. */
+function showProblem(
+  dialog: HTMLDialogElement,
+  options: FinishDialogOptions,
+  problem: string,
+): void {
   setBusy(dialog, false);
+  // Disabling the button took focus off it; the owner retries from there.
+  dialog.querySelector<HTMLButtonElement>('[data-fix-ado-review-action="submit"]')?.focus();
   const status = dialog.querySelector(".fix-ado-review-status");
   if (status !== null) {
     status.textContent = problem;
@@ -143,6 +144,16 @@ async function submitFrom(dialog: HTMLDialogElement, options: FinishDialogOption
   dialog
     .querySelector(".fix-ado-review-pending-list")
     ?.replaceWith(pendingList(options.document, options.pending()));
+}
+
+async function submitFrom(dialog: HTMLDialogElement, options: FinishDialogOptions): Promise<void> {
+  const problem = await postFrom(dialog, options);
+  if (problem === null || options.pending().length === 0) {
+    dialog.close();
+    options.onSubmitted();
+    return;
+  }
+  showProblem(dialog, options, problem);
 }
 
 function createButtons(document: Document): HTMLElement {

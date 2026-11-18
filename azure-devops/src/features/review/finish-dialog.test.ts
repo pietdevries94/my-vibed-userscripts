@@ -111,3 +111,15 @@ test("the dialog is named by its visible heading and keeps its native role", () 
     [false, false],
   );
 });
+
+test("after a failed submit, focus is back on Submit review", async () => {
+  const { dialog, finishSubmit } = openDialogPage();
+  const submit = button(dialog, "Submit review");
+  submit.focus();
+  submit.click();
+  // A browser moves focus off a button once it is disabled.
+  submit.blur();
+  finishSubmit({ failures: [{ httpStatus: 500, id: "1" }], vote: "skipped" });
+  await settle();
+  assert.equal(dialog.ownerDocument.activeElement, submit);
+});
