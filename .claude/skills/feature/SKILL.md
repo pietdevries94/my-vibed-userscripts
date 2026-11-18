@@ -26,6 +26,7 @@ Code that only this script needs stays in `<script>/src/`. A file moves to `shar
 
 A script is event-driven: it changes the page before the browser paints what the site rendered, so the owner never sees the page change twice.
 
+- A script that changes how the page loads, such as CSS that hides or rearranges the site's parts, sets `"runAt": "document-start"` in `script.json`. At the default `document-idle` the site paints first.
 - Re-apply after a DOM change in the next animation frame, as `azure-devops/src/core/sync-before-paint.ts` does. A settle delay shows the site's version first.
 - To wait for the page, check on every DOM change (`azure-devops/src/core/next-dom-change.ts`). A timer is only the deadline to give up.
 - Poll on a timer only what sends no event, such as the REST API.

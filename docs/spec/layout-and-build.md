@@ -60,7 +60,7 @@ my-vibed-userscripts/
 
 - JSON, so the release command and the checks read and bump it without running code.
 - It is the mode record: `mode` is `open` or `sealed`. The mode changes only when the owner asks.
-- Fields: name, description, `@match`, `@grant`, `version`, `mode`. An open script also lists its sign-in origins and CDN origins (used for the read-only guard's allowlist), and any POST exemption the owner approved (see [open-script.md](open-script.md)).
+- Fields: name, description, `@match`, `@grant`, `version`, `mode`, and an optional `runAt`. An open script also lists its sign-in origins and CDN origins (used for the read-only guard's allowlist), and any POST exemption the owner approved (see [open-script.md](open-script.md)).
 - `version` is semver. A new script starts at `1.0.0`. Only the release command changes it.
 
 ## Stack
@@ -75,7 +75,7 @@ my-vibed-userscripts/
 
 ## Metadata block
 
-Generated from `script.json`. The build adds `@namespace`, `@downloadURL` and `@run-at document-idle`.
+Generated from `script.json`. The build adds `@namespace` and `@downloadURL`. `@run-at` is the script's `runAt`, else `document-idle`. A script that changes how the page loads, such as hiding parts with CSS, sets `runAt` to `document-start`, so the page never paints without it.
 
 ## Shared code
 

@@ -7,6 +7,10 @@ const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
 
 type ScriptMode = "open" | "sealed";
 
+/** Violentmonkey's `@run-at` values. */
+const RUN_AT_VALUES = ["document-start", "document-body", "document-end", "document-idle"] as const;
+type RunAt = (typeof RUN_AT_VALUES)[number];
+
 /** A narrow exception to the read-only guard, approved by the owner. Matches one exact URL, query ignored. */
 interface PostExemption {
   url: string;
@@ -20,6 +24,11 @@ interface ScriptConfig {
   grant: string[];
   version: string;
   mode: ScriptMode;
+  /**
+   * When the script runs. `document-idle` when left out. A script that changes how the
+   * page loads, such as hiding parts with CSS, runs at `document-start`, before the first paint.
+   */
+  runAt?: RunAt;
   /** Open scripts only: exact origins of the sign-in pages. Exempt from the guard's GET-only rule. */
   signInOrigins?: string[];
   /** Open scripts only: exact origins the site loads assets from. */
@@ -52,7 +61,11 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-function problemsOf(config: Partial<ScriptConfig>): string[] {
+function isRunAt(value: unknown): value is RunAt {
+  return RUN_AT_VALUES.some((runAt) => runAt === value);
+}
+
+function problemsOf(config: Record<string, unknown>): string[] {
   const checks: [isValid: boolean, problem: string][] = [
     [typeof config.name === "string" && config.name !== "", "name is missing"],
     [typeof config.description === "string", "description is missing"],
@@ -63,6 +76,10 @@ function problemsOf(config: Partial<ScriptConfig>): string[] {
       "version must be x.y.z",
     ],
     [config.mode === "open" || config.mode === "sealed", 'mode must be "open" or "sealed"'],
+    [
+      config.runAt === undefined || isRunAt(config.runAt),
+      'runAt must be "document-start", "document-body", "document-end" or "document-idle"',
+    ],
   ];
   return checks.filter(([isValid]) => !isValid).map(([, problem]) => problem);
 }
@@ -121,12 +138,13 @@ function devFilePath(id: string): string {
   return path.join(REPO_ROOT, "dist", "dev", `${id}.user.js`);
 }
 
-export type { PostExemption, Script, ScriptConfig, ScriptMode };
+export type { PostExemption, RunAt, Script, ScriptConfig, ScriptMode };
 export {
   REPO_ROOT,
   devFilePath,
   findScriptIds,
   isRecord,
+  problemsOf,
   readJsonFile,
   readScript,
   releaseFilePath,

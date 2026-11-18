@@ -5,6 +5,7 @@
   "grant": ["GM_addStyle"],
   "version": "1.0.1",
   "mode": "open",
+  "runAt": "document-start",
   "signInOrigins": ["https://myprivacy.dpgmedia.nl"],
   "cdnOrigins": [
     "https://myprivacy-static.dpgmedia.net",

@@ -54,7 +54,7 @@ function metadataLines(script: Script, target: BuildTarget): [key: string, value
     ["description", config.description],
     ...matches.map((pattern): [string, string] => ["match", pattern]),
     ...(grants.length > 0 ? grants : ["none"]).map((grant): [string, string] => ["grant", grant]),
-    ["run-at", "document-idle"],
+    ["run-at", config.runAt ?? "document-idle"],
     ...(isDev ? [] : [["downloadURL", releaseInstallUrl(script.id)] satisfies [string, string]]),
   ];
 }
