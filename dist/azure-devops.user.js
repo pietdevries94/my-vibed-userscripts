@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.15.3
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.16.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each listed pull request was published, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -2202,8 +2202,8 @@ ${issue.message ?? ""}`;
   function pullRequestPath({ project, repository, pullRequestId }) {
     return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}`;
   }
-  async function getPullRequestStatus(options, pullRequest) {
-    return (await (await sendRequest(options, `${pullRequestPath(pullRequest)}?${API_VERSION}`)).json()).status ?? "";
+  async function getPullRequest(options, pullRequest) {
+    return await (await sendRequest(options, `${pullRequestPath(pullRequest)}?${API_VERSION}`)).json();
   }
   function pageAfter({ nextSkip, nextTop }) {
     return nextSkip !== void 0 && nextSkip > 0 ? { skip: nextSkip, top: nextTop ?? CHANGES_PER_REQUEST } : null;
@@ -2246,6 +2246,7 @@ ${issue.message ?? ""}`;
     return {
       createPullRequestThread: async (pullRequest, thread) => createPullRequestThread(options, pullRequest, thread),
       getIterationChanges: async (pullRequest, iteration) => getIterationChanges(options, pullRequest, iteration),
+      getPullRequestCreationDate: async (pullRequest) => getPullRequest(options, pullRequest).then(({ creationDate }) => creationDate ?? ""),
       async getPullRequestIterationIds(pullRequest) {
         let { body } = await getJson(
           options,
@@ -2253,7 +2254,7 @@ ${issue.message ?? ""}`;
         );
         return (body.value ?? []).map(({ id }) => id);
       },
-      getPullRequestStatus: async (pullRequest) => getPullRequestStatus(options, pullRequest),
+      getPullRequestStatus: async (pullRequest) => getPullRequest(options, pullRequest).then(({ status }) => status ?? ""),
       async getPullRequestThreads(pullRequest) {
         let { body } = await getJson(
           options,
@@ -6234,6 +6235,33 @@ ${content}`
       return;
     shownIcon?.remove(), row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
   }
+  var DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill", ROW_ACTIONS_CELL_SELECTOR = ".bolt-table-cell-side-action", PUBLISHED_SINCE_CLASS = "fix-ado-published-since";
+  function isDraftRow(row) {
+    return row.querySelector(DRAFT_PILL_SELECTOR) !== null;
+  }
+  function addPublishedSinceColumn(row) {
+    let columns = row.closest("table")?.querySelector(":scope > colgroup");
+    if (!columns || columns.querySelector(`.${PUBLISHED_SINCE_CLASS}`))
+      return;
+    let column = row.ownerDocument.createElement("col");
+    column.className = PUBLISHED_SINCE_CLASS;
+    let actionsColumn = columns.lastElementChild?.previousElementSibling;
+    actionsColumn ? actionsColumn.before(column) : columns.append(column);
+  }
+  function publishedSinceCell(row) {
+    let shown = row.querySelector(`:scope > .${PUBLISHED_SINCE_CLASS}`);
+    if (shown)
+      return shown;
+    let actionsCell = row.querySelector(`:scope > ${ROW_ACTIONS_CELL_SELECTOR}`);
+    if (!actionsCell)
+      return null;
+    let cell2 = row.ownerDocument.createElement("td");
+    return cell2.className = `${PUBLISHED_SINCE_CLASS} bolt-table-cell bolt-list-cell secondary-text`, actionsCell.before(cell2), cell2;
+  }
+  function showPublishedSince(row, text) {
+    let cell2 = publishedSinceCell(row);
+    cell2 && (addPublishedSinceColumn(row), cell2.textContent !== (text ?? "") && (cell2.textContent = text ?? ""));
+  }
   var REVIEWER_SELECTOR = ".pr-reviewer";
   function markRequiredReviewers(row, reviewers) {
     for (let reviewerElement of row.querySelectorAll(REVIEWER_SELECTOR)) {
@@ -6331,6 +6359,109 @@ ${content}`
       };
     },
     styles: [pipeline_status_icon_default]
+  };
+
+  // azure-devops/src/features/published-since/published-since.ts
+  var relativeTime = new Intl.RelativeTimeFormat("en", { numeric: "always" }), isDraftUpdate = (thread) => thread.isDeleted !== !0 && thread.properties?.CodeReviewThreadType?.$value === "IsDraftUpdate" && thread.publishedDate !== void 0;
+  function publishedAt(creationDate, threads) {
+    let draftUpdates = threads.filter((thread) => isDraftUpdate(thread)).map((thread) => Date.parse(thread.publishedDate ?? ""));
+    return draftUpdates.length > 0 ? Math.max(...draftUpdates) : Date.parse(creationDate);
+  }
+  function publishedSinceText(publishedAtMs, nowMs) {
+    let elapsed = nowMs - publishedAtMs;
+    if (elapsed < 6e4)
+      return "Published just now";
+    let [count, unit] = largestWholeUnit(elapsed);
+    return `Published ${relativeTime.format(-count, unit)}`;
+  }
+  function largestWholeUnit(elapsedMs) {
+    let days = Math.floor(elapsedMs / 864e5);
+    return days >= 365 ? [Math.floor(days / 365), "year"] : days >= 30 ? [Math.floor(days / 30), "month"] : days >= 1 ? [days, "day"] : elapsedMs >= 36e5 ? [Math.floor(elapsedMs / 36e5), "hour"] : [Math.floor(elapsedMs / 6e4), "minute"];
+  }
+
+  // azure-devops/src/features/published-since/published-at-fetcher.ts
+  var PUBLISHED_AT_REFRESH_INTERVAL_MS = 6e5;
+  async function fetchPublishedAt(client, pullRequest) {
+    let threads = await client.getPullRequestThreads(pullRequest), creationDate = threads.some(
+      (thread) => thread.properties?.CodeReviewThreadType?.$value === "IsDraftUpdate"
+    ) ? "" : await client.getPullRequestCreationDate(pullRequest);
+    return publishedAt(creationDate, threads);
+  }
+  function createPublishedAtFetcher(options) {
+    let fetched = /* @__PURE__ */ new Map(), isFetching = !1;
+    function duePullRequests2() {
+      let due = /* @__PURE__ */ new Map();
+      for (let { pullRequest, isDraft } of options.findRows())
+        isDraft ? fetched.delete(pullRequest.pullRequestId) : (fetched.get(pullRequest.pullRequestId)?.nextFetchAt ?? 0) <= options.now() && due.set(pullRequest.pullRequestId, pullRequest);
+      return [...due.values()];
+    }
+    async function fetchOne(pullRequest) {
+      let { pullRequestId } = pullRequest;
+      try {
+        let at = await fetchPublishedAt(options.client, pullRequest);
+        fetched.set(pullRequestId, {
+          nextFetchAt: options.now() + PUBLISHED_AT_REFRESH_INTERVAL_MS,
+          publishedAt: at
+        });
+      } catch {
+        fetched.set(pullRequestId, {
+          nextFetchAt: options.now() + FAILED_REQUEST_RETRY_MS,
+          publishedAt: fetched.get(pullRequestId)?.publishedAt ?? null
+        });
+      }
+    }
+    return {
+      publishedAt: (pullRequestId) => fetched.get(pullRequestId)?.publishedAt ?? null,
+      async sync() {
+        if (!isFetching) {
+          isFetching = !0;
+          try {
+            for (let pullRequest of duePullRequests2())
+              await fetchOne(pullRequest);
+          } finally {
+            isFetching = !1;
+          }
+        }
+      }
+    };
+  }
+
+  // azure-devops/src/features/published-since/style.css
+  var style_default12 = `/* The publish time column in pull request lists. pr-list.ts adds the cell and its column. */
+col.fix-ado-published-since {
+  width: 12rem;
+}
+
+td.fix-ado-published-since {
+  white-space: nowrap;
+}
+`;
+
+  // azure-devops/src/features/published-since/index.ts
+  var publishedSince = {
+    change: { kind: "new", version: "1.16.0" },
+    description: "A column on each pull request in a list with how long ago it left draft.",
+    id: "published-since",
+    name: "Published since",
+    start({ basePath: basePath2, client, document: document2, now }) {
+      let findRows = () => findPullRequestRows(document2, basePath2).map(({ row, pullRequest }) => ({
+        isDraft: isDraftRow(row),
+        pullRequest,
+        row
+      })), fetcher = createPublishedAtFetcher({ client, findRows, now });
+      function showAll() {
+        for (let { row, pullRequest, isDraft } of findRows()) {
+          let at = isDraft ? null : fetcher.publishedAt(pullRequest.pullRequestId);
+          showPublishedSince(row, at === null ? null : publishedSinceText(at, now()));
+        }
+      }
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          showAll(), (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") && isTabActive2 && fetcher.sync().then(showAll);
+        }
+      };
+    },
+    styles: [style_default12]
   };
 
   // azure-devops/src/features/reload-on-changes/page-reloader.ts
@@ -6523,7 +6654,7 @@ ${content}`
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default12 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default13 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -6570,12 +6701,15 @@ ${content}`
         }
       };
     },
-    styles: [style_default12]
+    styles: [style_default13]
   };
 
   // azure-devops/src/features/index.ts
   var FEATURE_CATEGORIES = [
-    { features: [pipelineStatusOnPullRequests, requiredReviewers], name: "Pull request lists" },
+    {
+      features: [pipelineStatusOnPullRequests, requiredReviewers, publishedSince],
+      name: "Pull request lists"
+    },
     { features: PULL_REQUEST_FEATURES, name: "Pull request" },
     { features: OVERVIEW_FEATURES, name: "Pull request Overview" },
     { features: [daysInColumn], name: "Boards" },
