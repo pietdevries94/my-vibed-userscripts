@@ -146,14 +146,30 @@ function showIssues(panel: HTMLElement, tree: HTMLElement, content: PanelContent
   tree.after(box);
 }
 
-/** Puts the tree first in the panel, in place of the old one or the message. */
+/** The focus key of the tree's control that has focus, or null when focus is elsewhere. */
+function focusedKey(oldTree: Element | null): string | null {
+  const focused = oldTree?.ownerDocument.activeElement ?? null;
+  return focused !== null && oldTree?.contains(focused) === true
+    ? (focused.closest<HTMLElement>("[data-fix-ado-focus-key]")?.dataset.fixAdoFocusKey ?? null)
+    : null;
+}
+
+/**
+ * Puts the tree first in the panel, in place of the old one or the message. Focus moves
+ * to the new tree's same control, or else to its current item, so it does not fall to the page.
+ */
 function placeTree(panel: HTMLElement, tree: HTMLElement): void {
   panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
   const oldTree = panel.querySelector(TREE_SELECTOR);
+  const key = focusedKey(oldTree);
   if (oldTree === null) {
     panel.prepend(tree);
   } else {
     oldTree.replaceWith(tree);
+  }
+  if (key !== null) {
+    const same = tree.querySelector<HTMLElement>(`[data-fix-ado-focus-key="${key}"]`);
+    (same ?? tree.querySelector<HTMLElement>('[aria-current="true"]'))?.focus();
   }
 }
 

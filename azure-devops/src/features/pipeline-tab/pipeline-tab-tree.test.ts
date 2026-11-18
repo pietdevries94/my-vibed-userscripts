@@ -196,3 +196,21 @@ test("when the log moves on by itself, the tree catches up at once", async () =>
   await settle();
   assert.deepEqual(treeNames(document, "step"), ["checkout", "compile*"]);
 });
+
+/** Picks an item the way the owner does: focus first, so a redrawn tree can drop the focus. */
+function focusAndClick(element: Element | null): void {
+  const view = element?.ownerDocument.defaultView ?? null;
+  assert.ok(view !== null && element instanceof view.HTMLElement);
+  element.focus();
+  click(element);
+}
+
+test("picking an item keeps focus on that item in the redrawn tree", async () => {
+  const { document } = setUp();
+  click(pipelineTab(document));
+  await settle();
+  focusAndClick(pickItem(document, "stage", "test"));
+  assert.equal(document.activeElement, pickItem(document, "stage", "test"));
+  focusAndClick(pickItem(document, "stage", "test"));
+  assert.equal(document.activeElement, pickItem(document, "stage", "test"), "after folding");
+});

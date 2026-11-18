@@ -73,6 +73,8 @@ function createItem(context: TreeContext, item: TreeItem): HTMLButtonElement {
   button.type = "button";
   button.className = `fix-ado-pipeline-item ${item.className}`;
   button.setAttribute("aria-current", String(item.isCurrent));
+  const { buildId, jobId, stageId, stepId } = item.pick;
+  button.dataset.fixAdoFocusKey = [buildId, stageId, jobId, stepId].join("/");
   button.append(...createItemParts(document, item));
   button.addEventListener("click", () => {
     const { level } = item;

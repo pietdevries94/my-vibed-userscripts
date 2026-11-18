@@ -50,6 +50,7 @@ function createChoice(context: RunActionContext, choice: RunActionChoice): HTMLB
   const row = document.createElement("button");
   row.type = "button";
   row.className = "fix-ado-pipeline-item fix-ado-pipeline-run-action-choice";
+  row.dataset.fixAdoFocusKey = `run-action/${choice.key}`;
   const text = textElement(document, "fix-ado-pipeline-item-text", "");
   text.append(
     textElement(document, "fix-ado-pipeline-item-name", choice.name),
@@ -88,6 +89,7 @@ function createButton(context: RunActionContext): HTMLButtonElement {
     disabled: isWaiting,
     type: "button",
   });
+  button.dataset.fixAdoFocusKey = "run-action";
   const label = LABELS[action][isWaiting ? "waiting" : "idle"];
   button.append(textElement(document, "bolt-button-text body-m", label));
   if (choices.length > 1) {
