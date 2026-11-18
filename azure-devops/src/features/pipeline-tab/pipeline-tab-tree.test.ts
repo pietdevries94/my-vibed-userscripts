@@ -214,3 +214,14 @@ test("picking an item keeps focus on that item in the redrawn tree", async () =>
   focusAndClick(pickItem(document, "stage", "test"));
   assert.equal(document.activeElement, pickItem(document, "stage", "test"), "after folding");
 });
+
+test("a current run, stage or job says whether it is folded", async () => {
+  const { document } = setUp();
+  click(pipelineTab(document));
+  await settle();
+  const stage = (): Element | null => pickItem(document, "stage", "build");
+  assert.equal(stage()?.getAttribute("aria-expanded"), "true");
+  assert.equal(pickItem(document, "stage", "test")?.hasAttribute("aria-expanded"), false);
+  click(stage());
+  assert.equal(stage()?.getAttribute("aria-expanded"), "false");
+});

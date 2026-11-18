@@ -67,14 +67,23 @@ function foldPick(context: TreeContext, level: TreeLevel): PipelineTabPick {
   return { ...pick, folded: pick.folded === level ? null : level };
 }
 
+/** Marks an item as current, folded or open, and with the key that keeps its focus. */
+function markItem(context: TreeContext, button: HTMLButtonElement, item: TreeItem): void {
+  button.setAttribute("aria-current", String(item.isCurrent));
+  if (item.isCurrent && item.level !== null) {
+    // A click on the current item folds or opens the list under it.
+    button.setAttribute("aria-expanded", String(context.pick.folded !== item.level));
+  }
+  const { buildId, jobId, stageId, stepId } = item.pick;
+  button.dataset.fixAdoFocusKey = [buildId, stageId, jobId, stepId].join("/");
+}
+
 function createItem(context: TreeContext, item: TreeItem): HTMLButtonElement {
   const { document } = context;
   const button = document.createElement("button");
   button.type = "button";
   button.className = `fix-ado-pipeline-item ${item.className}`;
-  button.setAttribute("aria-current", String(item.isCurrent));
-  const { buildId, jobId, stageId, stepId } = item.pick;
-  button.dataset.fixAdoFocusKey = [buildId, stageId, jobId, stepId].join("/");
+  markItem(context, button, item);
   button.append(...createItemParts(document, item));
   button.addEventListener("click", () => {
     const { level } = item;
