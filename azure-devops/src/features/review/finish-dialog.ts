@@ -82,7 +82,9 @@ function chosenVote(dialog: HTMLDialogElement): number | null {
   return VOTE_OPTIONS[Number(checked?.value ?? 0)]?.vote ?? null;
 }
 
+/** Marks the dialog as posting. Esc then leaves it open, so the outcome stays in view. */
 function setBusy(dialog: HTMLDialogElement, isBusy: boolean): void {
+  dialog.toggleAttribute("aria-busy", isBusy);
   for (const control of dialog.querySelectorAll<HTMLButtonElement>("button, input, textarea")) {
     control.disabled = isBusy;
   }
@@ -217,6 +219,11 @@ function openFinishDialog(options: FinishDialogOptions): void {
     const clicked = clickedAction(event.target);
     if (clicked !== null) {
       actions[clicked.action]?.();
+    }
+  });
+  dialog.addEventListener("cancel", (event) => {
+    if (dialog.hasAttribute("aria-busy")) {
+      event.preventDefault();
     }
   });
   dialog.addEventListener("close", () => {
