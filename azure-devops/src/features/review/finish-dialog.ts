@@ -55,7 +55,12 @@ function voteOption(document: Document, index: number): HTMLElement {
 
 function voteOptions(document: Document): HTMLElement {
   const group = element(document, "fieldset", { className: "fix-ado-review-votes" });
-  group.append(...VOTE_OPTIONS.map((_option, index) => voteOption(document, index)));
+  // Names the radio group for a screen reader; the options speak for themselves on screen.
+  const legend = element(document, "legend", {
+    className: "fix-ado-visually-hidden",
+    text: "Your vote",
+  });
+  group.append(legend, ...VOTE_OPTIONS.map((_option, index) => voteOption(document, index)));
   return group;
 }
 

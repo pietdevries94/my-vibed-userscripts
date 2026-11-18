@@ -217,6 +217,16 @@
   margin: 0 0 12px;
 }
 
+/* Read by a screen reader, not shown. */
+.fix-ado-visually-hidden {
+  block-size: 1px;
+  clip-path: inset(50%);
+  inline-size: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+}
+
 .fix-ado-review-votes {
   border: 0;
   display: flex;

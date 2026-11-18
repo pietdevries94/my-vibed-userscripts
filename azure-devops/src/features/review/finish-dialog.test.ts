@@ -97,3 +97,9 @@ test("after a failed submit, focus is back on Submit review", async () => {
   await settle();
   assert.equal(dialog.ownerDocument.activeElement, submit);
 });
+
+test("the vote options are a group named by its legend", () => {
+  const { dialog } = openDialogPage();
+  const group = dialog.querySelector("input[type=radio]")?.closest("fieldset");
+  assert.equal(group?.querySelector(":scope > legend")?.textContent, "Your vote");
+});
