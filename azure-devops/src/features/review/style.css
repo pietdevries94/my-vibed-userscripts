@@ -209,8 +209,15 @@
   width: min(560px, 90vw);
 }
 
+/* Scrolling in the dialog or over the backdrop stops there, and leaves the page behind it. */
+.fix-ado-review-dialog:modal {
+  overscroll-behavior: contain;
+}
+
 .fix-ado-review-dialog::backdrop {
   background-color: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .fix-ado-review-title {

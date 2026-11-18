@@ -46,8 +46,15 @@
     0 4.8px 14.4px rgba(0, 0, 0, 0.18);
 }
 
+/* Scrolling in the panel or over the backdrop stops there, and leaves the page behind it. */
+.fix-ado-settings:modal {
+  overscroll-behavior: contain;
+}
+
 .fix-ado-settings::backdrop {
   background: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .fix-ado-settings-title {
