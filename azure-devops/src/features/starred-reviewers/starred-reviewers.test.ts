@@ -169,3 +169,63 @@ test("the search field finds people and groups to star, without the starred ones
   assert.equal(starred.querySelector(".fix-ado-star-picker"), null, "the field closed");
   assert.deepEqual(starredNames(harness.document), ["Marren Tolk"]);
 });
+
+/** Opens the search field and types `query` into it. Every search finds Quill and Marren. */
+async function searchFor(
+  query: string,
+  starredReviewers = [QUILL],
+): Promise<{
+  input: HTMLInputElement;
+  key: (key: string) => void;
+  starred: HTMLElement;
+  type: (value: string) => void;
+}> {
+  const harness = setUp(starredReviewers);
+  const starred = section(harness.document);
+  starred.querySelector<HTMLElement>(".fix-ado-star-someone")?.click();
+  const input = starred.querySelector<HTMLInputElement>(".fix-ado-star-picker input");
+  assert.ok(input);
+  const view = harness.document.defaultView;
+  assert.ok(view !== null);
+  const type = (value: string): void => {
+    input.value = value;
+    input.dispatchEvent(new view.Event("input"));
+    harness.runScheduled();
+  };
+  type(query);
+  await settle();
+  return {
+    input,
+    key: (key) => {
+      input.dispatchEvent(new view.KeyboardEvent("keydown", { key }));
+    },
+    starred,
+    type,
+  };
+}
+
+test("the arrow keys tell a screen reader which suggestion is highlighted", async () => {
+  const { input, key, starred } = await searchFor("ma");
+  const listbox = starred.querySelector(`#${input.getAttribute("aria-controls") ?? ""}`);
+  assert.equal(listbox?.getAttribute("role"), "listbox");
+  key("ArrowDown");
+  const active = starred.querySelector(`#${input.getAttribute("aria-activedescendant") ?? ""}`);
+  assert.equal(active?.getAttribute("role"), "option");
+  assert.equal(active?.getAttribute("aria-selected"), "true");
+  assert.match(active?.textContent ?? "", /Marren Tolk/u);
+});
+
+test("an emptied search field says its suggestions are closed", async () => {
+  const { input, key, type } = await searchFor("ma");
+  key("ArrowDown");
+  type("");
+  assert.equal(input.getAttribute("aria-expanded"), "false");
+  assert.equal(input.hasAttribute("aria-activedescendant"), false);
+});
+
+test("no matches is a polite status, not an option in the list", async () => {
+  const { starred } = await searchFor("ma", [QUILL, MARREN]);
+  const none = starred.querySelector(".bolt-suggestions-none-region");
+  assert.equal(none?.getAttribute("role"), "status");
+  assert.equal(none?.closest('[role="listbox"]'), null);
+});

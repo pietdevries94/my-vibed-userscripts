@@ -6,6 +6,8 @@ import { wrapIn } from "../../pipeline/pipeline-issue-list.ts";
 
 const SEARCH_DELAY_MS = 300;
 const SUGGESTED_CLASS = "bolt-suggestions-isSuggested";
+/** One picker is open at a time, so its list has a fixed id. */
+const LIST_ID = "fix-ado-star-picker-list";
 
 interface StarPickerOptions {
   document: Document;
@@ -55,7 +57,11 @@ function createPersonaName(document: Document, identity: Identity): HTMLElement 
   });
 }
 
-function createSuggestion(options: StarPickerOptions, identity: Identity): HTMLElement {
+function createSuggestion(
+  options: StarPickerOptions,
+  identity: Identity,
+  index: number,
+): HTMLElement {
   const { document } = options;
   const text = element(document, "div", {
     children: [
@@ -78,7 +84,7 @@ function createSuggestion(options: StarPickerOptions, identity: Identity): HTMLE
     options.onPick(identity);
   });
   return element(document, "div", {
-    attributes: { role: "option" },
+    attributes: { "aria-selected": "false", id: `${LIST_ID}-${index}`, role: "option" },
     children: [item],
     className: "flex-noshrink",
   });
@@ -90,7 +96,7 @@ function createNoResults(document: Document): HTMLElement {
     text: "No identities found",
   });
   return element(document, "div", {
-    attributes: { role: "alert" },
+    attributes: { role: "status" },
     children: [text],
     className: "bolt-suggestions-none-region flex-row flex-grow",
   });
@@ -98,7 +104,7 @@ function createNoResults(document: Document): HTMLElement {
 
 function createCallout(document: Document): { callout: HTMLElement; list: HTMLElement } {
   const list = element(document, "div", {
-    attributes: { role: "listbox" },
+    attributes: { id: LIST_ID, role: "listbox" },
     className: "bolt-suggestions-container flex-column flex-grow v-scroll-auto h-scroll-hidden",
   });
   const callout = wrapIn(document, list, [
@@ -121,6 +127,7 @@ function createSearchInput(document: Document): HTMLInputElement {
   input.setAttribute("aria-label", "Search people and groups to star");
   input.setAttribute("aria-autocomplete", "list");
   input.setAttribute("aria-expanded", "false");
+  input.setAttribute("aria-controls", LIST_ID);
   return input;
 }
 
@@ -136,16 +143,28 @@ function createField(document: Document): { field: HTMLElement; input: HTMLInput
   return { field, input };
 }
 
+/** Shows or hides the suggestions, and tells the field. */
+function setExpanded({ callout, input }: PickerParts, isExpanded: boolean): void {
+  callout.hidden = !isExpanded;
+  input.setAttribute("aria-expanded", String(isExpanded));
+  input.removeAttribute("aria-activedescendant");
+}
+
 function showFound(parts: PickerParts, found: Identity[]): void {
-  const { options, list, callout, input } = parts;
+  const { options, list } = parts;
   const unstarred = found.filter(({ id }) => !options.isStarred(id));
+  // "No identities found" is a status, so the list is a listbox only while it holds options.
+  if (unstarred.length > 0) {
+    list.setAttribute("role", "listbox");
+  } else {
+    list.removeAttribute("role");
+  }
   list.replaceChildren(
     ...(unstarred.length === 0
       ? [createNoResults(options.document)]
-      : unstarred.map((identity) => createSuggestion(options, identity))),
+      : unstarred.map((identity, index) => createSuggestion(options, identity, index))),
   );
-  callout.hidden = false;
-  input.setAttribute("aria-expanded", "true");
+  setExpanded(parts, true);
 }
 
 async function search(parts: PickerParts, query: string): Promise<void> {
@@ -167,7 +186,7 @@ function onInput(parts: PickerParts): void {
   stopSearch(parts);
   const query = parts.input.value.trim();
   if (query === "") {
-    parts.callout.hidden = true;
+    setExpanded(parts, false);
     return;
   }
   parts.cancelSearch = parts.options.schedule(() => {
@@ -175,13 +194,22 @@ function onInput(parts: PickerParts): void {
   }, SEARCH_DELAY_MS);
 }
 
-/** Moves the highlight one suggestion up or down. */
-function moveSuggestion(list: HTMLElement, step: number): void {
-  const items = [...list.querySelectorAll(".bolt-suggestions-item")];
-  const current = items.findIndex((item) => item.classList.contains(SUGGESTED_CLASS));
-  const next = Math.min(Math.max(current + step, 0), items.length - 1);
-  items[current]?.classList.remove(SUGGESTED_CLASS);
-  items[next]?.classList.add(SUGGESTED_CLASS);
+/** Moves the highlight one suggestion up or down, and points the field at it. */
+function moveSuggestion({ input, list }: PickerParts, step: number): void {
+  const options = [...list.querySelectorAll('[role="option"]')];
+  const current = options.findIndex((option) => option.getAttribute("aria-selected") === "true");
+  const next = Math.min(Math.max(current + step, 0), options.length - 1);
+  for (const [index, option] of options.entries()) {
+    option.setAttribute("aria-selected", String(index === next));
+    option
+      .querySelector(".bolt-suggestions-item")
+      ?.classList.toggle(SUGGESTED_CLASS, index === next);
+  }
+
+  const nextOption = options[next];
+  if (nextOption !== undefined) {
+    input.setAttribute("aria-activedescendant", nextOption.id);
+  }
 }
 
 function onKeyDown(parts: PickerParts, event: KeyboardEvent): void {
@@ -189,8 +217,8 @@ function onKeyDown(parts: PickerParts, event: KeyboardEvent): void {
     parts.options.onClose();
   } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
-    moveSuggestion(parts.list, event.key === "ArrowDown" ? 1 : -1);
-  } else if (event.key === "Enter") {
+    moveSuggestion(parts, event.key === "ArrowDown" ? 1 : -1);
+  } else if (event.key === "Enter" && !event.isComposing) {
     event.preventDefault();
     parts.list.querySelector<HTMLElement>(`.${SUGGESTED_CLASS}`)?.click();
   }
