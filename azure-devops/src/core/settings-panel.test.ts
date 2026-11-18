@@ -204,3 +204,12 @@ test("the panel links to a new GitHub issue, opened in a new tab", () => {
   assert.equal(link.target, "_blank");
   assert.equal(link.rel, "noopener noreferrer");
 });
+
+test("the panel is named by its visible heading", () => {
+  const page = pageWith(TOP_BAR);
+  page.panel.open();
+  const dialog = page.dialog();
+  const heading = page.document.querySelector(`#${dialog?.getAttribute("aria-labelledby") ?? ""}`);
+  assert.equal(heading?.textContent, "Fix Azure DevOps settings");
+  assert.equal(dialog?.hasAttribute("aria-label"), false);
+});

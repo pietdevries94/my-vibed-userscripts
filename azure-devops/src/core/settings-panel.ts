@@ -11,6 +11,7 @@ const ISSUE_LINK_TEXT = "Found a bug or have a suggestion?";
 const NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new";
 const TOP_BAR_SELECTOR = ".region-header-menubar";
 const DIALOG_CLASS = "fix-ado-settings";
+const TITLE_ID = "fix-ado-settings-title";
 const CHIP_TEXT = { new: "New", updated: "Updated" } as const;
 
 interface SettingsPanelOptions {
@@ -179,13 +180,18 @@ function categorySection(
 function createDialog(options: SettingsPanelOptions, unseen: Feature[]): HTMLDialogElement {
   const { document } = options;
   const dialog = element(document, "dialog", { className: DIALOG_CLASS });
-  dialog.setAttribute("aria-label", SETTINGS_TITLE);
+  dialog.setAttribute("aria-labelledby", TITLE_ID);
   const { buttons, save } = createButtons(dialog, options);
+  const title = element(document, "h2", {
+    className: "fix-ado-settings-title",
+    text: SETTINGS_TITLE,
+  });
+  title.id = TITLE_ID;
   dialog.addEventListener("change", () => {
     save.disabled = changedChoices(dialog, options).size === 0;
   });
   dialog.append(
-    element(document, "h2", { className: "fix-ado-settings-title", text: SETTINGS_TITLE }),
+    title,
     ...options.categories.map((category) => categorySection(category, options, unseen)),
     buttons,
   );

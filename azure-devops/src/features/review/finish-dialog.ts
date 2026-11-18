@@ -6,6 +6,7 @@ import type { PendingComment } from "./review-store.ts";
 
 const DIALOG_CLASS = "fix-ado-review-dialog";
 const TITLE = "Finish your review";
+const TITLE_ID = "fix-ado-review-dialog-title";
 
 /** The vote each option sends. "Comment" sends none, so an earlier vote stays. */
 const VOTE_OPTIONS: { label: string; description: string; vote: number | null }[] = [
@@ -174,11 +175,11 @@ function statusLine(document: Document): HTMLElement {
 function createDialog(options: FinishDialogOptions): HTMLDialogElement {
   const { document } = options;
   const dialog = element(document, "dialog", { className: DIALOG_CLASS });
-  // Azure DevOps's role for a dialog: the script holds a page reload while one is open.
-  dialog.setAttribute("role", "dialog");
-  dialog.setAttribute("aria-label", TITLE);
+  const title = element(document, "h2", { className: "fix-ado-review-title", text: TITLE });
+  title.id = TITLE_ID;
+  dialog.setAttribute("aria-labelledby", TITLE_ID);
   dialog.append(
-    element(document, "h2", { className: "fix-ado-review-title", text: TITLE }),
+    title,
     summaryBox(document),
     voteOptions(document),
     pendingList(document, options.pending()),

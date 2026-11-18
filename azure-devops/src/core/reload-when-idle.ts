@@ -3,7 +3,7 @@ const LAST_RELOAD_STORAGE_KEY = "fix-ado-last-page-reload";
 
 function isOwnerBusy(document: Document): boolean {
   const isTyping = document.activeElement?.matches("input, textarea, [contenteditable]") ?? false;
-  const hasOpenDialog = document.querySelector('[role="dialog"]') !== null;
+  const hasOpenDialog = document.querySelector('[role="dialog"], dialog[open]') !== null;
   return isTyping || hasOpenDialog;
 }
 
@@ -31,4 +31,4 @@ function reloadWhenIdle(document: Document): void {
   }
 }
 
-export { reloadWhenIdle };
+export { isOwnerBusy, reloadWhenIdle };

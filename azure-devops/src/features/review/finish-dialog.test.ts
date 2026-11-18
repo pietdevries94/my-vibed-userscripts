@@ -99,3 +99,15 @@ test("Esc closes the dialog when nothing is being posted", () => {
   assert.equal(pressEscape(), true);
   assert.equal(dialog.isConnected, false);
 });
+
+test("the dialog is named by its visible heading and keeps its native role", () => {
+  const { dialog } = openDialogPage();
+  const heading = dialog.ownerDocument.querySelector(
+    `#${dialog.getAttribute("aria-labelledby") ?? ""}`,
+  );
+  assert.equal(heading?.textContent, "Finish your review");
+  assert.deepEqual(
+    [dialog.hasAttribute("role"), dialog.hasAttribute("aria-label")],
+    [false, false],
+  );
+});
