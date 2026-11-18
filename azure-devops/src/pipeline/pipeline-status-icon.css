@@ -45,3 +45,11 @@
     animation-duration: 6s;
   }
 }
+
+/* Forced colors turn the disc into the text colour, which can be white; the marks take the
+   background colour, so succeeded, failed and expired stay apart. */
+@media (forced-colors: active) {
+  .fix-ado-pipeline-status path[stroke="#fff"] {
+    stroke: Canvas;
+  }
+}

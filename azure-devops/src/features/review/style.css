@@ -179,6 +179,14 @@
   width: 16px;
 }
 
+/* Forced colors drop the background, which is all the dot is. */
+@media (forced-colors: active) {
+  .fix-ado-review-pending-dot {
+    background-color: CanvasText;
+    forced-color-adjust: none;
+  }
+}
+
 /* "Submit review" in the pull request's tab bar. */
 .fix-ado-review-header {
   align-items: center;

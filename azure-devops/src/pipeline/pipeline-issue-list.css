@@ -101,6 +101,16 @@
   background: var(--component-status-error, rgb(205, 74, 69));
 }
 
+/* Dark text: white on the warning orange is about 3:1. */
 .fix-ado-issue-count[data-kind="warning"] {
   background: var(--component-status-warning, rgb(214, 119, 48));
+  color: rgba(0, 0, 0, 0.9);
+}
+
+/* Forced colors turn the disc into the text colour, which can be white; the mark takes the
+   background colour. */
+@media (forced-colors: active) {
+  .fix-ado-kind-icon path[fill="#fff"] {
+    fill: Canvas;
+  }
 }
