@@ -13,6 +13,7 @@ Change only the parts the owner names. When a word could mean two parts of the p
 
 ## Loop
 
+0. **Guides**: when the change adds or changes markup, CSS or DOM code, load `modern-web-guidance`. Search and retrieve a guide for each UI pattern it builds, such as a dialog, a toggle button, a tree or a loading state. Done when each pattern has a retrieved guide, or a rephrased search that found none. The code follows those guides. Where the site's own markup or classes must be matched to blend in, the site wins; say so in the hand-off.
 1. **Red**: write a failing test.
    - Unit tests sit next to the code as `*.test.ts`, with small invented inputs in the test.
    - Tests that read `<script>/fixtures/` are named `*.fixtures.test.ts`. They skip when fixtures are missing; `npm run test:fixtures <script>` runs them for real.

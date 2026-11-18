@@ -20,6 +20,7 @@ Only what every session needs:
 - In a new worktree: `npm ci`, then `npm run fixtures:link`.
 - Push only when the owner says "push" or "release".
 - Load `real-site` before using any `real-site` browser tool.
+- The browser support policy: the owner's current Chrome and Firefox.
 - One trigger line per skill.
 
 ## Sealed refusals
@@ -41,6 +42,7 @@ All loaded on demand.
 - `real-site`: open scripts only. The guarded browser, reading pages, capture through `browser_evaluate`, and every rule in [open-script.md](open-script.md): evaluate only reads, no action URLs, stop on a block or expiry, report visits. These rules are not in `AGENTS.md`. The guard, the allowlist and the deny rules are the backstop when the skill does not load.
 - `sealed-capture`: the five hand-offs in [sealed-workflow.md](sealed-workflow.md), plus the open-to-sealed steps from [open-script.md](open-script.md) under one heading.
 - `release`: detection, wait for the owner's "release", run the command, write the commit body. See [releasing.md](releasing.md).
+- `modern-web-guidance`: installed from `GoogleChrome/modern-web-guidance`, pinned in `skills-lock.json`. `feature` loads it before markup, CSS or DOM code. `AGENTS.md` sets the browser support policy it reads: current Chrome and Firefox, no fallbacks for features both ship.
 
 ## Commands
 

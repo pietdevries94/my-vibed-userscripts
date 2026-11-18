@@ -33,6 +33,11 @@ The repo is public. Real values from a site stay out of code, tests, comments, c
 - `real-site`: load before any `real-site` browser tool.
 - `sealed-capture`: get fixtures for a sealed script, or turn an open script sealed.
 - `release`: the owner says "release", or a change touches `shared/runtime/`.
+- `modern-web-guidance`: before writing markup, CSS or DOM code.
+
+## Browser support
+
+Scripts run only in the owner's current Chrome and Firefox. A web feature that ships in both needs no fallback, Baseline Newly available included.
 
 ## Lessons
 
