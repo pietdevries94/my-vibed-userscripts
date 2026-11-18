@@ -44,7 +44,10 @@
   padding: 0 12px;
 }
 
-[data-fix-ado-thread="collapsed"] .repos-discussion-comment {
+/* Azure DevOps gives a first comment with replies its own border and bottom padding, in a rule
+   as specific as the plain one. The second selector outranks it. */
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment,
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment.has-replies {
   padding: 4px 20px;
   border-bottom: 0;
 }
