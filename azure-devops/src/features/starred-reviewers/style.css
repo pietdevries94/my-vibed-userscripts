@@ -1,6 +1,7 @@
-/* Starred reviewers: a star on each reviewer row, shown on hover or when starred. */
+/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
+   Hidden by opacity, not visibility, so the keyboard can still reach it. */
 .repos-reviewer > .fix-ado-star {
-  visibility: hidden;
+  opacity: 0;
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
   padding: 4px;
 }
@@ -8,7 +9,7 @@
 .repos-reviewer.focused > .fix-ado-star,
 .repos-reviewer > .fix-ado-star:focus-visible,
 .repos-reviewer > .fix-ado-star[aria-pressed="true"] {
-  visibility: visible;
+  opacity: 1;
 }
 .fix-ado-star-icon path {
   fill: none;
