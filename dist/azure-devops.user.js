@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.17.1
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.18.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, a New chip that glows on pushes and other changes you have not seen, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -652,6 +652,213 @@
       };
     },
     styles: [style_default4]
+  };
+
+  // azure-devops/src/features/new-activity-chips/new-activity-chips.ts
+  var ROW_SELECTOR2 = ".activity-feed-list .bolt-timeline-row", FLAGGED_ROW_SELECTOR = ".activity-feed-sequence.new", THREAD_SELECTOR = ".repos-discussion-thread", CHIP_CLASS = "fix-ado-new-chip";
+  function createChip(document2) {
+    let chip = document2.createElement("div");
+    chip.className = `${CHIP_CLASS} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
+    let content = document2.createElement("div");
+    return content.className = "bolt-pill-content text-ellipsis", content.textContent = "New", chip.append(content), chip;
+  }
+  function isNewRow(row, time, lastVisit) {
+    if (row.querySelector(THREAD_SELECTOR) !== null)
+      return !1;
+    let happenedAt = Date.parse(time.dateTime);
+    return lastVisit !== null && happenedAt > lastVisit || row.querySelector(FLAGGED_ROW_SELECTOR) !== null;
+  }
+  function syncRow(row, lastVisit) {
+    let chip = row.querySelector(`.${CHIP_CLASS}`), time = row.querySelector("time"), timeBox = time?.parentElement ?? null;
+    if (time === null || timeBox === null || !isNewRow(row, time, lastVisit)) {
+      chip?.remove();
+      return;
+    }
+    (chip === null || timeBox.nextElementSibling !== chip) && timeBox.after(chip ?? createChip(row.ownerDocument));
+  }
+  function createNewActivityChips({
+    document: document2,
+    now,
+    visits
+  }) {
+    let shownKey = null, lastVisit = null;
+    function leave() {
+      shownKey !== null && visits.save(shownKey, now());
+    }
+    function sync4(pullRequestKey) {
+      if (pullRequestKey !== shownKey && (leave(), shownKey = pullRequestKey, lastVisit = pullRequestKey === null ? null : visits.lastVisit(pullRequestKey)), pullRequestKey !== null)
+        for (let row of document2.querySelectorAll(ROW_SELECTOR2))
+          syncRow(row, lastVisit);
+    }
+    return { leave, sync: sync4 };
+  }
+
+  // azure-devops/src/features/new-activity-chips/visit-store.ts
+  var KEY_PREFIX = "last-visit:", visitedAtOf = (value) => typeof value == "number" && Number.isFinite(value) ? value : null;
+  function createVisitStore(storage) {
+    return {
+      deleteOlderThan(maxAgeMs, now) {
+        for (let key of storage.keys().filter((name) => name.startsWith(KEY_PREFIX))) {
+          let visitedAt = visitedAtOf(storage.load(key));
+          (visitedAt === null || now - visitedAt > maxAgeMs) && storage.remove(key);
+        }
+      },
+      lastVisit: (pullRequestKey) => visitedAtOf(storage.load(`${KEY_PREFIX}${pullRequestKey}`)),
+      save(pullRequestKey, visitedAt) {
+        storage.save(`${KEY_PREFIX}${pullRequestKey}`, visitedAt);
+      }
+    };
+  }
+
+  // azure-devops/src/pull-requests/pull-request-link.ts
+  function apiBasePath(location2) {
+    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
+    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
+  }
+  function pathSegments(pathname) {
+    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
+  }
+  function projectOf(segments, gitIndex, basePath2) {
+    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
+    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
+  }
+  function parsePullRequestHref(href, basePath2) {
+    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
+    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
+  }
+  function parsePullRequestListLocation(location2, basePath2) {
+    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
+    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
+      return null;
+    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
+    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
+  }
+  function isPullRequestInboxLocation(location2) {
+    return pathSegments(location2.pathname).at(-1) === "_pulls";
+  }
+  function isPullRequestCreateLocation(location2) {
+    let segments = pathSegments(location2.pathname);
+    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
+  }
+
+  // azure-devops/src/boards/board.ts
+  var CARD_SELECTOR = ".wit-card[data-itemid]";
+  function isBoardLocation(location2) {
+    return location2.pathname.includes("/_boards/board/");
+  }
+  function findBoardCardIds(root) {
+    let ids = /* @__PURE__ */ new Set();
+    for (let card of root.querySelectorAll(CARD_SELECTOR)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && ids.add(id);
+    }
+    return [...ids];
+  }
+  function hasBoardChanged(loaded, current) {
+    for (let [id, workItem] of current.workItems) {
+      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
+      if (isChanged && !isMyOwnChange)
+        return !0;
+    }
+    return !1;
+  }
+  function watchBoard(client, location2, cardIds) {
+    return {
+      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
+      extendLoaded: (loaded, current) => ({
+        myUserId: current.myUserId,
+        workItems: new Map([...current.workItems, ...loaded.workItems])
+      }),
+      async fetchSnapshot() {
+        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
+          client.getWorkItems(cardIds),
+          client.getAuthenticatedUserId()
+        ]);
+        return {
+          retryAfterSeconds,
+          snapshot: {
+            myUserId,
+            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
+          }
+        };
+      },
+      hasChanged: hasBoardChanged,
+      key: `board:${location2.pathname}${location2.search}`
+    };
+  }
+
+  // azure-devops/src/core/page.ts
+  function parsePullRequestPage(location2, basePath2) {
+    if (isPullRequestCreateLocation(location2))
+      return { kind: "pull-request-create" };
+    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
+    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
+  }
+  function parsePage(location2, basePath2) {
+    if (isBoardLocation(location2))
+      return { kind: "board" };
+    let listPage = parsePullRequestListLocation(location2, basePath2);
+    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
+  }
+  function pullRequestOf(page) {
+    return page.kind === "pull-request" ? page.pullRequest : null;
+  }
+
+  // azure-devops/src/features/new-activity-chips/style.css
+  var style_default5 = `/* The New chip glows like an unread comment, in Azure DevOps's colour for links and focus. */
+.bolt-pill.fix-ado-new-chip {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  box-shadow: 0 0 6px 2px var(--communication-background, rgb(0, 120, 212));
+  color: var(--communication-foreground, rgb(0, 90, 158));
+  font-weight: 600;
+}
+
+/* A push shows its time in a block under its title: the chip sits on the same line. */
+.fix-ado-new-chip {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+/* Forced colors drop box shadows, so the glow becomes an outline there. */
+@media (forced-colors: active) {
+  .bolt-pill.fix-ado-new-chip {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+}
+`;
+
+  // azure-devops/src/features/new-activity-chips/index.ts
+  var MAX_VISIT_AGE_MS = 2592e6, newActivityChips = {
+    change: { kind: "new", version: "1.18.0" },
+    description: "A New chip that glows on pushes, votes and other lines on a pull request's Overview that came after your last visit.",
+    id: "new-activity-chips",
+    name: "New chips on pushes and other changes",
+    start({ basePath: basePath2, document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2)
+        return null;
+      let visits = createVisitStore({
+        keys: () => GM_listValues(),
+        load: (key) => GM_getValue(key, null),
+        remove: (key) => {
+          GM_deleteValue(key);
+        },
+        save: (key, visitedAt) => {
+          GM_setValue(key, visitedAt);
+        }
+      });
+      visits.deleteOlderThan(MAX_VISIT_AGE_MS, now());
+      let chips = createNewActivityChips({ document: document2, now, visits }), keyOf = ({ project, pullRequestId, repository }) => `${location.host}${basePath2}/${project}/${repository}/${pullRequestId}`;
+      return globalThis.addEventListener("pagehide", chips.leave), document2.addEventListener("visibilitychange", () => {
+        document2.visibilityState === "hidden" && chips.leave();
+      }), {
+        sync({ page }) {
+          let pullRequest = pullRequestOf(page);
+          chips.sync(pullRequest === null ? null : keyOf(pullRequest));
+        }
+      };
+    },
+    styles: [style_default5]
   };
 
   // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
@@ -1343,100 +1550,6 @@ ${issue.message ?? ""}`;
 }
 `;
 
-  // azure-devops/src/pull-requests/pull-request-link.ts
-  function apiBasePath(location2) {
-    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
-    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
-  }
-  function pathSegments(pathname) {
-    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
-  }
-  function projectOf(segments, gitIndex, basePath2) {
-    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
-    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
-  }
-  function parsePullRequestHref(href, basePath2) {
-    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
-    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
-  }
-  function parsePullRequestListLocation(location2, basePath2) {
-    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
-    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
-      return null;
-    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
-    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
-  }
-  function isPullRequestInboxLocation(location2) {
-    return pathSegments(location2.pathname).at(-1) === "_pulls";
-  }
-  function isPullRequestCreateLocation(location2) {
-    let segments = pathSegments(location2.pathname);
-    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
-  }
-
-  // azure-devops/src/boards/board.ts
-  var CARD_SELECTOR = ".wit-card[data-itemid]";
-  function isBoardLocation(location2) {
-    return location2.pathname.includes("/_boards/board/");
-  }
-  function findBoardCardIds(root) {
-    let ids = /* @__PURE__ */ new Set();
-    for (let card of root.querySelectorAll(CARD_SELECTOR)) {
-      let id = Number(card.dataset.itemid);
-      Number.isInteger(id) && id > 0 && ids.add(id);
-    }
-    return [...ids];
-  }
-  function hasBoardChanged(loaded, current) {
-    for (let [id, workItem] of current.workItems) {
-      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
-      if (isChanged && !isMyOwnChange)
-        return !0;
-    }
-    return !1;
-  }
-  function watchBoard(client, location2, cardIds) {
-    return {
-      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
-      extendLoaded: (loaded, current) => ({
-        myUserId: current.myUserId,
-        workItems: new Map([...current.workItems, ...loaded.workItems])
-      }),
-      async fetchSnapshot() {
-        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
-          client.getWorkItems(cardIds),
-          client.getAuthenticatedUserId()
-        ]);
-        return {
-          retryAfterSeconds,
-          snapshot: {
-            myUserId,
-            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
-          }
-        };
-      },
-      hasChanged: hasBoardChanged,
-      key: `board:${location2.pathname}${location2.search}`
-    };
-  }
-
-  // azure-devops/src/core/page.ts
-  function parsePullRequestPage(location2, basePath2) {
-    if (isPullRequestCreateLocation(location2))
-      return { kind: "pull-request-create" };
-    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
-    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
-  }
-  function parsePage(location2, basePath2) {
-    if (isBoardLocation(location2))
-      return { kind: "board" };
-    let listPage = parsePullRequestListLocation(location2, basePath2);
-    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
-  }
-  function pullRequestOf(page) {
-    return page.kind === "pull-request" ? page.pullRequest : null;
-  }
-
   // azure-devops/src/features/overview-pipeline-issues/index.ts
   var overviewPipelineIssues = {
     change: { kind: "new", version: "1.7.2" },
@@ -1469,19 +1582,19 @@ ${issue.message ?? ""}`;
   };
 
   // azure-devops/src/features/resolved-thread-chips/resolved-thread-chips.ts
-  var CHIP_CLASS = "fix-ado-thread-chip", UNRESOLVED_LABEL = "Unresolved", RESOLVED_CHIP = { className: "fix-ado-resolved-chip", label: RESOLVED_STATUS }, UNRESOLVED_CHIP = { className: "fix-ado-unresolved-chip", label: UNRESOLVED_LABEL };
+  var CHIP_CLASS2 = "fix-ado-thread-chip", UNRESOLVED_LABEL = "Unresolved", RESOLVED_CHIP = { className: "fix-ado-resolved-chip", label: RESOLVED_STATUS }, UNRESOLVED_CHIP = { className: "fix-ado-unresolved-chip", label: UNRESOLVED_LABEL };
   function chipKindOf(feedThread) {
     return feedThread?.isResolved === !0 ? RESOLVED_CHIP : feedThread?.isUnresolved === !0 ? UNRESOLVED_CHIP : null;
   }
-  function createChip(document2, { className, label }) {
+  function createChip2(document2, { className, label }) {
     let chip = document2.createElement("div");
-    chip.className = `${CHIP_CLASS} ${className} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
+    chip.className = `${CHIP_CLASS2} ${className} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
     let content = document2.createElement("div");
     return content.className = "bolt-pill-content text-ellipsis", content.textContent = label, chip.append(content), chip;
   }
   function syncThread(thread) {
-    let feedThread = feedThreadOf(thread), kind = chipKindOf(feedThread), chip = thread.querySelector(`.${CHIP_CLASS}`);
-    kind !== null && chip?.classList.contains(kind.className) === !0 || (chip?.remove(), feedThread !== null && kind !== null && feedThread.timeBox.append(createChip(thread.ownerDocument, kind)));
+    let feedThread = feedThreadOf(thread), kind = chipKindOf(feedThread), chip = thread.querySelector(`.${CHIP_CLASS2}`);
+    kind !== null && chip?.classList.contains(kind.className) === !0 || (chip?.remove(), feedThread !== null && kind !== null && feedThread.timeBox.append(createChip2(thread.ownerDocument, kind)));
   }
   function createResolvedThreadChips({ document: document2 }) {
     function sync4() {
@@ -1492,7 +1605,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/resolved-thread-chips/style.css
-  var style_default5 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success,
+  var style_default6 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success,
    Unresolved in its colour for warnings. */
 .bolt-pill.fix-ado-thread-chip {
   font-weight: 600;
@@ -1525,7 +1638,7 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default5]
+    styles: [style_default6]
   };
 
   // azure-devops/src/core/scroll-behavior.ts
@@ -1613,7 +1726,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/scroll-to-bottom/style.css
-  var style_default6 = `/* The button that scrolls a pull request's Overview to its bottom: round, in the corner of the window. */
+  var style_default7 = `/* The button that scrolls a pull request's Overview to its bottom: round, in the corner of the window. */
 .fix-ado-scroll-to-bottom {
   position: fixed;
   right: 32px;
@@ -1675,13 +1788,13 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default6]
+    styles: [style_default7]
   };
 
   // azure-devops/src/features/unread-comments/unread-comments.ts
-  var FEED_SELECTOR3 = ".activity-feed-list", ROW_SELECTOR2 = ".bolt-timeline-row", THREAD_SELECTOR = ".repos-discussion-thread", COMMENT_SELECTOR = ".repos-comment-viewer", NEW_ROW_SELECTOR = ".activity-feed-sequence.new", STICKY_TAB_BAR_SELECTOR = ".bolt-tabbar.sticky", FILTER_SELECTOR3 = ".repos-activity-filter-dropdown", FIRST_UNREAD_CLASS = "fix-ado-first-unread", FIRST_UNREAD_LABEL = "Go to first unread", NEXT_UNREAD_CLASS = "fix-ado-next-unread", NEXT_UNREAD_LABEL = "Go to next unread";
+  var FEED_SELECTOR3 = ".activity-feed-list", ROW_SELECTOR3 = ".bolt-timeline-row", THREAD_SELECTOR2 = ".repos-discussion-thread", COMMENT_SELECTOR = ".repos-comment-viewer", NEW_ROW_SELECTOR = ".activity-feed-sequence.new", STICKY_TAB_BAR_SELECTOR = ".bolt-tabbar.sticky", FILTER_SELECTOR3 = ".repos-activity-filter-dropdown", FIRST_UNREAD_CLASS = "fix-ado-first-unread", FIRST_UNREAD_LABEL = "Go to first unread", NEXT_UNREAD_CLASS = "fix-ado-next-unread", NEXT_UNREAD_LABEL = "Go to next unread";
   function rowsAsShown(feed) {
-    let rows = [...feed.querySelectorAll(ROW_SELECTOR2)];
+    let rows = [...feed.querySelectorAll(ROW_SELECTOR3)];
     return feed.dataset.fixAdoActivityOrder === "oldest-first" ? rows.toReversed() : rows;
   }
   function unreadGroupsOf(thread) {
@@ -1708,7 +1821,7 @@ ${issue.message ?? ""}`;
     return first === void 0 ? [] : [{ comments, target: first }];
   }
   function stopsOfRow(row) {
-    let thread = row.querySelector(THREAD_SELECTOR);
+    let thread = row.querySelector(THREAD_SELECTOR2);
     return thread === null ? [] : thread.querySelector(HEADER_SELECTOR) === null ? row.querySelector(NEW_ROW_SELECTOR) === null ? [] : [{ comments: [], target: row }] : unreadGroupsOf(thread).flatMap((comments) => stopOfGroup(comments));
   }
   function readStops(document2) {
@@ -1748,7 +1861,7 @@ ${issue.message ?? ""}`;
     feed !== null && feed.style.getPropertyValue("--fix-ado-sticky-height") !== height && feed.style.setProperty("--fix-ado-sticky-height", height);
   }
   function shownPartOf(target) {
-    return target.checkVisibility() ? target : target.closest(THREAD_SELECTOR) ?? target;
+    return target.checkVisibility() ? target : target.closest(THREAD_SELECTOR2) ?? target;
   }
   function createStopScroller(document2) {
     let scrollCount = 0;
@@ -1800,7 +1913,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/unread-comments/style.css
-  var style_default7 = `/* Unread comments glow like a required reviewer, one glow around each group of unread comments
+  var style_default8 = `/* Unread comments glow like a required reviewer, one glow around each group of unread comments
    that follow each other. The thread clips what spills outside it, so the glow sits inside. Each
    comment of a group draws its piece: across the 4px gap to a neighbour in the group, and cut off
    there, so no edge shows between them. */
@@ -1920,7 +2033,7 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default7]
+    styles: [style_default8]
   };
 
   // azure-devops/src/features/overview-features.ts
@@ -1932,7 +2045,8 @@ ${issue.message ?? ""}`;
     joinedReviewerLines,
     resolvedThreadChips,
     collapsibleThreads,
-    unreadComments
+    unreadComments,
+    newActivityChips
   ];
 
   // azure-devops/src/features/pipeline-tab/pipeline-run-frame.ts
@@ -3070,7 +3184,7 @@ ${issue.message ?? ""}`;
 `;
 
   // azure-devops/src/features/pipeline-tab/style.css
-  var style_default8 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+  var style_default9 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
 .repos-pr-details-page[data-fix-ado-pipeline-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
   display: none !important;
@@ -3298,13 +3412,13 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         }
       };
     },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default8]
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default9]
   };
 
   // azure-devops/src/features/review/review-store.ts
-  var KEY_PREFIX = "review:";
+  var KEY_PREFIX2 = "review:";
   function reviewKey(hostAndBasePath, { project, pullRequestId, repository }) {
-    return `${KEY_PREFIX}${hostAndBasePath}/${project}/${repository}/${pullRequestId}`;
+    return `${KEY_PREFIX2}${hostAndBasePath}/${project}/${repository}/${pullRequestId}`;
   }
   function isLineAnchor(value) {
     return typeof value == "object" && value !== null && "filePath" in value && typeof value.filePath == "string" && "side" in value && (value.side === "left" || value.side === "right") && "line" in value && typeof value.line == "number" && "lineLength" in value && typeof value.lineLength == "number" && "iteration" in value && (value.iteration === null || typeof value.iteration == "number");
@@ -3317,7 +3431,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
   var isPending = ({ postedThreadId }) => postedThreadId === null;
   function deleteReviewsBefore(storage, time) {
-    for (let key of storage.keys().filter((name) => name.startsWith(KEY_PREFIX))) {
+    for (let key of storage.keys().filter((name) => name.startsWith(KEY_PREFIX2))) {
       let stored = storage.load(key);
       isReview(stored) && stored.updatedAt < time && storage.remove(key);
     }
@@ -3610,7 +3724,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/pending-cards.ts
-  var CARD_ROW_CLASS = "fix-ado-review-card-row", THREAD_SELECTOR2 = ".repos-diff-discussion", LINE_CELL_CLASS = "repos-line-content";
+  var CARD_ROW_CLASS = "fix-ado-review-card-row", THREAD_SELECTOR3 = ".repos-diff-discussion", LINE_CELL_CLASS = "repos-line-content";
   function cardCell(document2, comment) {
     let cell2 = element(document2, "div", { className: "fix-ado-review-card-cell body-m" });
     return cell2.append(createCard2(document2, comment, ONLY_YOU_NOTE)), cell2;
@@ -3626,7 +3740,7 @@ ${content}`
     return row.append(cardCell(document2, comment)), row;
   }
   function isThreadRow(row) {
-    return row?.querySelector(`:scope > ${THREAD_SELECTOR2}`) !== null && row !== null;
+    return row?.querySelector(`:scope > ${THREAD_SELECTOR3}`) !== null && row !== null;
   }
   function isCardRow(row) {
     return row?.classList.contains(CARD_ROW_CLASS) === !0;
@@ -4661,7 +4775,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/style.css
-  var style_default9 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
+  var style_default10 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
    reads "Add single comment". Its aria-label carries that name, so the text here is
    left out of what a screen reader reads. */
 .repos-discussion-thread-reply
@@ -4994,7 +5108,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default9]
+    styles: [style_default10]
   };
 
   // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
@@ -5428,7 +5542,7 @@ ${content}`
     let id = closestHtmlElement(event.target, `.${STARRED_CHIP_CLASS}`)?.dataset.fixAdoIdentity, identity = state.options.store.list().find((starred) => starred.id === id);
     identity !== void 0 && addThroughField(state, field, identity);
   }
-  function createChip2(state, identity) {
+  function createChip3(state, identity) {
     let { document: document2, imageUrlOf } = state.options, chip = createStarredChip(document2, identity, imageUrlOf(identity));
     return state.activePick !== null && (chip.setAttribute("disabled", ""), chip.classList.remove("clickable")), state.activePick?.identityId === identity.id && showChipSpinner(document2, chip), state.notFoundIds.has(identity.id) && markNotFound(chip), chip;
   }
@@ -5447,7 +5561,7 @@ ${content}`
       state.activePick?.identityId,
       shown.map(({ id }) => [id, state.notFoundIds.has(id)])
     ]);
-    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip2(state, identity))));
+    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip3(state, identity))));
   }
   function removeChipRows(document2) {
     for (let row of document2.querySelectorAll(`.${STARRED_CHIP_ROW_CLASS}`))
@@ -5816,7 +5930,7 @@ ${content}`
   }
 
   // azure-devops/src/features/starred-reviewers/style.css
-  var style_default10 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
+  var style_default11 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
    Hidden by opacity, not visibility, so the keyboard can still reach it. */
 .repos-reviewer > .fix-ado-star {
   opacity: 0;
@@ -5994,7 +6108,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default10]
+    styles: [style_default11]
   };
 
   // azure-devops/src/features/pull-request-features.ts
@@ -6023,7 +6137,7 @@ ${content}`
   }
 
   // azure-devops/src/features/avatar-initials/style.css
-  var style_default11 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+  var style_default12 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
 [data-fix-ado-initials] {
   position: relative;
   border-radius: 50%;
@@ -6070,7 +6184,7 @@ ${content}`
         showInitialsOnAvatars(document2);
       }
     }),
-    styles: [style_default11]
+    styles: [style_default12]
   };
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
@@ -6225,7 +6339,7 @@ ${content}`
   }
 
   // azure-devops/src/features/days-in-column/style.css
-  var style_default12 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+  var style_default13 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
 .fix-ado-days-in-column {
   display: flex;
   flex-wrap: wrap;
@@ -6343,7 +6457,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default12]
+    styles: [style_default13]
   };
 
   // azure-devops/src/features/system-theme/system-theme.ts
@@ -6691,7 +6805,7 @@ ${content}`
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default13 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+  var style_default14 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
 .bolt-table-cell-content:has(> .fix-ado-published-since) {
   flex-direction: column;
   align-items: flex-start;
@@ -6740,7 +6854,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default13]
+    styles: [style_default14]
   };
 
   // azure-devops/src/features/reload-on-changes/page-reloader.ts
@@ -6933,7 +7047,7 @@ ${content}`
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default14 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default15 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -6980,7 +7094,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default14]
+    styles: [style_default15]
   };
 
   // azure-devops/src/features/index.ts
