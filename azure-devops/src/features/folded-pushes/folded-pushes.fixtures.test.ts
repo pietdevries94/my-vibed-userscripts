@@ -7,7 +7,7 @@ import { createFoldedPushes } from "./folded-pushes.ts";
 import { test } from "node:test";
 
 test(
-  "the captured Overview folds both pushes, and only the one with commits gets a toggle",
+  "the captured Overview folds its three pushes, each with commits and a toggle",
   { skip: fixtures.skipWithout("pr-detail.html") },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail");
@@ -24,7 +24,8 @@ test(
         push.querySelectorAll(".fix-ado-push-toggle").length,
       ]),
       [
-        ["folded", true, false, 0],
+        ["folded", true, true, 1],
+        ["folded", true, true, 1],
         ["folded", true, true, 1],
       ],
     );
@@ -36,7 +37,7 @@ test(
     toggle?.click();
     assert.deepEqual(
       pushes.map((push) => push.dataset.fixAdoPush),
-      ["folded", "open"],
+      ["open", "folded", "folded"],
     );
   },
 );
