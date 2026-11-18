@@ -117,6 +117,12 @@
     transform: rotate(360deg);
   }
 }
+/* Slower, not stopped, so the row still looks busy. */
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-spinner {
+    animation-duration: 4s;
+  }
+}
 /* While a chip picks its reviewer: the field's dropdown and typed text stay out of sight.
    Hidden, not removed, so the chip can still press the suggestion; the field keeps its focus. */
 .fix-ado-starred-picking #__bolt-tag-picker-callout {

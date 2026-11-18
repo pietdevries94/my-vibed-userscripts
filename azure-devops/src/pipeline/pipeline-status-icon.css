@@ -39,8 +39,9 @@
   }
 }
 
+/* Slower, not stopped, so a running pipeline still looks busy. */
 @media (prefers-reduced-motion: reduce) {
   .fix-ado-pipeline-status[data-status="running"] {
-    animation: none;
+    animation-duration: 6s;
   }
 }
