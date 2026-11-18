@@ -239,7 +239,7 @@ function showCutOffNames(tree: HTMLElement): void {
 function createRunTree(context: TreeContext & { runs: PipelineRun[] }): HTMLElement {
   const items = context.runs.flatMap((run) => createRun(context, run));
   const tree = group(context.document, "fix-ado-pipeline-tree", items);
-  tree.setAttribute("role", "navigation");
+  tree.setAttribute("role", "group");
   tree.setAttribute("aria-label", "Pipeline runs");
   showCutOffNames(tree);
   return tree;

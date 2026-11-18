@@ -140,3 +140,17 @@ test("when the run list does not load, the checks' runs show and the script log 
     message: "Pipeline tab: Azure DevOps refused the run list",
   });
 });
+
+test("the panel is named by its tab, and the run tree is a named group", async () => {
+  const { document } = setUp();
+  click(pipelineTab(document));
+  await settle();
+  const panel = document.querySelector('[role="tabpanel"]');
+  const tab = document.querySelector(`#${panel?.getAttribute("aria-labelledby") ?? ""}`);
+  assert.equal(tab, pipelineTab(document));
+  const tree = document.querySelector(".fix-ado-pipeline-tree");
+  assert.deepEqual(
+    [tree?.getAttribute("role"), tree?.getAttribute("aria-label")],
+    ["group", "Pipeline runs"],
+  );
+});

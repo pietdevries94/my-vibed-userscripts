@@ -7,6 +7,7 @@ import type {
   PipelineTabLoader,
   PipelineTabSources,
 } from "./pipeline-tab-data.ts";
+import { TAB_CLASS, createTab } from "./pipeline-tab-element.ts";
 import {
   createTabData,
   expireTimeline,
@@ -20,8 +21,6 @@ import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
 import { closestElement } from "../../core/closest-element.ts";
 import { watchShownStep } from "./pipeline-log-frame.ts";
 
-const TAB_CLASS = "fix-ado-pipeline-tab";
-const TAB_LABEL = "Pipeline";
 const OPEN_ATTRIBUTE = "data-fix-ado-pipeline-tab-open";
 const PAGE_SELECTOR = ".repos-pr-details-page";
 const TABBAR_SELECTOR = ".repos-pr-details-page-tabbar";
@@ -47,17 +46,6 @@ interface TabState {
   isOpen: boolean;
   /** Azure DevOps's own selected tab, while the Pipeline tab took its place. */
   replacedTab: Element | null;
-}
-
-/** A tab like Azure DevOps's own. data-content keeps the width of the bold selected label. */
-function createTab(document: Document): HTMLAnchorElement {
-  const tab = document.createElement("a");
-  tab.className = `bolt-tab focus-treatment flex-noshrink ${TAB_CLASS}`;
-  tab.setAttribute("role", "tab");
-  tab.href = "#";
-  tab.innerHTML = `<span class="bolt-tab-inner-container"><span class="bolt-tab-text" data-content="${TAB_LABEL}">${TAB_LABEL}</span></span>`;
-  setSelected(tab, false);
-  return tab;
 }
 
 function setSelected(tab: Element, isSelected: boolean): void {

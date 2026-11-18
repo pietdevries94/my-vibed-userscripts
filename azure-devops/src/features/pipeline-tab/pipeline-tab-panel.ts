@@ -9,6 +9,7 @@ import type { PipelineRun } from "../../pipeline/pipeline-runs.ts";
 import type { RunIssue } from "../../pipeline/pipeline-issues.ts";
 import type { StartableCheck } from "../../pipeline/pipeline-checks.ts";
 import type { StepLog } from "./pipeline-log-frame.ts";
+import { TAB_ID } from "./pipeline-tab-element.ts";
 import { createRunAction } from "./pipeline-tab-run-action.ts";
 import { runIssuesOf } from "../../pipeline/pipeline-issues.ts";
 import { showStepLog } from "./pipeline-log-frame.ts";
@@ -267,6 +268,7 @@ function createPanel(document: Document): HTMLElement {
   const panel = document.createElement("div");
   panel.className = PANEL_CLASS;
   panel.setAttribute("role", "tabpanel");
+  panel.setAttribute("aria-labelledby", TAB_ID);
   return panel;
 }
 
