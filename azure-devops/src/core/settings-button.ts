@@ -28,11 +28,18 @@ function puzzleIcon(document: Document): Element {
   return svg;
 }
 
-/** The count of unseen feature changes, on the settings button's corner. */
+/** The count of unseen feature changes, on the settings button's corner. The button's name says it. */
 function unseenCountBadge(document: Document, unseenCount: number): HTMLElement {
   const badge = element(document, "span", { className: BADGE_CLASS, text: String(unseenCount) });
-  badge.setAttribute("aria-label", `${unseenCount} new or updated`);
+  badge.setAttribute("aria-hidden", "true");
   return badge;
+}
+
+/** Takes the badge off the settings button, and its count out of the button's name. */
+function removeUnseenCountBadge(document: Document): void {
+  const badge = document.querySelector(`.${BUTTON_ITEM_CLASS} .${BADGE_CLASS}`);
+  badge?.parentElement?.setAttribute("aria-label", SETTINGS_TITLE);
+  badge?.remove();
 }
 
 /** The top bar item, shaped like Azure DevOps's own icon buttons next to it. */
@@ -52,7 +59,10 @@ function createSettingsButtonItem(
     open,
   );
   settingsButton.title = SETTINGS_TITLE;
-  settingsButton.setAttribute("aria-label", SETTINGS_TITLE);
+  settingsButton.setAttribute(
+    "aria-label",
+    unseenCount > 0 ? `${SETTINGS_TITLE}, ${unseenCount} new or updated` : SETTINGS_TITLE,
+  );
   settingsButton.append(puzzleIcon(document));
   if (unseenCount > 0) {
     settingsButton.append(unseenCountBadge(document, unseenCount));
@@ -61,4 +71,10 @@ function createSettingsButtonItem(
   return item;
 }
 
-export { BADGE_CLASS, BUTTON_ITEM_CLASS, SETTINGS_TITLE, createSettingsButtonItem };
+export {
+  BADGE_CLASS,
+  BUTTON_ITEM_CLASS,
+  SETTINGS_TITLE,
+  createSettingsButtonItem,
+  removeUnseenCountBadge,
+};

@@ -1,8 +1,8 @@
 import {
-  BADGE_CLASS,
   BUTTON_ITEM_CLASS,
   SETTINGS_TITLE,
   createSettingsButtonItem,
+  removeUnseenCountBadge,
 } from "./settings-button.ts";
 import type { Feature, FeatureCategory, FeatureChange } from "./feature.ts";
 import { button, element } from "./settings-panel-markup.ts";
@@ -212,7 +212,7 @@ function createSettingsPanel(options: SettingsPanelOptions): SettingsPanel {
     // The chips stay while this panel is open; the badge and the next panel show none.
     if (unseen.length > 0) {
       options.markChangesSeen(unseen);
-      document.querySelector(`.${BUTTON_ITEM_CLASS} .${BADGE_CLASS}`)?.remove();
+      removeUnseenCountBadge(document);
     }
   }
 

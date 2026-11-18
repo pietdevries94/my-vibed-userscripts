@@ -213,3 +213,16 @@ test("the panel is named by its visible heading", () => {
   assert.equal(heading?.textContent, "Fix Azure DevOps settings");
   assert.equal(dialog?.hasAttribute("aria-label"), false);
 });
+
+test("the button's name says how many changes are unseen, until the panel opens", () => {
+  const page = pageWith(TOP_BAR, { features: CHANGED_FEATURES });
+  page.panel.sync();
+  const button = page.document.querySelector(".region-header-menubar button");
+  assert.equal(button?.getAttribute("aria-label"), "Fix Azure DevOps settings, 2 new or updated");
+  assert.equal(
+    page.document.querySelector(".fix-ado-settings-badge")?.getAttribute("aria-hidden"),
+    "true",
+  );
+  page.panel.open();
+  assert.equal(button?.getAttribute("aria-label"), "Fix Azure DevOps settings");
+});
