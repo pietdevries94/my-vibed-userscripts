@@ -94,3 +94,15 @@ test("adds no toggles when headers and columns do not line up", () => {
   toggles(document, { value: [] }).sync();
   assert.equal(buttons(document).length, 0);
 });
+
+test("a toggle keeps one name, and says by its pressed state whether the days show", () => {
+  const document = board();
+  toggles(document, { value: [] }).sync();
+  const [, toggle] = buttons(document);
+  assert.equal(toggle?.getAttribute("aria-label"), "Days in column");
+  toggle?.click();
+  assert.deepEqual(
+    [toggle?.getAttribute("aria-label"), toggle?.getAttribute("aria-pressed")],
+    ["Days in column", "false"],
+  );
+});

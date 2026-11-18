@@ -4,7 +4,7 @@ const HEADER_SELECTOR = ".activity-feed-list .iteration-card-header";
 const TITLE_SELECTOR = ".iteration-header .font-weight-semibold";
 const COMMITS_SELECTOR = ".bolt-table-container";
 const TOGGLE_CLASS = "fix-ado-push-toggle";
-const TOGGLE_LABELS = { folded: "Show commits", open: "Hide commits" };
+const TOGGLE_LABELS = { folded: "Show commits", name: "Commits", open: "Hide commits" };
 
 type PushState = "folded" | "open";
 

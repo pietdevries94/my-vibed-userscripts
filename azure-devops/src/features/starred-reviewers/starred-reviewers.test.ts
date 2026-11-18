@@ -275,3 +275,15 @@ test("once Azure DevOps shows the added reviewer, focus goes to the next button 
     section(harness.document).querySelector(".fix-ado-star-someone"),
   );
 });
+
+test("a reviewer row's star keeps one name, and says by its pressed state whether it is on", () => {
+  const { document } = setUp([QUILL]);
+  const stars = [
+    ...document.querySelectorAll(".pr-required-reviewers-section .fix-ado-star"),
+    ...document.querySelectorAll(".pr-optional-reviewers-section .fix-ado-star"),
+  ];
+  assert.deepEqual(
+    stars.map((star) => star.getAttribute("aria-label")),
+    ["Starred", "Starred"],
+  );
+});

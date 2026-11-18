@@ -3,7 +3,7 @@ import { feedThreadElements, feedThreadOf } from "../../pull-requests/feed-threa
 import type { FeedThread } from "../../pull-requests/feed-threads.ts";
 
 const TOGGLE_CLASS = "fix-ado-thread-toggle";
-const TOGGLE_LABELS = { folded: "Expand thread", open: "Collapse thread" };
+const TOGGLE_LABELS = { folded: "Expand thread", name: "Thread", open: "Collapse thread" };
 /** The reply box's field carries the thread's id in a class name. */
 const THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u;
 const FILE_HEADER_SELECTOR = ".comment-file-header";

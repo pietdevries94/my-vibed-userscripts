@@ -81,7 +81,8 @@ function createSpinner(document: Document): HTMLElement {
 /** The star on a reviewer row. Filled when the reviewer is starred. */
 function createStarButton(document: Document): HTMLButtonElement {
   const button = element(document, "button", {
-    attributes: { "aria-pressed": "false", type: "button" },
+    // One name; aria-pressed says whether the reviewer is starred.
+    attributes: { "aria-label": "Starred", "aria-pressed": "false", type: "button" },
     children: [svgIcon(document, "fix-ado-star-icon", [STAR_PATH])],
     className: `${STAR_BUTTON_CLASS} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`,
   });
@@ -92,7 +93,6 @@ function createStarButton(document: Document): HTMLButtonElement {
 function updateStarButton(button: Element, isStarred: boolean): void {
   if (button.getAttribute("aria-pressed") !== String(isStarred)) {
     button.setAttribute("aria-pressed", String(isStarred));
-    button.setAttribute("aria-label", isStarred ? "Remove from starred" : "Add to starred");
     button.setAttribute("title", isStarred ? "Remove from starred" : "Add to starred");
   }
 }

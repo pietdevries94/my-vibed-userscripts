@@ -21,7 +21,8 @@ function showColumnState(column: HTMLElement, toggle: HTMLButtonElement, isHidde
   if (toggle.getAttribute("aria-pressed") !== pressed) {
     toggle.setAttribute("aria-pressed", pressed);
     toggle.title = isHidden ? "Show days in column" : "Hide days in column";
-    toggle.setAttribute("aria-label", toggle.title);
+    // One name; aria-pressed says whether the days show.
+    toggle.setAttribute("aria-label", "Days in column");
   }
 }
 

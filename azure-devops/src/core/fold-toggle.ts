@@ -4,8 +4,12 @@
 /** Azure DevOps's chevron for an open and a folded part. */
 const CHEVRONS = { folded: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
 
-/** What the toggle says it does, per state: "Hide commits" while open, "Show commits" while folded. */
+/**
+ * The toggle's name, which stays, and its tooltip per state: "Hide commits" while open,
+ * "Show commits" while folded. A screen reader hears the state from aria-expanded.
+ */
 interface FoldToggleLabels {
+  name: string;
   open: string;
   folded: string;
 }
@@ -42,7 +46,7 @@ function showFoldToggleState(
   }
   toggle.setAttribute("aria-expanded", expanded);
   toggle.title = isOpen ? labels.open : labels.folded;
-  toggle.setAttribute("aria-label", toggle.title);
+  toggle.setAttribute("aria-label", labels.name);
   const chevron = toggle.querySelector(".fabric-icon");
   chevron?.classList.toggle(CHEVRONS.open, isOpen);
   chevron?.classList.toggle(CHEVRONS.folded, !isOpen);
