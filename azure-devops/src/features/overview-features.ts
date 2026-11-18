@@ -3,6 +3,7 @@ import { activityOrder } from "./activity-order/index.ts";
 import { collapsibleThreads } from "./collapsible-threads/index.ts";
 import { foldedPushes } from "./folded-pushes/index.ts";
 import { joinedReviewerLines } from "./joined-reviewer-lines/index.ts";
+import { newActivityChips } from "./new-activity-chips/index.ts";
 import { overviewPipelineIssues } from "./overview-pipeline-issues/index.ts";
 import { resolvedThreadChips } from "./resolved-thread-chips/index.ts";
 import { scrollToBottom } from "./scroll-to-bottom/index.ts";
@@ -18,6 +19,7 @@ const OVERVIEW_FEATURES: Feature[] = [
   resolvedThreadChips,
   collapsibleThreads,
   unreadComments,
+  newActivityChips,
 ];
 
 export { OVERVIEW_FEATURES };

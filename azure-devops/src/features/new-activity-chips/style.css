@@ -1,0 +1,21 @@
+/* The New chip glows like an unread comment, in Azure DevOps's colour for links and focus. */
+.bolt-pill.fix-ado-new-chip {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  box-shadow: 0 0 6px 2px var(--communication-background, rgb(0, 120, 212));
+  color: var(--communication-foreground, rgb(0, 90, 158));
+  font-weight: 600;
+}
+
+/* A push shows its time in a block under its title: the chip sits on the same line. */
+.fix-ado-new-chip {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+/* Forced colors drop box shadows, so the glow becomes an outline there. */
+@media (forced-colors: active) {
+  .bolt-pill.fix-ado-new-chip {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+}
