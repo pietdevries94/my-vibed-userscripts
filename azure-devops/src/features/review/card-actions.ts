@@ -74,5 +74,47 @@ function focusEditor(document: Document, id: string): void {
   document.querySelector<HTMLTextAreaElement>(`[${ID_ATTRIBUTE}="${id}"] textarea`)?.focus();
 }
 
+/** The ids of the cards on the page, in page order. */
+function cardIdsOnPage(document: Document): string[] {
+  return [...document.querySelectorAll(`[${ID_ATTRIBUTE}]`)].map(
+    (holder) => holder.getAttribute(ID_ATTRIBUTE) ?? "",
+  );
+}
+
+/**
+ * Puts focus back after a card was drawn again, so it does not fall to the page: on the
+ * card's Edit button, or the nearest card's when it is gone, or else on "Submit review".
+ */
+function refocusCard(document: Document, id: string, idsBefore: string[]): void {
+  const at = Math.max(idsBefore.indexOf(id), 0);
+  const nearest = [id, ...idsBefore.slice(at + 1), ...idsBefore.slice(0, at).toReversed()];
+  const editButtons = nearest.map((candidate) =>
+    document.querySelector<HTMLElement>(
+      `[${ID_ATTRIBUTE}="${candidate}"] [data-fix-ado-review-action="edit"]`,
+    ),
+  );
+  const target =
+    editButtons.find((button) => button !== null) ??
+    document.querySelector<HTMLElement>('[data-fix-ado-review-action="finish"]');
+  target?.focus();
+}
+
+/**
+ * Notes where focus is before a click on a review button. The function it returns runs after
+ * the page is drawn again: it puts the cursor in a card whose edit started, or else focuses
+ * near a card the click redrew, so focus does not fall to the page.
+ */
+function keepCardFocus(document: Document, button: Element): (editedId: string | null) => void {
+  const cardId = cardAround(button)?.id ?? null;
+  const idsBefore = cardIdsOnPage(document);
+  return (editedId) => {
+    if (editedId !== null) {
+      focusEditor(document, editedId);
+    } else if (cardId !== null && !button.isConnected) {
+      refocusCard(document, cardId, idsBefore);
+    }
+  };
+}
+
 export type { CardContext, Drafts };
-export { focusEditor, handleCardAction, noteDraft, saveDrafts };
+export { handleCardAction, keepCardFocus, noteDraft, saveDrafts };

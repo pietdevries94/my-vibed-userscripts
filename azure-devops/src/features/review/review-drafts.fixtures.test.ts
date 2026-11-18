@@ -147,3 +147,30 @@ test('"No" drops the edit and goes on, "Cancel" keeps it and goes back', { skip 
     "Finish your review",
   );
 });
+
+/** Clicks a card button the way the owner does: focus first, so a rebuild can drop the focus. */
+function press(button: HTMLButtonElement): void {
+  button.focus();
+  button.click();
+}
+
+test("Cancel and Update comment leave focus on the card's Edit button", { skip }, () => {
+  const page = pageWithOpenEdit();
+  press(cardButton(page, "Cancel"));
+  assert.equal(page.document.activeElement, cardButton(page, "Edit"));
+  press(cardButton(page, "Edit"));
+  press(cardButton(page, "Update comment"));
+  assert.equal(page.document.activeElement, cardButton(page, "Edit"));
+});
+
+test("Delete comment with no card left leaves focus on Submit review", { skip }, () => {
+  const page = loadReviewPage("pr-files-composer");
+  page.sync();
+  page.button("Start a review").click();
+  page.store.add(KEY, { anchor: null, content: "Keeps the review going" });
+  page.sync();
+  press(cardButton(page, "Delete comment"));
+  const submit = page.document.querySelector(".fix-ado-review-header button");
+  assert.ok(submit !== null);
+  assert.equal(page.document.activeElement, submit);
+});

@@ -3,7 +3,7 @@
 import { ADD_ACTION, closeBox, commentBoxAround, hasAddButton } from "./comment-box-buttons.ts";
 import type { PendingComment, ReviewStore } from "./review-store.ts";
 import { asMarkdown, clickedAction, pendingCountText } from "./review-markup.ts";
-import { focusEditor, handleCardAction, noteDraft, saveDrafts } from "./card-actions.ts";
+import { handleCardAction, keepCardFocus, noteDraft, saveDrafts } from "./card-actions.ts";
 import { showInTree, showReview, watchTree } from "./review-view.ts";
 import type { AdoClient } from "../../core/ado-client.ts";
 import type { ClickedAction } from "./review-markup.ts";
@@ -232,11 +232,10 @@ function handleClick(state: ReviewState, event: Event): void {
   if (shown === null || clicked === null) {
     return;
   }
+  const restoreFocus = keepCardFocus(state.options.document, clicked.button);
   const editedId = runAction(state, shown, clicked);
   render(state);
-  if (editedId !== null) {
-    focusEditor(state.options.document, editedId);
-  }
+  restoreFocus(editedId);
 }
 
 /** The box a key press would add to the review: Ctrl+Enter or Cmd+Enter, in a started review. */
