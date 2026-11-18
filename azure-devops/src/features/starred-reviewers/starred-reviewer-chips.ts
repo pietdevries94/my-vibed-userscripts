@@ -6,6 +6,7 @@ import {
   STARRED_CHIP_ROW_CLASS,
   createStarredChip,
   createStarredChipRow,
+  markNotFound,
   showChipSpinner,
 } from "./starred-reviewer-chips-markup.ts";
 import {
@@ -32,7 +33,6 @@ const STEP_WAIT_MS = 250;
 const PICK_TIMEOUT_MS = 5000;
 /** On the body while a chip picks: style.css hides the field's dropdown and typed text then. */
 const PICKING_CLASS = "fix-ado-starred-picking";
-const NOT_FOUND_TITLE = "Not found in the reviewer field's suggestions. Pick them there.";
 
 interface StarredReviewerChipsOptions {
   document: Document;
@@ -222,7 +222,7 @@ function createChip(state: ChipsState, identity: Identity): HTMLElement {
     showChipSpinner(document, chip);
   }
   if (state.notFoundIds.has(identity.id)) {
-    chip.title = NOT_FOUND_TITLE;
+    markNotFound(chip);
   }
   return chip;
 }

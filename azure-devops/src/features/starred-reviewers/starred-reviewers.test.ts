@@ -130,6 +130,10 @@ test("a failed add keeps the row and says why", async () => {
     section(harness.document).querySelector(".fix-ado-starred-detail")?.textContent,
     "Could not add: HTTP 403",
   );
+  assert.equal(
+    section(harness.document).querySelector(".fix-ado-starred-detail")?.getAttribute("role"),
+    "alert",
+  );
   assert.equal(isAdding(harness.document), false);
 });
 

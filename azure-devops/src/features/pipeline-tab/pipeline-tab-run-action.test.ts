@@ -97,6 +97,11 @@ test("while the run starts, the button waits; a refused start says so", async ()
     document.querySelector(".fix-ado-pipeline-tree")?.textContent ?? "",
     /Could not start the run\./u,
   );
+  assert.equal(
+    document.querySelector(".fix-ado-pipeline-note")?.getAttribute("role"),
+    "alert",
+    "a screen reader hears the refusal",
+  );
 });
 
 test("a pull request without build checks has no Start new run button", async () => {

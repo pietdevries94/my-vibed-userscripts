@@ -38,6 +38,14 @@ function createStarredChip(document: Document, identity: Identity, imageUrl: str
   });
 }
 
+const NOT_FOUND_TEXT = "Not found in the reviewer field's suggestions. Pick them there.";
+
+/** Says on the chip, as its tooltip and its description, that its reviewer was not found. */
+function markNotFound(chip: Element): void {
+  chip.setAttribute("title", NOT_FOUND_TEXT);
+  chip.setAttribute("aria-description", NOT_FOUND_TEXT);
+}
+
 /** Puts a spinner in place of the chip's avatar while it picks its reviewer. */
 function showChipSpinner(document: Document, chip: Element): void {
   chip.querySelector(".bolt-pill-filled-visual")?.replaceChildren(createSpinner(document));
@@ -60,5 +68,6 @@ export {
   STARRED_CHIP_ROW_CLASS,
   createStarredChip,
   createStarredChipRow,
+  markNotFound,
   showChipSpinner,
 };

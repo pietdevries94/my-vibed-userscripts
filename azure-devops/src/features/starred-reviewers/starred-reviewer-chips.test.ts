@@ -221,7 +221,7 @@ test("the chip waits for the suggestions, and gives up when its reviewer is not 
   assert.deepEqual(pillNames(harness.document, OPTIONAL), []);
   const button = chip(chipRows(harness.document)[0], "Quill Barrow");
   assert.equal(button.disabled, false);
-  assert.match(button.title, /not found/iu);
+  assert.match(button.getAttribute("aria-description") ?? "", /not found/iu);
   assert.equal(harness.document.body.classList.contains("fix-ado-starred-picking"), false);
 });
 

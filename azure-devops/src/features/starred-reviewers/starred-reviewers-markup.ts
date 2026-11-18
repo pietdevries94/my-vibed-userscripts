@@ -254,6 +254,7 @@ function showError(row: HTMLElement, error: string): void {
   if (detail !== null) {
     detail.textContent = error;
     detail.classList.replace("secondary-text", "error-text");
+    detail.setAttribute("role", "alert");
   }
 }
 

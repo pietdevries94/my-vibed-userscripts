@@ -101,6 +101,13 @@ function createButton(context: RunActionContext): HTMLButtonElement {
   return button;
 }
 
+/** The refusal note under the button, which a screen reader hears at once. */
+function failedNote(document: Document, action: RunAction): HTMLElement {
+  const note = textElement(document, "fix-ado-pipeline-note", LABELS[action].failed);
+  note.setAttribute("role", "alert");
+  return note;
+}
+
 /** The button, with the list or a refusal note under it. Null with nothing to start or cancel. */
 function createRunAction(context: RunActionContext): HTMLElement[] | null {
   const { action, choices, document, state } = context;
@@ -112,7 +119,7 @@ function createRunAction(context: RunActionContext): HTMLElement[] | null {
     return [button, createChoices(context)];
   }
   if (state === "failed") {
-    return [button, textElement(document, "fix-ado-pipeline-note", LABELS[action].failed)];
+    return [button, failedNote(document, action)];
   }
   return [button];
 }

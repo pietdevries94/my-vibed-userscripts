@@ -38,10 +38,14 @@ interface PanelContent {
   onRunAction: (action: RunAction, key: string) => void;
 }
 
-function message(panel: HTMLElement, text: string): void {
+/** Puts a message in place of the panel's content. A screen reader hears an error at once. */
+function message(panel: HTMLElement, text: string, isError = false): void {
   const note = panel.ownerDocument.createElement("p");
   note.className = "fix-ado-pipeline-message";
   note.textContent = text;
+  if (isError) {
+    note.setAttribute("role", "alert");
+  }
   panel.replaceChildren(note);
 }
 
@@ -253,7 +257,7 @@ function renderPanel(panel: HTMLElement, content: PanelContent): void {
   if (content.runs.kind === "loading") {
     message(panel, "Loading pipeline runs…");
   } else if (content.runs.kind === "failed") {
-    message(panel, "Could not load the pipeline runs.");
+    message(panel, "Could not load the pipeline runs.", true);
   } else {
     showRun(panel, content.runs, content);
   }
