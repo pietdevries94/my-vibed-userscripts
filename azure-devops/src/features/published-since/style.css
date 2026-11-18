@@ -10,5 +10,5 @@
 }
 
 .fix-ado-published-since-too-long {
-  color: var(--status-error-foreground, rgba(205, 74, 69, 1));
+  color: var(--status-error-text);
 }
