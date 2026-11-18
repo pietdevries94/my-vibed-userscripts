@@ -1,7 +1,9 @@
 import {
   findPullRequestRows,
+  isDraftRow,
   markRequiredReviewers,
   showPipelineStatus,
+  showPublishedSince,
 } from "../../pull-requests/pr-list.ts";
 import { JSDOM } from "jsdom";
 import type { PullRequestRow } from "../../pull-requests/pr-list.ts";
@@ -186,4 +188,52 @@ test("a row reused for another pull request loses the old marks", { skip: fixtur
   markRequiredReviewers(row, reviewersRequiredAt([1, 2]));
   markRequiredReviewers(row, reviewersRequiredAt([0]));
   assert.deepEqual(required(), [true, false, false]);
+});
+
+test("the draft pill marks a row as draft", { skip: fixtures.skip }, () => {
+  assert.equal(isDraftRow(capturedRow("pr-list", 1001)), true);
+  assert.equal(isDraftRow(capturedRow("pr-list", 1002)), false);
+});
+
+const publishedSinceCell = (row: HTMLElement): Element | null | undefined =>
+  row.querySelector(".bolt-table-cell-side-action")?.previousElementSibling;
+
+for (const page of ["pr-list", "pr-inbox"]) {
+  test(
+    `${page}: the publish time sits in a column before the row's actions`,
+    {
+      skip: fixtures.skip,
+    },
+    () => {
+      const row = capturedRow(page, 1002);
+      const table = row.closest("table");
+      const columnCount = table?.querySelectorAll("colgroup > col").length ?? 0;
+      showPublishedSince(row, "Published 3 minutes ago");
+
+      const cell = publishedSinceCell(row);
+      assert.ok(cell?.classList.contains("fix-ado-published-since") === true);
+      assert.equal(cell.textContent, "Published 3 minutes ago");
+      const columns = [...(table?.querySelectorAll("colgroup > col") ?? [])];
+      assert.equal(columns.length, columnCount + 1);
+      assert.ok(columns.at(-3)?.classList.contains("fix-ado-published-since") === true);
+    },
+  );
+}
+
+test("showing the column again adds no second cell or column", { skip: fixtures.skip }, () => {
+  const row = capturedRow("pr-list", 1002);
+  showPublishedSince(row, "Published 3 minutes ago");
+  showPublishedSince(row, "Published 4 minutes ago");
+  assert.equal(row.querySelectorAll(".fix-ado-published-since").length, 1);
+  assert.equal(row.closest("table")?.querySelectorAll("col.fix-ado-published-since").length, 1);
+  assert.equal(publishedSinceCell(row)?.textContent, "Published 4 minutes ago");
+});
+
+test("a draft row gets an empty cell, so the columns stay aligned", { skip: fixtures.skip }, () => {
+  const row = capturedRow("pr-list", 1001);
+  showPublishedSince(row, "Published 3 minutes ago");
+  showPublishedSince(row, null);
+  const cell = publishedSinceCell(row);
+  assert.ok(cell?.classList.contains("fix-ado-published-since") === true);
+  assert.equal(cell.textContent, "");
 });

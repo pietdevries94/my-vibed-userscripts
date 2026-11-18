@@ -107,19 +107,20 @@ test("the changed files of an iteration are read page by page", async () => {
   );
 });
 
-test("threads, iteration ids and the status are read with GET requests", async () => {
+test("threads, iteration ids, the status and the creation date are read with GET requests", async () => {
   const { client, requests } = fakeAdo((url) => {
     if (url.includes("/iterations?")) {
       return Response.json({ value: [{ id: 1 }, { id: 2 }] });
     }
     return url.includes("/threads?")
       ? Response.json({ value: [{ comments: [{ content: "Hi" }], id: 5 }] })
-      : Response.json({ status: "completed" });
+      : Response.json({ creationDate: "2030-03-01T09:00:00.000Z", status: "completed" });
   });
   assert.deepEqual(await client.getPullRequestIterationIds(PULL_REQUEST), [1, 2]);
   assert.deepEqual(await client.getPullRequestThreads(PULL_REQUEST), [
     { comments: [{ content: "Hi" }], id: 5 },
   ]);
   assert.equal(await client.getPullRequestStatus(PULL_REQUEST), "completed");
+  assert.equal(await client.getPullRequestCreationDate(PULL_REQUEST), "2030-03-01T09:00:00.000Z");
   assert.deepEqual([...new Set(requests.map(({ method }) => method))], ["GET"]);
 });

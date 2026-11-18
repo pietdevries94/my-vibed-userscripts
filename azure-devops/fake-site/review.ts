@@ -6,6 +6,7 @@ import type {
   FakeResponse,
   FakeSiteAction,
 } from "../../shared/dev/fake-site/server.ts";
+import { draftResponse } from "./drafts.ts";
 import { jsonResponse } from "../../shared/dev/fake-site/server.ts";
 import { reviewData } from "./data.ts";
 
@@ -70,8 +71,12 @@ const ROUTES: Route[] = [
   ["PUT", new RegExp(`${PULL_REQUEST}\\/reviewers\\/[^/]+$`, "u"), voteResponse],
 ];
 
-/** The answer to a review request, or null for another request. */
+/** The answer to a review request, or to a list page's draft request, or null for another request. */
 function reviewResponse(request: FakeRequest): FakeResponse | null {
+  const draft = draftResponse(request);
+  if (draft !== null) {
+    return draft;
+  }
   for (const [method, pattern, answer] of ROUTES) {
     if (method === request.method && pattern.test(request.url.pathname)) {
       return answer(request);

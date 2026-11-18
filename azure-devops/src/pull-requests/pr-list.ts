@@ -49,6 +49,62 @@ function showPipelineStatus(row: HTMLElement, pullRequestId: number, status: Sho
   title?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
 }
 
+const DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill";
+const ROW_ACTIONS_CELL_SELECTOR = ".bolt-table-cell-side-action";
+const PUBLISHED_SINCE_CLASS = "fix-ado-published-since";
+
+/** True when Azure DevOps shows its Draft pill on the row. */
+function isDraftRow(row: HTMLElement): boolean {
+  return row.querySelector(DRAFT_PILL_SELECTOR) !== null;
+}
+
+/** Adds the column for the publish time to the row's table, before the actions column. */
+function addPublishedSinceColumn(row: HTMLElement): void {
+  const columns = row.closest("table")?.querySelector(":scope > colgroup");
+  if (!columns || columns.querySelector(`.${PUBLISHED_SINCE_CLASS}`)) {
+    return;
+  }
+  const column = row.ownerDocument.createElement("col");
+  column.className = PUBLISHED_SINCE_CLASS;
+  const actionsColumn = columns.lastElementChild?.previousElementSibling;
+  if (actionsColumn) {
+    actionsColumn.before(column);
+  } else {
+    columns.append(column);
+  }
+}
+
+/** The row's publish time cell, added before the actions cell when missing. Null without an actions cell. */
+function publishedSinceCell(row: HTMLElement): Element | null {
+  const shown = row.querySelector(`:scope > .${PUBLISHED_SINCE_CLASS}`);
+  if (shown) {
+    return shown;
+  }
+  const actionsCell = row.querySelector(`:scope > ${ROW_ACTIONS_CELL_SELECTOR}`);
+  if (!actionsCell) {
+    return null;
+  }
+  const cell = row.ownerDocument.createElement("td");
+  cell.className = `${PUBLISHED_SINCE_CLASS} bolt-table-cell bolt-list-cell secondary-text`;
+  actionsCell.before(cell);
+  return cell;
+}
+
+/**
+ * Shows "Published 3 minutes ago" in a cell before the row's actions. A draft row gets
+ * `null` and an empty cell, so the columns stay aligned. Only touches the DOM on a change.
+ */
+function showPublishedSince(row: HTMLElement, text: string | null): void {
+  const cell = publishedSinceCell(row);
+  if (!cell) {
+    return;
+  }
+  addPublishedSinceColumn(row);
+  if (cell.textContent !== (text ?? "")) {
+    cell.textContent = text ?? "";
+  }
+}
+
 const REVIEWER_SELECTOR = ".pr-reviewer";
 
 /**
@@ -65,4 +121,10 @@ function markRequiredReviewers(row: HTMLElement, reviewers: Reviewer[]): void {
 }
 
 export type { PullRequestRow };
-export { findPullRequestRows, markRequiredReviewers, showPipelineStatus };
+export {
+  findPullRequestRows,
+  isDraftRow,
+  markRequiredReviewers,
+  showPipelineStatus,
+  showPublishedSince,
+};

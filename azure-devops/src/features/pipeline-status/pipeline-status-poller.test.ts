@@ -39,6 +39,7 @@ async function notUsedByThePoller(): Promise<never> {
 const UNUSED_REVIEW_REQUESTS = {
   createPullRequestThread: notUsedByThePoller,
   getIterationChanges: notUsedByThePoller,
+  getPullRequestCreationDate: notUsedByThePoller,
   getPullRequestIterationIds: notUsedByThePoller,
   getPullRequestStatus: notUsedByThePoller,
   getPullRequestThreads: notUsedByThePoller,

@@ -1,6 +1,7 @@
 // What the fake site's actions change, on top of the captured pages: build statuses,
 // pull request changes, required reviewers and work item changes.
 import { boardData, showFilesCapture, showPullRequestCapture } from "./data.ts";
+import { currentIsDraft, draftActions, draftChanges } from "./drafts.ts";
 import { BUILD_POLICY_TYPE_ID } from "../src/pipeline/pipeline-status.ts";
 import type { BoardWorkItem } from "../src/boards/board.ts";
 import type { FakeSiteAction } from "../../shared/dev/fake-site/server.ts";
@@ -62,7 +63,7 @@ function currentEvaluations(
 
 /** A listed pull request with the changes and required reviewers the actions made. */
 function currentPullRequest(pullRequest: ListedPullRequest): ListedPullRequest {
-  const current = structuredClone(pullRequest);
+  const current = { ...structuredClone(pullRequest), isDraft: currentIsDraft(pullRequest) };
   const required = requiredReviewers.get(pullRequest.pullRequestId) ?? new Set<number>();
   for (const [index, reviewer] of (current.reviewers ?? []).entries()) {
     if (required.has(index)) {
@@ -132,7 +133,13 @@ function changeWorkItem(query: URLSearchParams): unknown {
 }
 
 function reset(): unknown {
-  for (const changes of [buildStatuses, pullRequestRevisions, requiredReviewers, workItemChanges]) {
+  for (const changes of [
+    buildStatuses,
+    draftChanges,
+    pullRequestRevisions,
+    requiredReviewers,
+    workItemChanges,
+  ]) {
     changes.clear();
   }
   addedReviewers.length = 0;
@@ -146,7 +153,8 @@ function firstWorkItemId(): number {
   return boardData().data.workItems[0]?.id ?? 0;
 }
 
-function actions(): FakeSiteAction[] {
+/** The actions on the pull request lists. */
+function pullRequestListActions(): FakeSiteAction[] {
   return [
     {
       description: `The build status of a pull request on a page (pr-list or pr-inbox): ${BUILD_STATUSES.join(", ")}, or reset.`,
@@ -166,6 +174,13 @@ function actions(): FakeSiteAction[] {
       name: "toggle-required-reviewer",
       run: toggleRequiredReviewer,
     },
+    ...draftActions,
+  ];
+}
+
+function actions(): FakeSiteAction[] {
+  return [
+    ...pullRequestListActions(),
     {
       description: "Someone else (or by=me, the signed-in user) changes a work item on the board.",
       example: `id=${firstWorkItemId()}&by=other`,
@@ -197,4 +212,5 @@ function actions(): FakeSiteAction[] {
   ];
 }
 
+export { draftPillScript } from "./drafts.ts";
 export { actions, currentEvaluations, currentPullRequest, currentWorkItem };

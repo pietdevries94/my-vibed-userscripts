@@ -25,6 +25,10 @@ interface PullRequestThread {
   isDeleted?: boolean;
   comments?: { content?: string }[];
   threadContext?: ThreadContext | null;
+  /** When the thread was created. */
+  publishedDate?: string;
+  /** A system thread names its kind here, such as `IsDraftUpdate`. */
+  properties?: { CodeReviewThreadType?: { $value?: string } };
 }
 
 /** A thread to create. Without `threadContext` it is a comment on the pull request as a whole. */
@@ -44,6 +48,8 @@ interface IterationChange {
 interface ReviewRequests {
   /** "active", "completed" or "abandoned". */
   getPullRequestStatus: (pullRequest: PullRequestRef) => Promise<string>;
+  /** When the pull request was created, as an ISO date. */
+  getPullRequestCreationDate: (pullRequest: PullRequestRef) => Promise<string>;
   getPullRequestThreads: (pullRequest: PullRequestRef) => Promise<PullRequestThread[]>;
   /** The ids of a pull request's iterations, oldest first. */
   getPullRequestIterationIds: (pullRequest: PullRequestRef) => Promise<number[]>;
@@ -73,14 +79,13 @@ function pullRequestPath({ project, repository, pullRequestId }: PullRequestRef)
   );
 }
 
-async function getPullRequestStatus(
+async function getPullRequest(
   options: AdoClientOptions,
   pullRequest: PullRequestRef,
-): Promise<string> {
+): Promise<{ status?: string; creationDate?: string }> {
   const response = await sendRequest(options, `${pullRequestPath(pullRequest)}?${API_VERSION}`);
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
-  const body = (await response.json()) as { status?: string };
-  return body.status ?? "";
+  return (await response.json()) as { status?: string; creationDate?: string };
 }
 
 /** Where a page of changed files starts, and how many files it asks for. */
@@ -167,6 +172,8 @@ function createReviewRequests(options: AdoClientOptions): ReviewRequests {
       createPullRequestThread(options, pullRequest, thread),
     getIterationChanges: async (pullRequest, iteration) =>
       getIterationChanges(options, pullRequest, iteration),
+    getPullRequestCreationDate: async (pullRequest) =>
+      getPullRequest(options, pullRequest).then(({ creationDate }) => creationDate ?? ""),
     async getPullRequestIterationIds(pullRequest) {
       const { body } = await getJson(
         options,
@@ -175,7 +182,8 @@ function createReviewRequests(options: AdoClientOptions): ReviewRequests {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
       return ((body.value ?? []) as { id: number }[]).map(({ id }) => id);
     },
-    getPullRequestStatus: async (pullRequest) => getPullRequestStatus(options, pullRequest),
+    getPullRequestStatus: async (pullRequest) =>
+      getPullRequest(options, pullRequest).then(({ status }) => status ?? ""),
     async getPullRequestThreads(pullRequest) {
       const { body } = await getJson(
         options,

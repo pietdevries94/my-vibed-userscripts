@@ -5,7 +5,13 @@
 import { BOARD_STYLE, PULL_REQUEST_STYLE, RUN_STYLE } from "./styles.ts";
 import type { FakeRequest, FakeResponse } from "../../shared/dev/fake-site/server.ts";
 import { THEME_PATH, themeAction, themeResponse } from "./theme.ts";
-import { actions, currentEvaluations, currentPullRequest, currentWorkItem } from "./state.ts";
+import {
+  actions,
+  currentEvaluations,
+  currentPullRequest,
+  currentWorkItem,
+  draftPillScript,
+} from "./state.ts";
 import {
   boardData,
   pageCss,
@@ -81,7 +87,7 @@ function pageResponse(page: Page): FakeResponse {
   return htmlResponse(
     fixturePage({
       fixtureUrl: `/fake-site/${page}.html`,
-      script: page === "pr-create" ? CREATE_PAGE_SCRIPT : "",
+      script: page === "pr-create" ? CREATE_PAGE_SCRIPT : draftPillScript(page),
       style,
       title: `Fake Azure DevOps: ${page}`,
     }),

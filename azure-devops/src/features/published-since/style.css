@@ -1,0 +1,8 @@
+/* The publish time column in pull request lists. pr-list.ts adds the cell and its column. */
+col.fix-ado-published-since {
+  width: 12rem;
+}
+
+td.fix-ado-published-since {
+  white-space: nowrap;
+}
