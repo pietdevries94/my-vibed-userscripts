@@ -1,3 +1,5 @@
+import { scrollBehaviorOf } from "../../core/scroll-behavior.ts";
+
 const FEED_SELECTOR = ".activity-feed-list";
 /** Azure DevOps's class on a box that can scroll down. The Overview sits in more than one. */
 const SCROLLER_SELECTOR = ".v-scroll-auto";
@@ -60,13 +62,6 @@ function shouldShowButton(scroller: HTMLElement | null, button: HTMLButtonElemen
   return scroller !== null && (!isAtBottom(scroller) || hasFocus);
 }
 
-/** A smooth scroll, or a jump when the owner asks for reduced motion. */
-function scrollBehaviorOf(scroller: HTMLElement): ScrollBehavior {
-  const view = scroller.ownerDocument.defaultView;
-  const reducesMotion = view?.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-  return reducesMotion ? "instant" : "smooth";
-}
-
 /** What the owner does to scroll by hand. Any of them ends the follow. */
 const OWNER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "pointerdown"];
 
@@ -89,7 +84,10 @@ function createBottomFollow(now: () => number): BottomFollow {
 
   function start(scroller: HTMLElement): void {
     followed = { height: scroller.scrollHeight, lastActiveAt: now() };
-    scroller.scrollTo({ behavior: scrollBehaviorOf(scroller), top: scroller.scrollHeight });
+    scroller.scrollTo({
+      behavior: scrollBehaviorOf(scroller.ownerDocument),
+      top: scroller.scrollHeight,
+    });
   }
 
   function step(scroller: HTMLElement | null, isScrollEvent: boolean): void {

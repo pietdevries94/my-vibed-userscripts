@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createCollapsibleThreads } from "./collapsible-threads.ts";
 import { test } from "node:test";
 
-function comment(author: string, status: string | null): string {
+function comment(author: string, status: string | null, isUnread = false): string {
   const statusDropdown =
     status === null
       ? ""
@@ -12,7 +12,7 @@ function comment(author: string, status: string | null): string {
     <div><div class="bolt-coin repos-comment-header-persona"></div></div>
     <div class="repos-comment-editor-fit flex-column">
       <div class="repos-discussion-comment-header flex-row">
-        <div class="scroll-hidden flex-row flex-center"><span>${author}</span><div><time>an hour ago</time></div></div>
+        <div class="scroll-hidden flex-row flex-center"><span>${author}</span><div>${isUnread ? '<div class="repos-unread-comment-marker"></div>' : ""}<time>an hour ago</time></div></div>
         <div class="flex-row justify-end">${statusDropdown}</div>
       </div><p>Should the total include tax?</p>
     </div>
@@ -21,15 +21,20 @@ function comment(author: string, status: string | null): string {
 
 /**
  * A thread of two comments with its reply box. Only the first comment has the status dropdown.
- * A thread on a file has the file's header before it.
+ * A thread on a file has the file's header before it. Its reply can carry Azure DevOps's unread
+ * marker.
  */
-function thread(threadId: number, status: string, isOnFile = false): string {
+function thread(
+  threadId: number,
+  status: string,
+  { isOnFile = false, isReplyUnread = false }: { isOnFile?: boolean; isReplyUnread?: boolean } = {},
+): string {
   const fileHeader = isOnFile
     ? `<div class="comment-file-header"><div class="comment-file-header-title flex-row">
         <div class="file-icon"></div><a>invoice.ts</a></div></div>`
     : "";
   return `<tr class="bolt-timeline-row"><td>${fileHeader}<div class="repos-discussion-thread">
-    ${comment("Quill Barrow", status)}${comment("Marren Tolk", null)}
+    ${comment("Quill Barrow", status)}${comment("Marren Tolk", null, isReplyUnread)}
     <div class="repos-discussion-thread-reply"><input class="threadId-${threadId} bolt-textfield-input"></div>
   </div></td></tr>`;
 }
@@ -76,6 +81,26 @@ test("a resolved thread starts collapsed, any other thread starts open", () => {
   assert.deepEqual(page.states(), ["collapsed", "open", "open"]);
 });
 
+test("a resolved thread with an unread comment starts open, and opens when one comes in", () => {
+  const page = overviewPage(
+    thread(11, "Resolved", { isReplyUnread: true }) + thread(12, "Resolved"),
+  );
+  page.sync();
+  assert.deepEqual(page.states(), ["open", "collapsed"]);
+  page.document
+    .querySelectorAll(".repos-discussion-comment-header time")[3]
+    ?.insertAdjacentHTML("beforebegin", '<div class="repos-unread-comment-marker"></div>');
+  page.sync();
+  assert.deepEqual(page.states(), ["open", "open"]);
+});
+
+test("a resolved thread with an unread comment the owner collapsed stays collapsed", () => {
+  const page = overviewPage(thread(11, "Resolved", { isReplyUnread: true }));
+  page.sync();
+  page.toggles()[0]?.click();
+  assert.deepEqual(page.states(), ["collapsed"]);
+});
+
 test("every thread has one toggle, before the author of its first comment", () => {
   const page = overviewPage(thread(11, "Resolved") + thread(12, "Active"));
   page.sync();
@@ -93,7 +118,7 @@ test("every thread has one toggle, before the author of its first comment", () =
 });
 
 test("an open thread on a file has its toggle before the file's icon, a collapsed one before the author", () => {
-  const page = overviewPage(thread(11, "Active", true));
+  const page = overviewPage(thread(11, "Active", { isOnFile: true }));
   page.sync();
   const [toggle] = page.toggles();
   assert.equal(toggle?.parentElement?.className, "comment-file-header-title flex-row");

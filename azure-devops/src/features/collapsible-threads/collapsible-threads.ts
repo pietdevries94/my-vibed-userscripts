@@ -98,7 +98,7 @@ function addExpandAllButton(document: Document, onClick: () => void): void {
 /**
  * The threads in the activity feed of a pull request's Overview, each with a toggle before its
  * author that collapses it to the header of its first comment, also a thread on a file (style.css). A resolved thread starts
- * collapsed. A thread the owner opened or collapsed stays that way until a reload.
+ * collapsed, unless Azure DevOps marks one of its comments as unread. A thread the owner opened or collapsed stays that way until a reload.
  * Expand all threads, above the feed, opens every thread, also the ones Azure DevOps renders
  * later, until a reload.
  */
@@ -107,9 +107,9 @@ function createCollapsibleThreads({ document }: { document: Document }): { sync:
   const pickedStates = new Map<string, ThreadState>();
   let isAllExpanded = false;
 
-  function stateOf({ isResolved, thread }: FeedThread): ThreadState {
+  function stateOf({ hasUnreadComment, isResolved, thread }: FeedThread): ThreadState {
     const picked = pickedStates.get(threadIdOf(thread) ?? "");
-    return picked ?? (isResolved && !isAllExpanded ? "collapsed" : "open");
+    return picked ?? (isResolved && !hasUnreadComment && !isAllExpanded ? "collapsed" : "open");
   }
 
   function expandAll(): void {

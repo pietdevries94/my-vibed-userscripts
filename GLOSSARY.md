@@ -99,3 +99,7 @@ _Avoid_: Draft (a pull request state in Azure DevOps), batch
 **Pending comment**:
 A comment in a review that is not posted yet. Only the owner sees it.
 _Avoid_: Draft comment, unsent comment
+
+**Unread comment**:
+A comment on a pull request that Azure DevOps marks with a dot because the owner has not seen it yet. Unread comments that follow each other in a thread form an **unread group**, which glows as one.
+_Avoid_: New comment, unseen comment

@@ -78,3 +78,22 @@ test(
     assert.ok(bar?.nextElementSibling?.classList.contains("activity-feed-list") === true);
   },
 );
+
+test(
+  "a captured resolved thread with an unread comment stays open",
+  { skip: fixtures.skip },
+  () => {
+    const { document } = loadCapturedPullRequest("pr-detail-warnings");
+    const marker = document.querySelector(".repos-unread-comment-marker");
+    const status = marker
+      ?.closest(".repos-discussion-thread")
+      ?.querySelector(".bolt-dropdown-expandable-button-label");
+    assert.ok(status !== null && status !== undefined);
+    status.textContent = "Resolved";
+    createCollapsibleThreads({ document }).sync();
+    assert.equal(
+      marker?.closest<HTMLElement>("[data-fix-ado-thread]")?.dataset.fixAdoThread,
+      "open",
+    );
+  },
+);

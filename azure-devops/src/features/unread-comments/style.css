@@ -1,0 +1,98 @@
+/* Unread comments glow like a required reviewer, one glow around each group of unread comments
+   that follow each other. The thread clips what spills outside it, so the glow sits inside. Each
+   comment of a group draws its piece: across the 4px gap to a neighbour in the group, and cut off
+   there, so no edge shows between them. */
+[data-fix-ado-unread] {
+  --fix-ado-unread-glow: var(--communication-background, rgb(0, 120, 212));
+  position: relative;
+  scroll-margin-top: 16px;
+}
+
+[data-fix-ado-unread]::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  box-shadow:
+    inset 0 0 0 2px var(--fix-ado-unread-glow),
+    inset 0 0 6px 3px var(--fix-ado-unread-glow);
+  content: "";
+  pointer-events: none;
+}
+
+/* A comment after another of its group reaches 16px up: 4px across the gap, 12px it cuts off. */
+[data-fix-ado-unread="middle"]::after,
+[data-fix-ado-unread="last"]::after {
+  top: -16px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  clip-path: inset(12px 0 0 0);
+}
+
+/* A comment before another of its group reaches 16px down the same way. */
+[data-fix-ado-unread="first"]::after,
+[data-fix-ado-unread="middle"]::after {
+  bottom: -16px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  clip-path: inset(0 0 12px 0);
+}
+
+[data-fix-ado-unread="middle"]::after {
+  clip-path: inset(12px 0);
+}
+
+/* Go to first unread sits left of every other button in the bar above the feed, and glows while
+   there is something unread. */
+.fix-ado-first-unread-box {
+  order: -2;
+}
+
+.fix-ado-first-unread:not(:disabled) {
+  box-shadow:
+    0 0 0 2px var(--communication-background, rgb(0, 120, 212)),
+    0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-first-unread:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Go to next unread follows the time of a group's first comment, as a small button. */
+.fix-ado-next-unread {
+  flex: none;
+  margin-left: 8px;
+  padding: 0 8px;
+  min-height: 0;
+  height: 24px;
+  font-size: 12px;
+}
+
+/* Forced colors drop box shadows, so the glows become outlines there. */
+@media (forced-colors: active) {
+  [data-fix-ado-unread]::after {
+    border-inline: 2px solid Highlight;
+    box-shadow: none;
+  }
+
+  [data-fix-ado-unread="only"]::after,
+  [data-fix-ado-unread="first"]::after {
+    border-top: 2px solid Highlight;
+  }
+
+  [data-fix-ado-unread="only"]::after,
+  [data-fix-ado-unread="last"]::after {
+    border-bottom: 2px solid Highlight;
+  }
+
+  .fix-ado-first-unread:not(:disabled) {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+
+  .fix-ado-first-unread:disabled {
+    border-color: GrayText;
+    color: GrayText;
+    opacity: 1;
+  }
+}
