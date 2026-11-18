@@ -17,10 +17,17 @@ const EXPAND_ALL_LABEL = "Expand all threads";
 
 type ThreadState = "collapsed" | "open";
 
-/** The id Azure DevOps gave the thread, or null while its reply box is not a plain field. */
-function threadIdOf(thread: HTMLElement): string | null {
+/**
+ * The id Azure DevOps gave the thread, or null when it is not known yet. Only the reply box's
+ * plain field carries it: a click swaps that for a textarea without it, so the id is remembered.
+ */
+function threadIdOf(thread: HTMLElement, knownIds: WeakMap<HTMLElement, string>): string | null {
   const field = thread.querySelector(".repos-discussion-thread-reply input");
-  return THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id ?? null;
+  const id = THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id;
+  if (id !== undefined) {
+    knownIds.set(thread, id);
+  }
+  return id ?? knownIds.get(thread) ?? null;
 }
 
 /** The header with the file's name above a thread on a file, or null for a thread on the pull request. */
@@ -105,10 +112,12 @@ function addExpandAllButton(document: Document, onClick: () => void): void {
 function createCollapsibleThreads({ document }: { document: Document }): { sync: () => void } {
   /** The state the owner picked, by thread id. */
   const pickedStates = new Map<string, ThreadState>();
+  /** The id of each thread seen with a plain reply field. */
+  const knownIds = new WeakMap<HTMLElement, string>();
   let isAllExpanded = false;
 
   function stateOf({ hasUnreadComment, isResolved, thread }: FeedThread): ThreadState {
-    const picked = pickedStates.get(threadIdOf(thread) ?? "");
+    const picked = pickedStates.get(threadIdOf(thread, knownIds) ?? "");
     return picked ?? (isResolved && !hasUnreadComment && !isAllExpanded ? "collapsed" : "open");
   }
 
@@ -119,7 +128,7 @@ function createCollapsibleThreads({ document }: { document: Document }): { sync:
   }
 
   function flip(thread: HTMLElement): void {
-    const threadId = threadIdOf(thread);
+    const threadId = threadIdOf(thread, knownIds);
     if (threadId !== null) {
       pickedStates.set(threadId, thread.dataset.fixAdoThread === "open" ? "collapsed" : "open");
       sync();

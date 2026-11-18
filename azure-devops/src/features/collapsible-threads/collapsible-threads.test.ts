@@ -218,3 +218,25 @@ test("a page without the bar above the feed gets no Expand all threads button", 
   createCollapsibleThreads({ document }).sync();
   assert.equal(document.querySelector(".fix-ado-expand-all-threads"), null);
 });
+
+/** Clicking a reply field swaps its input for a textarea without the thread's id class. */
+function focusReplies(document: Document): void {
+  for (const input of document.querySelectorAll(".repos-discussion-thread-reply input")) {
+    const textarea = document.createElement("textarea");
+    textarea.className = "bolt-textfield-input flex-grow bolt-textfield-auto-adjust";
+    input.replaceWith(textarea);
+  }
+}
+
+test("a thread with its reply field clicked keeps its state, and its toggle still works", () => {
+  const page = overviewPage(thread(11, "Resolved") + thread(12, "Active"));
+  page.sync();
+  page.toggles()[0]?.click();
+  assert.deepEqual(page.states(), ["open", "open"]);
+  focusReplies(page.document);
+  page.sync();
+  assert.deepEqual(page.states(), ["open", "open"]);
+  page.toggles()[0]?.click();
+  page.toggles()[1]?.click();
+  assert.deepEqual(page.states(), ["collapsed", "collapsed"]);
+});

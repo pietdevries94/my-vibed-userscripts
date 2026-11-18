@@ -97,3 +97,21 @@ test(
     );
   },
 );
+
+test(
+  "a captured thread with its reply field clicked has a textarea without the thread's id",
+  { skip: fixtures.skip },
+  () => {
+    const { document } = loadCapturedPullRequest("pr-detail-reply-focused");
+    const fields = [
+      ...document.querySelectorAll(
+        ".activity-feed-list .repos-discussion-thread-reply :is(input, textarea)",
+      ),
+    ];
+    const textareas = fields.filter((field) => field.matches("textarea"));
+    const inputs = fields.filter((field) => field.matches("input"));
+    assert.ok(textareas.length > 0);
+    assert.ok(textareas.every((textarea) => !textarea.className.includes("threadId-")));
+    assert.ok(inputs.every((input) => /\bthreadId-\d+\b/u.test(input.className)));
+  },
+);
