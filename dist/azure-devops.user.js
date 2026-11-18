@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.18.0
+// @version      1.18.1
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, a New chip that glows on pushes and other changes you have not seen, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -216,9 +216,9 @@
 
   // azure-devops/src/features/collapsible-threads/collapsible-threads.ts
   var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", name: "Thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u, FILE_HEADER_SELECTOR = ".comment-file-header", FILE_TITLE_SELECTOR = ".comment-file-header-title", AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit", FILTER_SELECTOR2 = ".repos-activity-filter-dropdown", EXPAND_ALL_CLASS = "fix-ado-expand-all-threads", EXPAND_ALL_LABEL = "Expand all threads";
-  function threadIdOf(thread) {
-    let field = thread.querySelector(".repos-discussion-thread-reply input");
-    return THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id ?? null;
+  function threadIdOf(thread, knownIds) {
+    let field = thread.querySelector(".repos-discussion-thread-reply input"), id = THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id;
+    return id !== void 0 && knownIds.set(thread, id), id ?? knownIds.get(thread) ?? null;
   }
   function fileHeaderOf(thread) {
     let before = thread.previousElementSibling;
@@ -256,15 +256,15 @@
     bar != null && bar.querySelector(`.${EXPAND_ALL_CLASS}`) === null && bar.prepend(createExpandAllBox(document2, onClick2));
   }
   function createCollapsibleThreads({ document: document2 }) {
-    let pickedStates = /* @__PURE__ */ new Map(), isAllExpanded = !1;
+    let pickedStates = /* @__PURE__ */ new Map(), knownIds = /* @__PURE__ */ new WeakMap(), isAllExpanded = !1;
     function stateOf({ hasUnreadComment, isResolved, thread }) {
-      return pickedStates.get(threadIdOf(thread) ?? "") ?? (isResolved && !hasUnreadComment && !isAllExpanded ? "collapsed" : "open");
+      return pickedStates.get(threadIdOf(thread, knownIds) ?? "") ?? (isResolved && !hasUnreadComment && !isAllExpanded ? "collapsed" : "open");
     }
     function expandAll() {
       pickedStates.clear(), isAllExpanded = !0, sync4();
     }
     function flip(thread) {
-      let threadId = threadIdOf(thread);
+      let threadId = threadIdOf(thread, knownIds);
       threadId !== null && (pickedStates.set(threadId, thread.dataset.fixAdoThread === "open" ? "collapsed" : "open"), sync4());
     }
     function syncThread2(feedThread) {
