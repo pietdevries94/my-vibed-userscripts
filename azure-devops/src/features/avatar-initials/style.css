@@ -2,7 +2,8 @@
 [data-fix-ado-initials] {
   position: relative;
   border-radius: 50%;
-  background: hsl(var(--fix-ado-hue, 210) 45% 38%);
+  /* OKLCH lightness is the same for every hue, so white initials keep 4.5:1 contrast on each. */
+  background: oklch(50% 0.11 var(--fix-ado-hue, 250));
 }
 
 [data-fix-ado-initials] > .bolt-coin-content,
