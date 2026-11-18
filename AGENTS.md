@@ -39,6 +39,10 @@ The repo is public. Real values from a site stay out of code, tests, comments, c
 
 Scripts run only in the owner's current Chrome and Firefox. A web feature that ships in both needs no fallback, Baseline Newly available included.
 
+## Storage
+
+A script that stores a value per item, such as one key per pull request, deletes stale ones when it starts: every value unused for 30 days, and every value it cannot read. Each feature's `index.ts` sets the age, as `azure-devops/src/features/review/index.ts` does.
+
 ## Lessons
 
 When the owner corrects you, or you hit a gap, fix this file or the skill in the same session and commit it.

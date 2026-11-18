@@ -69,7 +69,7 @@ test(
 
 test(
   "the captured Overview gets an Expand all threads button in the bar above its feed",
-  { skip: fixtures.skip },
+  { skip: fixtures.skipWithout("pr-detail.html") },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail");
     createCollapsibleThreads({ document }).sync();

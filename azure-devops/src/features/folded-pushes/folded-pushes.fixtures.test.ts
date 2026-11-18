@@ -8,7 +8,7 @@ import { test } from "node:test";
 
 test(
   "the captured Overview folds both pushes, and only the one with commits gets a toggle",
-  { skip: fixtures.skip },
+  { skip: fixtures.skipWithout("pr-detail.html") },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail");
     const { sync } = createFoldedPushes({ document });

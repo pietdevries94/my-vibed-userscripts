@@ -8,7 +8,7 @@ import { test } from "node:test";
 
 test(
   "the captured Overview, taller than its window, gets one button that scrolls its page",
-  { skip: fixtures.skip },
+  { skip: fixtures.skipWithout("pr-detail.html") },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail");
     const page = document.querySelector<HTMLElement>(".repos-pr-details-page");

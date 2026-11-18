@@ -7,6 +7,8 @@ import path from "node:path";
 interface ScriptFixtures {
   /** False when fixtures are there, else the message node:test prints for the skip. */
   skip: string | false;
+  /** Like `skip`, and also a skip message when the fixture `name` is missing. */
+  skipWithout: (name: string) => string | false;
   read: (name: string) => string;
 }
 
@@ -32,6 +34,14 @@ function scriptFixtures(sourceDirectory: string): ScriptFixtures {
   return {
     read: (name) => fs.readFileSync(path.join(directory, name), "utf8"),
     skip: isPresent ? false : `no fixtures: ${scriptId}/fixtures is missing`,
+    skipWithout: (name) => {
+      if (!isPresent) {
+        return `no fixtures: ${scriptId}/fixtures is missing`;
+      }
+      return fs.existsSync(path.join(directory, name))
+        ? false
+        : `no fixture: ${scriptId}/fixtures/${name} is missing`;
+    },
   };
 }
 

@@ -8,7 +8,7 @@ import { test } from "node:test";
 
 test(
   "the captured Overview gets one sort button before its filters, and runs oldest first",
-  { skip: fixtures.skip },
+  { skip: fixtures.skipWithout("pr-detail.html") },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail");
     const saved: string[] = [];
