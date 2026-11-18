@@ -18,3 +18,19 @@ test("a dialog marked with the dialog role keeps the page from reloading", () =>
 test("a closed native dialog lets the page reload", () => {
   assert.equal(isOwnerBusy(documentWith("<dialog><button>Save</button></dialog>")), false);
 });
+
+function documentWithFocusOn(body: string): Document {
+  const document = documentWith(body);
+  document.querySelector<HTMLElement>("#focused")?.focus();
+  return document;
+}
+
+test("focus in a text field or editor keeps the page from reloading", () => {
+  assert.equal(isOwnerBusy(documentWithFocusOn('<input id="focused">')), true);
+  assert.equal(isOwnerBusy(documentWithFocusOn('<textarea id="focused"></textarea>')), true);
+});
+
+test("focus on a checkbox or a button that is an input lets the page reload", () => {
+  assert.equal(isOwnerBusy(documentWithFocusOn('<input id="focused" type="checkbox">')), false);
+  assert.equal(isOwnerBusy(documentWithFocusOn('<input id="focused" type="button">')), false);
+});

@@ -1,8 +1,16 @@
 const MIN_TIME_BETWEEN_RELOADS_MS = 15_000;
 const LAST_RELOAD_STORAGE_KEY = "fix-ado-last-page-reload";
 
+/** Inputs the owner types in. A checkbox, a radio or an input button holds nothing typed. */
+const TEXT_FIELD_SELECTOR =
+  "textarea, input:not([type=checkbox], [type=radio], [type=button], [type=submit], [type=reset])";
+
 function isOwnerBusy(document: Document): boolean {
-  const isTyping = document.activeElement?.matches("input, textarea, [contenteditable]") ?? false;
+  const focused = document.activeElement;
+  const isTyping =
+    focused !== null &&
+    (focused.matches(TEXT_FIELD_SELECTOR) ||
+      ("isContentEditable" in focused && focused.isContentEditable === true));
   const hasOpenDialog = document.querySelector('[role="dialog"], dialog[open]') !== null;
   return isTyping || hasOpenDialog;
 }
