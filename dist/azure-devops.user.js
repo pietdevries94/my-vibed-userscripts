@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.17.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each listed pull request was published, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.17.1
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -6490,32 +6490,27 @@ ${content}`
       return;
     shownIcon?.remove(), row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
   }
-  var DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill", ROW_ACTIONS_CELL_SELECTOR = ".bolt-table-cell-side-action", PUBLISHED_SINCE_CLASS = "fix-ado-published-since";
+  var DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill", UPDATE_TIME_SELECTOR = "time.bolt-time-item", PUBLISHED_SINCE_CLASS = "fix-ado-published-since", TOO_LONG_AGO_CLASS = "fix-ado-published-since-too-long";
   function isDraftRow(row) {
     return row.querySelector(DRAFT_PILL_SELECTOR) !== null;
   }
-  function addPublishedSinceColumn(row) {
-    let columns = row.closest("table")?.querySelector(":scope > colgroup");
-    if (!columns || columns.querySelector(`.${PUBLISHED_SINCE_CLASS}`))
-      return;
-    let column = row.ownerDocument.createElement("col");
-    column.className = PUBLISHED_SINCE_CLASS;
-    let actionsColumn = columns.lastElementChild?.previousElementSibling;
-    actionsColumn ? actionsColumn.before(column) : columns.append(column);
-  }
-  function publishedSinceCell(row) {
-    let shown = row.querySelector(`:scope > .${PUBLISHED_SINCE_CLASS}`);
+  function publishedSinceLine(row) {
+    let shown = row.querySelector(`.${PUBLISHED_SINCE_CLASS}`);
     if (shown)
       return shown;
-    let actionsCell = row.querySelector(`:scope > ${ROW_ACTIONS_CELL_SELECTOR}`);
-    if (!actionsCell)
+    let updateLine = row.querySelector(UPDATE_TIME_SELECTOR)?.closest(".bolt-table-cell-content > *");
+    if (!updateLine)
       return null;
-    let cell2 = row.ownerDocument.createElement("td");
-    return cell2.className = `${PUBLISHED_SINCE_CLASS} bolt-table-cell bolt-list-cell secondary-text`, actionsCell.before(cell2), cell2;
+    let line2 = row.ownerDocument.createElement("div");
+    return line2.className = PUBLISHED_SINCE_CLASS, updateLine.after(line2), line2;
   }
-  function showPublishedSince(row, text) {
-    let cell2 = publishedSinceCell(row);
-    cell2 && (addPublishedSinceColumn(row), cell2.textContent !== (text ?? "") && (cell2.textContent = text ?? ""));
+  function showPublishedSince(row, shown) {
+    if (shown === null) {
+      row.querySelector(`.${PUBLISHED_SINCE_CLASS}`)?.remove();
+      return;
+    }
+    let line2 = publishedSinceLine(row);
+    line2 && (line2.textContent !== shown.text && (line2.textContent = shown.text), line2.classList.contains(TOO_LONG_AGO_CLASS) !== shown.isTooLongAgo && line2.classList.toggle(TOO_LONG_AGO_CLASS, shown.isTooLongAgo));
   }
   var REVIEWER_SELECTOR = ".pr-reviewer";
   function markRequiredReviewers(row, reviewers) {
@@ -6633,6 +6628,20 @@ ${content}`
     let days = Math.floor(elapsedMs / 864e5);
     return days >= 365 ? [Math.floor(days / 365), "year"] : days >= 30 ? [Math.floor(days / 30), "month"] : days >= 1 ? [days, "day"] : elapsedMs >= 36e5 ? [Math.floor(elapsedMs / 36e5), "hour"] : [Math.floor(elapsedMs / 6e4), "minute"];
   }
+  function weekdayTimeBetween(fromMs, toMs) {
+    let total = 0, start = fromMs;
+    for (; start < toMs; ) {
+      let day = new Date(start), nextMidnight = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime(), end = Math.min(nextMidnight, toMs);
+      day.getDay() !== 0 && day.getDay() !== 6 && (total += end - start), start = end;
+    }
+    return total;
+  }
+  function isPublishedTooLongAgo(publishedAtMs, nowMs) {
+    return weekdayTimeBetween(publishedAtMs, nowMs) > 1728e5;
+  }
+  function showsPublishedSince(page) {
+    return page.kind === "pull-request-inbox" || page.kind === "pull-request-list" && page.listPage.status === "active";
+  }
 
   // azure-devops/src/features/published-since/published-at-fetcher.ts
   var PUBLISHED_AT_REFRESH_INTERVAL_MS = 6e5;
@@ -6682,20 +6691,26 @@ ${content}`
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default13 = `/* The publish time column in pull request lists. pr-list.ts adds the cell and its column. */
-col.fix-ado-published-since {
-  width: 12rem;
+  var style_default13 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+.bolt-table-cell-content:has(> .fix-ado-published-since) {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
 }
 
-td.fix-ado-published-since {
+.fix-ado-published-since {
   white-space: nowrap;
+}
+
+.fix-ado-published-since-too-long {
+  color: var(--status-error-text);
 }
 `;
 
   // azure-devops/src/features/published-since/index.ts
   var publishedSince = {
-    change: { kind: "new", version: "1.16.0" },
-    description: "A column on each pull request in a list with how long ago it left draft.",
+    change: { kind: "updated", version: "1.17.1" },
+    description: "How long ago each active pull request in a list left draft, under its update time. Red after two weekdays.",
     id: "published-since",
     name: "Published since",
     start({ basePath: basePath2, client, document: document2, now }) {
@@ -6704,15 +6719,24 @@ td.fix-ado-published-since {
         pullRequest,
         row
       })), fetcher = createPublishedAtFetcher({ client, findRows, now });
-      function showAll() {
+      function showAll(isShown) {
         for (let { row, pullRequest, isDraft } of findRows()) {
-          let at = isDraft ? null : fetcher.publishedAt(pullRequest.pullRequestId);
-          showPublishedSince(row, at === null ? null : publishedSinceText(at, now()));
+          let at = isShown && !isDraft ? fetcher.publishedAt(pullRequest.pullRequestId) : null;
+          showPublishedSince(
+            row,
+            at === null ? null : {
+              isTooLongAgo: isPublishedTooLongAgo(at, now()),
+              text: publishedSinceText(at, now())
+            }
+          );
         }
       }
       return {
         sync({ page, isTabActive: isTabActive2 }) {
-          showAll(), (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") && isTabActive2 && fetcher.sync().then(showAll);
+          let isShown = showsPublishedSince(page);
+          showAll(isShown), isShown && isTabActive2 && fetcher.sync().then(() => {
+            showAll(isShown);
+          });
         }
       };
     },
