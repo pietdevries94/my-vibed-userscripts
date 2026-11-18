@@ -8,6 +8,14 @@
     0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
 }
 
+/* Forced colors drop box shadows, so the glow becomes an outline there. */
+@media (forced-colors: active) {
+  .pr-reviewer[data-fix-ado-required] .bolt-coin {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+}
+
 /* Required reviewers first. Even spacing whatever the visual order. */
 [data-fix-ado-reviewers] > .pr-reviewer {
   margin: 0 8px 0 0 !important;

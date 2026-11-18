@@ -4,9 +4,11 @@
   display: block;
 }
 
+/* Tab and screen reader order follow the rows as shown, where reading-flow is supported. */
 .activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody {
   display: flex;
   flex-direction: column-reverse;
+  reading-flow: flex-visual;
 }
 
 .activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody > tr {

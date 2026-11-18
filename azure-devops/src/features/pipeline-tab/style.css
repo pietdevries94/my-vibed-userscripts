@@ -68,6 +68,13 @@
   box-shadow: inset 3px 0 0 var(--communication-background, rgb(0, 120, 212));
 }
 
+/* Forced colors drop box shadows and backgrounds, so the bar becomes a border there. */
+@media (forced-colors: active) {
+  .fix-ado-pipeline-item[aria-current="true"] {
+    border-inline-start: 3px solid Highlight;
+  }
+}
+
 .fix-ado-pipeline-item:focus:not(:focus-visible) {
   outline: none;
 }
