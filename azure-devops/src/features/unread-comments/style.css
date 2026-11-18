@@ -5,7 +5,13 @@
 [data-fix-ado-unread] {
   --fix-ado-unread-glow: var(--communication-background, rgb(0, 120, 212));
   position: relative;
-  scroll-margin-top: 16px;
+}
+
+/* A scroll to a stop ends 16px under the tab bar that sticks to the top. The script measures the
+   bar. A stop is a group's first comment, or the row of a thread that is not rendered yet. */
+.activity-feed-list [data-fix-ado-unread],
+.activity-feed-list .bolt-timeline-row {
+  scroll-margin-top: calc(var(--fix-ado-sticky-height, 0px) + 16px);
 }
 
 [data-fix-ado-unread]::after {

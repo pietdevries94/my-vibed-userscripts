@@ -11,6 +11,8 @@ const THREAD_SELECTOR = ".repos-discussion-thread";
 const COMMENT_SELECTOR = ".repos-comment-viewer";
 /** Azure DevOps marks the timeline of a row with new activity, also before it renders the row's comments. */
 const NEW_ROW_SELECTOR = ".activity-feed-sequence.new";
+/** The pull request's tab bar, which sticks to the top of the box the feed scrolls in. */
+const STICKY_TAB_BAR_SELECTOR = ".bolt-tabbar.sticky";
 /** The feed's filter, in the bar above the feed. */
 const FILTER_SELECTOR = ".repos-activity-filter-dropdown";
 const FIRST_UNREAD_CLASS = "fix-ado-first-unread";
@@ -177,6 +179,22 @@ async function scrollIntoViewAndWait(
   }
 }
 
+/** Tells style.css how much room to leave above a stop, so the sticky tab bar does not cover it. */
+function leaveRoomForTabBar(document: Document): void {
+  const height = `${document.querySelector<HTMLElement>(STICKY_TAB_BAR_SELECTOR)?.offsetHeight ?? 0}px`;
+  const feed = document.querySelector<HTMLElement>(FEED_SELECTOR);
+  if (feed !== null && feed.style.getPropertyValue("--fix-ado-sticky-height") !== height) {
+    feed.style.setProperty("--fix-ado-sticky-height", height);
+  }
+}
+
+/** The stop, or its thread when the owner collapsed the thread and the stop is hidden. */
+function shownPartOf(target: HTMLElement): HTMLElement {
+  return target.checkVisibility()
+    ? target
+    : (target.closest<HTMLElement>(THREAD_SELECTOR) ?? target);
+}
+
 /** Scrolls to a stop, then moves focus there. Of scrolls that overlap, only the latest moves focus. */
 function createStopScroller(document: Document): (stop: UnreadStop | undefined) => Promise<void> {
   let scrollCount = 0;
@@ -187,9 +205,11 @@ function createStopScroller(document: Document): (stop: UnreadStop | undefined) 
     scrollCount += 1;
     const scroll = scrollCount;
     const { target } = stop;
-    // A comment in a thread the owner collapsed is hidden: the scroll goes to its thread.
-    const shown = target.checkVisibility() ? target : (target.closest(THREAD_SELECTOR) ?? target);
-    await scrollIntoViewAndWait(shown, { behavior: scrollBehaviorOf(document), block: "start" });
+    leaveRoomForTabBar(document);
+    await scrollIntoViewAndWait(shownPartOf(target), {
+      behavior: scrollBehaviorOf(document),
+      block: "start",
+    });
     if (scroll === scrollCount) {
       target.tabIndex = -1;
       target.focus({ preventScroll: true });

@@ -193,3 +193,19 @@ test("in a thread the owner collapsed, Go to first unread scrolls to the thread"
   await settle();
   assert.deepEqual(page.scrolledTo, [thread]);
 });
+
+test("the scroll leaves room for the tab bar that sticks to the top", async () => {
+  const page = overviewPage(threadRow([true]));
+  page.document.body.insertAdjacentHTML("afterbegin", '<div class="bolt-tabbar sticky"></div>');
+  Object.defineProperty(page.document.defaultView?.HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement): number {
+      return this.classList.contains("bolt-tabbar") ? 48 : 0;
+    },
+  });
+  page.sync();
+  page.firstUnreadButton()?.click();
+  await settle();
+  const feed = page.document.querySelector<HTMLElement>(".activity-feed-list");
+  assert.equal(feed?.style.getPropertyValue("--fix-ado-sticky-height"), "48px");
+});
