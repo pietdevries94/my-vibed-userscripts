@@ -1,4 +1,10 @@
-import { publishedAt, publishedSinceText } from "./published-since.ts";
+import {
+  isPublishedTooLongAgo,
+  publishedAt,
+  publishedSinceText,
+  showsPublishedSince,
+} from "./published-since.ts";
+import type { Page } from "../../core/page.ts";
 import type { PullRequestThread } from "../../pull-requests/review-requests.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -60,4 +66,36 @@ test("the text names the largest whole unit", () => {
 
 test("a publish time a little ahead of the local clock reads as just now", () => {
   assert.equal(publishedSinceText(5000, 0), "Published just now");
+});
+
+/** Local time on a day in March 2030. The 1st is a Friday. */
+const march = (day: number, hour: number, minute = 0): number =>
+  new Date(2030, 2, day, hour, minute).getTime();
+
+test("a weekend does not count towards the wait", () => {
+  assert.equal(isPublishedTooLongAgo(march(1, 9), march(5, 8, 59)), false);
+  assert.equal(isPublishedTooLongAgo(march(1, 9), march(5, 9, 1)), true);
+});
+
+test("a wait of more than two weekdays is too long", () => {
+  assert.equal(isPublishedTooLongAgo(march(4, 9), march(6, 9)), false);
+  assert.equal(isPublishedTooLongAgo(march(4, 9), march(6, 9, 1)), true);
+});
+
+test("a pull request published on a Saturday waits from Monday", () => {
+  assert.equal(isPublishedTooLongAgo(march(2, 10), march(5, 23)), false);
+  assert.equal(isPublishedTooLongAgo(march(2, 10), march(7, 0, 1)), true);
+});
+
+const list = (status: "active" | "completed" | "abandoned"): Page => ({
+  kind: "pull-request-list",
+  listPage: { project: "Shop", repository: "web", status },
+});
+
+test("only lists of active pull requests show publish times", () => {
+  assert.equal(showsPublishedSince(list("active")), true);
+  assert.equal(showsPublishedSince(list("completed")), false);
+  assert.equal(showsPublishedSince(list("abandoned")), false);
+  assert.equal(showsPublishedSince({ kind: "pull-request-inbox" }), true);
+  assert.equal(showsPublishedSince({ kind: "board" }), false);
 });

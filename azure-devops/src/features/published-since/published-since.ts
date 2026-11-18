@@ -1,3 +1,4 @@
+import type { Page } from "../../core/page.ts";
 import type { PullRequestThread } from "../../pull-requests/review-requests.ts";
 
 const MINUTE_MS = 60_000;
@@ -5,6 +6,11 @@ const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 const DAYS_PER_MONTH = 30;
 const DAYS_PER_YEAR = 365;
+
+/** How long a published pull request may wait for review, in weekday time. */
+const MAX_WAIT_MS = 2 * DAY_MS;
+const SUNDAY = 0;
+const SATURDAY = 6;
 
 const relativeTime = new Intl.RelativeTimeFormat("en", { numeric: "always" });
 
@@ -54,4 +60,33 @@ function largestWholeUnit(elapsedMs: number): [number, Intl.RelativeTimeFormatUn
   return [Math.floor(elapsedMs / MINUTE_MS), "minute"];
 }
 
-export { publishedAt, publishedSinceText };
+/** The time between two moments that falls on Monday to Friday, in local time. */
+function weekdayTimeBetween(fromMs: number, toMs: number): number {
+  let total = 0;
+  let start = fromMs;
+  while (start < toMs) {
+    const day = new Date(start);
+    const nextMidnight = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
+    const end = Math.min(nextMidnight, toMs);
+    if (day.getDay() !== SUNDAY && day.getDay() !== SATURDAY) {
+      total += end - start;
+    }
+    start = end;
+  }
+  return total;
+}
+
+/** True after more than two weekdays since the publish. Saturday and Sunday do not count. */
+function isPublishedTooLongAgo(publishedAtMs: number, nowMs: number): boolean {
+  return weekdayTimeBetween(publishedAtMs, nowMs) > MAX_WAIT_MS;
+}
+
+/** True on the inbox and on a repository's Active tab. A completed pull request needs no publish time. */
+function showsPublishedSince(page: Page): boolean {
+  return (
+    page.kind === "pull-request-inbox" ||
+    (page.kind === "pull-request-list" && page.listPage.status === "active")
+  );
+}
+
+export { isPublishedTooLongAgo, publishedAt, publishedSinceText, showsPublishedSince };

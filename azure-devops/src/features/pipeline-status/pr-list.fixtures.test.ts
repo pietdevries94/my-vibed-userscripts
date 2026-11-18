@@ -195,45 +195,51 @@ test("the draft pill marks a row as draft", { skip: fixtures.skip }, () => {
   assert.equal(isDraftRow(capturedRow("pr-list", 1002)), false);
 });
 
-const publishedSinceCell = (row: HTMLElement): Element | null | undefined =>
-  row.querySelector(".bolt-table-cell-side-action")?.previousElementSibling;
+const updatedCell = (row: HTMLElement): Element | null | undefined =>
+  row.querySelector("time.bolt-time-item")?.closest("td");
+
+const publishedSinceLine = (row: HTMLElement): Element | null =>
+  row.querySelector(".fix-ado-published-since");
 
 for (const page of ["pr-list", "pr-inbox"]) {
-  test(
-    `${page}: the publish time sits in a column before the row's actions`,
-    {
-      skip: fixtures.skip,
-    },
-    () => {
-      const row = capturedRow(page, 1002);
-      const table = row.closest("table");
-      const columnCount = table?.querySelectorAll("colgroup > col").length ?? 0;
-      showPublishedSince(row, "Published 3 minutes ago");
+  test(`${page}: the publish time sits under the update time`, { skip: fixtures.skip }, () => {
+    const row = capturedRow(page, 1002);
+    const cellCount = row.children.length;
+    showPublishedSince(row, { isTooLongAgo: false, text: "Published 3 minutes ago" });
 
-      const cell = publishedSinceCell(row);
-      assert.ok(cell?.classList.contains("fix-ado-published-since") === true);
-      assert.equal(cell.textContent, "Published 3 minutes ago");
-      const columns = [...(table?.querySelectorAll("colgroup > col") ?? [])];
-      assert.equal(columns.length, columnCount + 1);
-      assert.ok(columns.at(-3)?.classList.contains("fix-ado-published-since") === true);
-    },
-  );
+    const line = publishedSinceLine(row);
+    assert.equal(line?.textContent, "Published 3 minutes ago");
+    assert.equal(line?.closest("td"), updatedCell(row));
+    assert.equal(line?.previousElementSibling?.querySelector("time.bolt-time-item") !== null, true);
+    assert.equal(row.children.length, cellCount);
+  });
 }
 
-test("showing the column again adds no second cell or column", { skip: fixtures.skip }, () => {
+test("showing the publish time again adds no second line", { skip: fixtures.skip }, () => {
   const row = capturedRow("pr-list", 1002);
-  showPublishedSince(row, "Published 3 minutes ago");
-  showPublishedSince(row, "Published 4 minutes ago");
+  showPublishedSince(row, { isTooLongAgo: false, text: "Published 3 minutes ago" });
+  showPublishedSince(row, { isTooLongAgo: false, text: "Published 4 minutes ago" });
   assert.equal(row.querySelectorAll(".fix-ado-published-since").length, 1);
-  assert.equal(row.closest("table")?.querySelectorAll("col.fix-ado-published-since").length, 1);
-  assert.equal(publishedSinceCell(row)?.textContent, "Published 4 minutes ago");
+  assert.equal(publishedSinceLine(row)?.textContent, "Published 4 minutes ago");
 });
 
-test("a draft row gets an empty cell, so the columns stay aligned", { skip: fixtures.skip }, () => {
+test(
+  "a publish too long ago is marked, and loses the mark once it is not",
+  { skip: fixtures.skip },
+  () => {
+    const row = capturedRow("pr-list", 1002);
+    const isMarked = (): boolean =>
+      publishedSinceLine(row)?.classList.contains("fix-ado-published-since-too-long") === true;
+    showPublishedSince(row, { isTooLongAgo: true, text: "Published 3 days ago" });
+    assert.equal(isMarked(), true);
+    showPublishedSince(row, { isTooLongAgo: false, text: "Published just now" });
+    assert.equal(isMarked(), false);
+  },
+);
+
+test("without a publish time, the line goes", { skip: fixtures.skip }, () => {
   const row = capturedRow("pr-list", 1001);
-  showPublishedSince(row, "Published 3 minutes ago");
+  showPublishedSince(row, { isTooLongAgo: false, text: "Published 3 minutes ago" });
   showPublishedSince(row, null);
-  const cell = publishedSinceCell(row);
-  assert.ok(cell?.classList.contains("fix-ado-published-since") === true);
-  assert.equal(cell.textContent, "");
+  assert.equal(publishedSinceLine(row), null);
 });

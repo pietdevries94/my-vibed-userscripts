@@ -50,58 +50,57 @@ function showPipelineStatus(row: HTMLElement, pullRequestId: number, status: Sho
 }
 
 const DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill";
-const ROW_ACTIONS_CELL_SELECTOR = ".bolt-table-cell-side-action";
+const UPDATE_TIME_SELECTOR = "time.bolt-time-item";
 const PUBLISHED_SINCE_CLASS = "fix-ado-published-since";
+const TOO_LONG_AGO_CLASS = "fix-ado-published-since-too-long";
 
 /** True when Azure DevOps shows its Draft pill on the row. */
 function isDraftRow(row: HTMLElement): boolean {
   return row.querySelector(DRAFT_PILL_SELECTOR) !== null;
 }
 
-/** Adds the column for the publish time to the row's table, before the actions column. */
-function addPublishedSinceColumn(row: HTMLElement): void {
-  const columns = row.closest("table")?.querySelector(":scope > colgroup");
-  if (!columns || columns.querySelector(`.${PUBLISHED_SINCE_CLASS}`)) {
-    return;
-  }
-  const column = row.ownerDocument.createElement("col");
-  column.className = PUBLISHED_SINCE_CLASS;
-  const actionsColumn = columns.lastElementChild?.previousElementSibling;
-  if (actionsColumn) {
-    actionsColumn.before(column);
-  } else {
-    columns.append(column);
-  }
+/** What the row shows under its update time. */
+interface PublishedSince {
+  text: string;
+  isTooLongAgo: boolean;
 }
 
-/** The row's publish time cell, added before the actions cell when missing. Null without an actions cell. */
-function publishedSinceCell(row: HTMLElement): Element | null {
-  const shown = row.querySelector(`:scope > .${PUBLISHED_SINCE_CLASS}`);
+/** The line under the update time, added when missing. Null without an update time. */
+function publishedSinceLine(row: HTMLElement): Element | null {
+  const shown = row.querySelector(`.${PUBLISHED_SINCE_CLASS}`);
   if (shown) {
     return shown;
   }
-  const actionsCell = row.querySelector(`:scope > ${ROW_ACTIONS_CELL_SELECTOR}`);
-  if (!actionsCell) {
+  const updateLine = row
+    .querySelector(UPDATE_TIME_SELECTOR)
+    ?.closest(".bolt-table-cell-content > *");
+  if (!updateLine) {
     return null;
   }
-  const cell = row.ownerDocument.createElement("td");
-  cell.className = `${PUBLISHED_SINCE_CLASS} bolt-table-cell bolt-list-cell secondary-text`;
-  actionsCell.before(cell);
-  return cell;
+  const line = row.ownerDocument.createElement("div");
+  line.className = PUBLISHED_SINCE_CLASS;
+  updateLine.after(line);
+  return line;
 }
 
 /**
- * Shows "Published 3 minutes ago" in a cell before the row's actions. A draft row gets
- * `null` and an empty cell, so the columns stay aligned. Only touches the DOM on a change.
+ * Shows "Published 3 minutes ago" under the row's update time, red when it is too long
+ * ago. `null` removes it. Only touches the DOM on a change.
  */
-function showPublishedSince(row: HTMLElement, text: string | null): void {
-  const cell = publishedSinceCell(row);
-  if (!cell) {
+function showPublishedSince(row: HTMLElement, shown: PublishedSince | null): void {
+  if (shown === null) {
+    row.querySelector(`.${PUBLISHED_SINCE_CLASS}`)?.remove();
     return;
   }
-  addPublishedSinceColumn(row);
-  if (cell.textContent !== (text ?? "")) {
-    cell.textContent = text ?? "";
+  const line = publishedSinceLine(row);
+  if (!line) {
+    return;
+  }
+  if (line.textContent !== shown.text) {
+    line.textContent = shown.text;
+  }
+  if (line.classList.contains(TOO_LONG_AGO_CLASS) !== shown.isTooLongAgo) {
+    line.classList.toggle(TOO_LONG_AGO_CLASS, shown.isTooLongAgo);
   }
 }
 
@@ -120,7 +119,7 @@ function markRequiredReviewers(row: HTMLElement, reviewers: Reviewer[]): void {
   }
 }
 
-export type { PullRequestRow };
+export type { PublishedSince, PullRequestRow };
 export {
   findPullRequestRows,
   isDraftRow,
