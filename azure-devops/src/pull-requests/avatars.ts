@@ -11,7 +11,15 @@ function avatarName(avatar: Element): string {
   return (label === "" ? imageAlt : label).trim();
 }
 
-function markAvatar(avatar: HTMLElement, initials: string, hue: string): void {
+/** What an avatar should show, and its width, read before any avatar is changed. */
+interface AvatarMark {
+  avatar: HTMLElement;
+  initials: string;
+  hue: string;
+  width: number;
+}
+
+function markAvatar({ avatar, initials, hue, width }: AvatarMark): void {
   if (initials) {
     avatar.dataset.fixAdoInitials = initials;
   } else {
@@ -19,9 +27,26 @@ function markAvatar(avatar: HTMLElement, initials: string, hue: string): void {
   }
   avatar.style.setProperty("--fix-ado-hue", hue || null);
   // The initials scale with the avatar, whatever size class ADO gave it.
-  if (initials && avatar.offsetWidth > 0) {
-    avatar.style.setProperty("--fix-ado-avatar-size", `${avatar.offsetWidth}px`);
+  if (initials && width > 0) {
+    avatar.style.setProperty("--fix-ado-avatar-size", `${width}px`);
   }
+}
+
+/** The avatars under `root` whose initials or colour are out of date, with what they should show. */
+function outdatedAvatars(root: ParentNode): AvatarMark[] {
+  const marks: AvatarMark[] = [];
+  for (const avatar of root.querySelectorAll<HTMLElement>(AVATAR_SELECTOR)) {
+    const name = avatarName(avatar);
+    const initials = initialsOf(name);
+    const hue = initials ? String(hueOf(name)) : "";
+    const isUpToDate =
+      (avatar.dataset.fixAdoInitials ?? "") === initials &&
+      avatar.style.getPropertyValue("--fix-ado-hue") === hue;
+    if (!isUpToDate) {
+      marks.push({ avatar, hue, initials, width: initials ? avatar.offsetWidth : 0 });
+    }
+  }
+  return marks;
 }
 
 /**
@@ -29,18 +54,11 @@ function markAvatar(avatar: HTMLElement, initials: string, hue: string): void {
  * It only sets attributes; style.css draws the initials over ADO's picture.
  * That leaves ADO's own elements in place, so hover cards keep working. An
  * avatar without a name keeps ADO's picture. Safe to call repeatedly.
+ * All widths are read before the first change, so the browser lays out once.
  */
 function showInitialsOnAvatars(root: ParentNode): void {
-  for (const avatar of root.querySelectorAll<HTMLElement>(AVATAR_SELECTOR)) {
-    const name = avatarName(avatar);
-    const initials = initialsOf(name);
-    const shownInitials = avatar.dataset.fixAdoInitials ?? "";
-    const hue = initials ? String(hueOf(name)) : "";
-    const isUpToDate =
-      shownInitials === initials && avatar.style.getPropertyValue("--fix-ado-hue") === hue;
-    if (!isUpToDate) {
-      markAvatar(avatar, initials, hue);
-    }
+  for (const mark of outdatedAvatars(root)) {
+    markAvatar(mark);
   }
 }
 
