@@ -185,6 +185,13 @@ test("a card's text can be edited, and the comment deleted", { skip }, async () 
   assert.equal(page.document.querySelector(".fix-ado-review-header"), null);
 });
 
+test('Azure DevOps\'s own post button is named "Add single comment", as it reads', { skip }, () => {
+  const page = loadReviewPage("pr-files-composer");
+  page.sync();
+  const post = page.button("Start a review").previousElementSibling;
+  assert.equal(post?.getAttribute("aria-label"), "Add single comment");
+});
+
 test(
   '"Finish your review" posts the summary, the comments and the vote, then reloads',
   { skip },

@@ -1,6 +1,7 @@
 // The review's button in Azure DevOps's own comment boxes. It goes last in the box's
-// button row, as the primary one. Azure DevOps's own button stays as it is: the
-// stylesheet alone makes it look secondary and read "Add single comment".
+// button row, as the primary one. Azure DevOps's own button keeps its text: the
+// stylesheet makes it look secondary and read "Add single comment", and an aria-label
+// gives a screen reader that same name.
 import { BOX_SELECTOR, commentBoxOf, findCommentBoxes } from "./comment-boxes.ts";
 import type { CommentBox } from "./comment-boxes.ts";
 import { actionButton } from "./review-markup.ts";
@@ -11,6 +12,7 @@ const ADD_ACTION = "add";
 const START_LABEL = "Start a review";
 const ADD_LABEL = "Add review comment";
 const TITLE = "Add to your review. Nothing is posted until you submit.";
+const POST_LABEL = "Add single comment";
 
 function addButtonOf(box: CommentBox): HTMLButtonElement | null {
   return (
@@ -43,6 +45,9 @@ function syncAddButtons(document: Document, hasReview: boolean): void {
     if (button === null) {
       button = createAddButton(box.textarea.ownerDocument);
       box.postButton.after(button);
+    }
+    if (box.postButton.getAttribute("aria-label") !== POST_LABEL) {
+      box.postButton.setAttribute("aria-label", POST_LABEL);
     }
     setIfChanged(button, hasReview ? ADD_LABEL : START_LABEL, box.textarea.value.trim() === "");
   }

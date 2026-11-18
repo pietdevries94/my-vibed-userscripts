@@ -1,5 +1,6 @@
 /* Azure DevOps's own post button, next to the review's button: it looks secondary and
-   reads "Add single comment". Only the stylesheet touches it. */
+   reads "Add single comment". Its aria-label carries that name, so the text here is
+   left out of what a screen reader reads. */
 .repos-discussion-thread-reply
   :has(> .fix-ado-review-add)
   > .bolt-button.primary:not(.fix-ado-review-add) {
@@ -17,7 +18,7 @@
 .repos-discussion-thread-reply
   :has(> .fix-ado-review-add)
   > .bolt-button.primary:not(.fix-ado-review-add)::after {
-  content: "Add single comment";
+  content: "Add single comment" / "";
   font-size: 0.875rem;
 }
 
