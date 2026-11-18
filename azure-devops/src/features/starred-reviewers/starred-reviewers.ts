@@ -6,9 +6,10 @@ import {
   STARRED_SECTION_CLASS,
   STAR_BUTTON_CLASS,
   createEmptyWell,
-  createSpinner,
   createStarredRow,
   createStarredSection,
+  showAdding,
+  showError,
 } from "./starred-reviewers-markup.ts";
 import { addStars, isOnPage, logShown, nameOfRow, reviewerRowOf } from "./reviewer-stars.ts";
 import type { AdoClient } from "../../core/ado-client.ts";
@@ -18,6 +19,7 @@ import type { StarredReviewersStore } from "./starred-reviewers-store.ts";
 import { closestHtmlElement } from "../../core/closest-element.ts";
 import { createStarPicker } from "./star-picker.ts";
 import { isNameOf } from "./starred-reviewers-store.ts";
+import { keepListFocus } from "./starred-list-focus.ts";
 import { log } from "../../../../shared/runtime/script-log.ts";
 
 /** How long Azure DevOps gets to show an added reviewer before the page reloads to show it. */
@@ -137,8 +139,13 @@ function openPicker(state: StarredState, opener: HTMLElement): void {
   });
   close = (): void => {
     close = null;
+    // On a blur, focus has gone elsewhere already; on Esc or a pick it is still in the field.
+    const hadFocus = picker.element.contains(document.activeElement);
     picker.element.remove();
     opener.hidden = false;
+    if (hadFocus) {
+      opener.focus();
+    }
   };
   opener.hidden = true;
   opener.before(picker.element);
@@ -153,6 +160,9 @@ function identityOfRow(state: StarredState, target: EventTarget | null): Identit
 
 /** A click on a starred row's star, + button or required button. */
 function onRowButton(state: StarredState, button: HTMLElement, identity: Identity): void {
+  if (button.getAttribute("aria-disabled") === "true") {
+    return;
+  }
   if (button.classList.contains(STAR_BUTTON_CLASS)) {
     state.options.store.unstar(identity.id);
     sync(state);
@@ -187,25 +197,6 @@ function placeSection(state: StarredState, anchor: Element): HTMLElement {
     anchor.after(section);
   }
   return section;
-}
-
-/** Puts a spinner on the row's + button, which stays in place, hidden and disabled. */
-function showAdding(document: Document, row: HTMLElement): void {
-  for (const button of row.querySelectorAll("[data-fix-ado-add]")) {
-    button.classList.replace("enabled", "disabled");
-    button.setAttribute("disabled", "");
-  }
-  const addButton = row.querySelector(".fix-ado-add-reviewer");
-  addButton?.classList.add("fix-ado-adding");
-  addButton?.append(createSpinner(document));
-}
-
-function showError(row: HTMLElement, error: string): void {
-  const detail = row.querySelector(".fix-ado-starred-detail");
-  if (detail !== null) {
-    detail.textContent = error;
-    detail.classList.replace("secondary-text", "error-text");
-  }
 }
 
 function createShownRow(state: StarredState, identity: Identity): HTMLElement {
@@ -251,11 +242,13 @@ function fillList(state: StarredState, section: HTMLElement): void {
     return;
   }
   list.dataset.fixAdoSignature = signature;
+  const restoreFocus = keepListFocus(list);
   list.replaceChildren(
     ...(starred.length === 0
       ? [createEmptyWell(state.options.document)]
       : shown.map((identity) => createShownRow(state, identity))),
   );
+  restoreFocus();
 }
 
 function sync(state: StarredState): void {

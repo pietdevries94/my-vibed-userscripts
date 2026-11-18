@@ -149,7 +149,7 @@ function isAdding(document: Document): boolean {
   const buttons = [...(row?.querySelectorAll("[data-fix-ado-add]") ?? [])];
   return (
     row?.querySelector(".fix-ado-spinner") !== null &&
-    buttons.every((button) => button.hasAttribute("disabled"))
+    buttons.every((button) => button.getAttribute("aria-disabled") === "true")
   );
 }
 

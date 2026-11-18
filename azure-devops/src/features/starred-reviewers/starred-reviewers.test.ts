@@ -229,3 +229,49 @@ test("no matches is a polite status, not an option in the list", async () => {
   assert.equal(none?.getAttribute("role"), "status");
   assert.equal(none?.closest('[role="listbox"]'), null);
 });
+
+/** Focuses a control of the section and clicks it, as the owner does with the keyboard. */
+function press(document: Document, selector: string): void {
+  const control = section(document).querySelector<HTMLElement>(selector);
+  assert.ok(control);
+  control.focus();
+  control.click();
+}
+
+test("Esc in the search field gives focus back to the button that opened it", () => {
+  const harness = setUp([QUILL]);
+  press(harness.document, ".fix-ado-star-someone");
+  const input = section(harness.document).querySelector(".fix-ado-star-picker input");
+  const view = harness.document.defaultView;
+  assert.ok(input !== null && view !== null);
+  input.dispatchEvent(new view.KeyboardEvent("keydown", { key: "Escape" }));
+  assert.equal(
+    harness.document.activeElement,
+    section(harness.document).querySelector(".fix-ado-star-someone"),
+  );
+});
+
+test("the + button keeps focus while its row spins, and takes no second click", async () => {
+  const harness = setUp([MARREN]);
+  press(harness.document, '[data-fix-ado-add="optional"]');
+  const add = section(harness.document).querySelector('[data-fix-ado-add="optional"]');
+  assert.equal(harness.document.activeElement, add);
+  assert.equal(add?.getAttribute("aria-disabled"), "true");
+  press(harness.document, '[data-fix-ado-add="optional"]');
+  await settle();
+  assert.equal(harness.added.length, 1);
+});
+
+test("once Azure DevOps shows the added reviewer, focus goes to the next button to use", async () => {
+  const harness = setUp([MARREN]);
+  press(harness.document, '[data-fix-ado-add="optional"]');
+  await settle();
+  harness.document
+    .querySelector(".pr-optional-reviewers-section")
+    ?.insertAdjacentHTML("beforeend", reviewerRow("Marren Tolk"));
+  harness.sync();
+  assert.equal(
+    harness.document.activeElement,
+    section(harness.document).querySelector(".fix-ado-star-someone"),
+  );
+});

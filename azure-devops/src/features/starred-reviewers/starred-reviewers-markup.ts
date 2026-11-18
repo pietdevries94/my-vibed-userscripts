@@ -235,6 +235,28 @@ function createStarredSection(document: Document): HTMLElement {
   });
 }
 
+/**
+ * Puts a spinner on the row's + button, which stays in place, hidden and disabled. The
+ * buttons stay focusable, so a keyboard user keeps their place.
+ */
+function showAdding(document: Document, row: HTMLElement): void {
+  for (const button of row.querySelectorAll("[data-fix-ado-add]")) {
+    button.classList.replace("enabled", "disabled");
+    button.setAttribute("aria-disabled", "true");
+  }
+  const addButton = row.querySelector(".fix-ado-add-reviewer");
+  addButton?.classList.add("fix-ado-adding");
+  addButton?.append(createSpinner(document));
+}
+
+function showError(row: HTMLElement, error: string): void {
+  const detail = row.querySelector(".fix-ado-starred-detail");
+  if (detail !== null) {
+    detail.textContent = error;
+    detail.classList.replace("secondary-text", "error-text");
+  }
+}
+
 export type { ElementOptions };
 export {
   STARRED_SECTION_CLASS,
@@ -242,6 +264,8 @@ export {
   createAvatar,
   createEmptyWell,
   createSpinner,
+  showAdding,
+  showError,
   createStarButton,
   createStarredRow,
   createStarredSection,
