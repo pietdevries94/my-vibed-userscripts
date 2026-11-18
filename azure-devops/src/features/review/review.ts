@@ -271,8 +271,9 @@ function createReview(options: ReviewOptions): ReviewFeature {
     handleClick(state, event);
   });
   document.addEventListener("input", (event) => {
-    noteDraft(state.drafts, event.target);
-    render(state);
+    if (noteDraft(state.drafts, event.target) || commentBoxAround(event.target) !== null) {
+      render(state);
+    }
   });
   watchTree(document, () => {
     showInTree(document, shownReview(state));

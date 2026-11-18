@@ -60,13 +60,14 @@ function handleCardAction(context: CardContext, { action, button }: ClickedActio
   return action === "edit" ? comment.id : null;
 }
 
-/** Keeps what the owner types in a card's text box as that comment's draft. */
-function noteDraft(drafts: Drafts, target: EventTarget | null): void {
+/** Keeps what the owner types in a card's text box as that comment's draft. True for a card's text box. */
+function noteDraft(drafts: Drafts, target: EventTarget | null): boolean {
   const textarea = closestElement(target, "textarea");
   const card = textarea === null ? null : cardAround(textarea);
   if (card !== null && drafts.has(card.id) && textarea !== null && "value" in textarea) {
     drafts.set(card.id, String(textarea.value));
   }
+  return card !== null;
 }
 
 /** Puts the cursor in the text box of a comment's card. */
