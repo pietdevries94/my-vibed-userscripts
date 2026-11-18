@@ -236,3 +236,28 @@ test("a page without an Overview gets no button", () => {
   page.sync();
   assert.equal(page.button(), null);
 });
+
+test("with reduced motion the button jumps to the bottom", () => {
+  const page = overviewPage();
+  const scrolledTo = page.size(PAGE, TALL);
+  const view = page.document.defaultView;
+  assert.ok(view !== null);
+  Object.defineProperty(view, "matchMedia", {
+    value: (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)" }),
+  });
+  page.sync();
+  page.button()?.click();
+  assert.deepEqual(scrolledTo, [{ behavior: "instant", top: 2000 }]);
+});
+
+test("at the bottom, a focused button stays until focus leaves it", () => {
+  const page = overviewPage();
+  page.size(PAGE, TALL);
+  page.sync();
+  page.button()?.focus();
+  page.button()?.click();
+  page.scroll(PAGE, 1400);
+  assert.deepEqual([page.isButtonShown(), page.document.activeElement], [true, page.button()]);
+  page.button()?.blur();
+  assert.equal(page.isButtonShown(), false);
+});

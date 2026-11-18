@@ -30,7 +30,11 @@ function scrollerOf(feed: Element): HTMLElement | null {
   return box;
 }
 
-function createButton(document: Document, onClick: () => void): HTMLButtonElement {
+function createButton(
+  document: Document,
+  onClick: () => void,
+  onBlur: () => void,
+): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = BUTTON_CLASS;
@@ -38,6 +42,7 @@ function createButton(document: Document, onClick: () => void): HTMLButtonElemen
   button.setAttribute("aria-label", LABEL);
   button.append(arrowDownIcon(document));
   button.addEventListener("click", onClick);
+  button.addEventListener("blur", onBlur);
   return button;
 }
 
@@ -48,6 +53,19 @@ function overviewScrollerOf(document: Document): HTMLElement | null {
 
 const isAtBottom = (scroller: HTMLElement): boolean =>
   scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= BOTTOM_MARGIN;
+
+/** True while there is more below, or while the button has focus, so focus does not fall to the page. */
+function isButtonWanted(scroller: HTMLElement | null, button: HTMLButtonElement | null): boolean {
+  const hasFocus = button !== null && button.ownerDocument.activeElement === button;
+  return scroller !== null && (!isAtBottom(scroller) || hasFocus);
+}
+
+/** A smooth scroll, or a jump when the owner asks for reduced motion. */
+function scrollBehaviorOf(scroller: HTMLElement): ScrollBehavior {
+  const view = scroller.ownerDocument.defaultView;
+  const reducesMotion = view?.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  return reducesMotion ? "instant" : "smooth";
+}
 
 /** What the owner does to scroll by hand. Any of them ends the follow. */
 const OWNER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "pointerdown"];
@@ -71,7 +89,7 @@ function createBottomFollow(now: () => number): BottomFollow {
 
   function start(scroller: HTMLElement): void {
     followed = { height: scroller.scrollHeight, lastActiveAt: now() };
-    scroller.scrollTo({ behavior: "smooth", top: scroller.scrollHeight });
+    scroller.scrollTo({ behavior: scrollBehaviorOf(scroller), top: scroller.scrollHeight });
   }
 
   function step(scroller: HTMLElement | null, isScrollEvent: boolean): void {
@@ -133,11 +151,11 @@ function createScrollToBottom(options: { document: Document; now: () => number }
 
   /** Writes only what changed, to keep the page's mutation observer quiet. */
   function showOrHideButton(scroller: HTMLElement | null): void {
-    const isShown = scroller !== null && !isAtBottom(scroller);
+    const isShown = isButtonWanted(scroller, button);
     if (button === null && !isShown) {
       return;
     }
-    button ??= createButton(document, scrollToBottom);
+    button ??= createButton(document, scrollToBottom, sync);
     if (!button.isConnected) {
       document.body.append(button);
     }
