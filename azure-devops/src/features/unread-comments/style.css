@@ -64,14 +64,12 @@
   opacity: 0.5;
 }
 
-/* Go to next unread follows the time of a group's first comment, as a small button. */
+/* Go to next unread spans the bottom of a group's last comment, inside the glow. */
 .fix-ado-next-unread {
-  flex: none;
-  margin-left: 8px;
-  padding: 0 8px;
-  min-height: 0;
-  height: 24px;
-  font-size: 12px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin: 8px 0 12px;
 }
 
 /* Forced colors drop box shadows, so the glows become outlines there. */

@@ -64,5 +64,4 @@ export {
   UNREAD_COMMENT_MARKER_SELECTOR,
   feedThreadElements,
   feedThreadOf,
-  timeBoxOf,
 };

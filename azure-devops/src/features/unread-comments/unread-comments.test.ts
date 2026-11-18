@@ -127,16 +127,16 @@ test("Go to first unread scrolls to the first group and moves focus there", asyn
   assert.equal(page.document.activeElement, firstGroup);
 });
 
-test("every group but the last has Go to next unread after the time of its first comment", () => {
+test("every group but the last has Go to next unread at the bottom of its last comment", () => {
   const page = overviewPage(threadRow([true, true, false, true]) + threadRow([true]));
   page.sync();
   page.sync();
   const buttons = page.nextUnreadButtons();
   assert.equal(buttons.length, 2);
   const viewers = page.document.querySelectorAll(".repos-comment-viewer");
-  assert.equal(buttons[0]?.closest(".repos-comment-viewer"), viewers[0]);
-  assert.equal(buttons[1]?.closest(".repos-comment-viewer"), viewers[3]);
-  assert.equal(buttons[0]?.previousElementSibling?.tagName, "TIME");
+  assert.equal(buttons[0]?.parentElement, viewers[1]);
+  assert.equal(buttons[1]?.parentElement, viewers[3]);
+  assert.equal(viewers[1]?.lastElementChild, buttons[0]);
   assert.equal(buttons[0]?.textContent, "Go to next unread");
 });
 

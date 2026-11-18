@@ -1,7 +1,6 @@
 import {
   HEADER_SELECTOR,
   UNREAD_COMMENT_MARKER_SELECTOR,
-  timeBoxOf,
 } from "../../pull-requests/feed-threads.ts";
 import { scrollBehaviorOf } from "../../core/scroll-behavior.ts";
 
@@ -147,21 +146,23 @@ function findOrAddFirstUnreadButton(
   return bar.querySelector<HTMLButtonElement>(`.${FIRST_UNREAD_CLASS}`);
 }
 
-/** The box of the time in the header of a group's first comment. Null for a row, or a header without a time. */
-function groupTimeBoxOf({ target, comments }: UnreadStop): Element | null {
-  const header = comments.length === 0 ? null : target.querySelector(HEADER_SELECTOR);
-  return header === null ? null : timeBoxOf(header);
-}
+/** The last comment of a group, where Go to next unread goes. Null for a row. */
+const lastCommentOf = ({ comments }: UnreadStop): HTMLElement | null => comments.at(-1) ?? null;
 
-/** Go to next unread after the time of a group's first comment, added when it is not there yet. */
-function findOrAddNextUnreadButton(timeBox: Element, onClick: () => void): HTMLButtonElement {
-  const existing = timeBox.querySelector<HTMLButtonElement>(`:scope > .${NEXT_UNREAD_CLASS}`);
-  if (existing !== null) {
-    return existing;
+/**
+ * Go to next unread, last in the last comment of a group, so it shows inside the group's glow.
+ * Added when it is not there yet, and moved back to the end when Azure DevOps adds after it.
+ */
+function findOrAddNextUnreadButton(comment: HTMLElement, onClick: () => void): HTMLButtonElement {
+  const existing = comment.querySelector<HTMLButtonElement>(`:scope > .${NEXT_UNREAD_CLASS}`);
+  const button =
+    existing ?? createButton(comment.ownerDocument, NEXT_UNREAD_CLASS, NEXT_UNREAD_LABEL);
+  if (existing === null) {
+    button.addEventListener("click", onClick);
   }
-  const button = createButton(timeBox.ownerDocument, NEXT_UNREAD_CLASS, NEXT_UNREAD_LABEL);
-  button.addEventListener("click", onClick);
-  timeBox.append(button);
+  if (comment.lastElementChild !== button) {
+    comment.append(button);
+  }
   return button;
 }
 
@@ -230,7 +231,7 @@ function removeNextUnreadButtons(document: Document, kept: Set<HTMLButtonElement
  * Unread comments on a pull request's Overview. Azure DevOps marks each one with a dot. Unread
  * comments that follow each other in a thread form a group, with one glow around it (style.css).
  * Go to first unread, above the feed, scrolls to the first group, and glows while there is one.
- * Go to next unread, after the time of each group's first comment but the last, scrolls to the
+ * Go to next unread, at the bottom of each group but the last, scrolls to the
  * next group. A new thread Azure DevOps has not rendered yet counts as a group: its row is where
  * the scroll goes.
  */
@@ -246,10 +247,10 @@ function createUnreadComments({ document }: { document: Document }): { sync: () 
   function syncNextUnreadButtons(stops: UnreadStop[]): void {
     const kept = new Set<HTMLButtonElement>();
     for (const stop of stops.slice(0, -1)) {
-      const timeBox = groupTimeBoxOf(stop);
-      if (timeBox !== null) {
+      const lastComment = lastCommentOf(stop);
+      if (lastComment !== null) {
         kept.add(
-          findOrAddNextUnreadButton(timeBox, () => {
+          findOrAddNextUnreadButton(lastComment, () => {
             goToNextAfter(stop.target);
           }),
         );
