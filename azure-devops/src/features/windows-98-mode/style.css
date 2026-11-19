@@ -7958,8 +7958,13 @@ html[data-fix-ado-win98]
     }
   }
 
-  .v-scroll-auto:has(> .bolt-list) {
+  /* The list box, 4px under the search field when there is one. */
+  :has(> .bolt-textfield) + .v-scroll-auto:has(> .bolt-list) {
     margin-top: 4px;
+  }
+
+  .v-scroll-auto:has(> .bolt-list) {
+    margin-top: 0;
     padding: 2px;
     background: #fff;
     box-shadow: var(--fix-ado-win98-sunken);
@@ -7970,10 +7975,63 @@ html[data-fix-ado-win98]
     border-spacing: 0;
   }
 
+  /* A row is 17px: its checkbox 4px in, then 6px, then the name; every cell fits the row, so the
+     hovered row's navy covers its whole name. */
   .bolt-list-row {
     height: 17px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px;
     background: #fff;
     color: #000;
+
+    & > .bolt-list-cell {
+      flex: none;
+      width: auto;
+      height: 17px;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      display: flex;
+      align-items: center;
+
+      &:last-child {
+        flex: 1;
+        min-width: 0;
+      }
+
+      :is(
+        .bolt-table-cell-content,
+        .bolt-list-box-cell-container,
+        .bolt-list-cell-child,
+        .flex-row,
+        .flex-row-inline
+      ):not(.bolt-checkmark) {
+        height: 17px;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        gap: 4px;
+        align-items: center;
+      }
+
+      /* The checkbox's wrappers are as tall as the box, so it sits on whole pixels. */
+      &.bolt-table-cell-select :is(.flex-row, .flex-row-inline) {
+        display: flex;
+        height: 13px;
+      }
+
+      /* A person's 16px avatar, 4px, then the name. A 1px margin under each centres them on
+         whole pixels in the 17px row. */
+      :is(.identity-view, .identity-avatar) {
+        margin: 0;
+      }
+
+      :is(.identity-view, .text-ellipsis) {
+        margin-bottom: 1px;
+      }
+    }
 
     &:hover,
     &.focused {
@@ -7987,7 +8045,8 @@ html[data-fix-ado-win98]
     }
   }
 
-  .bolt-list-cell {
+  /* The invented table form of the list, before the real capture, keeps its cell padding. */
+  td.bolt-list-cell {
     padding: 0 4px;
   }
 
@@ -7997,6 +8056,7 @@ html[data-fix-ado-win98]
 
   .bolt-checkbox {
     flex: none;
+    margin: 0;
     padding: 0;
   }
 
@@ -8024,11 +8084,14 @@ html[data-fix-ado-win98]
   /* Clear: a push button at the right, under the list. */
   :has(> .bolt-button):last-child {
     margin-top: 4px;
+    padding: 0;
+    align-items: flex-end;
     justify-content: flex-end;
 
     .bolt-button {
       min-width: 75px;
       height: 23px;
+      margin: 0;
       justify-content: center;
       gap: 4px;
       padding: 0 10px;
