@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.19.0
+// @version      1.19.1
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, a New chip that glows on pushes and other changes you have not seen, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, pull request lists and boards that reload on changes, and a Windows 98 mode, still a work in progress and off by default. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -921,31 +921,6 @@
    it shows, or empty on any other page. The top bar, side bar, menus and dialogs get the look
    on every page; page content only on captured pages, whose markup is known. */
 
-html[data-fix-ado-win98] {
-  --fix-ado-win98-font: Tahoma, "MS Sans Serif", Geneva, Verdana, sans-serif;
-  --fix-ado-win98-mono: "Courier New", Courier, monospace;
-  --fix-ado-win98-face: #c0c0c0;
-  --fix-ado-win98-navy: #000080;
-  --fix-ado-win98-title: linear-gradient(90deg, #000080, #1084d0);
-  --fix-ado-win98-title-off: linear-gradient(90deg, #808080, #b5b5b5);
-  --fix-ado-win98-raised:
-    inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
-  --fix-ado-win98-pressed:
-    inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
-  --fix-ado-win98-sunken:
-    inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
-  --fix-ado-win98-thin: inset -1px -1px #808080, inset 1px 1px #fff;
-  --fix-ado-win98-window:
-    inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff;
-  --fix-ado-win98-well: inset -1px -1px #fff, inset 1px 1px #808080;
-  --fix-ado-win98-default:
-    inset 0 0 0 1px #000, inset -2px -2px #0a0a0a, inset 2px 2px #fff, inset -3px -3px #808080,
-    inset 3px 3px #dfdfdf;
-  --fix-ado-win98-menu-shadow:
-    inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff,
-    2px 2px 0 rgba(0, 0, 0, 0.35);
-}
-
 /* Azure DevOps's theme variables, as Windows 98. Light and Dark both get them, so the dark
    palette is set back to light values. On a captured page they apply to all of it; elsewhere
    only to the top bar, side bar, menus and dialogs. */
@@ -1007,51 +982,51 @@ html[data-fix-ado-win98]
   --palette-error: rgba(192, 0, 0, 1) !important;
   --palette-error-6: rgba(160, 0, 0, 1) !important;
   --palette-error-10: rgba(128, 0, 0, 1) !important;
-  --background-color: #c0c0c0 !important;
-  --border-subtle-color: #808080 !important;
-  --callout-background-color: #c0c0c0 !important;
-  --callout-filtered-background-color: #c0c0c0 !important;
+  --background-color: var(--win98-face) !important;
+  --border-subtle-color: var(--win98-shadow) !important;
+  --callout-background-color: var(--win98-face) !important;
+  --callout-filtered-background-color: var(--win98-face) !important;
   --callout-shadow-color: transparent !important;
   --callout-shadow-secondary-color: transparent !important;
   --panel-shadow-color: transparent !important;
   --panel-shadow-secondary-color: transparent !important;
-  --communication-background: #000080 !important;
-  --communication-foreground: #000080 !important;
+  --communication-background: var(--win98-navy) !important;
+  --communication-foreground: var(--win98-navy) !important;
   --text-on-communication-background: #fff !important;
   --focus-border-color: #000 !important;
   --focus-pulse-max-color: transparent !important;
   --focus-pulse-min-color: transparent !important;
   --text-primary-color: #000 !important;
   --text-secondary-color: #404040 !important;
-  --text-disabled-color: #808080 !important;
-  --nav-header-background: #c0c0c0 !important;
+  --text-disabled-color: var(--win98-shadow) !important;
+  --nav-header-background: var(--win98-face) !important;
   --nav-header-active-item-background: transparent !important;
   --nav-header-item-hover-background: transparent !important;
   --nav-header-product-color: #000 !important;
   --nav-header-text-primary-color: #000 !important;
   --nav-header-text-secondary-color: #404040 !important;
-  --nav-header-text-disabled-color: #808080 !important;
-  --nav-vertical-background-color: #c0c0c0 !important;
+  --nav-header-text-disabled-color: var(--win98-shadow) !important;
+  --nav-vertical-background-color: var(--win98-face) !important;
   --nav-vertical-active-group-background: transparent !important;
-  --nav-vertical-active-item-background: #000080 !important;
-  --nav-vertical-item-hover-background: #000080 !important;
+  --nav-vertical-active-item-background: var(--win98-navy) !important;
+  --nav-vertical-item-hover-background: var(--win98-navy) !important;
   --nav-vertical-text-primary-color: #000 !important;
   --nav-vertical-text-secondary-color: #404040 !important;
   --component-grid-row-hover-color: transparent !important;
-  --component-grid-selected-row-color: #000080 !important;
+  --component-grid-selected-row-color: var(--win98-navy) !important;
   --component-grid-focus-border-color: #000 !important;
   --component-grid-cell-bottom-border-color: transparent !important;
-  --component-grid-action-hover-color: #c0c0c0 !important;
-  --component-menu-selected-item-background: #000080 !important;
-  --component-label-default-color: #c0c0c0 !important;
-  --component-label-default-color-hover: #dfdfdf !important;
+  --component-grid-action-hover-color: var(--win98-face) !important;
+  --component-menu-selected-item-background: var(--win98-navy) !important;
+  --component-label-default-color: var(--win98-face) !important;
+  --component-label-default-color-hover: var(--win98-light) !important;
   --component-htmlEditor-background-color: #fff !important;
   --component-htmlEditor-foreground-color: #000 !important;
   --component-status-error: #c00000 !important;
   --component-status-success: #008000 !important;
   --component-status-warning: #a07000 !important;
-  --component-status-info: #000080 !important;
-  --component-status-neutral: #808080 !important;
+  --component-status-info: var(--win98-navy) !important;
+  --component-status-neutral: var(--win98-shadow) !important;
   --status-error-foreground: #c00000 !important;
   --status-error-text: #a00000 !important;
   --status-error-strong: #800000 !important;
@@ -1062,21 +1037,21 @@ html[data-fix-ado-win98]
   --status-warning-foreground: #a07000 !important;
   --status-warning-text: #705000 !important;
   --status-warning-icon-foreground: #a07000 !important;
-  --status-warning-background: #ffffe1 !important;
-  --status-info-foreground: #000080 !important;
+  --status-warning-background: var(--win98-tooltip) !important;
+  --status-info-foreground: var(--win98-navy) !important;
   --status-info-background: #e8e8ff !important;
-  --splitter-border-color: #808080 !important;
+  --splitter-border-color: var(--win98-shadow) !important;
   --diff-color-original: rgba(255, 0, 0, 0.18) !important;
   --diff-color-modified: rgba(0, 160, 0, 0.18) !important;
   --icon-folder-color: #e0c000 !important;
   --search-match-background: #ffff00 !important;
-  --search-selected-match-background: #000080 !important;
+  --search-selected-match-background: var(--win98-navy) !important;
 
   color-scheme: light;
-  accent-color: #000080;
-  font-family: var(--fix-ado-win98-font);
+  accent-color: var(--win98-navy);
+  font-family: var(--win98-font);
   -webkit-font-smoothing: none;
-  scrollbar-color: #767676 #dfdfdf;
+  scrollbar-color: #767676 var(--win98-light);
 }
 
 /* ===== Top bar: a title bar with the page title, then an Address bar ===== */
@@ -1084,8 +1059,8 @@ html[data-fix-ado-win98]
 html[data-fix-ado-win98] :is(.project-header, .top-level-header) {
   position: relative;
   padding-top: 22px;
-  background: #c0c0c0;
-  box-shadow: inset 0 -1px #808080;
+  background: var(--win98-face);
+  box-shadow: inset 0 -1px var(--win98-shadow);
   color: #000;
 
   &::before {
@@ -1100,14 +1075,14 @@ html[data-fix-ado-win98] :is(.project-header, .top-level-header) {
     white-space: nowrap;
     text-overflow: ellipsis;
     color: #fff;
-    font: 700 11px/18px var(--fix-ado-win98-font);
+    font: 700 11px/18px var(--win98-font);
     /* The icon, the minimise, maximise and close buttons, and the title gradient. */
     background:
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 18 18' shape-rendering='crispEdges'%3E%3Crect x='1' y='2' width='16' height='11' fill='%23c0c0c0' stroke='%23000'/%3E%3Crect x='3' y='4' width='12' height='7' fill='%23008080'/%3E%3Crect x='6' y='13' width='6' height='2' fill='%23808080'/%3E%3Crect x='4' y='15' width='10' height='2' fill='%23c0c0c0' stroke='%23000'/%3E%3C/svg%3E")
         3px center / 14px no-repeat,
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='14' shape-rendering='crispEdges'%3E%3Cdefs%3E%3Cg id='b'%3E%3Crect width='16' height='14' fill='%23c0c0c0'/%3E%3Cpath d='M0 0h15v1H1v12H0z' fill='%23fff'/%3E%3Cpath d='M15 0h1v14H0v-1h15z' fill='%230a0a0a'/%3E%3Cpath d='M1 1h13v1H2v10H1z' fill='%23dfdfdf'/%3E%3Cpath d='M14 1h1v12H1v-1h13z' fill='%23808080'/%3E%3C/g%3E%3C/defs%3E%3Cuse href='%23b'/%3E%3Cuse href='%23b' x='16'/%3E%3Cuse href='%23b' x='34'/%3E%3Crect x='4' y='9' width='6' height='2'/%3E%3Cpath d='M19 2h9v9h-9zM20 4v6h7V4z' fill-rule='evenodd'/%3E%3Cpath d='M38 3h2l2 2 2-2h2l-3 3.5 3 3.5h-2l-2-2-2 2h-2l3-3.5z'/%3E%3C/svg%3E")
         right 2px center / 50px 14px no-repeat,
-      var(--fix-ado-win98-title);
+      var(--win98-title);
     pointer-events: none;
   }
 
@@ -1117,7 +1092,7 @@ html[data-fix-ado-win98] :is(.project-header, .top-level-header) {
     background: transparent;
     box-shadow: none;
     color: #000;
-    font-family: var(--fix-ado-win98-font);
+    font-family: var(--win98-font);
     font-size: 11px;
   }
 
@@ -1146,7 +1121,7 @@ html[data-fix-ado-win98] :is(.project-header, .top-level-header) {
     margin: 0 6px 0 2px;
     padding: 0 4px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     align-items: center;
   }
 
@@ -1187,7 +1162,7 @@ html[data-fix-ado-win98] :is(.project-header, .top-level-header) {
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     color: #000;
   }
 
@@ -1199,8 +1174,8 @@ html[data-fix-ado-win98] :is(.project-header, .top-level-header) {
 /* ===== Side bar: a Start menu pane with a banner ===== */
 
 html[data-fix-ado-win98] .navigation-container {
-  background: #c0c0c0;
-  box-shadow: var(--fix-ado-win98-raised);
+  background: var(--win98-face);
+  box-shadow: var(--win98-raised);
   font-size: 11px;
 
   .project-navigation {
@@ -1223,7 +1198,7 @@ html[data-fix-ado-win98] .navigation-container {
         bottom: 2px;
         left: 2px;
         width: 22px;
-        background: linear-gradient(180deg, #000080, #1084d0);
+        background: linear-gradient(180deg, var(--win98-navy), var(--win98-title-end));
       }
 
       &::before {
@@ -1236,7 +1211,7 @@ html[data-fix-ado-win98] .navigation-container {
         writing-mode: vertical-rl;
         transform: rotate(180deg);
         color: #fff;
-        font: 700 16px/14px var(--fix-ado-win98-font);
+        font: 700 16px/14px var(--win98-font);
         white-space: nowrap;
       }
     }
@@ -1244,7 +1219,7 @@ html[data-fix-ado-win98] .navigation-container {
     .separator {
       height: 2px;
       background: transparent;
-      border-top: 1px solid #808080;
+      border-top: 1px solid var(--win98-shadow);
       border-bottom: 1px solid #fff;
     }
   }
@@ -1274,7 +1249,7 @@ html[data-fix-ado-win98] .navigation-container {
     &:hover,
     &.displayed.hub,
     &.displayed:not(:has(~ [role="menu"])) {
-      background: #000080;
+      background: var(--win98-navy);
       color: #fff;
 
       .navigation-text,
@@ -1302,8 +1277,8 @@ html[data-fix-ado-win98] .top-level-navigation {
   min-width: 220px;
   padding: 2px 2px 2px 24px;
   border: 0;
-  background: #c0c0c0;
-  box-shadow: var(--fix-ado-win98-raised);
+  background: var(--win98-face);
+  box-shadow: var(--win98-raised);
   color: #000;
   font-size: 11px;
 
@@ -1314,7 +1289,7 @@ html[data-fix-ado-win98] .top-level-navigation {
     bottom: 2px;
     left: 2px;
     width: 22px;
-    background: linear-gradient(180deg, #000080, #1084d0);
+    background: linear-gradient(180deg, var(--win98-navy), var(--win98-title-end));
   }
 
   &::before {
@@ -1327,7 +1302,7 @@ html[data-fix-ado-win98] .top-level-navigation {
     writing-mode: vertical-rl;
     transform: rotate(180deg);
     color: #fff;
-    font: 700 16px/14px var(--fix-ado-win98-font);
+    font: 700 16px/14px var(--win98-font);
     white-space: nowrap;
   }
 
@@ -1360,7 +1335,7 @@ html[data-fix-ado-win98] .top-level-navigation {
     }
 
     &:is(.displayed, :hover, :focus) {
-      background: #000080;
+      background: var(--win98-navy);
       color: #fff;
     }
 
@@ -1383,7 +1358,7 @@ html[data-fix-ado-win98] .top-level-navigation {
     padding: 5px 0 0;
     border: 0;
     box-shadow:
-      inset 0 1px #808080,
+      inset 0 1px var(--win98-shadow),
       inset 0 2px #fff;
   }
 
@@ -1415,7 +1390,7 @@ html[data-fix-ado-win98]
   .bolt-textfield-input,
   .bolt-list,
   .bolt-table {
-    font-family: var(--fix-ado-win98-font);
+    font-family: var(--win98-font);
     font-size: 11px;
   }
 
@@ -1430,8 +1405,8 @@ html[data-fix-ado-win98]
     padding-bottom: 0;
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
     font-weight: 400;
 
@@ -1441,35 +1416,35 @@ html[data-fix-ado-win98]
 
     &.primary.disabled,
     &.primary:disabled {
-      background: #c0c0c0;
-      color: #808080;
+      background: var(--win98-face);
+      color: var(--win98-shadow);
       text-shadow: 1px 1px #fff;
     }
 
     &:hover {
-      background: #c0c0c0;
+      background: var(--win98-face);
     }
 
     &:active,
     &.active,
     &[aria-pressed="true"],
     &[aria-expanded="true"] {
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-pressed);
+      background: var(--win98-face);
+      box-shadow: var(--win98-pressed);
     }
 
     &.primary {
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-default);
+      background: var(--win98-face);
+      box-shadow: var(--win98-default);
       color: #000;
     }
 
     /* Disabled: the normal bevel, embossed grey text, at full opacity. */
     &.disabled,
     &:disabled {
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
-      color: #808080;
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
+      color: var(--win98-shadow);
       text-shadow: 1px 1px #fff;
       opacity: 1;
     }
@@ -1480,7 +1455,7 @@ html[data-fix-ado-win98]
     }
 
     &.subtle:hover {
-      box-shadow: var(--fix-ado-win98-thin);
+      box-shadow: var(--win98-thin);
     }
 
     &:focus-visible {
@@ -1496,14 +1471,14 @@ html[data-fix-ado-win98]
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     color: #000;
 
     &.focused,
     &:focus-within,
     &.bolt-identitypickerdropdown-textField.focused {
       border: 0;
-      box-shadow: var(--fix-ado-win98-sunken);
+      box-shadow: var(--win98-sunken);
     }
   }
 
@@ -1526,7 +1501,7 @@ html[data-fix-ado-win98]
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     color: #000;
   }
 
@@ -1534,8 +1509,8 @@ html[data-fix-ado-win98]
   .bolt-pill {
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-well);
+    background: var(--win98-face);
+    box-shadow: var(--win98-well);
     color: #000;
     font-size: 11px;
   }
@@ -1562,8 +1537,8 @@ html[data-fix-ado-win98] .bolt-portal-host {
   .bolt-contextual-menu {
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-menu-shadow);
+    background: var(--win98-face);
+    box-shadow: var(--win98-menu);
     padding: 3px;
     color: #000;
   }
@@ -1573,7 +1548,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
 
     &:hover,
     &.focused {
-      background: #000080;
+      background: var(--win98-navy);
       color: #fff;
 
       /* Only the text: a vote's icon keeps its colour. */
@@ -1583,7 +1558,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
     }
 
     &.disabled {
-      color: #808080;
+      color: var(--win98-shadow);
       text-shadow: 1px 1px #fff;
     }
   }
@@ -1653,7 +1628,12 @@ html[data-fix-ado-win98] .bolt-portal-host {
     & > .bolt-menuitem-cell {
       height: 8px;
       padding: 0;
-      background: linear-gradient(transparent 3px, #808080 3px 4px, #fff 4px 5px, transparent 5px);
+      background: linear-gradient(
+        transparent 3px,
+        var(--win98-shadow) 3px 4px,
+        #fff 4px 5px,
+        transparent 5px
+      );
     }
 
     & > .bolt-menuitem-cell > * {
@@ -1664,7 +1644,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
   .bolt-list-row.selected,
   .bolt-list-row:hover,
   .bolt-list-row.focused {
-    background: #000080;
+    background: var(--win98-navy);
     color: #fff;
 
     /* Icons keep their colour: a vote or status icon says something. */
@@ -1678,8 +1658,8 @@ html[data-fix-ado-win98] .bolt-portal-host {
   .bolt-dialog-callout-content {
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-menu-shadow);
+    background: var(--win98-face);
+    box-shadow: var(--win98-menu);
     color: #000;
   }
 
@@ -1687,13 +1667,13 @@ html[data-fix-ado-win98] .bolt-portal-host {
   .bolt-dialog-header {
     margin: 3px 3px 0;
     padding: 2px 4px;
-    background: var(--fix-ado-win98-title);
+    background: var(--win98-title);
     color: #fff;
 
     .title-m,
     .bolt-header-title {
       color: #fff;
-      font: 700 11px/18px var(--fix-ado-win98-font);
+      font: 700 11px/18px var(--win98-font);
     }
 
     .bolt-button {
@@ -1715,9 +1695,9 @@ html[data-fix-ado-win98] .bolt-portal-host {
     padding: 2px 4px;
     border: 1px solid #000;
     border-radius: 0;
-    background: #ffffe1;
+    background: var(--win98-tooltip);
     color: #000;
-    font: 11px/14px var(--fix-ado-win98-font);
+    font: 11px/14px var(--win98-font);
     box-shadow: none;
   }
 }
@@ -1725,18 +1705,18 @@ html[data-fix-ado-win98] .bolt-portal-host {
 /* ===== Captured pages: page content ===== */
 
 html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
-  background: #c0c0c0;
+  background: var(--win98-face);
   color: #000;
   font-size: 11px;
 
   .region-content,
   .bolt-page,
   .page-content {
-    background: #c0c0c0;
+    background: var(--win98-face);
   }
 
   :is(.title-m, .title-s, .title-l, .bolt-header-title) {
-    font-family: var(--fix-ado-win98-font);
+    font-family: var(--win98-font);
     font-size: 13px;
     font-weight: 700;
   }
@@ -1745,7 +1725,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   .monospaced-s,
   code,
   pre {
-    font-family: var(--fix-ado-win98-mono);
+    font-family: var(--win98-mono);
   }
 
   /* Tabs: property sheet tabs on top of a raised panel. */
@@ -1761,11 +1741,11 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     padding: 0 10px;
     border: 0;
     border-radius: 3px 3px 0 0;
-    background: #c0c0c0;
+    background: var(--win98-face);
     box-shadow:
       inset 1px 1px #fff,
-      inset -1px 0 #0a0a0a,
-      inset -2px 0 #808080;
+      inset -1px 0 var(--win98-dark),
+      inset -2px 0 var(--win98-shadow);
     color: #000;
 
     &.selected {
@@ -1796,9 +1776,9 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   /* Cards: group boxes on the window face. */
   .bolt-card,
   .bolt-card.bolt-table-card {
-    border: 1px solid #808080;
+    border: 1px solid var(--win98-shadow);
     border-radius: 0;
-    background: #c0c0c0;
+    background: var(--win98-face);
     box-shadow:
       inset 1px 1px #fff,
       1px 1px #fff;
@@ -1807,7 +1787,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   .bolt-card-white,
   .depth-8,
   .depth-16 {
-    background: #c0c0c0;
+    background: var(--win98-face);
   }
 
   .bolt-card .bolt-header-title {
@@ -1818,7 +1798,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   .bolt-table-container,
   .bolt-table-card {
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     padding: 2px;
   }
 
@@ -1827,8 +1807,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   }
 
   .bolt-table-header-cell {
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
     font-weight: 400;
   }
@@ -1840,7 +1820,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     }
 
     &.selected {
-      background: #000080;
+      background: var(--win98-navy);
       color: #fff;
 
       :is(.secondary-text, a, .bolt-link, .text-ellipsis) {
@@ -1876,15 +1856,15 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
 
   /* The diff editor's gutter: Win98 grey, as in the Files artboards. */
   .monaco-editor .margin {
-    background: #dfdfdf;
+    background: var(--win98-light);
   }
 
   .logs-view,
   .log-reader,
   .run-logs-content {
     background: #000;
-    color: #c0c0c0;
-    font-family: var(--fix-ado-win98-mono);
+    color: var(--win98-face);
+    font-family: var(--win98-mono);
   }
 
   /* Discussion threads: small windows. */
@@ -1892,30 +1872,30 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   .repos-comment-thread {
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   .repos-discussion-comment .repos-comment-viewer {
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     padding: 4px 6px;
   }
 
   /* Board: columns as windows on the teal desktop, cards as raised white tiles. */
   .kanban-board-content,
   .kanban-board {
-    background: #008080;
+    background: var(--win98-desktop);
   }
 
   .kanban-board-column {
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   .kanban-board-column-header {
     padding: 2px 4px;
-    background: var(--fix-ado-win98-title);
+    background: var(--win98-title);
     color: #fff;
 
     /* Buttons stay grey with black text. */
@@ -1929,8 +1909,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     border: 0;
     border-left: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
 
     /* Only the bevel draws the card's edge: the content's own border stays, unseen. */
     .card-content {
@@ -1948,7 +1928,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     .tags-list .bolt-pill {
       box-sizing: border-box;
       padding: 0 5px;
-      border: 1px solid #808080;
+      border: 1px solid var(--win98-shadow);
       background: #fff;
       box-shadow: none;
 
@@ -1961,12 +1941,12 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   /* Work item form: a window with group boxes. */
   .work-item-form-header,
   .work-item-form-title {
-    background: #c0c0c0;
+    background: var(--win98-face);
   }
 
   .work-item-form-header-title-bar,
   .witform-header {
-    background: var(--fix-ado-win98-title);
+    background: var(--win98-title);
     color: #fff;
   }
 }
@@ -1985,9 +1965,9 @@ html[data-fix-ado-win98] .fix-ado-settings-button .fix-ado-settings-badge.fix-ad
   padding: 0 2px;
   border: 1px solid #000;
   border-radius: 0;
-  background: #ffffe1;
+  background: var(--win98-tooltip);
   color: #000;
-  font: 700 9px/9px var(--fix-ado-win98-font);
+  font: 700 9px/9px var(--win98-font);
 }
 
 /* The settings panel, as in the Settings artboards: a window whose frame is a border image, so
@@ -2001,10 +1981,10 @@ html[data-fix-ado-win98] .fix-ado-settings {
     3 / 3px stretch;
   border-radius: 0;
   padding: 0 7px 7px;
-  background: #c0c0c0;
+  background: var(--win98-face);
   box-shadow: none;
   color: #000;
-  font: 11px/14px var(--fix-ado-win98-font);
+  font: 11px/14px var(--win98-font);
 
   &::backdrop {
     background: transparent;
@@ -2017,9 +1997,9 @@ html[data-fix-ado-win98] .fix-ado-settings {
     height: 18px;
     margin: 0 -7px;
     padding: 0 4px;
-    background: var(--fix-ado-win98-title);
+    background: var(--win98-title);
     color: #fff;
-    font: 700 11px/18px var(--fix-ado-win98-font);
+    font: 700 11px/18px var(--win98-font);
   }
 
   .fix-ado-settings-category,
@@ -2027,7 +2007,7 @@ html[data-fix-ado-win98] .fix-ado-settings {
     position: relative;
     margin-top: 14px;
     padding: 12px 8px 6px;
-    border: 1px solid #808080;
+    border: 1px solid var(--win98-shadow);
     box-shadow:
       inset 1px 1px #fff,
       1px 1px #fff;
@@ -2039,9 +2019,9 @@ html[data-fix-ado-win98] .fix-ado-settings {
     left: 6px;
     margin: 0;
     padding: 0 3px;
-    background: #c0c0c0;
+    background: var(--win98-face);
     color: #000;
-    font: 400 11px/14px var(--fix-ado-win98-font);
+    font: 400 11px/14px var(--win98-font);
   }
 
   .fix-ado-settings-feature,
@@ -2070,7 +2050,7 @@ html[data-fix-ado-win98] .fix-ado-settings {
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
 
     &:checked {
       background:
@@ -2092,14 +2072,14 @@ html[data-fix-ado-win98] .fix-ado-settings {
     border: 1px solid #000;
     border-radius: 0;
     padding: 0 4px;
-    background: #ffffe1;
+    background: var(--win98-tooltip);
     color: #000;
-    font: 700 10px/12px var(--fix-ado-win98-font);
+    font: 700 10px/12px var(--win98-font);
     text-transform: uppercase;
   }
 
   .fix-ado-settings-chip-updated.fix-ado-settings-chip {
-    background: #c0c0c0;
+    background: var(--win98-face);
   }
 
   /* A feature's tag, such as WIP: white, so it reads apart from New and Updated. */
@@ -2115,15 +2095,15 @@ html[data-fix-ado-win98] .fix-ado-settings {
     gap: 6px;
     margin: 0 -7px -7px;
     padding: 8px 7px 7px;
-    background: #c0c0c0;
+    background: var(--win98-face);
 
     & > .primary {
       order: -1;
     }
 
     & > .bolt-button:disabled {
-      box-shadow: var(--fix-ado-win98-raised);
-      color: #808080;
+      box-shadow: var(--win98-raised);
+      color: var(--win98-shadow);
       text-shadow: 1px 1px #fff;
       opacity: 1;
     }
@@ -2145,10 +2125,10 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) .fix-ado-review-dialog {
   border: 0;
   border-radius: 0;
   padding: 3px 10px 10px;
-  background: #c0c0c0;
-  box-shadow: var(--fix-ado-win98-window);
+  background: var(--win98-face);
+  box-shadow: var(--win98-window);
   color: #000;
-  font: 11px/14px var(--fix-ado-win98-font);
+  font: 11px/14px var(--win98-font);
 
   &::backdrop {
     background: transparent;
@@ -2158,9 +2138,9 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) .fix-ado-review-dialog {
     height: 18px;
     margin: 0 -7px 8px;
     padding: 0 4px;
-    background: var(--fix-ado-win98-title);
+    background: var(--win98-title);
     color: #fff;
-    font: 700 11px/18px var(--fix-ado-win98-font);
+    font: 700 11px/18px var(--win98-font);
   }
 
   .fix-ado-review-textarea {
@@ -2169,10 +2149,10 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) .fix-ado-review-dialog {
     height: 80px;
     min-height: 0;
     padding: 4px 5px;
-    font: 11px/14px var(--fix-ado-win98-font);
+    font: 11px/14px var(--win98-font);
 
     &::placeholder {
-      color: #808080;
+      color: var(--win98-shadow);
       opacity: 1;
     }
   }
@@ -2183,7 +2163,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) .fix-ado-review-dialog {
     min-width: 0;
     margin: 14px 0 0;
     padding: 13px 8px 8px;
-    border: 1px solid #808080;
+    border: 1px solid var(--win98-shadow);
     box-shadow:
       inset 1px 1px #fff,
       1px 1px #fff;
@@ -2197,7 +2177,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) .fix-ado-review-dialog {
       padding: 0 3px;
       overflow: visible;
       clip-path: none;
-      background: #c0c0c0;
+      background: var(--win98-face);
     }
   }
 
@@ -2300,7 +2280,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) .fix-ado-review-dialog {
     }
 
     .fix-ado-review-textarea {
-      background: #c0c0c0;
+      background: var(--win98-face);
     }
 
     .fix-ado-review-vote input[type="radio"] {
@@ -2312,7 +2292,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) .fix-ado-review-dialog {
     }
 
     :is(.fix-ado-review-vote, .fix-ado-review-vote .secondary-text, .bolt-button) {
-      color: #808080;
+      color: var(--win98-shadow);
       text-shadow: 1px 1px #fff;
     }
   }
@@ -2339,10 +2319,10 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     gap: 0;
     padding: 3px;
     background:
-      linear-gradient(#c0c0c0 0 0) 0 0 / 100% 31px no-repeat local,
-      linear-gradient(#808080 0 0) 0 31px / 100% 1px no-repeat local,
+      linear-gradient(var(--win98-face) 0 0) 0 0 / 100% 31px no-repeat local,
+      linear-gradient(var(--win98-shadow) 0 0) 0 31px / 100% 1px no-repeat local,
       #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
 
     & > .fix-ado-pipeline-run-action {
       flex: none;
@@ -2371,7 +2351,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
 
   .fix-ado-pipeline-run ~ .fix-ado-pipeline-run.fix-ado-pipeline-run {
     margin-top: 4px;
-    border-top: 1px dotted #808080;
+    border-top: 1px dotted var(--win98-shadow);
   }
 
   /* A row: a +/- box on a run, stage or job that opens and closes, the status icon, the label.
@@ -2425,7 +2405,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
         )
       ) {
       .fix-ado-pipeline-item-text {
-        background: #000080;
+        background: var(--win98-navy);
         color: #fff;
       }
 
@@ -2457,14 +2437,14 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   /* Cancel current run: a plain raised button; Win98 has no red ones. Starting… and
      Cancelling… are greyed out as Win98 disables a button. */
   .fix-ado-pipeline-run-action.danger {
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
   }
 
   .fix-ado-pipeline-run-action:is(.disabled, :disabled) {
-    box-shadow: var(--fix-ado-win98-raised);
-    color: #808080;
+    box-shadow: var(--win98-raised);
+    color: var(--win98-shadow);
     text-shadow: 1px 1px #fff;
   }
 
@@ -2509,7 +2489,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     margin: 0;
     padding: 4px 6px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     color: #000;
     font-size: 11px;
 
@@ -2523,12 +2503,12 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     margin: 0;
     padding: 4px 6px;
     border: 1px solid;
-    border-color: #0a0a0a #dfdfdf #dfdfdf #0a0a0a;
+    border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
     background: #000;
     box-shadow:
-      -1px -1px #808080,
+      -1px -1px var(--win98-shadow),
       1px 1px #fff;
-    color: #c0c0c0;
+    color: var(--win98-face);
     font-size: 11px;
   }
 
@@ -2556,9 +2536,9 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   /* The log: a sunken frame. */
   .fix-ado-pipeline-frame {
     border: 1px solid;
-    border-color: #0a0a0a #dfdfdf #dfdfdf #0a0a0a;
+    border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
     box-shadow:
-      -1px -1px #808080,
+      -1px -1px var(--win98-shadow),
       1px 1px #fff;
   }
 
@@ -2567,23 +2547,23 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     border: 1px solid #000;
     border-radius: 0;
     padding: 0 4px;
-    background: #ffffe1;
+    background: var(--win98-tooltip);
     color: #000;
     font-weight: 700;
   }
 
   /* The warnings and errors box: a group box around a sunken list. */
   .fix-ado-issue-box {
-    border: 1px solid #808080;
+    border: 1px solid var(--win98-shadow);
     border-radius: 0;
-    background: #c0c0c0;
+    background: var(--win98-face);
     box-shadow:
       inset 1px 1px #fff,
       1px 1px #fff;
 
     & > table {
       background: #fff;
-      box-shadow: var(--fix-ado-win98-sunken);
+      box-shadow: var(--win98-sunken);
     }
   }
 
@@ -2592,12 +2572,12 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   }
 
   .fix-ado-issue-output {
-    font-family: var(--fix-ado-win98-mono);
+    font-family: var(--win98-mono);
   }
 
   /* Go to first unread: the default button while something is unread, greyed out when not. */
   .bolt-button.fix-ado-first-unread:not(:disabled) {
-    box-shadow: var(--fix-ado-win98-default);
+    box-shadow: var(--win98-default);
     font-weight: 700;
   }
 
@@ -2605,12 +2585,12 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
      yellow over the threads' transparent comments further down. */
   .repos-comment-viewer[data-fix-ado-unread],
   [data-fix-ado-unread] .repos-comment-viewer {
-    background: #ffffe1;
+    background: var(--win98-tooltip);
   }
 
   /* The box reaches 2px past the comments, so the coins keep a yellow edge before the outline. */
   .repos-comment-viewer[data-fix-ado-unread] {
-    box-shadow: 0 0 0 2px #ffffe1;
+    box-shadow: 0 0 0 2px var(--win98-tooltip);
   }
 
   [data-fix-ado-unread]::after {
@@ -2651,7 +2631,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     .repos-discussion-comment-header {
     margin: 0 0 6px;
     padding: 1px 3px;
-    background: var(--fix-ado-win98-title);
+    background: var(--win98-title);
     color: #fff;
     font-weight: 700;
 
@@ -2660,8 +2640,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     }
 
     .bolt-button {
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
       color: #000;
     }
   }
@@ -2674,8 +2654,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     height: 13px;
     min-height: 0;
     padding: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
 
     & > * {
       display: none;
@@ -2684,7 +2664,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     &::before {
       content: "+" / "";
       color: #000;
-      font: 700 11px/11px var(--fix-ado-win98-mono);
+      font: 700 11px/11px var(--win98-mono);
     }
 
     &[aria-expanded="true"]::before {
@@ -2704,8 +2684,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   .bolt-pill.fix-ado-thread-chip {
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-thin);
+    background: var(--win98-face);
+    box-shadow: var(--win98-thin);
     color: #000;
     font-weight: 400;
   }
@@ -2723,8 +2703,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   .fix-ado-scroll-to-bottom:hover {
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
   }
 
@@ -2736,8 +2716,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     box-shadow: none;
 
     &:hover {
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-thin);
+      background: var(--win98-face);
+      box-shadow: var(--win98-thin);
     }
 
     &[aria-pressed="true"] .fix-ado-star-icon path {
@@ -2749,7 +2729,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   .fix-ado-starred-empty {
     padding: 8px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     color: #404040;
   }
 
@@ -2778,9 +2758,9 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     border-radius: 0;
     padding: 3px;
     background:
-      var(--fix-ado-win98-title-off) 3px 3px / calc(100% - 6px) 18px no-repeat,
-      #c0c0c0;
-    box-shadow: var(--fix-ado-win98-window);
+      var(--win98-title-inactive) 3px 3px / calc(100% - 6px) 18px no-repeat,
+      var(--win98-face);
+    box-shadow: var(--win98-window);
   }
 
   .fix-ado-review-card-header {
@@ -2813,15 +2793,15 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background: #c0c0c0
+      background: var(--win98-face)
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='14' shape-rendering='crispEdges'%3E%3Cpath d='M10 3h1v1h-1zM11 3h1v1h-1zM9 4h1v1h-1zM11 4h1v1h-1zM8 5h1v1h-1zM10 5h1v1h-1zM7 6h1v1h-1zM9 6h1v1h-1zM6 7h1v1h-1zM8 7h1v1h-1zM5 8h1v1h-1zM6 8h1v1h-1zM7 8h1v1h-1zM5 9h1v1h-1zM6 9h1v1h-1z'/%3E%3C/svg%3E")
         0 0 / 16px 14px no-repeat;
-      box-shadow: var(--fix-ado-win98-raised);
+      box-shadow: var(--win98-raised);
       font-size: 0;
 
       &:active {
         background-position: 1px 1px;
-        box-shadow: var(--fix-ado-win98-pressed);
+        box-shadow: var(--win98-pressed);
       }
     }
 
@@ -2843,8 +2823,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
 
   .fix-ado-review-card-text {
     padding: 4px 6px;
-    background: #ffffe1;
-    box-shadow: var(--fix-ado-win98-sunken);
+    background: var(--win98-tooltip);
+    box-shadow: var(--win98-sunken);
   }
 
   .fix-ado-review-card-editor {
@@ -2853,7 +2833,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
       height: 80px;
       min-height: 0;
       padding: 4px 5px;
-      font: 11px/14px var(--fix-ado-win98-font);
+      font: 11px/14px var(--win98-font);
     }
 
     .fix-ado-review-buttons {
@@ -2870,7 +2850,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     border: 1px solid #000;
     border-radius: 0;
     padding: 0 5px;
-    background: #ffffe1;
+    background: var(--win98-tooltip);
     color: #000;
     font-size: 10px;
     font-weight: 700;
@@ -2879,7 +2859,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
 
   .fix-ado-review-pending-dot {
     border-radius: 0;
-    background: #ffffe1;
+    background: var(--win98-tooltip);
     box-shadow: inset 0 0 0 1px #000;
   }
 
@@ -2900,10 +2880,10 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     border: 0;
     border-radius: 0;
     padding: 3px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-menu-shadow);
+    background: var(--win98-face);
+    box-shadow: var(--win98-menu);
     color: #000;
-    font: 11px/14px var(--fix-ado-win98-font);
+    font: 11px/14px var(--win98-font);
 
     & > summary {
       display: flex;
@@ -2912,7 +2892,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
       height: 18px;
       padding: 0 4px;
       list-style: none;
-      background: var(--fix-ado-win98-title);
+      background: var(--win98-title);
       color: #fff;
       font-weight: 700;
       white-space: nowrap;
@@ -2944,7 +2924,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
   }
 
   /* Published since, too long ago: dark red and bold. */
@@ -2970,14 +2950,14 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     padding: 2px;
     background: #fff;
     box-shadow:
-      inset 1px 1px #808080,
+      inset 1px 1px var(--win98-shadow),
       inset -1px -1px #fff;
   }
 
   .fix-ado-days-in-column > span {
     width: 6px;
     border-radius: 0;
-    background: #000080;
+    background: var(--win98-navy);
   }
 
   .fix-ado-days-in-column > span[data-age="aging"] {
@@ -2989,8 +2969,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   }
 
   .fix-ado-days-in-column > span[data-age="loading"] {
-    background: #dfdfdf;
-    box-shadow: inset 1px 1px #808080;
+    background: var(--win98-light);
+    box-shadow: inset 1px 1px var(--win98-shadow);
   }
 
   /* The days toggle, as in the DaysInColumn artboard: a 16x14 caption button in the column's
@@ -3004,8 +2984,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     padding: 0;
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     opacity: 1;
 
     & > span {
@@ -3018,11 +2998,11 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
 
     &[aria-pressed="true"] {
       padding: 1px 0 0 1px;
-      box-shadow: var(--fix-ado-win98-pressed);
+      box-shadow: var(--win98-pressed);
     }
 
     &[aria-pressed="false"] > span {
-      background: #808080;
+      background: var(--win98-shadow);
     }
   }
 }
@@ -3046,7 +3026,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
     :is(h1, h2, h3, .title-s, .title-m, .title-l, .bolt-header-title) *,
     .bolt-breadcrumb-divider
   ) {
-  font-family: var(--fix-ado-win98-font);
+  font-family: var(--win98-font);
   font-size: 11px;
   line-height: 14px;
 }
@@ -3060,7 +3040,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
     .fix-ado-review-dialog *,
     .fix-ado-settings *
   ) {
-  font-family: var(--fix-ado-win98-font);
+  font-family: var(--win98-font);
   font-size: 13px;
   font-weight: 700;
   line-height: 16px;
@@ -3083,7 +3063,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
     .logs-view .pl-reader,
     .logs-view .pl-reader *
   ):not(.monaco-editor *) {
-  font-family: var(--fix-ado-win98-mono);
+  font-family: var(--win98-mono);
   font-size: 12px;
 }
 
@@ -3098,7 +3078,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     border-radius: 0;
     animation: none;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
   }
 
   .fix-ado-review-textarea:focus,
@@ -3112,8 +3092,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   .fix-ado-star-picker {
     position: relative;
     padding: 24px 6px 6px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
 
     &::before {
       content: "Add person/group to starred" / "";
@@ -3123,9 +3103,9 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
       right: 3px;
       height: 18px;
       padding: 0 4px;
-      background: var(--fix-ado-win98-title);
+      background: var(--win98-title);
       color: #fff;
-      font: 700 11px/18px var(--fix-ado-win98-font);
+      font: 700 11px/18px var(--win98-font);
     }
   }
 
@@ -3139,7 +3119,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     &:hover,
     &.selected,
     &.focused {
-      background: #000080;
+      background: var(--win98-navy);
       color: #fff;
 
       :not(svg, svg *, [data-fix-ado-initials], .bolt-coin, .vss-Persona) {
@@ -3187,11 +3167,11 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     width: 17px;
     height: 17px;
     margin-right: 2px;
-    background: #c0c0c0;
+    background: var(--win98-face);
     box-shadow:
-      inset -1px -1px #0a0a0a,
-      inset 1px 1px #dfdfdf,
-      inset -2px -2px #808080,
+      inset -1px -1px var(--win98-dark),
+      inset 1px 1px var(--win98-light),
+      inset -2px -2px var(--win98-shadow),
       inset 2px 2px #fff;
     color: #000;
   }
@@ -3254,8 +3234,8 @@ html[data-fix-ado-win98]:is(
     margin: 0;
     padding: 14px 12px 12px;
     gap: 14px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
 
     & > * + * {
       margin-top: 0;
@@ -3268,7 +3248,7 @@ html[data-fix-ado-win98]:is(
     padding: 2px;
     border: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
 
     /* The header row; a list without sections, as on the Active tab, has none. */
     & > .flex-row:first-child:not(.bolt-card-content) {
@@ -3276,8 +3256,8 @@ html[data-fix-ado-win98]:is(
       align-items: center;
       gap: 8px;
       padding: 0 10px;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-thin);
+      background: var(--win98-face);
+      box-shadow: var(--win98-thin);
     }
 
     &:has(.repos-pr-section-tabs) > .flex-row:first-child:not(.bolt-card-content) {
@@ -3317,8 +3297,8 @@ html[data-fix-ado-win98]:is(
       min-width: 0;
       height: 13px;
       padding: 0;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
 
       & > * {
         display: none;
@@ -3327,7 +3307,7 @@ html[data-fix-ado-win98]:is(
       &::before {
         content: "\\2212" / "";
         color: #000;
-        font: 700 11px/11px var(--fix-ado-win98-mono);
+        font: 700 11px/11px var(--win98-mono);
       }
 
       &[aria-expanded="false"]::before {
@@ -3422,8 +3402,8 @@ html[data-fix-ado-win98] {
       min-width: 0;
       height: 23px;
       padding: 0;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
     }
   }
 
@@ -3437,8 +3417,8 @@ html[data-fix-ado-win98] {
     width: 19px;
     height: 19px;
     margin-right: 2px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 }
 
@@ -3661,8 +3641,8 @@ html[data-fix-ado-win98] {
   :is(.project-header, .top-level-header) .region-header-menubar .bolt-button.subtle,
   .navigation-container .bolt-button.subtle,
   .navigation-container .collapsible-section .bolt-expandable-container {
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   .navigation-container .bolt-button.subtle {
@@ -3894,8 +3874,8 @@ html[data-fix-ado-win98] {
     min-width: 0;
     height: 23px;
     padding: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   /* The project row centres its + button, as in the design. */
@@ -3988,8 +3968,8 @@ html[data-fix-ado-win98] {
     margin-right: 6px;
     padding: 0;
     justify-content: center;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   /* The account control is larger than its 23px button; the button shows what fits. */
@@ -4057,8 +4037,8 @@ html[data-fix-ado-win98="pull-request"] body {
     min-width: 0;
     padding: 0;
     justify-content: center;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   .repos-pr-header .bolt-split-button-main {
@@ -4108,7 +4088,7 @@ html[data-fix-ado-win98="pull-request"] body {
     margin: 0 0 -2px;
     padding: 6px 0 2px;
     align-items: flex-end;
-    background: #c0c0c0;
+    background: var(--win98-face);
     box-shadow: none;
 
     &::after {
@@ -4118,8 +4098,8 @@ html[data-fix-ado-win98="pull-request"] body {
       bottom: -6px;
       left: 0;
       height: 8px;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
       clip-path: inset(0 0 6px 0);
     }
 
@@ -4137,8 +4117,8 @@ html[data-fix-ado-win98="pull-request"] body {
   .repos-pr-details-page > .page-content {
     margin: 0;
     padding: 14px 12px 12px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
 
     & > .flex-row {
       gap: 12px;
@@ -4169,8 +4149,8 @@ html[data-fix-ado-win98="pull-request"] body {
   .repos-overview-right-pane > * {
     margin: 0;
     padding: 8px 10px;
-    border: 1px solid #808080;
-    background: #c0c0c0;
+    border: 1px solid var(--win98-shadow);
+    background: var(--win98-face);
     box-shadow:
       inset 1px 1px #fff,
       1px 1px #fff;
@@ -4221,8 +4201,8 @@ html[data-fix-ado-win98="pull-request"] body {
       margin: 0;
       padding: 0;
       justify-content: center;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
     }
   }
 
@@ -4255,7 +4235,7 @@ html[data-fix-ado-win98="pull-request"] body {
       padding-bottom: 10px;
       box-shadow:
         inset 0 -1px #fff,
-        inset 0 -2px #808080;
+        inset 0 -2px var(--win98-shadow);
     }
 
     /* A completed pull request's banner, as wide as the card: the merge icon, who completed it
@@ -4379,8 +4359,8 @@ html[data-fix-ado-win98="pull-request"] body {
     }
 
     .bolt-button.bolt-button.subtle {
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
     }
   }
 
@@ -4389,7 +4369,7 @@ html[data-fix-ado-win98="pull-request"] body {
     border: 0;
     padding: 2px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
 
     & > table {
       box-shadow: none;
@@ -4435,15 +4415,19 @@ html[data-fix-ado-win98="pull-request"] body {
       align-items: center;
       padding: 0 10px;
       border: 0;
-      box-shadow: inset 0 1px #c0c0c0;
+      box-shadow: inset 0 1px var(--win98-face);
     }
 
+    /* A log line is at least 30px; a long or many-line message grows the row, wrapping anywhere,
+       as a console window does. */
     .fix-ado-issue-output {
-      height: 30px;
+      min-height: 30px;
+      height: auto;
       display: flex;
-      align-items: center;
-      padding: 0 10px;
+      align-items: flex-start;
+      padding: 8px 10px;
       background: #000;
+      line-height: 14px;
     }
 
     .fix-ado-issue-message {
@@ -4458,7 +4442,7 @@ html[data-fix-ado-win98="pull-request"] body {
     /* A log line's number before its message, in the console's light grey. */
     .fix-ado-issue-output > .line-number {
       padding: 0 8px 0 0;
-      color: #c0c0c0;
+      color: var(--win98-face);
     }
   }
 
@@ -4559,7 +4543,7 @@ html[data-fix-ado-win98="pull-request"] body {
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     color: #404040;
   }
 
@@ -4923,19 +4907,19 @@ html[data-fix-ado-win98="pull-request"] body {
       margin: 0;
       padding: 0;
       justify-content: center;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
     }
   }
 
   /* The tree and the changes: two sunken white panes, 4px apart. */
   .repos-changes-explorer-splitter {
-    background: #c0c0c0;
+    background: var(--win98-face);
 
     .vss-Splitter--pane-fixed,
     .vss-Splitter--pane-flexible {
       background: #fff;
-      box-shadow: var(--fix-ado-win98-sunken);
+      box-shadow: var(--win98-sunken);
     }
 
     .vss-Splitter--pane-fixed > .absolute-fill,
@@ -4945,21 +4929,21 @@ html[data-fix-ado-win98="pull-request"] body {
     }
 
     .vss-Splitter--divider {
-      background: #c0c0c0;
+      background: var(--win98-face);
     }
   }
 
   /* The tree's top row: a raised bar with the repository and its menu. */
   .repos-changes-explorer-tree-root {
-    background: #c0c0c0;
+    background: var(--win98-face);
 
     & > .bolt-table-row {
       height: 24px;
       gap: 4px;
       padding: 0 4px;
-      background: #c0c0c0;
+      background: var(--win98-face);
       box-shadow:
-        inset -1px -1px #808080,
+        inset -1px -1px var(--win98-shadow),
         inset 1px 1px #fff;
     }
 
@@ -4985,8 +4969,8 @@ html[data-fix-ado-win98="pull-request"] body {
       min-width: 0;
       padding: 0;
       justify-content: center;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
     }
   }
 
@@ -5136,16 +5120,16 @@ html[data-fix-ado-win98="pull-request"] body {
     padding: 0;
     border: 0;
     background: #fff;
-    box-shadow: 0 0 0 1px #808080;
+    box-shadow: 0 0 0 1px var(--win98-shadow);
 
     & > div:first-child {
       height: 40px;
       align-items: stretch;
       gap: 6px;
       padding: 0 6px;
-      background: #c0c0c0;
+      background: var(--win98-face);
       box-shadow:
-        inset -1px -1px #808080,
+        inset -1px -1px var(--win98-shadow),
         inset 1px 1px #fff;
     }
 
@@ -5228,7 +5212,7 @@ html[data-fix-ado-win98="pull-request"] body {
     box-sizing: border-box;
     width: 36px;
     padding: 0 6px 0 0;
-    background: #dfdfdf;
+    background: var(--win98-light);
     color: #404040;
   }
 
@@ -5251,9 +5235,9 @@ html[data-fix-ado-win98="pull-request"] body {
   /* Skipped lines: a 24px etched grey band. */
   .repos-diff-contents-row.repos-elliplis-row {
     height: 24px;
-    background: #dfdfdf;
+    background: var(--win98-light);
     box-shadow:
-      inset 0 1px #808080,
+      inset 0 1px var(--win98-shadow),
       inset 0 -1px #fff;
 
     & > * {
@@ -5371,8 +5355,8 @@ html[data-fix-ado-win98] .bolt-portal-host {
   .bolt-split-button {
     gap: 0;
     height: 23px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   .bolt-split-button .bolt-button.bolt-button {
@@ -5416,7 +5400,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
 
   /* Pressed: the whole control sinks. */
   .bolt-split-button:has(.bolt-button:active, .bolt-button[aria-expanded="true"]) {
-    box-shadow: var(--fix-ado-win98-pressed);
+    box-shadow: var(--win98-pressed);
   }
 
   .bolt-split-button .bolt-button::before,
@@ -5562,27 +5546,27 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
 
   /* "Start a review" or "Add review comment" is the default button once it is enabled. */
   & > .fix-ado-review-add:not(.disabled, :disabled) {
-    box-shadow: var(--fix-ado-win98-default);
+    box-shadow: var(--win98-default);
   }
 
   & > .bolt-button.primary:not(.fix-ado-review-add) {
-    background-color: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background-color: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
 
     &::after {
-      font: 11px/14px var(--fix-ado-win98-font);
+      font: 11px/14px var(--win98-font);
     }
 
     &:is(.disabled, :disabled) {
-      color: #808080;
+      color: var(--win98-shadow);
       text-shadow: 1px 1px #fff;
     }
   }
 
   & > .fix-ado-review-add:is(.disabled, :disabled) {
-    box-shadow: var(--fix-ado-win98-raised);
-    color: #808080;
+    box-shadow: var(--win98-raised);
+    color: var(--win98-shadow);
     text-shadow: 1px 1px #fff;
     opacity: 1;
   }
@@ -5674,10 +5658,10 @@ html[data-fix-ado-win98] .bolt-portal-host {
     right: 2px;
     width: 17px;
     height: 17px;
-    background: #c0c0c0
+    background: var(--win98-face)
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
       center / 7px 4px no-repeat;
-    box-shadow: var(--fix-ado-win98-menu-shadow);
+    box-shadow: var(--win98-menu);
 
     & > * {
       visibility: hidden;
@@ -5694,7 +5678,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
     position: relative;
     margin-top: 6px;
     padding: 14px 10px 10px;
-    border: 1px solid #808080;
+    border: 1px solid var(--win98-shadow);
     box-shadow:
       inset 1px 1px #fff,
       1px 1px #fff;
@@ -5705,7 +5689,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
       left: 8px;
       margin: 0;
       padding: 0 2px;
-      background: #c0c0c0;
+      background: var(--win98-face);
     }
   }
 
@@ -5810,9 +5794,9 @@ html[data-fix-ado-win98]
   > .fluent-icons-enabled {
   /* A combo box's arrow button: raised, with no drop shadow. */
   box-shadow:
-    inset -1px -1px #0a0a0a,
-    inset 1px 1px #dfdfdf,
-    inset -2px -2px #808080,
+    inset -1px -1px var(--win98-dark),
+    inset 1px 1px var(--win98-light),
+    inset -2px -2px var(--win98-shadow),
     inset 2px 2px #fff;
 }
 
@@ -5826,7 +5810,7 @@ html[data-fix-ado-win98] .bolt-portal-host .theme-panel {
       flex: 1;
       padding: 10px;
       background: #fff;
-      box-shadow: var(--fix-ado-win98-sunken);
+      box-shadow: var(--win98-sunken);
     }
   }
 
@@ -5857,7 +5841,7 @@ html[data-fix-ado-win98] .bolt-portal-host .theme-panel {
   }
 
   .theme-tile-container.selected .theme-name {
-    background: #000080;
+    background: var(--win98-navy);
     color: #fff;
   }
 
@@ -5886,7 +5870,7 @@ html[data-fix-ado-win98="pull-request"]
   gap: 2px;
   padding: 6px 8px;
   border: 1px solid #000;
-  background: #ffffe1;
+  background: var(--win98-tooltip);
   box-shadow: none;
 
   & > * {
@@ -5968,7 +5952,7 @@ html[data-fix-ado-win98="pull-request"] body {
       height: 29px;
       margin: 0;
       padding: 1px 6px 0;
-      box-shadow: var(--fix-ado-win98-well);
+      box-shadow: var(--win98-well);
     }
 
     .flex-row {
@@ -5999,7 +5983,7 @@ html[data-fix-ado-win98="pull-request"] body {
 
   /* The tree's selected row: navy, its checkbox and menu button drawn as on other rows. */
   .repos-changes-explorer-tree tr.bolt-tree-row.selected {
-    background: #000080;
+    background: var(--win98-navy);
     color: #fff;
 
     .bolt-table-button-more .bolt-button.bolt-button {
@@ -6007,8 +5991,8 @@ html[data-fix-ado-win98="pull-request"] body {
       height: 16px;
       min-width: 0;
       padding: 0;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
       color: #000;
     }
   }
@@ -6023,12 +6007,12 @@ html[data-fix-ado-win98="pull-request"] body {
   /* The diff editor: a grey gutter with Tahoma numbers, then the code in Courier New. */
   .monaco-editor .margin,
   .monaco-editor .margin-view-overlays {
-    background: #dfdfdf;
+    background: var(--win98-light);
   }
 
   .monaco-editor .line-numbers {
     color: #404040;
-    font-family: var(--fix-ado-win98-font);
+    font-family: var(--win98-font);
     font-size: 11px;
     line-height: 18px;
   }
@@ -6036,7 +6020,7 @@ html[data-fix-ado-win98="pull-request"] body {
   /* Code on Monaco's 18px rows, centred as the line numbers are. */
   .monaco-editor .view-line,
   .monaco-editor .view-line * {
-    font-family: var(--fix-ado-win98-mono);
+    font-family: var(--win98-mono);
     line-height: 18px;
   }
 
@@ -6097,8 +6081,8 @@ html[data-fix-ado-win98="pull-request"] body .repos-editor-discussion {
     padding: 3px;
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   .repos-comment-viewer,
@@ -6118,13 +6102,13 @@ html[data-fix-ado-win98="pull-request"] body .repos-editor-discussion {
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
   }
 
   /* The thread's status: a small raised drop-down button. */
   .repos-discussion-comment-header .bolt-dropdown-expandable .bolt-button.bolt-button {
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 }
 
@@ -6155,8 +6139,8 @@ html[data-fix-ado-win98] .bolt-portal-host {
     outline: none;
     box-shadow:
       inset 1px 1px #fff,
-      inset -1px 0 #0a0a0a,
-      inset -2px 0 #808080;
+      inset -1px 0 var(--win98-dark),
+      inset -2px 0 var(--win98-shadow);
     color: #000;
     animation: none;
   }
@@ -6168,15 +6152,15 @@ html[data-fix-ado-win98] .bolt-portal-host {
   .bolt-button.bolt-focus-treatment:focus {
     border-color: transparent;
     outline: none;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
     animation: none;
   }
 
   .bolt-button:focus-visible,
   .bolt-button.bolt-focus-treatment:focus-visible {
-    box-shadow: var(--fix-ado-win98-default);
+    box-shadow: var(--win98-default);
     outline: 1px dotted #000;
     outline-offset: -4px;
   }
@@ -6189,8 +6173,8 @@ html[data-fix-ado-win98] .bolt-portal-host {
     ) {
     box-shadow:
       inset 0 0 0 1px #000,
-      inset -2px -2px #808080,
-      inset 2px 2px #808080;
+      inset -2px -2px var(--win98-shadow),
+      inset 2px 2px var(--win98-shadow);
   }
 
   .bolt-button.bolt-focus-treatment.subtle:focus:not(:hover, :active, [aria-expanded="true"]) {
@@ -6209,7 +6193,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
   .bolt-split-button:has(.bolt-button:focus-visible):not(
       :has(.bolt-button:active, .bolt-button[aria-expanded="true"])
     ) {
-    box-shadow: var(--fix-ado-win98-default);
+    box-shadow: var(--win98-default);
   }
 
   /* Checkboxes, links and pills: only the dotted rectangle, no ring. */
@@ -6230,7 +6214,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
 
   .bolt-pill:focus {
     border-color: transparent;
-    box-shadow: var(--fix-ado-win98-well);
+    box-shadow: var(--win98-well);
   }
 
   /* The top bar's items: a dotted rectangle on focus, nothing on the selected one. */
@@ -6248,13 +6232,13 @@ html[data-fix-ado-win98] .bolt-portal-host {
    grey frame around the header. The top band stops 1px short of the 12px gap between cards. */
 html[data-fix-ado-win98="pull-request"] body .repos-summary-header.bolt-card > div:first-child {
   box-shadow:
-    inset -1px -1px #808080,
+    inset -1px -1px var(--win98-shadow),
     inset 1px 1px #fff,
-    0 -1px #808080,
-    -1px 0 #808080,
-    1px 0 #808080,
-    -1px -1px #808080,
-    1px -1px #808080,
+    0 -1px var(--win98-shadow),
+    -1px 0 var(--win98-shadow),
+    1px 0 var(--win98-shadow),
+    -1px -1px var(--win98-shadow),
+    1px -1px var(--win98-shadow),
     0 -11px #fff,
     -10px 0 #fff,
     10px 0 #fff,
@@ -6312,7 +6296,7 @@ html[data-fix-ado-win98] .work-item-form-dialog .markdown-content {
     padding: 0;
     border-radius: 0;
     background: transparent;
-    font: 12px / 14px var(--fix-ado-win98-mono);
+    font: 12px / 14px var(--win98-mono);
     vertical-align: top;
   }
 
@@ -6335,7 +6319,7 @@ html[data-fix-ado-win98] .work-item-form-dialog .markdown-content {
   /* The header row: bold, with a grey line under it. */
   th {
     padding-bottom: 1px;
-    box-shadow: inset 0 -1px #808080;
+    box-shadow: inset 0 -1px var(--win98-shadow);
     font-weight: 700;
     text-align: left;
   }
@@ -6418,15 +6402,15 @@ html[data-fix-ado-win98] .bolt-portal-host {
   }
 
   :is(svg.bolt-status.success, .fix-ado-pipeline-status[data-status="succeeded"]) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M13 3h1v1h-1zM12 4h2v1h-2zM11 5h3v1h-3zM2 6h1v1h-1zM10 6h3v1h-3zM2 7h2v1h-2zM9 7h3v1h-3zM2 8h3v1h-3zM8 8h3v1h-3zM3 9h3v1h-3zM7 9h3v1h-3zM4 10h5v1h-5zM5 11h3v1h-3zM6 12h1v1h-1z'/%3E%3C/svg%3E");
+    background-image: var(--win98-icon-passed);
   }
 
   :is(svg.bolt-status.failed, .fix-ado-pipeline-status[data-status="failed"]) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23800000' d='M5 0h6v1h-6zM3 1h2v1h-2zM11 1h2v1h-2zM2 2h1v1h-1zM13 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM2 12h1v1h-1zM13 12h1v1h-1zM3 13h2v1h-2zM11 13h2v1h-2zM5 14h6v1h-6z'/%3E%3Cpath fill='%23ff0000' d='M5 1h6v1h-6zM3 2h10v1h-10zM2 3h12v1h-12zM2 4h2v1h-2zM6 4h4v1h-4zM12 4h2v1h-2zM1 5h4v1h-4zM7 5h2v1h-2zM11 5h4v1h-4zM1 6h5v1h-5zM10 6h5v1h-5zM1 7h6v1h-6zM9 7h6v1h-6zM1 8h5v1h-5zM10 8h5v1h-5zM1 9h4v1h-4zM7 9h2v1h-2zM11 9h4v1h-4zM2 10h2v1h-2zM6 10h4v1h-4zM12 10h2v1h-2zM2 11h12v1h-12zM3 12h10v1h-10zM5 13h6v1h-6z'/%3E%3Cpath fill='%23ffffff' d='M4 4h2v1h-2zM10 4h2v1h-2zM5 5h2v1h-2zM9 5h2v1h-2zM6 6h4v1h-4zM7 7h2v1h-2zM6 8h4v1h-4zM5 9h2v1h-2zM9 9h2v1h-2zM4 10h2v1h-2zM10 10h2v1h-2z'/%3E%3C/svg%3E");
+    background-image: var(--win98-icon-failed);
   }
 
   :is(svg.bolt-status.warning, .fix-ado-pipeline-status[data-status="expired"]) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M7 0h2v1h-2zM6 1h1v1h-1zM9 1h1v1h-1zM6 2h1v1h-1zM9 2h1v1h-1zM5 3h1v1h-1zM10 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM4 5h1v1h-1zM7 5h2v1h-2zM11 5h1v1h-1zM4 6h1v1h-1zM7 6h2v1h-2zM11 6h1v1h-1zM3 7h1v1h-1zM7 7h2v1h-2zM12 7h1v1h-1zM3 8h1v1h-1zM7 8h2v1h-2zM12 8h1v1h-1zM2 9h1v1h-1zM13 9h1v1h-1zM2 10h1v1h-1zM7 10h2v1h-2zM13 10h1v1h-1zM1 11h1v1h-1zM7 11h2v1h-2zM14 11h1v1h-1zM1 12h1v1h-1zM14 12h1v1h-1zM0 13h1v1h-1zM15 13h1v1h-1zM0 14h16v1h-16z'/%3E%3Cpath fill='%23ffff00' d='M7 1h2v1h-2zM7 2h2v1h-2zM6 3h4v1h-4zM6 4h4v1h-4zM5 5h2v1h-2zM9 5h2v1h-2zM5 6h2v1h-2zM9 6h2v1h-2zM4 7h3v1h-3zM9 7h3v1h-3zM4 8h3v1h-3zM9 8h3v1h-3zM3 9h10v1h-10zM3 10h4v1h-4zM9 10h4v1h-4zM2 11h5v1h-5zM9 11h5v1h-5zM2 12h12v1h-12zM1 13h14v1h-14z'/%3E%3C/svg%3E");
+    background-image: var(--win98-icon-warning);
   }
 
   :is(
@@ -6437,7 +6421,7 @@ html[data-fix-ado-win98] .bolt-portal-host {
     .fix-ado-pipeline-status[data-status="running"],
     .fix-ado-pipeline-status[data-status="queued"]
   ) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 1h10v1h-10zM4 2h1v1h-1zM11 2h1v1h-1zM4 3h1v1h-1zM11 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM7 6h2v1h-2zM6 7h1v1h-1zM9 7h1v1h-1zM5 8h1v1h-1zM10 8h1v1h-1zM4 9h1v1h-1zM11 9h1v1h-1zM4 10h1v1h-1zM11 10h1v1h-1zM4 11h1v1h-1zM11 11h1v1h-1zM3 12h10v1h-10z'/%3E%3Cpath fill='%23ffffff' d='M5 2h6v1h-6zM7 7h1v1h-1zM6 8h2v1h-2zM9 8h1v1h-1zM5 9h3v1h-3zM9 9h2v1h-2zM5 10h2v1h-2z'/%3E%3Cpath fill='%23808000' d='M5 3h6v1h-6zM6 4h4v1h-4zM7 5h2v1h-2zM8 7h1v1h-1zM8 8h1v1h-1zM8 9h1v1h-1zM7 10h4v1h-4zM5 11h6v1h-6z'/%3E%3C/svg%3E");
+    background-image: var(--win98-icon-waiting);
   }
 
   :is(
@@ -6450,11 +6434,11 @@ html[data-fix-ado-win98] .bolt-portal-host {
     .fix-ado-pipeline-status[data-status="loading"],
     .fix-ado-pipeline-status[data-status="cancelling"]
   ) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23808080' d='M4 7h8v1h-8zM4 8h8v1h-8z'/%3E%3C/svg%3E");
+    background-image: var(--win98-icon-none);
   }
 
   :is(svg.bolt-status.system-task, svg.bolt-status.information, svg.bolt-status.info) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 0h10v1h-10zM2 1h1v1h-1zM13 1h1v1h-1zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM1 6h1v1h-1zM14 6h1v1h-1zM1 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM14 8h1v1h-1zM1 9h1v1h-1zM14 9h1v1h-1zM2 10h1v1h-1zM13 10h1v1h-1zM3 11h4v1h-4zM8 11h5v1h-5zM6 12h1v1h-1zM8 12h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM4 14h2v1h-2z'/%3E%3Cpath fill='%23ffffff' d='M3 1h10v1h-10zM2 2h5v1h-5zM9 2h5v1h-5zM2 3h5v1h-5zM9 3h5v1h-5zM2 4h12v1h-12zM2 5h4v1h-4zM9 5h5v1h-5zM2 6h5v1h-5zM9 6h5v1h-5zM2 7h5v1h-5zM9 7h5v1h-5zM2 8h5v1h-5zM9 8h5v1h-5zM2 9h4v1h-4zM10 9h4v1h-4zM3 10h10v1h-10zM7 11h1v1h-1zM7 12h1v1h-1zM6 13h1v1h-1z'/%3E%3Cpath fill='%230000ff' d='M7 2h2v1h-2zM7 3h2v1h-2zM6 5h3v1h-3zM7 6h2v1h-2zM7 7h2v1h-2zM7 8h2v1h-2zM6 9h4v1h-4z'/%3E%3C/svg%3E");
+    background-image: var(--win98-icon-info);
   }
 
   /* The star of a starred reviewer: yellow when starred, a grey outline when not. */
@@ -6492,7 +6476,7 @@ html[data-fix-ado-win98="pull-request"] body .bolt-card.bolt-table-card:has(.rep
   .bolt-table-container {
     padding: 2px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
   }
 }
 
@@ -6551,7 +6535,7 @@ html[data-fix-ado-win98="pull-request"] body .repos-commits-table {
 
   .monospaced-xs {
     color: #000;
-    font-family: var(--fix-ado-win98-mono);
+    font-family: var(--win98-mono);
     font-size: 12px;
   }
 
@@ -6608,7 +6592,7 @@ html[data-fix-ado-win98="pull-request-create"] body {
     gap: 4px;
     padding: 0 2px 0 4px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
     font-weight: 700;
 
     & > .fluent-icons-enabled:last-child {
@@ -6618,8 +6602,8 @@ html[data-fix-ado-win98="pull-request-create"] body {
       background:
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
           center / 7px 4px no-repeat,
-        #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+        var(--win98-face);
+      box-shadow: var(--win98-raised);
 
       & > * {
         visibility: hidden;
@@ -6630,8 +6614,8 @@ html[data-fix-ado-win98="pull-request-create"] body {
   .repos-pr-create-header .bolt-button.icon-only {
     width: 23px;
     height: 23px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   .repos-pr-create-form {
@@ -6639,8 +6623,8 @@ html[data-fix-ado-win98="pull-request-create"] body {
     max-width: none;
     margin: 0 16px;
     padding: 14px 12px 12px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
 
     & > .bolt-card {
       width: 736px;
@@ -6861,12 +6845,12 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body .fix-ado-starred-chip
     padding: 0 6px 0 3px;
     gap: 4px;
     border: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
 
     &:active {
-      box-shadow: var(--fix-ado-win98-pressed);
+      box-shadow: var(--win98-pressed);
     }
   }
 
@@ -6895,11 +6879,11 @@ html[data-fix-ado-win98="pull-request"] body .fix-ado-starred-reviewer > .fix-ad
    a 7px white square with a grey edge. */
 html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
   :is(.bolt-timeline-icon-prefix, .bolt-timeline-icon-suffix) {
-    border-left: 1px dotted #808080;
+    border-left: 1px dotted var(--win98-shadow);
   }
 
   .activity-feed-timeline-iteration {
-    font: 700 11px / 22px var(--fix-ado-win98-font);
+    font: 700 11px / 22px var(--win98-font);
   }
 
   :has(> .text-ellipsis > .activity-card-time) {
@@ -6917,7 +6901,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: inset 0 0 0 1px #808080;
+    box-shadow: inset 0 0 0 1px var(--win98-shadow);
   }
 }
 
@@ -6934,8 +6918,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list .repos-discussi
     height: 14px;
     margin: 0;
     padding: 0 2px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
 
     .fluent-icons-enabled {
@@ -6960,7 +6944,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list .markdown-conte
   border: 0;
   border-radius: 0;
   background: #fff;
-  box-shadow: var(--fix-ado-win98-sunken);
+  box-shadow: var(--win98-sunken);
 
   code {
     background: transparent;
@@ -6980,8 +6964,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
   .bolt-card:has(.comment-file-header, [data-fix-ado-thread]) {
     border: 0;
     border-radius: 0;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-window);
+    background: var(--win98-face);
+    box-shadow: var(--win98-window);
 
     /* The card's own padding is held at 0 by Azure DevOps, so the frame's 3px sit inside it. */
     & > .bolt-card-content {
@@ -7010,8 +6994,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
 
     /* Unread comments keep their yellow box, 2px past their edges. */
     .repos-comment-viewer[data-fix-ado-unread] {
-      background: #ffffe1;
-      box-shadow: 0 0 0 2px #ffffe1;
+      background: var(--win98-tooltip);
+      box-shadow: 0 0 0 2px var(--win98-tooltip);
     }
   }
 
@@ -7060,7 +7044,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     align-items: center;
     gap: 4px;
     padding: 0 2px 0 3px;
-    background: var(--fix-ado-win98-title-off);
+    background: var(--win98-title-inactive);
     color: #fff;
 
     .fix-ado-thread-toggle {
@@ -7133,7 +7117,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       padding: 0 2px 0 3px;
       align-items: center;
       gap: 4px;
-      background: var(--fix-ado-win98-title);
+      background: var(--win98-title);
       color: #fff;
       white-space: nowrap;
 
@@ -7176,8 +7160,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
         height: 14px;
         min-width: 16px;
         padding: 0 3px;
-        background: #c0c0c0;
-        box-shadow: var(--fix-ado-win98-raised);
+        background: var(--win98-face);
+        box-shadow: var(--win98-raised);
         color: #000;
       }
     }
@@ -7205,8 +7189,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       height: 13px;
       min-width: 0;
       padding: 0;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
     }
 
     .repos-summary-code-diff {
@@ -7214,7 +7198,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       margin: 0;
       padding: 2px;
       background: #fff;
-      box-shadow: var(--fix-ado-win98-sunken);
+      box-shadow: var(--win98-sunken);
     }
   }
 
@@ -7358,7 +7342,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
 
         &,
         * {
-          font: 12px / 15px var(--fix-ado-win98-mono);
+          font: 12px / 15px var(--win98-mono);
         }
       }
     }
@@ -7367,7 +7351,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       margin-top: 10px;
       padding-top: 10px;
       box-shadow:
-        inset 0 1px #808080,
+        inset 0 1px var(--win98-shadow),
         inset 0 2px #fff;
 
       & > .flex-row {
@@ -7440,7 +7424,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       margin: 2px 4px 0 24px;
       padding: 2px;
       background: #fff;
-      box-shadow: var(--fix-ado-win98-sunken);
+      box-shadow: var(--win98-sunken);
     }
 
     .iteration-commits-table {
@@ -7495,8 +7479,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       }
 
       .monospaced-xs {
-        font: 11px / 14px var(--fix-ado-win98-mono);
-        color: #000080;
+        font: 11px / 14px var(--win98-mono);
+        color: var(--win98-navy);
       }
     }
   }
@@ -7517,7 +7501,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     height: auto;
     padding: 0;
     overflow: visible;
-    background: #c0c0c0;
+    background: var(--win98-face);
 
     /* The title bar: the type's icon and name. */
     & > .secondary-text {
@@ -7525,9 +7509,9 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       margin: 2px 2px 0;
       padding: 0 3px;
       align-items: center;
-      background: var(--fix-ado-win98-title);
+      background: var(--win98-title);
       color: #fff;
-      font: 700 11px / 14px var(--fix-ado-win98-font);
+      font: 700 11px / 14px var(--win98-font);
 
       & > div:first-child {
         display: flex;
@@ -7554,7 +7538,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       padding: 0;
       align-items: center;
       gap: 6px;
-      font: 700 13px / 16px var(--fix-ado-win98-font);
+      font: 700 13px / 16px var(--win98-font);
 
       & > div {
         flex: 1;
@@ -7574,7 +7558,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       .work-item-title-textfield input {
         height: 19px;
         padding: 0 4px;
-        font: 700 13px / 20px var(--fix-ado-win98-font);
+        font: 700 13px / 20px var(--win98-font);
       }
 
       .bolt-clipboard-button {
@@ -7627,8 +7611,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
 
       /* Refresh, Undo and More: raised square buttons, as on the top bar. */
       .bolt-header-commandbar-button-group .bolt-button.subtle.subtle {
-        background: #c0c0c0;
-        box-shadow: var(--fix-ado-win98-raised);
+        background: var(--win98-face);
+        box-shadow: var(--win98-raised);
       }
     }
 
@@ -7719,7 +7703,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     flex-wrap: nowrap;
     gap: 16px;
     overflow: visible;
-    background: #c0c0c0;
+    background: var(--win98-face);
 
     & > .padding-left-8:first-child,
     & > .wif-node-dropdowns {
@@ -7814,10 +7798,10 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
 
     /* A read-only field is grey with grey text, as Win98 shows a disabled one. */
     .readOnly.bolt-textfield {
-      background: #c0c0c0;
+      background: var(--win98-face);
 
       input {
-        color: #808080;
+        color: var(--win98-shadow);
       }
     }
 
@@ -7830,13 +7814,13 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       right: 2px;
       width: 17px;
       height: 17px;
-      background: #c0c0c0
+      background: var(--win98-face)
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
         center / 7px 4px no-repeat;
       box-shadow:
-        inset -1px -1px #0a0a0a,
-        inset 1px 1px #dfdfdf,
-        inset -2px -2px #808080,
+        inset -1px -1px var(--win98-dark),
+        inset 1px 1px var(--win98-light),
+        inset -2px -2px var(--win98-shadow),
         inset 2px 2px #fff;
       pointer-events: none;
     }
@@ -7921,7 +7905,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     border: 2px solid;
     border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='5' shape-rendering='crispEdges'%3E%3Crect width='5' height='5' fill='%23c0c0c0'/%3E%3Cpath d='M0 0h5v2H0zM0 0h2v5H0z' fill='%23dfdfdf'/%3E%3Cpath d='M0 3h5v2H0zM3 0h2v5H3z' fill='%23808080'/%3E%3Cpath d='M0 0h5v1H0zM0 0h1v5H0z' fill='%23fff'/%3E%3Cpath d='M0 4h5v1H0zM4 0h1v5H4z' fill='%230a0a0a'/%3E%3C/svg%3E")
       2 / 2px stretch;
-    background: #c0c0c0;
+    background: var(--win98-face);
     box-shadow: none;
   }
 
@@ -7940,7 +7924,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     position: relative;
     margin-top: 6px;
     padding: 12px 8px 8px;
-    border: 1px solid #808080;
+    border: 1px solid var(--win98-shadow);
     box-shadow:
       inset 1px 1px #fff,
       1px 1px #fff;
@@ -7959,8 +7943,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     & > span {
       height: 14px;
       padding: 0 2px;
-      background: #c0c0c0;
-      font: 400 11px / 14px var(--fix-ado-win98-font);
+      background: var(--win98-face);
+      font: 400 11px / 14px var(--win98-font);
     }
   }
 
@@ -7968,7 +7952,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     display: flex;
     gap: 2px;
     padding: 0 2px;
-    background: #c0c0c0;
+    background: var(--win98-face);
   }
 
   /* Win98 caption buttons are always there; Azure DevOps shows them on hover. */
@@ -7979,8 +7963,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     height: 14px;
     padding: 0;
     justify-content: center;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   .work-item-form-collapsible-section-content,
@@ -7994,13 +7978,13 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
   .work-item-form-control-content.show-markdown-preview {
     padding: 2px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
   }
 
   .markdown-content.markdown-editor-preview,
   .markdown-editor-placeholder {
     padding: 4px 6px;
-    font: 11px / 14px var(--fix-ado-win98-font);
+    font: 11px / 14px var(--win98-font);
 
     ul,
     ol {
@@ -8011,7 +7995,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
   .markdown-editor-placeholder {
     height: 46px;
     padding: 4px 6px;
-    color: #808080;
+    color: var(--win98-shadow);
     font-style: normal;
   }
 
@@ -8057,8 +8041,8 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
   .work-item-form-control-wrapper
     .bolt-button.subtle:not(.remove-item-button, :hover, :active, [aria-expanded="true"]) {
     min-width: 75px;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
   }
 
   /* Links are Win98 hyperlinks: blue and underlined. */
@@ -8147,7 +8131,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
   }
 
   .markdown-editor.enter-new-comment textarea::placeholder {
-    color: #808080;
+    color: var(--win98-shadow);
   }
 
   .markdown-editor.enter-new-comment {
@@ -8159,7 +8143,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       padding: 0;
       background: transparent;
       box-shadow: none;
-      font: 11px / 14px var(--fix-ado-win98-font);
+      font: 11px / 14px var(--win98-font);
     }
   }
 
@@ -8215,7 +8199,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
   .comment-viewer > div:last-child {
     padding: 2px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
   }
 
   /* An external link's icon: a 12px glyph, so the text after it lands on whole pixels. */
@@ -8265,7 +8249,7 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
 /* The pop-up's window: a Win98 frame with no drop shadow, as the other dialogs. Its two header
    buttons are caption buttons in the title bar; the resize grip sits in the corner. */
 html[data-fix-ado-win98] .bolt-portal-host .work-item-form-dialog {
-  box-shadow: var(--fix-ado-win98-window);
+  box-shadow: var(--win98-window);
 
   .bolt-dialog-root {
     margin: 0;
@@ -8278,8 +8262,8 @@ html[data-fix-ado-win98] .bolt-portal-host .work-item-form-dialog {
     margin-left: 2px;
     padding: 0;
     justify-content: center;
-    background: #c0c0c0;
-    box-shadow: var(--fix-ado-win98-raised);
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
     color: #000;
   }
 }
@@ -8292,10 +8276,10 @@ html[data-fix-ado-win98="pull-request"] body .bolt-pill.fix-ado-new-chip {
   padding: 0 4px;
   border: 1px solid #000;
   border-radius: 0;
-  background: #ffffe1;
+  background: var(--win98-tooltip);
   box-shadow: none;
   color: #000;
-  font: 700 10px / 12px var(--fix-ado-win98-font);
+  font: 700 10px / 12px var(--win98-font);
   text-transform: uppercase;
 
   .bolt-pill-content.bolt-pill-content {
@@ -8312,7 +8296,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
   .bolt-master-panel {
     width: 280px;
     border: 0;
-    background: #c0c0c0;
+    background: var(--win98-face);
   }
 
   .bolt-master-panel-header .bolt-header-title-row > * {
@@ -8325,7 +8309,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
     margin: 0 4px 4px;
     padding: 4px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
   }
 
   .run-logs-tree {
@@ -8361,7 +8345,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
     & > div + div {
       margin-top: 4px;
       padding-top: 4px;
-      border-top: 1px dotted #808080;
+      border-top: 1px dotted var(--win98-shadow);
     }
 
     .bolt-table-header-cell,
@@ -8456,7 +8440,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
       background: none;
 
       .job-name-area > span {
-        background: #000080;
+        background: var(--win98-navy);
         color: #fff;
         font-weight: 400;
       }
@@ -8465,7 +8449,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
 
   .logs-view {
     padding: 0 4px 4px;
-    background: #c0c0c0;
+    background: var(--win98-face);
 
     & > div {
       display: flex;
@@ -8551,10 +8535,10 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
     padding: 6px;
     background: #000;
     border: 1px solid;
-    border-color: #808080 #fff #fff #808080;
+    border-color: var(--win98-shadow) #fff #fff var(--win98-shadow);
     box-shadow:
-      inset 1px 1px #0a0a0a,
-      inset -1px -1px #dfdfdf;
+      inset 1px 1px var(--win98-dark),
+      inset -1px -1px var(--win98-light);
 
     /* Azure DevOps places the lines every 20px. */
     .line-row {
@@ -8586,7 +8570,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
       width: 36px;
       margin-right: 18px;
       padding: 0;
-      color: #808080;
+      color: var(--win98-shadow);
       text-align: right;
     }
 
@@ -8601,7 +8585,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
       margin: 0;
       padding: 0 4px;
       border: 0;
-      border-bottom: 1px solid #808080;
+      border-bottom: 1px solid var(--win98-shadow);
       background: #000;
       box-shadow: none;
       color: #fff;
@@ -8638,7 +8622,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
 
       .far-right {
         margin: 0 0 0 auto;
-        color: #c0c0c0;
+        color: var(--win98-face);
         font-weight: 400;
       }
     }
@@ -8673,8 +8657,8 @@ html[data-fix-ado-win98="pipeline-run"] body .run-details-page {
       height: 23px;
       padding: 0;
       justify-content: center;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
     }
   }
 
@@ -8690,7 +8674,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-details-page {
   /* The info message: a yellow tip box with a black line. */
   .bolt-messagecard {
     border-color: #000;
-    background: #ffffe1;
+    background: var(--win98-tooltip);
     box-shadow: none;
 
     .bolt-messagebar {
@@ -8715,11 +8699,11 @@ html[data-fix-ado-win98="pipeline-run"] body .run-details-page {
 
   /* A stage is a raised box, as a button: it opens the stage's logs. */
   .stage-card {
-    border-color: #fff #0a0a0a #0a0a0a #fff;
-    background: #c0c0c0;
+    border-color: #fff var(--win98-dark) var(--win98-dark) #fff;
+    background: var(--win98-face);
     box-shadow:
-      inset 1px 1px #dfdfdf,
-      inset -1px -1px #808080;
+      inset 1px 1px var(--win98-light),
+      inset -1px -1px var(--win98-shadow);
   }
 
   .stage-progress-row > .text-ellipsis {
@@ -8764,12 +8748,12 @@ html[data-fix-ado-win98="board"] body {
 
   /* The board sits in a teal well. */
   .board-wrapper {
-    background: #008080;
+    background: var(--win98-desktop);
   }
 
   /* The board's scroll area is teal too, so the teal runs on under columns scrolled into view. */
   :has(> .board-wrapper) {
-    background: #008080 local;
+    background: var(--win98-desktop) local;
   }
 
   /* A column is a window: its title bar inside the frame, joined to its body. */
@@ -8782,13 +8766,13 @@ html[data-fix-ado-win98="board"] body {
     height: 22px;
     padding: 3px 3px 1px;
     background:
-      var(--fix-ado-win98-title) content-box,
-      #c0c0c0;
+      var(--win98-title) content-box,
+      var(--win98-face);
     box-shadow:
-      inset 1px 1px #dfdfdf,
-      inset -1px 0 #0a0a0a,
+      inset 1px 1px var(--win98-light),
+      inset -1px 0 var(--win98-dark),
       inset 2px 2px #fff,
-      inset -2px 0 #808080;
+      inset -2px 0 var(--win98-shadow);
 
     & > .flex-row {
       height: 18px;
@@ -8807,9 +8791,9 @@ html[data-fix-ado-win98="board"] body {
 
   .kanban-board-column.kanban-board-column {
     box-shadow:
-      inset -1px -1px #0a0a0a,
-      inset 1px 0 #dfdfdf,
-      inset -2px -2px #808080,
+      inset -1px -1px var(--win98-dark),
+      inset 1px 0 var(--win98-light),
+      inset -2px -2px var(--win98-shadow),
       inset 2px 0 #fff;
   }
 
@@ -8822,7 +8806,7 @@ html[data-fix-ado-win98="board"] body {
     height: 14px;
     padding: 0;
     margin: 2px 2px 0 0;
-    box-shadow: var(--fix-ado-win98-raised);
+    box-shadow: var(--win98-raised);
   }
 
   /* The search button beside New item: a 23px push button. */
@@ -8855,7 +8839,7 @@ html[data-fix-ado-win98]
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
 
     /* The 16px magnifier, 4px, then the text. */
     & > .fluent-icons-enabled,
@@ -8871,7 +8855,7 @@ html[data-fix-ado-win98]
       padding: 0 0 0 4px;
 
       &::placeholder {
-        color: #808080;
+        color: var(--win98-shadow);
         opacity: 1;
       }
     }
@@ -8886,7 +8870,7 @@ html[data-fix-ado-win98]
     margin-top: 0;
     padding: 2px;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
   }
 
   .bolt-list {
@@ -8954,7 +8938,7 @@ html[data-fix-ado-win98]
 
     &:hover,
     &.focused {
-      background: #000080;
+      background: var(--win98-navy);
       color: #fff;
     }
 
@@ -8986,7 +8970,7 @@ html[data-fix-ado-win98]
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
 
     .fabric-icon {
       visibility: hidden;
@@ -9015,8 +8999,8 @@ html[data-fix-ado-win98]
       gap: 4px;
       padding: 0 10px;
       border-radius: 0;
-      background: #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+      background: var(--win98-face);
+      box-shadow: var(--win98-raised);
       color: #000;
 
       & > * {
@@ -9044,20 +9028,20 @@ html[data-fix-ado-win98]:is(
   > div:has(> .vss-FilterBar) {
   margin: 0;
   padding: 14px 12px 0;
-  background: #c0c0c0;
+  background: var(--win98-face);
   box-shadow:
-    inset -1px 0 #0a0a0a,
+    inset -1px 0 var(--win98-dark),
     inset 1px 1px #fff,
-    inset -2px 0 #808080,
-    inset 2px 2px #dfdfdf;
+    inset -2px 0 var(--win98-shadow),
+    inset 2px 2px var(--win98-light);
 
   & + .page-content {
     padding-top: 14px;
     box-shadow:
-      inset -1px -1px #0a0a0a,
+      inset -1px -1px var(--win98-dark),
       inset 1px 0 #fff,
-      inset -2px -2px #808080,
-      inset 2px 0 #dfdfdf;
+      inset -2px -2px var(--win98-shadow),
+      inset 2px 0 var(--win98-light);
   }
 
   .vss-FilterBar {
@@ -9108,7 +9092,7 @@ html[data-fix-ado-win98]:is(
     border: 0;
     border-radius: 0;
     background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    box-shadow: var(--win98-sunken);
 
     .prefix,
     .fluent-icons-enabled:has(> .prefix) {
@@ -9125,7 +9109,7 @@ html[data-fix-ado-win98]:is(
       padding: 0;
 
       &::placeholder {
-        color: #808080;
+        color: var(--win98-shadow);
         opacity: 1;
       }
     }
@@ -9143,8 +9127,8 @@ html[data-fix-ado-win98]:is(
       background:
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
           center / 7px 4px no-repeat,
-        #c0c0c0;
-      box-shadow: var(--fix-ado-win98-raised);
+        var(--win98-face);
+      box-shadow: var(--win98-raised);
 
       .suffix {
         visibility: hidden;
@@ -9170,6 +9154,75 @@ html[data-fix-ado-win98]:is(
 }
 `;
 
+  // shared/styles/win98/tokens.css
+  var tokens_default = `/* Windows 98's visual language as custom properties: colours, bevels, fonts, sizes and the
+   16px pixel icons. Components (components.css) and a script's own rules build on these, so a
+   look is changed in one place. Import it before the rules that use it. */
+
+:root {
+  /* Colours. */
+  --win98-face: #c0c0c0;
+  --win98-light: #dfdfdf;
+  --win98-highlight: #fff;
+  --win98-shadow: #808080;
+  --win98-dark: #0a0a0a;
+  --win98-text: #000;
+  --win98-field-face: #fff;
+  --win98-navy: #000080;
+  --win98-title-end: #1084d0;
+  --win98-desktop: #008080;
+  --win98-tooltip: #ffffe1;
+  --win98-link: #0000ee;
+  --win98-olive: #808000;
+  --win98-maroon: #800000;
+  --win98-title: linear-gradient(90deg, var(--win98-navy), var(--win98-title-end));
+  --win98-title-inactive: linear-gradient(90deg, #808080, #b5b5b5);
+
+  /* Bevels, as inset box shadows: the outer line first. */
+  --win98-raised:
+    inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+  --win98-pressed:
+    inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+  --win98-sunken:
+    inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+  --win98-thin: inset -1px -1px #808080, inset 1px 1px #fff;
+  --win98-window:
+    inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff;
+  --win98-well: inset -1px -1px #fff, inset 1px 1px #808080;
+  --win98-default:
+    inset 0 0 0 1px #000, inset -2px -2px #0a0a0a, inset 2px 2px #fff, inset -3px -3px #808080,
+    inset 3px 3px #dfdfdf;
+  --win98-menu:
+    inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff,
+    2px 2px 0 rgba(0, 0, 0, 0.35);
+  --win98-etched: inset 0 1px #808080, inset 0 2px #fff;
+
+  /* Fonts. */
+  --win98-font: Tahoma, "MS Sans Serif", Geneva, Verdana, sans-serif;
+  --win98-mono: "Courier New", Courier, monospace;
+  --win98-font-size: 11px;
+
+  /* Sizes. */
+  --win98-button-height: 23px;
+  --win98-button-min-width: 75px;
+  --win98-field-height: 21px;
+  --win98-row-height: 17px;
+  --win98-checkbox-size: 13px;
+  --win98-title-height: 18px;
+  --win98-gap: 6px;
+
+  /* The 16px pixel icons. In a 24px box they keep 16px, centred. */
+  --win98-icon-passed: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M13 3h1v1h-1zM12 4h2v1h-2zM11 5h3v1h-3zM2 6h1v1h-1zM10 6h3v1h-3zM2 7h2v1h-2zM9 7h3v1h-3zM2 8h3v1h-3zM8 8h3v1h-3zM3 9h3v1h-3zM7 9h3v1h-3zM4 10h5v1h-5zM5 11h3v1h-3zM6 12h1v1h-1z'/%3E%3C/svg%3E");
+  --win98-icon-failed: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23800000' d='M5 0h6v1h-6zM3 1h2v1h-2zM11 1h2v1h-2zM2 2h1v1h-1zM13 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM2 12h1v1h-1zM13 12h1v1h-1zM3 13h2v1h-2zM11 13h2v1h-2zM5 14h6v1h-6z'/%3E%3Cpath fill='%23ff0000' d='M5 1h6v1h-6zM3 2h10v1h-10zM2 3h12v1h-12zM2 4h2v1h-2zM6 4h4v1h-4zM12 4h2v1h-2zM1 5h4v1h-4zM7 5h2v1h-2zM11 5h4v1h-4zM1 6h5v1h-5zM10 6h5v1h-5zM1 7h6v1h-6zM9 7h6v1h-6zM1 8h5v1h-5zM10 8h5v1h-5zM1 9h4v1h-4zM7 9h2v1h-2zM11 9h4v1h-4zM2 10h2v1h-2zM6 10h4v1h-4zM12 10h2v1h-2zM2 11h12v1h-12zM3 12h10v1h-10zM5 13h6v1h-6z'/%3E%3Cpath fill='%23ffffff' d='M4 4h2v1h-2zM10 4h2v1h-2zM5 5h2v1h-2zM9 5h2v1h-2zM6 6h4v1h-4zM7 7h2v1h-2zM6 8h4v1h-4zM5 9h2v1h-2zM9 9h2v1h-2zM4 10h2v1h-2zM10 10h2v1h-2z'/%3E%3C/svg%3E");
+  --win98-icon-warning: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M7 0h2v1h-2zM6 1h1v1h-1zM9 1h1v1h-1zM6 2h1v1h-1zM9 2h1v1h-1zM5 3h1v1h-1zM10 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM4 5h1v1h-1zM7 5h2v1h-2zM11 5h1v1h-1zM4 6h1v1h-1zM7 6h2v1h-2zM11 6h1v1h-1zM3 7h1v1h-1zM7 7h2v1h-2zM12 7h1v1h-1zM3 8h1v1h-1zM7 8h2v1h-2zM12 8h1v1h-1zM2 9h1v1h-1zM13 9h1v1h-1zM2 10h1v1h-1zM7 10h2v1h-2zM13 10h1v1h-1zM1 11h1v1h-1zM7 11h2v1h-2zM14 11h1v1h-1zM1 12h1v1h-1zM14 12h1v1h-1zM0 13h1v1h-1zM15 13h1v1h-1zM0 14h16v1h-16z'/%3E%3Cpath fill='%23ffff00' d='M7 1h2v1h-2zM7 2h2v1h-2zM6 3h4v1h-4zM6 4h4v1h-4zM5 5h2v1h-2zM9 5h2v1h-2zM5 6h2v1h-2zM9 6h2v1h-2zM4 7h3v1h-3zM9 7h3v1h-3zM4 8h3v1h-3zM9 8h3v1h-3zM3 9h10v1h-10zM3 10h4v1h-4zM9 10h4v1h-4zM2 11h5v1h-5zM9 11h5v1h-5zM2 12h12v1h-12zM1 13h14v1h-14z'/%3E%3C/svg%3E");
+  --win98-icon-waiting: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 1h10v1h-10zM4 2h1v1h-1zM11 2h1v1h-1zM4 3h1v1h-1zM11 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM7 6h2v1h-2zM6 7h1v1h-1zM9 7h1v1h-1zM5 8h1v1h-1zM10 8h1v1h-1zM4 9h1v1h-1zM11 9h1v1h-1zM4 10h1v1h-1zM11 10h1v1h-1zM4 11h1v1h-1zM11 11h1v1h-1zM3 12h10v1h-10z'/%3E%3Cpath fill='%23ffffff' d='M5 2h6v1h-6zM7 7h1v1h-1zM6 8h2v1h-2zM9 8h1v1h-1zM5 9h3v1h-3zM9 9h2v1h-2zM5 10h2v1h-2z'/%3E%3Cpath fill='%23808000' d='M5 3h6v1h-6zM6 4h4v1h-4zM7 5h2v1h-2zM8 7h1v1h-1zM8 8h1v1h-1zM8 9h1v1h-1zM7 10h4v1h-4zM5 11h6v1h-6z'/%3E%3C/svg%3E");
+  --win98-icon-none: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23808080' d='M4 7h8v1h-8zM4 8h8v1h-8z'/%3E%3C/svg%3E");
+  --win98-icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 0h10v1h-10zM2 1h1v1h-1zM13 1h1v1h-1zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM1 6h1v1h-1zM14 6h1v1h-1zM1 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM14 8h1v1h-1zM1 9h1v1h-1zM14 9h1v1h-1zM2 10h1v1h-1zM13 10h1v1h-1zM3 11h4v1h-4zM8 11h5v1h-5zM6 12h1v1h-1zM8 12h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM4 14h2v1h-2z'/%3E%3Cpath fill='%23ffffff' d='M3 1h10v1h-10zM2 2h5v1h-5zM9 2h5v1h-5zM2 3h5v1h-5zM9 3h5v1h-5zM2 4h12v1h-12zM2 5h4v1h-4zM9 5h5v1h-5zM2 6h5v1h-5zM9 6h5v1h-5zM2 7h5v1h-5zM9 7h5v1h-5zM2 8h5v1h-5zM9 8h5v1h-5zM2 9h4v1h-4zM10 9h4v1h-4zM3 10h10v1h-10zM7 11h1v1h-1zM7 12h1v1h-1zM6 13h1v1h-1z'/%3E%3Cpath fill='%230000ff' d='M7 2h2v1h-2zM7 3h2v1h-2zM6 5h3v1h-3zM7 6h2v1h-2zM7 7h2v1h-2zM7 8h2v1h-2zM6 9h4v1h-4z'/%3E%3C/svg%3E");
+  --win98-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E");
+  --win98-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E");
+}
+`;
+
   // azure-devops/src/features/windows-98-mode/index.ts
   var windows98Mode = {
     change: { kind: "new", version: "1.19.0" },
@@ -9185,7 +9238,7 @@ html[data-fix-ado-win98]:is(
         }
       };
     },
-    styles: [style_default2],
+    styles: [tokens_default, style_default2],
     tag: "WIP"
   };
 
