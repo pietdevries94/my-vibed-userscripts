@@ -7673,6 +7673,11 @@ html[data-fix-ado-win98="board"] body {
     background: #008080;
   }
 
+  /* The board's scroll area is teal too, so the teal runs on under columns scrolled into view. */
+  :has(> .board-wrapper) {
+    background: #008080 local;
+  }
+
   /* A column is a window: its title bar inside the frame, joined to its body. */
   .kanban-board-column-header-container.kanban-board-column-header-container {
     margin-bottom: 0;
