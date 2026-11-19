@@ -14,7 +14,7 @@ Load `feature` for the code loop and `modern-web-guidance` before writing CSS. A
 Every state goes through the same five steps, in order. A state is done when its row in the checklist has all five.
 
 1. **Capture.** Get a capture of the page in that state, with `styleRoot`, so the fake site shows it with the site's own CSS. A state no capture shows gets invented fake-site data instead: put real markup from another capture around invented rows and names, and say in the state which parts are invented.
-2. **Design.** Draw the state as an artboard on the design canvas, from the capture's structure, items and text. Draw it from the components the other artboards use, never by tracing a screenshot. A design change to an approved artboard waits for the owner's approval before any CSS; a bug fix that keeps the approved look does not.
+2. **Design.** Draw the state as an artboard on the design canvas, from the capture's structure, items and text. Draw it from the look's design system components (`design-system.md`), never by tracing a screenshot. A design change to an approved artboard waits for the owner's approval before any CSS; a bug fix that keeps the approved look does not.
 3. **CSS.** Write the rules, scoped to the page (`html[data-<mode>="<page>"]`) or to a structure that only that component has. Build them from the look's tokens, never from literal colours and bevels.
 4. **Diff.** Add the state to `<script>/restyle/states.ts` and run `npm run restyle:diff <script> <state>`. Done means about 0%, with what is left explained: sub-pixel rounding, a font's anti-aliasing. Look at the two screenshots in `.restyle-runs/` before you trust a number: a blank or wrong crop also diffs low.
 5. **Regress.** Run `npm run restyle:diff <script>` for every state and check. Every result stays on its baseline, and the run's start time comes after your last CSS change. Report a changed baseline with its cause.
@@ -38,7 +38,7 @@ A look lives in `shared/styles/<look>/`, so another script can wear it too:
 - `tokens.css`: custom properties for the colours, bevels, fonts, sizes and pixel icons. A script imports it first, in the feature's `styles`, and builds every rule from it.
 - `components.css`: classes for the look's controls (window, button, field, tabs, list box, checkbox, tooltip, progress bar, group box, icons), for elements a script draws itself.
 
-A script maps its site's selectors onto the tokens in its own CSS. A new token or component goes into the artboards too. A change under `shared/styles/` reaches every script that imports it: name them, as `release` says.
+A script maps its site's selectors onto the tokens in its own CSS. Each look also has a design system on claude.ai with the same tokens and components: start a restyle, or a new look, from `design-system.md`. A change under `shared/styles/` reaches every script that imports it: name them, as `release` says.
 
 ## Tools
 
