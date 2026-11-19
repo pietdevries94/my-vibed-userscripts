@@ -3184,6 +3184,56 @@ html[data-fix-ado-win98="pull-request"] body {
         inset 0 -1px #fff,
         inset 0 -2px #808080;
     }
+
+    /* A completed pull request's banner, as wide as the card: the merge icon, who completed it
+       and when, then Cherry-pick and Revert 8px apart at the right end. Under it the merge
+       commit and Show details. */
+    & > .flex-column:has(.repos-commits-table) {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+
+      & > .flex-column > .flex-row {
+        min-height: 24px;
+        gap: 4px;
+
+        & > * {
+          margin: 0;
+        }
+      }
+
+      .circle-icon {
+        display: flex;
+        width: 24px;
+        height: 24px;
+        margin: 0;
+        padding: 0;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        font-size: 16px;
+      }
+
+      .fluent-icons-enabled:has(> .circle-icon) {
+        flex: none;
+      }
+
+      .justify-end > .bolt-button + .bolt-button {
+        margin-left: 8px;
+      }
+
+      /* Show details is a link, in link blue and underlined like the page's other links. */
+      & > div > .bolt-link {
+        color: #0000ee;
+        text-decoration: underline;
+      }
+
+      /* The merge commit: one 44px row, as on the Commits tab, the well tight around it. */
+      table.repos-commits-table {
+        border: 0;
+        border-spacing: 0;
+      }
+    }
   }
 
   /* A status heading: the 24px icon, 4px, the text. */
@@ -3198,18 +3248,19 @@ html[data-fix-ado-win98="pull-request"] body {
     margin: 0;
   }
 
-  /* The check list under a heading: a sunken white well, at least 34px, its row centred. With
+  /* The check list under a heading: rows on the window face, under the heading's text. With
      every check passed it holds a link to the checks instead of a failing check. */
-  .status-details-container:not(.fix-ado-issue-box) {
+  .status-details-container:not(.fix-ado-issue-box, table) {
     display: flex;
     flex-direction: column;
     justify-content: center;
     height: auto;
-    min-height: 34px;
+    min-height: 0;
+    padding-left: 28px;
     border: 0;
     border-radius: 0;
-    background: #fff;
-    box-shadow: var(--fix-ado-win98-sunken);
+    background: transparent;
+    box-shadow: none;
 
     .preview-check-list,
     .preview-check-list > tbody {
@@ -3225,20 +3276,27 @@ html[data-fix-ado-win98="pull-request"] body {
     .bolt-list-cell,
     .bolt-list-cell-content,
     .bolt-list-cell-content > a,
-    .bolt-list-cell-content > a > div {
+    .bolt-list-cell-content > a > div,
+    .bolt-list-cell-content > div {
       display: block;
-      height: 34px;
+      height: 23px;
       margin: 0;
       padding: 0;
       border: 0;
       background: transparent;
     }
 
-    .bolt-list-cell-content > a > div > .flex {
-      height: 34px;
+    /* A check's row, with or without a link around it: icon, name, state, then its button. */
+    .bolt-list-cell-content > a > div > .flex,
+    .bolt-list-cell-content > div > .flex {
+      height: 23px;
       align-items: center;
       gap: 6px;
-      padding: 0 10px;
+      padding: 0;
+
+      & > * {
+        margin: 0;
+      }
     }
 
     .pr-completion-status-header {
@@ -3606,7 +3664,7 @@ html[data-fix-ado-win98="pull-request"] body {
     justify-content: center;
   }
 
-  .status-details-container:not(.fix-ado-issue-box) .bolt-button.bolt-button.subtle {
+  .status-details-container:not(.fix-ado-issue-box, table) .bolt-button.bolt-button.subtle {
     min-width: 75px;
   }
 
@@ -4200,12 +4258,14 @@ html[data-fix-ado-win98="pull-request"] body {
   }
 }
 
-html[data-fix-ado-win98="pull-request"] body .status-details-container:not(.fix-ado-issue-box) {
+html[data-fix-ado-win98="pull-request"]
+  body
+  .status-details-container:not(.fix-ado-issue-box, table) {
   .preview-check-list:not(:has(.bolt-list-row:not(.bolt-list-row-spacer))) {
     display: none;
   }
 
-  /* With every check passed: one line, centred, a link to the checks and an info icon. */
+  /* With every check passed: one 23px line, a link to the checks and an info icon. */
   .status-details-container-row:not(:empty) {
     display: flex;
     margin: 0;
@@ -4216,9 +4276,9 @@ html[data-fix-ado-win98="pull-request"] body .status-details-container:not(.fix-
     flex: 1;
     align-items: center;
     gap: 6px;
-    height: 30px;
+    height: 23px;
     margin: 0;
-    padding: 0 10px;
+    padding: 0;
     border: 0;
 
     & > * {
@@ -5279,28 +5339,21 @@ html[data-fix-ado-win98] .bolt-portal-host {
     }
   }
 
-  :is(svg.bolt-status.success, .fix-ado-pipeline-status[data-status="succeeded"]) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M13 3h1v1h-1zM12 4h2v1h-2zM11 5h3v1h-3zM2 6h1v1h-1zM10 6h3v1h-3zM2 7h2v1h-2zM9 7h3v1h-3zM2 8h3v1h-3zM8 8h3v1h-3zM3 9h3v1h-3zM7 9h3v1h-3zM4 10h5v1h-5zM5 11h3v1h-3zM6 12h1v1h-1z'/%3E%3C/svg%3E");
+  /* A 24px status icon is the 16px one, centred, so every status icon has one size. */
+  svg.bolt-status[width="24"] {
+    background-size: 16px 16px;
   }
 
-  :is(svg.bolt-status.success[width="24"]) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M20 5h1v1h-1zM18 6h3v1h-3zM18 7h3v1h-3zM17 8h4v1h-4zM3 9h2v1h-2zM15 9h5v1h-5zM3 10h2v1h-2zM15 10h5v1h-5zM3 11h3v1h-3zM14 11h4v1h-4zM3 12h5v1h-5zM12 12h5v1h-5zM3 13h5v1h-5zM12 13h5v1h-5zM5 14h4v1h-4zM11 14h4v1h-4zM6 15h8v1h-8zM6 16h8v1h-8zM8 17h4v1h-4zM9 18h2v1h-2zM9 19h2v1h-2z'/%3E%3C/svg%3E");
+  :is(svg.bolt-status.success, .fix-ado-pipeline-status[data-status="succeeded"]) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M13 3h1v1h-1zM12 4h2v1h-2zM11 5h3v1h-3zM2 6h1v1h-1zM10 6h3v1h-3zM2 7h2v1h-2zM9 7h3v1h-3zM2 8h3v1h-3zM8 8h3v1h-3zM3 9h3v1h-3zM7 9h3v1h-3zM4 10h5v1h-5zM5 11h3v1h-3zM6 12h1v1h-1z'/%3E%3C/svg%3E");
   }
 
   :is(svg.bolt-status.failed, .fix-ado-pipeline-status[data-status="failed"]) {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23800000' d='M5 0h6v1h-6zM3 1h2v1h-2zM11 1h2v1h-2zM2 2h1v1h-1zM13 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM2 12h1v1h-1zM13 12h1v1h-1zM3 13h2v1h-2zM11 13h2v1h-2zM5 14h6v1h-6z'/%3E%3Cpath fill='%23ff0000' d='M5 1h6v1h-6zM3 2h10v1h-10zM2 3h12v1h-12zM2 4h2v1h-2zM6 4h4v1h-4zM12 4h2v1h-2zM1 5h4v1h-4zM7 5h2v1h-2zM11 5h4v1h-4zM1 6h5v1h-5zM10 6h5v1h-5zM1 7h6v1h-6zM9 7h6v1h-6zM1 8h5v1h-5zM10 8h5v1h-5zM1 9h4v1h-4zM7 9h2v1h-2zM11 9h4v1h-4zM2 10h2v1h-2zM6 10h4v1h-4zM12 10h2v1h-2zM2 11h12v1h-12zM3 12h10v1h-10zM5 13h6v1h-6z'/%3E%3Cpath fill='%23ffffff' d='M4 4h2v1h-2zM10 4h2v1h-2zM5 5h2v1h-2zM9 5h2v1h-2zM6 6h4v1h-4zM7 7h2v1h-2zM6 8h4v1h-4zM5 9h2v1h-2zM9 9h2v1h-2zM4 10h2v1h-2zM10 10h2v1h-2z'/%3E%3C/svg%3E");
   }
 
-  :is(svg.bolt-status.failed[width="24"]) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='crispEdges'%3E%3Cpath fill='%23800000' d='M8 0h9v1h-9zM8 1h9v1h-9zM5 2h3v1h-3zM17 2h3v1h-3zM3 3h2v1h-2zM20 3h1v1h-1zM3 4h2v1h-2zM20 4h1v1h-1zM2 5h1v1h-1zM21 5h2v1h-2zM2 6h1v1h-1zM21 6h2v1h-2zM2 7h1v1h-1zM21 7h2v1h-2zM0 8h2v1h-2zM23 8h1v1h-1zM0 9h2v1h-2zM23 9h1v1h-1zM0 10h2v1h-2zM23 10h1v1h-1zM0 11h2v1h-2zM23 11h1v1h-1zM0 12h2v1h-2zM23 12h1v1h-1zM0 13h2v1h-2zM23 13h1v1h-1zM0 14h2v1h-2zM23 14h1v1h-1zM2 15h1v1h-1zM21 15h2v1h-2zM2 16h1v1h-1zM21 16h2v1h-2zM2 17h1v1h-1zM21 17h2v1h-2zM3 18h2v1h-2zM20 18h1v1h-1zM3 19h2v1h-2zM20 19h1v1h-1zM5 20h3v1h-3zM17 20h3v1h-3zM8 21h9v1h-9zM8 22h9v1h-9z'/%3E%3Cpath fill='%23ff0000' d='M8 2h9v1h-9zM5 3h15v1h-15zM5 4h15v1h-15zM3 5h18v1h-18zM3 6h3v1h-3zM9 6h6v1h-6zM18 6h3v1h-3zM3 7h3v1h-3zM9 7h6v1h-6zM18 7h3v1h-3zM2 8h6v1h-6zM11 8h3v1h-3zM17 8h6v1h-6zM2 9h7v1h-7zM15 9h8v1h-8zM2 10h7v1h-7zM15 10h8v1h-8zM2 11h9v1h-9zM14 11h9v1h-9zM2 12h7v1h-7zM15 12h8v1h-8zM2 13h7v1h-7zM15 13h8v1h-8zM2 14h6v1h-6zM11 14h3v1h-3zM17 14h6v1h-6zM3 15h3v1h-3zM9 15h6v1h-6zM18 15h3v1h-3zM3 16h3v1h-3zM9 16h6v1h-6zM18 16h3v1h-3zM3 17h18v1h-18zM5 18h15v1h-15zM5 19h15v1h-15zM8 20h9v1h-9z'/%3E%3Cpath fill='%23ffffff' d='M6 6h3v1h-3zM15 6h3v1h-3zM6 7h3v1h-3zM15 7h3v1h-3zM8 8h3v1h-3zM14 8h3v1h-3zM9 9h6v1h-6zM9 10h6v1h-6zM11 11h3v1h-3zM9 12h6v1h-6zM9 13h6v1h-6zM8 14h3v1h-3zM14 14h3v1h-3zM6 15h3v1h-3zM15 15h3v1h-3zM6 16h3v1h-3zM15 16h3v1h-3z'/%3E%3C/svg%3E");
-  }
-
   :is(svg.bolt-status.warning, .fix-ado-pipeline-status[data-status="expired"]) {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M7 0h2v1h-2zM6 1h1v1h-1zM9 1h1v1h-1zM6 2h1v1h-1zM9 2h1v1h-1zM5 3h1v1h-1zM10 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM4 5h1v1h-1zM7 5h2v1h-2zM11 5h1v1h-1zM4 6h1v1h-1zM7 6h2v1h-2zM11 6h1v1h-1zM3 7h1v1h-1zM7 7h2v1h-2zM12 7h1v1h-1zM3 8h1v1h-1zM7 8h2v1h-2zM12 8h1v1h-1zM2 9h1v1h-1zM13 9h1v1h-1zM2 10h1v1h-1zM7 10h2v1h-2zM13 10h1v1h-1zM1 11h1v1h-1zM7 11h2v1h-2zM14 11h1v1h-1zM1 12h1v1h-1zM14 12h1v1h-1zM0 13h1v1h-1zM15 13h1v1h-1zM0 14h16v1h-16z'/%3E%3Cpath fill='%23ffff00' d='M7 1h2v1h-2zM7 2h2v1h-2zM6 3h4v1h-4zM6 4h4v1h-4zM5 5h2v1h-2zM9 5h2v1h-2zM5 6h2v1h-2zM9 6h2v1h-2zM4 7h3v1h-3zM9 7h3v1h-3zM4 8h3v1h-3zM9 8h3v1h-3zM3 9h10v1h-10zM3 10h4v1h-4zM9 10h4v1h-4zM2 11h5v1h-5zM9 11h5v1h-5zM2 12h12v1h-12zM1 13h14v1h-14z'/%3E%3C/svg%3E");
-  }
-
-  :is(svg.bolt-status.warning[width="24"]) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M11 0h3v1h-3zM11 1h3v1h-3zM9 2h2v1h-2zM14 2h1v1h-1zM9 3h2v1h-2zM14 3h1v1h-1zM9 4h2v1h-2zM14 4h1v1h-1zM8 5h1v1h-1zM15 5h2v1h-2zM8 6h1v1h-1zM15 6h2v1h-2zM8 7h1v1h-1zM15 7h2v1h-2zM6 8h2v1h-2zM11 8h3v1h-3zM17 8h1v1h-1zM6 9h2v1h-2zM11 9h3v1h-3zM17 9h1v1h-1zM6 10h2v1h-2zM11 10h3v1h-3zM17 10h1v1h-1zM5 11h1v1h-1zM11 11h3v1h-3zM18 11h2v1h-2zM5 12h1v1h-1zM11 12h3v1h-3zM18 12h2v1h-2zM5 13h1v1h-1zM11 13h3v1h-3zM18 13h2v1h-2zM3 14h2v1h-2zM20 14h1v1h-1zM3 15h2v1h-2zM11 15h3v1h-3zM20 15h1v1h-1zM3 16h2v1h-2zM11 16h3v1h-3zM20 16h1v1h-1zM2 17h1v1h-1zM11 17h3v1h-3zM21 17h2v1h-2zM2 18h1v1h-1zM21 18h2v1h-2zM2 19h1v1h-1zM21 19h2v1h-2zM0 20h2v1h-2zM23 20h1v1h-1zM0 21h24v1h-24zM0 22h24v1h-24z'/%3E%3Cpath fill='%23ffff00' d='M11 2h3v1h-3zM11 3h3v1h-3zM11 4h3v1h-3zM9 5h6v1h-6zM9 6h6v1h-6zM9 7h6v1h-6zM8 8h3v1h-3zM14 8h3v1h-3zM8 9h3v1h-3zM14 9h3v1h-3zM8 10h3v1h-3zM14 10h3v1h-3zM6 11h5v1h-5zM14 11h4v1h-4zM6 12h5v1h-5zM14 12h4v1h-4zM6 13h5v1h-5zM14 13h4v1h-4zM5 14h15v1h-15zM5 15h6v1h-6zM14 15h6v1h-6zM5 16h6v1h-6zM14 16h6v1h-6zM3 17h8v1h-8zM14 17h7v1h-7zM3 18h18v1h-18zM3 19h18v1h-18zM2 20h21v1h-21z'/%3E%3C/svg%3E");
   }
 
   :is(
@@ -5312,15 +5365,6 @@ html[data-fix-ado-win98] .bolt-portal-host {
     .fix-ado-pipeline-status[data-status="queued"]
   ) {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 1h10v1h-10zM4 2h1v1h-1zM11 2h1v1h-1zM4 3h1v1h-1zM11 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM7 6h2v1h-2zM6 7h1v1h-1zM9 7h1v1h-1zM5 8h1v1h-1zM10 8h1v1h-1zM4 9h1v1h-1zM11 9h1v1h-1zM4 10h1v1h-1zM11 10h1v1h-1zM4 11h1v1h-1zM11 11h1v1h-1zM3 12h10v1h-10z'/%3E%3Cpath fill='%23ffffff' d='M5 2h6v1h-6zM7 7h1v1h-1zM6 8h2v1h-2zM9 8h1v1h-1zM5 9h3v1h-3zM9 9h2v1h-2zM5 10h2v1h-2z'/%3E%3Cpath fill='%23808000' d='M5 3h6v1h-6zM6 4h4v1h-4zM7 5h2v1h-2zM8 7h1v1h-1zM8 8h1v1h-1zM8 9h1v1h-1zM7 10h4v1h-4zM5 11h6v1h-6z'/%3E%3C/svg%3E");
-  }
-
-  :is(
-    svg.bolt-status.active[width="24"],
-    svg.bolt-status.running[width="24"],
-    svg.bolt-status.queued[width="24"],
-    svg.bolt-status.waiting[width="24"]
-  ) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M5 2h15v1h-15zM6 3h2v1h-2zM17 3h1v1h-1zM6 4h2v1h-2zM17 4h1v1h-1zM6 5h2v1h-2zM17 5h1v1h-1zM8 6h1v1h-1zM15 6h2v1h-2zM8 7h1v1h-1zM15 7h2v1h-2zM9 8h2v1h-2zM14 8h1v1h-1zM11 9h3v1h-3zM11 10h3v1h-3zM9 11h2v1h-2zM14 11h1v1h-1zM8 12h1v1h-1zM15 12h2v1h-2zM8 13h1v1h-1zM15 13h2v1h-2zM6 14h2v1h-2zM17 14h1v1h-1zM6 15h2v1h-2zM17 15h1v1h-1zM6 16h2v1h-2zM17 16h1v1h-1zM6 17h2v1h-2zM17 17h1v1h-1zM5 18h15v1h-15zM5 19h15v1h-15z'/%3E%3Cpath fill='%23ffffff' d='M8 3h9v1h-9zM8 4h9v1h-9zM11 11h1v1h-1zM9 12h3v1h-3zM14 12h1v1h-1zM9 13h3v1h-3zM14 13h1v1h-1zM8 14h4v1h-4zM14 14h3v1h-3zM8 15h3v1h-3zM8 16h3v1h-3z'/%3E%3Cpath fill='%23808000' d='M8 5h9v1h-9zM9 6h6v1h-6zM9 7h6v1h-6zM11 8h3v1h-3zM12 11h2v1h-2zM12 12h2v1h-2zM12 13h2v1h-2zM12 14h2v1h-2zM11 15h6v1h-6zM11 16h6v1h-6zM8 17h9v1h-9z'/%3E%3C/svg%3E");
   }
 
   :is(
@@ -5336,25 +5380,8 @@ html[data-fix-ado-win98] .bolt-portal-host {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23808080' d='M4 7h8v1h-8zM4 8h8v1h-8z'/%3E%3C/svg%3E");
   }
 
-  :is(
-    svg.bolt-status.neutral[width="24"],
-    svg.bolt-status.skipped[width="24"],
-    svg.bolt-status.canceled[width="24"],
-    svg.bolt-status.cancelled[width="24"]
-  ) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='crispEdges'%3E%3Cpath fill='%23808080' d='M6 11h12v1h-12zM6 12h12v1h-12zM6 13h12v1h-12z'/%3E%3C/svg%3E");
-  }
-
   :is(svg.bolt-status.system-task, svg.bolt-status.information, svg.bolt-status.info) {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 0h10v1h-10zM2 1h1v1h-1zM13 1h1v1h-1zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM1 6h1v1h-1zM14 6h1v1h-1zM1 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM14 8h1v1h-1zM1 9h1v1h-1zM14 9h1v1h-1zM2 10h1v1h-1zM13 10h1v1h-1zM3 11h4v1h-4zM8 11h5v1h-5zM6 12h1v1h-1zM8 12h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM4 14h2v1h-2z'/%3E%3Cpath fill='%23ffffff' d='M3 1h10v1h-10zM2 2h5v1h-5zM9 2h5v1h-5zM2 3h5v1h-5zM9 3h5v1h-5zM2 4h12v1h-12zM2 5h4v1h-4zM9 5h5v1h-5zM2 6h5v1h-5zM9 6h5v1h-5zM2 7h5v1h-5zM9 7h5v1h-5zM2 8h5v1h-5zM9 8h5v1h-5zM2 9h4v1h-4zM10 9h4v1h-4zM3 10h10v1h-10zM7 11h1v1h-1zM7 12h1v1h-1zM6 13h1v1h-1z'/%3E%3Cpath fill='%230000ff' d='M7 2h2v1h-2zM7 3h2v1h-2zM6 5h3v1h-3zM7 6h2v1h-2zM7 7h2v1h-2zM7 8h2v1h-2zM6 9h4v1h-4z'/%3E%3C/svg%3E");
-  }
-
-  :is(
-    svg.bolt-status.system-task[width="24"],
-    svg.bolt-status.information[width="24"],
-    svg.bolt-status.info[width="24"]
-  ) {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M5 0h15v1h-15zM5 1h15v1h-15zM3 2h2v1h-2zM20 2h1v1h-1zM2 3h1v1h-1zM21 3h2v1h-2zM2 4h1v1h-1zM21 4h2v1h-2zM2 5h1v1h-1zM21 5h2v1h-2zM2 6h1v1h-1zM21 6h2v1h-2zM2 7h1v1h-1zM21 7h2v1h-2zM2 8h1v1h-1zM21 8h2v1h-2zM2 9h1v1h-1zM21 9h2v1h-2zM2 10h1v1h-1zM21 10h2v1h-2zM2 11h1v1h-1zM21 11h2v1h-2zM2 12h1v1h-1zM21 12h2v1h-2zM2 13h1v1h-1zM21 13h2v1h-2zM2 14h1v1h-1zM21 14h2v1h-2zM3 15h2v1h-2zM20 15h1v1h-1zM3 16h2v1h-2zM20 16h1v1h-1zM5 17h6v1h-6zM12 17h8v1h-8zM9 18h2v1h-2zM12 18h2v1h-2zM9 19h2v1h-2zM12 19h2v1h-2zM8 20h1v1h-1zM11 20h1v1h-1zM6 21h3v1h-3zM6 22h3v1h-3z'/%3E%3Cpath fill='%23ffffff' d='M5 2h15v1h-15zM3 3h8v1h-8zM14 3h7v1h-7zM3 4h8v1h-8zM14 4h7v1h-7zM3 5h8v1h-8zM14 5h7v1h-7zM3 6h18v1h-18zM3 7h18v1h-18zM3 8h6v1h-6zM14 8h7v1h-7zM3 9h8v1h-8zM14 9h7v1h-7zM3 10h8v1h-8zM14 10h7v1h-7zM3 11h8v1h-8zM14 11h7v1h-7zM3 12h8v1h-8zM14 12h7v1h-7zM3 13h8v1h-8zM14 13h7v1h-7zM3 14h6v1h-6zM15 14h6v1h-6zM5 15h15v1h-15zM5 16h15v1h-15zM11 17h1v1h-1zM11 18h1v1h-1zM11 19h1v1h-1zM9 20h2v1h-2z'/%3E%3Cpath fill='%230000ff' d='M11 3h3v1h-3zM11 4h3v1h-3zM11 5h3v1h-3zM9 8h5v1h-5zM11 9h3v1h-3zM11 10h3v1h-3zM11 11h3v1h-3zM11 12h3v1h-3zM11 13h3v1h-3zM9 14h6v1h-6z'/%3E%3C/svg%3E");
   }
 
   /* The star of a starred reviewer: yellow when starred, a grey outline when not. */
