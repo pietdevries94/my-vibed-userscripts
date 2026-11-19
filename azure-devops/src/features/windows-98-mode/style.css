@@ -7792,3 +7792,128 @@ html[data-fix-ado-win98="board"] body {
     }
   }
 }
+
+/* A drop-down that checks several items, such as a board filter, as in the BoardFilter artboard:
+   a search field, then a white list box of checkbox rows, then Clear. A checked row stays white
+   with a check in its box; only the hovered or focused row is navy. */
+html[data-fix-ado-win98]
+  .bolt-portal-host
+  .bolt-callout-content:has(.bolt-list-row .bolt-checkbox) {
+  .bolt-textfield {
+    height: 21px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    /* The 16px magnifier, 4px, then the text. */
+    & > .fluent-icons-enabled,
+    & > .fluent-icons-enabled > * {
+      flex: none;
+      width: 16px;
+      margin: 0;
+      padding: 0;
+    }
+
+    input {
+      margin: 0;
+      padding: 0 0 0 4px;
+
+      &::placeholder {
+        color: #808080;
+        opacity: 1;
+      }
+    }
+  }
+
+  .v-scroll-auto:has(> .bolt-list) {
+    margin-top: 4px;
+    padding: 2px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  .bolt-list {
+    width: 100%;
+    border-spacing: 0;
+  }
+
+  .bolt-list-row {
+    height: 17px;
+    background: #fff;
+    color: #000;
+
+    &:hover,
+    &.focused {
+      background: #000080;
+      color: #fff;
+    }
+
+    /* A checked row is selected, and the menus' rule makes a selected row's text white. */
+    &:not(:hover, .focused) :not(svg, svg *) {
+      color: #000;
+    }
+  }
+
+  .bolt-list-cell {
+    padding: 0 4px;
+  }
+
+  .bolt-list-cell-content {
+    gap: 6px;
+  }
+
+  .bolt-checkbox {
+    flex: none;
+    padding: 0;
+  }
+
+  .bolt-checkmark {
+    width: 13px;
+    height: 13px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    .fabric-icon {
+      visibility: hidden;
+    }
+  }
+
+  .bolt-checkbox[aria-checked="true"] .bolt-checkmark {
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E")
+        center / 7px 7px no-repeat,
+      #fff;
+  }
+
+  /* Clear: a push button at the right, under the list. */
+  :has(> .bolt-button):last-child {
+    margin-top: 4px;
+    justify-content: flex-end;
+
+    .bolt-button {
+      min-width: 75px;
+      height: 23px;
+      justify-content: center;
+      gap: 4px;
+      padding: 0 10px;
+      border-radius: 0;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+      color: #000;
+
+      & > * {
+        margin: 0;
+      }
+
+      .fluent-icons-enabled {
+        flex: none;
+        width: 16px;
+      }
+    }
+  }
+}
