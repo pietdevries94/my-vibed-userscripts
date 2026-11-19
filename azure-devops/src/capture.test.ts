@@ -234,7 +234,7 @@ test("a pipeline log capture keeps the job and step of its links as stand-ins", 
   assert.deepEqual(alerts, []);
   assert.deepEqual(
     [...files.keys()],
-    ["azure-devops--pipeline-log.html", "azure-devops--pipeline-log.json"],
+    ["html", "json", "css"].map((kind) => `azure-devops--pipeline-log.${kind}`),
   );
   assertNoRealValue(files);
   assert.match(

@@ -159,6 +159,8 @@ function pipelineRunPage(view: PipelineRunView, buildId: number): CapturePage {
     },
     name: PIPELINE_RUN_PAGE_NAMES[view],
     root: withoutScriptMarks(document.body),
+    // The fake site styles the run with the site's own CSS, as Windows 98 mode needs.
+    styleRoot: document.body,
   };
 }
 

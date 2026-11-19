@@ -51,6 +51,8 @@ function boardPageAt(location: Location): CapturePage | null {
     },
     name: "board",
     root: withoutScriptMarks(document.body),
+    // The fake site styles the board with the site's own CSS, as Windows 98 mode needs.
+    styleRoot: document.body,
   };
 }
 

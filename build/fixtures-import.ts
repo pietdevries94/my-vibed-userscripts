@@ -5,11 +5,18 @@
 // suffix for a repeated download, such as "board(1).html", is dropped. When two
 // downloads would get the same fixture name, nothing is imported.
 // The download folder is ~/Downloads, or DOWNLOADS_DIR when set.
+// A script with <script>/src/capture/fixture-cleanup.ts cleans each page capture (.html) on the
+// way in, such as taking out what the script itself added to the page.
 import type { Script } from "./scripts.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { selectScripts } from "./scripts.ts";
+
+/** A script's cleanup of a captured page's HTML. */
+type CleanPage = (html: string) => string;
+
+const CLEANUP_MODULE = path.join("src", "capture", "fixture-cleanup.ts");
 
 function moveFile(from: string, to: string): void {
   try {
@@ -48,14 +55,53 @@ function capturesIn(downloads: string, prefix: string): string[] {
     );
 }
 
+/** A capture's text as its fixture: a page capture cleaned, any other file as it is. */
+function fixtureTextOf(fileName: string, text: string, cleanPage: CleanPage | null): string {
+  return cleanPage !== null && fileName.endsWith(".html") ? cleanPage(text) : text;
+}
+
+function isCleanupModule(value: unknown): value is { cleanFixtureHtml: CleanPage } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "cleanFixtureHtml" in value &&
+    typeof value.cleanFixtureHtml === "function"
+  );
+}
+
+/** The script's cleanup of page captures, when it has one. */
+async function cleanupOf(script: Script): Promise<CleanPage | null> {
+  const modulePath = path.join(script.directory, CLEANUP_MODULE);
+  if (!fs.existsSync(modulePath)) {
+    return null;
+  }
+  const cleanup: unknown = await import(modulePath);
+  if (!isCleanupModule(cleanup)) {
+    throw new TypeError(`${modulePath} must export cleanFixtureHtml`);
+  }
+  return cleanup.cleanFixtureHtml;
+}
+
 function moveCapture(
   { downloads, fixtures }: { downloads: string; fixtures: string },
-  capture: string,
-  fixtureName: string,
+  {
+    capture,
+    fixtureName,
+    cleanPage,
+  }: { capture: string; fixtureName: string; cleanPage: CleanPage | null },
 ): void {
+  const source = path.join(downloads, capture);
   const target = path.join(fixtures, fixtureName);
   const label = fs.existsSync(target) ? "replaced" : "new     ";
-  moveFile(path.join(downloads, capture), target);
+  if (cleanPage !== null && fixtureName.endsWith(".html")) {
+    fs.writeFileSync(
+      target,
+      fixtureTextOf(fixtureName, fs.readFileSync(source, "utf8"), cleanPage),
+    );
+    fs.rmSync(source);
+  } else {
+    moveFile(source, target);
+  }
   console.log(`  ${label}  ${fixtureName}`);
 }
 
@@ -63,12 +109,21 @@ function moveCapture(
 function moveCaptures(
   folders: { downloads: string; fixtures: string },
   scriptId: string,
-  { captureName, captures, prefix }: { captureName: string; captures: string[]; prefix: string },
+  {
+    captureName,
+    captures,
+    cleanPage,
+    prefix,
+  }: { captureName: string; captures: string[]; cleanPage: CleanPage | null; prefix: string },
 ): void {
   fs.mkdirSync(folders.fixtures, { recursive: true });
   console.log(`Imported into ${scriptId}/fixtures/:`);
   for (const capture of captures) {
-    moveCapture(folders, capture, fixtureNameOf(capture, prefix, captureName));
+    moveCapture(folders, {
+      capture,
+      cleanPage,
+      fixtureName: fixtureNameOf(capture, prefix, captureName),
+    });
   }
   console.log("Skim these files before Claude reads them.");
 }
@@ -84,7 +139,7 @@ function stopOnRepeatedNames(downloads: string, repeated: string[]): void {
   }
 }
 
-function importCaptures(script: Script, captureName: string): void {
+async function importCaptures(script: Script, captureName: string): Promise<void> {
   const downloads = process.env.DOWNLOADS_DIR ?? path.join(os.homedir(), "Downloads");
   const prefix = `${script.id}--`;
   const captures = capturesIn(downloads, prefix);
@@ -94,7 +149,8 @@ function importCaptures(script: Script, captureName: string): void {
   }
   stopOnRepeatedNames(downloads, repeatedFixtureNames(captures, prefix, captureName));
   const folders = { downloads, fixtures: path.join(script.directory, "fixtures") };
-  moveCaptures(folders, script.id, { captureName, captures, prefix });
+  const cleanPage = await cleanupOf(script);
+  moveCaptures(folders, script.id, { captureName, captures, cleanPage, prefix });
 }
 
 if (import.meta.main) {
@@ -103,7 +159,7 @@ if (import.meta.main) {
   if (script === undefined) {
     process.exit(1);
   }
-  importCaptures(script, captureName);
+  await importCaptures(script, captureName);
 }
 
-export { fixtureNameOf, repeatedFixtureNames };
+export { fixtureNameOf, fixtureTextOf, repeatedFixtureNames };
