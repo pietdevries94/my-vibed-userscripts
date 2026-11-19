@@ -30,6 +30,7 @@ The repo is public. Real values from a site stay out of code, tests, comments, c
 
 - `new-script`: create a script for a new website.
 - `feature`: add or change a feature of a script.
+- `restyle`: restyle a whole script into another look, such as Windows 98 mode.
 - `real-site`: load before any `real-site` browser tool.
 - `sealed-capture`: get fixtures for a sealed script, or turn an open script sealed.
 - `release`: the owner says "release", or a change touches `shared/runtime/`.

@@ -82,6 +82,17 @@
       }
     },
     {
+      // A script's restyle states: artboard names, fake-site paths and screen boxes are data.
+      "files": ["*/restyle/**"],
+      "rules": {
+        "import/no-nodejs-modules": "off",
+        "eslint/no-magic-numbers": "off",
+        "import/no-default-export": "off",
+        // A check reads as one sequence of steps, like a test.
+        "eslint/max-statements": ["error", 20]
+      }
+    },
+    {
       // A classic script: Playwright adds it to every frame, where import and export would not parse.
       "files": ["shared/dev/real-site/read-only.init-script.ts"],
       "rules": {

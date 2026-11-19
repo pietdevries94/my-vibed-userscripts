@@ -25,7 +25,9 @@
     "fixtures:link": "node build/fixtures-link.ts",
     "fixtures:import": "node build/fixtures-import.ts",
     "capture:bundle": "node build/capture-bundle.ts",
-    "capture:save": "node build/capture-save.ts"
+    "capture:save": "node build/capture-save.ts",
+    "restyle:diff": "node shared/dev/restyle/run-diffs.ts",
+    "restyle:audit": "node shared/dev/restyle/audit.ts"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -38,6 +40,7 @@
     "oxfmt": "0.78.0",
     "oxlint": "1.93.0",
     "oxlint-tsgolint": "7.0.2006",
+    "playwright": "1.66.0-alpha-2026-11-09",
     "typescript": "7.0.2",
     "ws": "8.22.2"
   },

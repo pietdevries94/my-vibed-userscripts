@@ -4,3 +4,7 @@ dist/dev/
 .real-site/
 .DS_Store
 .fake-site/
+
+# A script's restyle artboards, downloaded from the design canvas, and the restyle tools' runs.
+/*/design/
+.restyle-runs/

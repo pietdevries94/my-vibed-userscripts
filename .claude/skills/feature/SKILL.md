@@ -13,9 +13,7 @@ Change only the parts the owner names. When a word could mean two parts of the p
 
 When the owner had a design made for the change, every visible style change goes into that design first, the owner approves it, and only then into code. That includes fixes found while checking.
 
-A design that restyles the site's own pages is drawn from captures of those pages: their structure, items and text. Get the captures, with `styleRoot`, before designing. Check the fake site against the design by a pixel diff per page, never by eye.
-
-A restyle of the whole script starts with a checklist: one row per feature in `<script>/src/features`, and per visible state of each, plus the site's own pages. It is done only when every row has a design from a capture, CSS, and a fake-site diff. A state the fake site cannot show gets invented data, never a skip.
+A restyle of the site's own pages follows `restyle`.
 
 ## Loop
 
