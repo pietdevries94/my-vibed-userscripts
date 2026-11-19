@@ -745,6 +745,11 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
       padding: 0 13px;
     }
 
+    /* After another tab it covers only that tab's 2px edge, as it covers 1px on its right. */
+    &.selected:not(:first-child) {
+      margin-left: -1px;
+    }
+
     &::after,
     .bolt-tab-focus-indicator,
     .bolt-tab-underline {
