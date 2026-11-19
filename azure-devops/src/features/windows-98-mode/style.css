@@ -681,12 +681,21 @@ html[data-fix-ado-win98] .bolt-portal-host {
     }
   }
 
+  /* A tooltip is one yellow box: its callout drops the menu's frame, padding and shadow. */
+  .bolt-callout-content:has(.bolt-tooltip-content) {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   .bolt-tooltip-content {
+    padding: 2px 4px;
     border: 1px solid #000;
     border-radius: 0;
     background: #ffffe1;
     color: #000;
-    font: 11px var(--fix-ado-win98-font);
+    font: 11px/14px var(--fix-ado-win98-font);
     box-shadow: none;
   }
 }
