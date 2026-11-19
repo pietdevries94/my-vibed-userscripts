@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.18.1
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, a New chip that glows on pushes and other changes you have not seen, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, and pull request lists and boards that reload on changes. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.19.0
+// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, a New chip that glows on pushes and other changes you have not seen, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, pull request lists and boards that reload on changes, and a Windows 98 mode, still a work in progress and off by default. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -16,16 +16,9197 @@
 // ==/UserScript==
 "use strict";
 (() => {
+  // azure-devops/src/pull-requests/reviewers.ts
+  var EMAIL_ADDRESS = /^(?<localPart>[^\s@]+)@[^\s@]+$/u, TRAILING_SIGN_IN_ADDRESS = /\s+<?[^\s<>@]+@[^\s<>@]+>?$/u;
+  function personOrTeamName(displayName) {
+    return displayName.replace(/^\[[^\]]*\]\\/u, "").replaceAll(/\([^)]*\)/gu, "").trim();
+  }
+  function wordsOf(text) {
+    return text.split(/\s+/u).filter(Boolean);
+  }
+  function firstCharacter(word) {
+    let codePoint = (word ?? "").codePointAt(0);
+    return codePoint === void 0 ? "" : String.fromCodePoint(codePoint);
+  }
+  function nameInLabel(label) {
+    let localPart = EMAIL_ADDRESS.exec(label.trim())?.groups?.localPart;
+    return localPart === void 0 ? personOrTeamName(label.trim().replace(TRAILING_SIGN_IN_ADDRESS, "")) : localPart.replaceAll(/[._-]+/gu, " ");
+  }
+  function initialsOf(displayName) {
+    let name = nameInLabel(displayName), commaIndex = name.indexOf(","), isSurnameFirst = commaIndex !== -1, firstNames = wordsOf(isSurnameFirst ? name.slice(commaIndex + 1) : name), surnameWords = isSurnameFirst ? wordsOf(name.slice(0, commaIndex)) : firstNames.slice(1);
+    return [firstNames[0], surnameWords.at(-1)].map((word) => firstCharacter(word)).join("").toUpperCase();
+  }
+  function hueOf(label) {
+    let nameKey = wordsOf(nameInLabel(label).replaceAll(",", " ").toLowerCase()).toSorted().join(" "), hash = 2166136261;
+    for (let character of nameKey)
+      hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16777619) >>> 0;
+    return hash % 360;
+  }
+  function namesOf(reviewer) {
+    let { displayName } = reviewer;
+    return displayName === void 0 || displayName === "" ? [] : [displayName, personOrTeamName(displayName)];
+  }
+  function findReviewerByLabel(avatarLabel, reviewers) {
+    let label = avatarLabel.toLowerCase(), bestMatch = null, bestMatchLength = 0;
+    for (let reviewer of reviewers)
+      for (let name of namesOf(reviewer))
+        name.length > bestMatchLength && label.includes(name.toLowerCase()) && (bestMatch = reviewer, bestMatchLength = name.length);
+    return bestMatch;
+  }
+
+  // azure-devops/src/pull-requests/avatars.ts
+  var AVATAR_SELECTOR = ".bolt-coin, .vss-Persona:not(.project-persona)";
+  function avatarName(avatar) {
+    let label = avatar.getAttribute("aria-label") ?? "", imageAlt = avatar.querySelector("img")?.getAttribute("alt") ?? "";
+    return (label === "" ? imageAlt : label).trim();
+  }
+  function markAvatar({ avatar, initials, hue, width }) {
+    initials ? avatar.dataset.fixAdoInitials = initials : delete avatar.dataset.fixAdoInitials, avatar.style.setProperty("--fix-ado-hue", hue || null), initials && width > 0 && avatar.style.setProperty("--fix-ado-avatar-size", `${width}px`);
+  }
+  function outdatedAvatars(root) {
+    let marks = [];
+    for (let avatar of root.querySelectorAll(AVATAR_SELECTOR)) {
+      let name = avatarName(avatar), initials = initialsOf(name), hue = initials ? String(hueOf(name)) : "";
+      (avatar.dataset.fixAdoInitials ?? "") === initials && avatar.style.getPropertyValue("--fix-ado-hue") === hue || marks.push({ avatar, hue, initials, width: initials ? avatar.offsetWidth : 0 });
+    }
+    return marks;
+  }
+  function showInitialsOnAvatars(root) {
+    for (let mark of outdatedAvatars(root))
+      markAvatar(mark);
+  }
+
+  // azure-devops/src/features/avatar-initials/style.css
+  var style_default = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
+[data-fix-ado-initials] {
+  position: relative;
+  border-radius: 50%;
+  /* OKLCH lightness is the same for every hue, so white initials keep 4.5:1 contrast on each. */
+  background: oklch(50% 0.11 var(--fix-ado-hue, 250));
+}
+
+[data-fix-ado-initials] > .bolt-coin-content,
+[data-fix-ado-initials] > .vss-Persona-content {
+  visibility: hidden;
+}
+
+[data-fix-ado-initials]::after {
+  content: attr(data-fix-ado-initials);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: calc(var(--fix-ado-avatar-size, 24px) * 0.42);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* A text field's prefix pads the avatar on the left, which stretches the circle into an oval.
+   Margin keeps the avatar in the same spot. Azure DevOps sets padding-left 4px, margin-left 7px. */
+.bolt-textfield .prefix[data-fix-ado-initials] {
+  padding-left: 0;
+  margin-left: 11px;
+}
+`;
+
+  // azure-devops/src/features/avatar-initials/index.ts
+  var avatarInitials = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Initials on avatars, in a colour per person.",
+    // The key of the earlier menu setting, so the owner's choice stays.
+    id: "avatar-initials",
+    name: "Avatar initials",
+    start: ({ document: document2 }) => ({
+      sync() {
+        showInitialsOnAvatars(document2);
+      }
+    }),
+    styles: [style_default]
+  };
+
+  // azure-devops/src/core/ado-request.ts
+  var AdoRequestError = class extends Error {
+    httpStatus;
+    retryAfterSeconds;
+    constructor(httpStatus, retryAfterSeconds) {
+      super(`Azure DevOps request failed with HTTP ${httpStatus}`), this.name = "AdoRequestError", this.httpStatus = httpStatus, this.retryAfterSeconds = retryAfterSeconds;
+    }
+  };
+  function retryAfterSecondsOf(response) {
+    let retryAfter = Number(response.headers.get("Retry-After"));
+    return response.headers.has("Retry-After") && Number.isFinite(retryAfter) ? retryAfter : null;
+  }
+  async function sendRequest(options, path, write) {
+    let accept = { Accept: "application/json" }, response = await options.fetch(options.origin + options.apiBasePath + path, {
+      credentials: "same-origin",
+      ...write === void 0 ? { headers: accept, method: "GET" } : {
+        body: JSON.stringify(write.body),
+        headers: { ...accept, "Content-Type": "application/json" },
+        method: write.method
+      }
+    });
+    if (!response.ok)
+      throw new AdoRequestError(response.status, retryAfterSecondsOf(response));
+    return response;
+  }
+  async function getJson(options, path) {
+    let response = await sendRequest(options, path), retryAfterSeconds = retryAfterSecondsOf(response);
+    return { body: await response.json() ?? {}, retryAfterSeconds };
+  }
+
+  // shared/runtime/script-log.ts
+  var entries = [];
+  function log(message2, data) {
+    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
+  }
+
+  // azure-devops/src/features/system-theme/system-theme.ts
+  var LIGHT_THEME_ID = "ms.vss-web.vsts-theme", DARK_THEME_ID = "ms.vss-web.vsts-theme-dark", THEME_CLASS_PREFIX = "ms-vss-web-vsts-theme", PALETTE_VARIABLE = "--palette-neutral-0", LIGHT_THEME_CLASS = "ms-vss-web-vsts-theme", DARK_THEME_CLASS = "ms-vss-web-vsts-theme-dark";
+  function currentThemeId(document2) {
+    let { body } = document2;
+    if (body.dataset.theme !== void 0)
+      return body.dataset.theme;
+    let themeClasses = [...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX));
+    if (!themeClasses.some((name) => name !== LIGHT_THEME_CLASS && name !== DARK_THEME_CLASS))
+      return themeClasses.includes(DARK_THEME_CLASS) ? DARK_THEME_ID : themeClasses.includes(LIGHT_THEME_CLASS) ? LIGHT_THEME_ID : void 0;
+  }
+  function isFollowedTheme(themeId) {
+    return themeId === LIGHT_THEME_ID || themeId === DARK_THEME_ID;
+  }
+  function findRootStyle(document2) {
+    return [...document2.head.querySelectorAll("style")].find((style) => {
+      let text = style.textContent.trimStart();
+      return text.startsWith(":root") && text.includes(PALETTE_VARIABLE);
+    }) ?? null;
+  }
+  function readLook(document2) {
+    let rootStyle = findRootStyle(document2);
+    return rootStyle === null ? null : {
+      bodyClasses: [...document2.body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX)),
+      rootStyle: rootStyle.textContent
+    };
+  }
+  function applyLook(document2, themeId, look) {
+    let rootStyle = findRootStyle(document2);
+    if (rootStyle === null)
+      return !1;
+    rootStyle.textContent = look.rootStyle;
+    let { body } = document2;
+    return body.classList.remove(
+      ...[...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX))
+    ), body.classList.add(...look.bodyClasses), body.dataset.theme = themeId, !0;
+  }
+  function rememberLook({ document: document2, looks }) {
+    let themeId = currentThemeId(document2), look = readLook(document2);
+    if (!isFollowedTheme(themeId) || look === null)
+      return;
+    let stored = looks.load();
+    JSON.stringify(stored[themeId]) !== JSON.stringify(look) && looks.save({ ...stored, [themeId]: look });
+  }
+  function themeToSwitchTo(options) {
+    let current = currentThemeId(options.document), wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
+    return isFollowedTheme(current) && current !== wanted ? wanted : null;
+  }
+  async function trySaveTheme(options, themeId) {
+    try {
+      return await options.saveTheme(themeId), !0;
+    } catch (error) {
+      return log("System theme: Azure DevOps refused the theme save", {
+        httpStatus: error instanceof AdoRequestError ? error.httpStatus : null
+      }), !1;
+    }
+  }
+  async function switchToSystemTheme(options, isPageLoad) {
+    let wanted = themeToSwitchTo(options);
+    if (log("System theme: checked", {
+      current: currentThemeId(options.document) ?? null,
+      isPageLoad,
+      prefersDark: options.prefersDark(),
+      rememberedThemes: Object.keys(options.looks.load())
+    }), wanted === null || !await trySaveTheme(options, wanted))
+      return;
+    let look = options.looks.load()[wanted], isSwitched = look !== void 0 && applyLook(options.document, wanted, look);
+    log("System theme: saved", {
+      hasRootStyle: findRootStyle(options.document) !== null,
+      isSwitched,
+      wanted
+    }), !isSwitched && isPageLoad && options.reload();
+  }
+  function createSystemTheme(options) {
+    let lastSwitch = Promise.resolve(), seenPrefersDark = options.prefersDark(), isWaitingForTheme = !1;
+    function queueSwitch(isPageLoad) {
+      lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, isPageLoad));
+    }
+    function onPageChange() {
+      rememberLook(options), isWaitingForTheme && currentThemeId(options.document) !== void 0 && (isWaitingForTheme = !1, queueSwitch(!0));
+    }
+    function onSystemThemeChange() {
+      onPageChange();
+      let prefersDark = options.prefersDark();
+      prefersDark !== seenPrefersDark && (seenPrefersDark = prefersDark, queueSwitch(!1));
+    }
+    return options.onSystemThemeChange(() => {
+      log("System theme: the system's theme changed"), onSystemThemeChange();
+    }), {
+      onPageChange,
+      settled: async () => lastSwitch,
+      async start() {
+        seenPrefersDark = options.prefersDark(), rememberLook(options), isWaitingForTheme = currentThemeId(options.document) === void 0, isWaitingForTheme || queueSwitch(!0), await lastSwitch;
+      }
+    };
+  }
+
+  // azure-devops/src/features/system-theme/index.ts
+  var THEME_LOOKS_KEY = "system-theme-looks", SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)", followSystemTheme = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Azure DevOps shows Light or Dark to match the system.",
+    // The key of the earlier menu setting, so the owner's choice stays.
+    id: "follow-system-theme",
+    name: "Follow system theme",
+    start({ client, document: document2, isInFrame: isInFrame2, reloadWhenIdle: reloadWhenIdle2 }) {
+      if (isInFrame2)
+        return null;
+      let systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY), theme = createSystemTheme({
+        document: document2,
+        looks: {
+          load: () => GM_getValue(THEME_LOOKS_KEY, {}),
+          save: (looks) => {
+            GM_setValue(THEME_LOOKS_KEY, looks);
+          }
+        },
+        onSystemThemeChange: (listener) => {
+          systemDark.addEventListener("change", listener);
+        },
+        prefersDark: () => systemDark.matches,
+        reload: reloadWhenIdle2,
+        saveTheme: async (themeId) => client.saveTheme(themeId)
+      });
+      return new MutationObserver(() => {
+        theme.onPageChange();
+      }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), theme.start(), null;
+    },
+    styles: []
+  };
+
+  // azure-devops/src/boards/board.ts
+  var CARD_SELECTOR = ".wit-card[data-itemid]";
+  function isBoardLocation(location2) {
+    return location2.pathname.includes("/_boards/board/");
+  }
+  function findBoardCardIds(root) {
+    let ids = /* @__PURE__ */ new Set();
+    for (let card of root.querySelectorAll(CARD_SELECTOR)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && ids.add(id);
+    }
+    return [...ids];
+  }
+  function hasBoardChanged(loaded, current) {
+    for (let [id, workItem] of current.workItems) {
+      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
+      if (isChanged && !isMyOwnChange)
+        return !0;
+    }
+    return !1;
+  }
+  function watchBoard(client, location2, cardIds) {
+    return {
+      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
+      extendLoaded: (loaded, current) => ({
+        myUserId: current.myUserId,
+        workItems: new Map([...current.workItems, ...loaded.workItems])
+      }),
+      async fetchSnapshot() {
+        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
+          client.getWorkItems(cardIds),
+          client.getAuthenticatedUserId()
+        ]);
+        return {
+          retryAfterSeconds,
+          snapshot: {
+            myUserId,
+            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
+          }
+        };
+      },
+      hasChanged: hasBoardChanged,
+      key: `board:${location2.pathname}${location2.search}`
+    };
+  }
+
+  // azure-devops/src/pull-requests/review-requests.ts
+  var API_VERSION = "api-version=7.1", CHANGES_PER_REQUEST = 500, ACTIVE_THREAD_STATUS = 1, TEXT_COMMENT_TYPE = 1;
+  function pullRequestPath({ project, repository, pullRequestId }) {
+    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}`;
+  }
+  async function getPullRequest(options, pullRequest) {
+    return await (await sendRequest(options, `${pullRequestPath(pullRequest)}?${API_VERSION}`)).json();
+  }
+  function pageAfter({ nextSkip, nextTop }) {
+    return nextSkip !== void 0 && nextSkip > 0 ? { skip: nextSkip, top: nextTop ?? CHANGES_PER_REQUEST } : null;
+  }
+  async function getIterationChanges(options, pullRequest, iteration) {
+    let changes = [], next = { skip: 0, top: CHANGES_PER_REQUEST };
+    for (; next !== null; ) {
+      let body = await (await sendRequest(
+        options,
+        `${pullRequestPath(pullRequest)}/iterations/${iteration}/changes?$top=${next.top}&$skip=${next.skip}&${API_VERSION}`
+      )).json(), page = body.changeEntries ?? [];
+      changes.push(...page), next = page.length === 0 ? null : pageAfter(body);
+    }
+    return changes;
+  }
+  function threadBody({ content, iteration, threadContext }) {
+    return {
+      comments: [{ commentType: TEXT_COMMENT_TYPE, content, parentCommentId: 0 }],
+      status: ACTIVE_THREAD_STATUS,
+      ...threadContext === void 0 ? {} : { threadContext },
+      ...iteration === void 0 ? {} : {
+        pullRequestThreadContext: {
+          changeTrackingId: iteration.changeTrackingId,
+          iterationContext: {
+            firstComparingIteration: iteration.id,
+            secondComparingIteration: iteration.id
+          }
+        }
+      }
+    };
+  }
+  async function createPullRequestThread(options, pullRequest, thread) {
+    return (await (await sendRequest(
+      options,
+      `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`,
+      { body: threadBody(thread), method: "POST" }
+    )).json()).id;
+  }
+  function createReviewRequests(options) {
+    return {
+      createPullRequestThread: async (pullRequest, thread) => createPullRequestThread(options, pullRequest, thread),
+      getIterationChanges: async (pullRequest, iteration) => getIterationChanges(options, pullRequest, iteration),
+      getPullRequestCreationDate: async (pullRequest) => getPullRequest(options, pullRequest).then(({ creationDate }) => creationDate ?? ""),
+      async getPullRequestIterationIds(pullRequest) {
+        let { body } = await getJson(
+          options,
+          `${pullRequestPath(pullRequest)}/iterations?${API_VERSION}`
+        );
+        return (body.value ?? []).map(({ id }) => id);
+      },
+      getPullRequestStatus: async (pullRequest) => getPullRequest(options, pullRequest).then(({ status }) => status ?? ""),
+      async getPullRequestThreads(pullRequest) {
+        let { body } = await getJson(
+          options,
+          `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`
+        );
+        return body.value ?? [];
+      },
+      async setPullRequestVote(pullRequest, { reviewerId, vote }) {
+        await sendRequest(
+          options,
+          `${pullRequestPath(pullRequest)}/reviewers/${encodeURIComponent(reviewerId)}?${API_VERSION}`,
+          { body: { vote }, method: "PUT" }
+        );
+      }
+    };
+  }
+
+  // azure-devops/src/pull-requests/reviewer-requests.ts
+  var SEARCH_OPTIONS = { MaxResults: 40, MinResults: 5 }, SEARCH_PROPERTIES = [
+    "DisplayName",
+    "IsMru",
+    "ScopeName",
+    "SamAccountName",
+    "Active",
+    "SubjectDescriptor",
+    "Mail",
+    "MailNickname",
+    "SignInAddress",
+    "Guest"
+  ];
+  function reviewersPath({ project, repository, pullRequestId }) {
+    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/reviewers`;
+  }
+  async function getPullRequestReviewers(options, pullRequest) {
+    return ((await (await sendRequest(options, `${reviewersPath(pullRequest)}?api-version=7.1`)).json()).value ?? []).flatMap(
+      ({ id, displayName, uniqueName, isContainer }) => id === void 0 ? [] : [
+        {
+          displayName: displayName ?? "",
+          id,
+          isGroup: isContainer === !0,
+          signInAddress: isContainer === !0 ? "" : uniqueName ?? ""
+        }
+      ]
+    );
+  }
+  async function addPullRequestReviewer(options, pullRequest, { reviewerId, isRequired }) {
+    await sendRequest(
+      options,
+      `${reviewersPath(pullRequest)}/${encodeURIComponent(reviewerId)}?api-version=7.1`,
+      { body: { isRequired, vote: 0 }, method: "PUT" }
+    );
+  }
+  function identityOf(body) {
+    let { localId, displayName, signInAddress, mail, entityType } = body;
+    if (localId == null || localId === "")
+      return [];
+    let isGroup = entityType?.toLowerCase() === "group";
+    return [
+      {
+        displayName: displayName ?? "",
+        id: localId,
+        isGroup,
+        signInAddress: isGroup ? "" : signInAddress ?? mail ?? ""
+      }
+    ];
+  }
+  async function searchIdentities(options, query) {
+    let found = ((await (await sendRequest(
+      options,
+      "/_apis/IdentityPicker/Identities?api-version=5.0-preview.1",
+      {
+        body: {
+          identityTypes: ["user", "group"],
+          operationScopes: ["ims", "source"],
+          options: SEARCH_OPTIONS,
+          properties: SEARCH_PROPERTIES,
+          query
+        },
+        method: "POST"
+      }
+    )).json()).results ?? []).flatMap(({ identities }) => identities ?? []);
+    return logFound(found), found.flatMap((identity) => identityOf(identity));
+  }
+  function logFound(found) {
+    log("Starred reviewers: search answered", {
+      found: found.map((identity) => ({
+        entityType: identity.entityType,
+        // Field names only: each one maps to true, so the capture keeps them and no value.
+        fields: Object.fromEntries(Object.keys(identity).map((key) => [key, !0])),
+        hasLocalId: identityOf(identity).length > 0,
+        originDirectory: identity.originDirectory
+      })),
+      foundCount: found.length
+    });
+  }
+  function createReviewerRequests(options) {
+    return {
+      addPullRequestReviewer: async (pullRequest, reviewer) => addPullRequestReviewer(options, pullRequest, reviewer),
+      getPullRequestReviewers: async (pullRequest) => getPullRequestReviewers(options, pullRequest),
+      searchIdentities: async (query) => searchIdentities(options, query)
+    };
+  }
+
+  // azure-devops/src/core/ado-client.ts
+  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200, MAX_PULL_REQUEST_BUILDS = 50, MAX_LISTED_PULL_REQUESTS = 200, THEME_SETTING_KEY = "WebPlatform/Theme";
+  function createProjectIdCache(options) {
+    let projectIdRequests = /* @__PURE__ */ new Map();
+    return async (project) => {
+      let request = projectIdRequests.get(project);
+      return request || (request = getJson(
+        options,
+        `/_apis/projects/${encodeURIComponent(project)}?api-version=7.1`
+      ).then(({ body }) => String(body.id)), request.catch(() => projectIdRequests.delete(project)), projectIdRequests.set(project, request)), request;
+    };
+  }
+  function toBoardWorkItems(values) {
+    return values.flatMap(
+      (workItem) => workItem === null ? [] : [
+        {
+          changedById: workItem.fields?.["System.ChangedBy"]?.id ?? null,
+          id: workItem.id,
+          rev: workItem.rev
+        }
+      ]
+    );
+  }
+  async function getWorkItems(options, ids) {
+    let workItems = [], retryAfterSeconds = null;
+    for (let start = 0; start < ids.length; start += MAX_WORK_ITEMS_PER_REQUEST) {
+      let idsInRequest = ids.slice(start, start + MAX_WORK_ITEMS_PER_REQUEST), response = await getJson(
+        options,
+        `/_apis/wit/workitems?ids=${idsInRequest.join(",")}&fields=System.Rev,System.ChangedBy&errorPolicy=Omit&api-version=7.1`
+      );
+      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds, workItems.push(...toBoardWorkItems(response.body.value));
+    }
+    return { retryAfterSeconds, workItems };
+  }
+  async function getWorkItemUpdates(options, id) {
+    let updates = [], retryAfterSeconds = null;
+    for (let skip = 0; ; skip += MAX_UPDATES_PER_REQUEST) {
+      let response = await getJson(
+        options,
+        `/_apis/wit/workItems/${id}/updates?$top=${MAX_UPDATES_PER_REQUEST}&$skip=${skip}&api-version=7.1`
+      );
+      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
+      let page = response.body.value ?? [];
+      if (updates.push(...page), page.length < MAX_UPDATES_PER_REQUEST)
+        return { retryAfterSeconds, updates };
+    }
+  }
+  async function getPolicyEvaluations(options, projectId, { pullRequestId }) {
+    let artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`, { body, retryAfterSeconds } = await getJson(
+      options,
+      `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`
+    );
+    return { evaluations: body.value, retryAfterSeconds };
+  }
+  async function cancelBuild(options, project, buildId) {
+    await sendRequest(
+      options,
+      `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`,
+      { body: { status: "cancelling" }, method: "PATCH" }
+    );
+  }
+  async function saveTheme(options, themeId) {
+    await sendRequest(options, "/_apis/Settings/Entries/globalme?api-version=7.1-preview.1", {
+      body: { [THEME_SETTING_KEY]: themeId },
+      method: "PATCH"
+    });
+  }
+  async function requeuePolicyEvaluation(options, projectId, evaluationId) {
+    await sendRequest(
+      options,
+      `/${projectId}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}?api-version=7.1-preview.1`,
+      { body: { status: "queued" }, method: "PATCH" }
+    );
+  }
+  async function getPullRequestBuilds(options, { project, pullRequestId }) {
+    let branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`), { body, retryAfterSeconds } = await getJson(
+      options,
+      `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}&queryOrder=queueTimeDescending&$top=${MAX_PULL_REQUEST_BUILDS}&api-version=7.1`
+    );
+    return { builds: body.value ?? [], retryAfterSeconds };
+  }
+  function createAdoClient(options) {
+    let getProjectId = createProjectIdCache(options), authenticatedUserIdRequest = null;
+    return {
+      cancelBuild: async (project, buildId) => cancelBuild(options, project, buildId),
+      async getAuthenticatedUserId() {
+        return authenticatedUserIdRequest ??= getJson(options, "/_apis/connectionData").then(({ body }) => body.authenticatedUser?.id ?? null).catch(() => null), authenticatedUserIdRequest;
+      },
+      getPolicyEvaluations: async (pullRequest) => getPolicyEvaluations(options, await getProjectId(pullRequest.project), pullRequest),
+      getPullRequestBuilds: async (project, pullRequestId) => getPullRequestBuilds(options, { project, pullRequestId }),
+      async getPullRequests({ project, repository, status }) {
+        let { body, retryAfterSeconds } = await getJson(
+          options,
+          `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullrequests?searchCriteria.status=${status}&$top=${MAX_LISTED_PULL_REQUESTS}&api-version=7.1`
+        );
+        return { pullRequests: body.value, retryAfterSeconds };
+      },
+      async getTimeline(project, buildId) {
+        let { body, retryAfterSeconds } = await getJson(
+          options,
+          `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?api-version=7.1`
+        );
+        return { records: body.records ?? [], retryAfterSeconds };
+      },
+      getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
+      getWorkItems: async (ids) => getWorkItems(options, ids),
+      requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
+      saveTheme: async (themeId) => saveTheme(options, themeId),
+      ...createReviewRequests(options),
+      ...createReviewerRequests(options)
+    };
+  }
+
+  // azure-devops/src/features/reload-on-changes/page-reloader.ts
+  var PAGE_CHECK_INTERVAL_MS = 3e4, FAILED_PAGE_CHECK_RETRY_MS = 6e4, MS_PER_SECOND = 1e3;
+  function isCheckDue(state, page, immediately) {
+    return state.loadedSnapshots.has(page.key) ? !state.options.isTabActive() || state.options.now() < state.pausedUntil ? !1 : immediately || state.options.now() >= state.nextCheckAt : !0;
+  }
+  function pauseFor(state, retryAfterSeconds) {
+    retryAfterSeconds !== null && (state.pausedUntil = state.options.now() + retryAfterSeconds * MS_PER_SECOND);
+  }
+  function compareWithLoaded(state, { page, hasLoadedSnapshot }, snapshot) {
+    hasLoadedSnapshot ? page.hasChanged(state.loadedSnapshots.get(page.key), snapshot) ? state.options.reload() : page.extendLoaded && state.loadedSnapshots.set(
+      page.key,
+      page.extendLoaded(state.loadedSnapshots.get(page.key), snapshot)
+    ) : state.loadedSnapshots.set(page.key, snapshot);
+  }
+  function recordFailure(state, error) {
+    error instanceof AdoRequestError && pauseFor(state, error.retryAfterSeconds), state.nextCheckAt = state.options.now() + FAILED_PAGE_CHECK_RETRY_MS;
+  }
+  async function runCheck(state, page) {
+    let checkedPage = { hasLoadedSnapshot: state.loadedSnapshots.has(page.key), page };
+    state.isChecking = !0;
+    try {
+      let { snapshot, retryAfterSeconds } = await page.fetchSnapshot();
+      pauseFor(state, retryAfterSeconds), state.nextCheckAt = state.options.now() + PAGE_CHECK_INTERVAL_MS, compareWithLoaded(state, checkedPage, snapshot);
+    } catch (error) {
+      recordFailure(state, error);
+    } finally {
+      state.isChecking = !1;
+    }
+  }
+  function createPageReloader(options) {
+    let state = {
+      isChecking: !1,
+      loadedSnapshots: /* @__PURE__ */ new Map(),
+      nextCheckAt: 0,
+      options,
+      pausedUntil: 0
+    };
+    return {
+      async check({ immediately = !1 } = {}) {
+        let page = options.currentPage();
+        !page || state.isChecking || !isCheckDue(state, page, immediately) || await runCheck(state, page);
+      }
+    };
+  }
+
+  // azure-devops/src/pipeline/pipeline-status-icon.ts
+  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE = "http://www.w3.org/2000/svg", LABELS = {
+    cancelling: "Pipeline cancelling",
+    expired: "Pipeline result expired",
+    failed: "Pipeline failed",
+    loading: "Pipeline status loading",
+    none: "No pipeline status",
+    notStarted: "Pipeline not started",
+    queued: "Pipeline queued",
+    running: "Pipeline running",
+    succeeded: "Pipeline succeeded"
+  }, DISC = ["circle", { cx: "8", cy: "8", fill: "currentColor", r: "8" }], RING = [
+    "circle",
+    { cx: "8", cy: "8", fill: "none", r: "7", stroke: "currentColor", "stroke-width": "2" }
+  ], SPINNER = [
+    "circle",
+    {
+      cx: "8",
+      cy: "8",
+      fill: "none",
+      r: "6.5",
+      stroke: "currentColor",
+      "stroke-dasharray": "28 13",
+      "stroke-linecap": "round",
+      "stroke-width": "2.5"
+    }
+  ];
+  function line(pathData, stroke) {
+    return ["path", { d: pathData, ...{
+      fill: "none",
+      stroke,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      "stroke-width": "1.75"
+    } }];
+  }
+  var SHAPES = {
+    cancelling: [RING, line("M5 11l6-6", "currentColor")],
+    expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
+    failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
+    loading: [DISC],
+    none: [DISC],
+    notStarted: [RING],
+    queued: [RING, line("M8 4.5V8l2.5 1.5", "currentColor")],
+    running: [SPINNER],
+    succeeded: [DISC, line("M4.5 8.3l2.3 2.3 4.7-5", "#fff")]
+  };
+  function setAttributes(element4, attributes) {
+    for (let [name, value] of Object.entries(attributes))
+      element4.setAttribute(name, value);
+  }
+  function createShape(document2, [tag, attributes]) {
+    let shape = document2.createElementNS(SVG_NAMESPACE, tag);
+    return setAttributes(shape, attributes), shape;
+  }
+  function createStatusIcon(document2, status, label = LABELS[status]) {
+    let icon = document2.createElementNS(SVG_NAMESPACE, "svg");
+    setAttributes(icon, {
+      "aria-label": label,
+      class: PIPELINE_STATUS_ICON_CLASS,
+      height: "16",
+      role: "img",
+      viewBox: "0 0 16 16",
+      width: "16"
+    }), icon.dataset.status = status;
+    let title = document2.createElementNS(SVG_NAMESPACE, "title");
+    return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
+  }
+  function createPipelineStatusIcon(document2, status, pullRequestId) {
+    let icon = createStatusIcon(document2, status);
+    return icon.dataset.pullRequestId = String(pullRequestId), icon;
+  }
+
+  // azure-devops/src/pull-requests/pull-request-link.ts
+  function apiBasePath(location2) {
+    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
+    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
+  }
+  function pathSegments(pathname) {
+    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
+  }
+  function projectOf(segments, gitIndex, basePath2) {
+    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
+    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
+  }
+  function parsePullRequestHref(href, basePath2) {
+    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
+    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
+  }
+  function parsePullRequestListLocation(location2, basePath2) {
+    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
+    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
+      return null;
+    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
+    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
+  }
+  function isPullRequestInboxLocation(location2) {
+    return pathSegments(location2.pathname).at(-1) === "_pulls";
+  }
+  function isPullRequestCreateLocation(location2) {
+    let segments = pathSegments(location2.pathname);
+    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
+  }
+
+  // azure-devops/src/pull-requests/pr-list.ts
+  var PULL_REQUEST_ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]', TITLE_LINE_SELECTOR = ".bolt-table-two-line-cell-item";
+  function findPullRequestRows(root, apiBasePath2) {
+    let rows = [];
+    for (let row of root.querySelectorAll(PULL_REQUEST_ROW_SELECTOR)) {
+      let pullRequest = parsePullRequestHref(row.getAttribute("href") ?? "", apiBasePath2);
+      pullRequest && rows.push({ pullRequest, row });
+    }
+    return rows;
+  }
+  function showPipelineStatus(row, pullRequestId, status) {
+    let shownIcon = row.querySelector(`.${PIPELINE_STATUS_ICON_CLASS}`);
+    if (shownIcon?.dataset.status === status && shownIcon.dataset.pullRequestId === String(pullRequestId))
+      return;
+    shownIcon?.remove(), row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
+  }
+  var DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill", UPDATE_TIME_SELECTOR = "time.bolt-time-item", PUBLISHED_SINCE_CLASS = "fix-ado-published-since", TOO_LONG_AGO_CLASS = "fix-ado-published-since-too-long";
+  function isDraftRow(row) {
+    return row.querySelector(DRAFT_PILL_SELECTOR) !== null;
+  }
+  function publishedSinceLine(row) {
+    let shown = row.querySelector(`.${PUBLISHED_SINCE_CLASS}`);
+    if (shown)
+      return shown;
+    let updateLine = row.querySelector(UPDATE_TIME_SELECTOR)?.closest(".bolt-table-cell-content > *");
+    if (!updateLine)
+      return null;
+    let line2 = row.ownerDocument.createElement("div");
+    return line2.className = PUBLISHED_SINCE_CLASS, updateLine.after(line2), line2;
+  }
+  function showPublishedSince(row, shown) {
+    if (shown === null) {
+      row.querySelector(`.${PUBLISHED_SINCE_CLASS}`)?.remove();
+      return;
+    }
+    let line2 = publishedSinceLine(row);
+    line2 && (line2.textContent !== shown.text && (line2.textContent = shown.text), line2.classList.contains(TOO_LONG_AGO_CLASS) !== shown.isTooLongAgo && line2.classList.toggle(TOO_LONG_AGO_CLASS, shown.isTooLongAgo));
+  }
+  var REVIEWER_SELECTOR = ".pr-reviewer";
+  function markRequiredReviewers(row, reviewers) {
+    for (let reviewerElement of row.querySelectorAll(REVIEWER_SELECTOR)) {
+      let avatar = reviewerElement.querySelector(AVATAR_SELECTOR), reviewer = avatar ? findReviewerByLabel(avatarName(avatar), reviewers) : null;
+      reviewerElement.toggleAttribute("data-fix-ado-required", reviewer?.isRequired ?? !1), reviewerElement.parentElement?.toggleAttribute("data-fix-ado-reviewers", !0);
+    }
+  }
+
+  // azure-devops/src/features/reload-on-changes/pr-list-changes.ts
+  function snapshotOf(pullRequests) {
+    return new Map(
+      pullRequests.map((pullRequest) => [
+        pullRequest.pullRequestId,
+        JSON.stringify([
+          pullRequest.title,
+          pullRequest.isDraft,
+          pullRequest.status,
+          pullRequest.targetRefName,
+          pullRequest.lastMergeSourceCommit?.commitId,
+          pullRequest.autoCompleteSetBy?.id,
+          (pullRequest.reviewers ?? []).map((reviewer) => `${reviewer.id}:${reviewer.vote}:${reviewer.isRequired ?? !1}`).toSorted()
+        ])
+      ])
+    );
+  }
+  function hasListChanged(before, after, onScreenPullRequestIds) {
+    if (before.size !== after.size)
+      return !0;
+    for (let pullRequestId of before.keys())
+      if (!after.has(pullRequestId))
+        return !0;
+    for (let pullRequestId of onScreenPullRequestIds)
+      if (before.has(pullRequestId) && before.get(pullRequestId) !== after.get(pullRequestId))
+        return !0;
+    return !1;
+  }
+
+  // azure-devops/src/features/reload-on-changes/pr-list-watch.ts
+  function watchPullRequestList(client, listPage, onScreenPullRequestIds) {
+    return {
+      async fetchSnapshot() {
+        let { pullRequests, retryAfterSeconds } = await client.getPullRequests(listPage);
+        return { retryAfterSeconds, snapshot: snapshotOf(pullRequests) };
+      },
+      hasChanged: (loaded, current) => hasListChanged(loaded, current, onScreenPullRequestIds()),
+      key: `pull-request-list:${JSON.stringify(listPage)}`
+    };
+  }
+
+  // azure-devops/src/features/reload-on-changes/index.ts
+  var reloadOnChanges = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Pull request lists and boards reload when their content changes on the server.",
+    id: "reload-on-changes",
+    name: "Reload on changes",
+    start({ basePath: basePath2, client, document: document2, now, reloadWhenIdle: reloadWhenIdle2 }) {
+      let shownPage = { kind: "other" };
+      function watchedPage() {
+        if (shownPage.kind === "pull-request-list")
+          return watchPullRequestList(
+            client,
+            shownPage.listPage,
+            () => findPullRequestRows(document2, basePath2).map(
+              ({ pullRequest }) => pullRequest.pullRequestId
+            )
+          );
+        if (shownPage.kind === "board") {
+          let cardIds = findBoardCardIds(document2);
+          return cardIds.length > 0 ? watchBoard(client, location, cardIds) : null;
+        }
+        return null;
+      }
+      let isTabActive2 = !1, reloader = createPageReloader({
+        currentPage: watchedPage,
+        isTabActive: () => isTabActive2,
+        now,
+        reload: reloadWhenIdle2
+      });
+      return {
+        sync(tick) {
+          shownPage = tick.page, { isTabActive: isTabActive2 } = tick, reloader.check({ immediately: tick.reason === "tab-shown" });
+        }
+      };
+    },
+    styles: []
+  };
+
+  // azure-devops/src/pipeline/pipeline-run-link.ts
+  var RUN_PATH_END = "/_build/results";
+  function parsePipelineRunLocation(location2) {
+    let query = new URLSearchParams(location2.search), buildId = Number(query.get("buildId") ?? Number.NaN);
+    if (!location2.pathname.endsWith(RUN_PATH_END) || !Number.isInteger(buildId))
+      return null;
+    let jobId = query.get("j"), stepId = query.get("t");
+    return query.get("view") !== "logs" ? { buildId, jobId: null, stepId: null, view: "summary" } : jobId !== null && stepId !== null ? { buildId, jobId, stepId, view: "log" } : { buildId, jobId: null, stepId: null, view: "steps" };
+  }
+  function pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) {
+    let step = `j=${encodeURIComponent(jobId)}&t=${encodeURIComponent(stepId)}`;
+    return `${apiBasePath2}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs&${step}`;
+  }
+
+  // azure-devops/src/features/windows-98-mode/windows-98-mode.ts
+  var WORK_ITEM_PATH = /\/_workitems\/edit\/\d+\/?$/u, TOP_BAR_SELECTOR = ".project-header, .top-level-header";
+  function windows98PageOf(page, location2) {
+    return page.kind !== "other" ? page.kind : parsePipelineRunLocation(location2) ? "pipeline-run" : WORK_ITEM_PATH.test(location2.pathname) ? "work-item" : null;
+  }
+  function createWindows98Mode(document2) {
+    let root = document2.documentElement;
+    return {
+      sync(page, location2) {
+        let windows98Page = windows98PageOf(page, location2) ?? "";
+        root.dataset.fixAdoWin98 !== windows98Page && (root.dataset.fixAdoWin98 = windows98Page);
+        let topBar = document2.querySelector(TOP_BAR_SELECTOR);
+        topBar && topBar.dataset.fixAdoWindowTitle !== document2.title && (topBar.dataset.fixAdoWindowTitle = document2.title);
+      }
+    };
+  }
+
+  // azure-devops/src/features/windows-98-mode/style.css
+  var style_default2 = `/* Windows 98 mode. windows-98-mode.ts marks <html> with data-fix-ado-win98: the captured page
+   it shows, or empty on any other page. The top bar, side bar, menus and dialogs get the look
+   on every page; page content only on captured pages, whose markup is known. */
+
+html[data-fix-ado-win98] {
+  --fix-ado-win98-font: Tahoma, "MS Sans Serif", Geneva, Verdana, sans-serif;
+  --fix-ado-win98-mono: "Courier New", Courier, monospace;
+  --fix-ado-win98-face: #c0c0c0;
+  --fix-ado-win98-navy: #000080;
+  --fix-ado-win98-title: linear-gradient(90deg, #000080, #1084d0);
+  --fix-ado-win98-title-off: linear-gradient(90deg, #808080, #b5b5b5);
+  --fix-ado-win98-raised:
+    inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+  --fix-ado-win98-pressed:
+    inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+  --fix-ado-win98-sunken:
+    inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+  --fix-ado-win98-thin: inset -1px -1px #808080, inset 1px 1px #fff;
+  --fix-ado-win98-window:
+    inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff;
+  --fix-ado-win98-well: inset -1px -1px #fff, inset 1px 1px #808080;
+  --fix-ado-win98-default:
+    inset 0 0 0 1px #000, inset -2px -2px #0a0a0a, inset 2px 2px #fff, inset -3px -3px #808080,
+    inset 3px 3px #dfdfdf;
+  --fix-ado-win98-menu-shadow:
+    inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff,
+    2px 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* Azure DevOps's theme variables, as Windows 98. Light and Dark both get them, so the dark
+   palette is set back to light values. On a captured page they apply to all of it; elsewhere
+   only to the top bar, side bar, menus and dialogs. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body,
+html[data-fix-ado-win98]
+  :is(
+    .project-header,
+    .top-level-header,
+    .navigation-container,
+    .bolt-portal-host,
+    .fix-ado-settings
+  ) {
+  --palette-neutral-0: 255, 255, 255 !important;
+  /* The lightest grey paints sticky tab bars and headers: the window face, so no strip shows. */
+  --palette-neutral-2: 192, 192, 192 !important;
+  --palette-neutral-4: 232, 232, 232 !important;
+  --palette-neutral-6: 223, 223, 223 !important;
+  --palette-neutral-8: 210, 210, 210 !important;
+  --palette-neutral-10: 192, 192, 192 !important;
+  --palette-neutral-20: 160, 160, 160 !important;
+  --palette-neutral-30: 128, 128, 128 !important;
+  --palette-neutral-60: 96, 96, 96 !important;
+  --palette-neutral-70: 64, 64, 64 !important;
+  --palette-neutral-80: 32, 32, 32 !important;
+  --palette-neutral-100: 0, 0, 0 !important;
+  --palette-black-alpha-0: rgba(0, 0, 0, 0) !important;
+  --palette-black-alpha-2: rgba(0, 0, 0, 0.02) !important;
+  --palette-black-alpha-4: rgba(0, 0, 0, 0.04) !important;
+  --palette-black-alpha-6: rgba(0, 0, 0, 0.06) !important;
+  --palette-black-alpha-8: rgba(0, 0, 0, 0.08) !important;
+  --palette-black-alpha-10: rgba(0, 0, 0, 0.1) !important;
+  --palette-black-alpha-20: rgba(0, 0, 0, 0.2) !important;
+  --palette-black-alpha-30: rgba(0, 0, 0, 0.3) !important;
+  --palette-black-alpha-60: rgba(0, 0, 0, 0.6) !important;
+  --palette-black-alpha-70: rgba(0, 0, 0, 0.7) !important;
+  --palette-black-alpha-80: rgba(0, 0, 0, 0.8) !important;
+  --palette-black-alpha-100: rgba(0, 0, 0, 1) !important;
+  --palette-primary: 0, 0, 128 !important;
+  --palette-primary-darken-6: rgba(0, 0, 128, 1) !important;
+  --palette-primary-darken-10: rgba(0, 0, 128, 1) !important;
+  --palette-primary-darkened-6: 0, 0, 128 !important;
+  --palette-primary-darkened-10: 0, 0, 96 !important;
+  --palette-primary-shade-10: 0, 0, 128 !important;
+  --palette-primary-shade-20: 0, 0, 128 !important;
+  --palette-primary-shade-30: 0, 0, 96 !important;
+  --palette-primary-tint-10: 16, 132, 208 !important;
+  --palette-primary-tint-20: 192, 192, 255 !important;
+  --palette-primary-tint-30: 208, 208, 255 !important;
+  --palette-primary-tint-40: 232, 232, 255 !important;
+  --palette-accent1: 192, 0, 0 !important;
+  --palette-accent1-light: 255, 224, 224 !important;
+  --palette-accent1-dark: 128, 0, 0 !important;
+  --palette-accent2: 0, 128, 0 !important;
+  --palette-accent2-light: 224, 255, 224 !important;
+  --palette-accent2-dark: 0, 96, 0 !important;
+  --palette-accent3: 160, 112, 0 !important;
+  --palette-accent3-light: 255, 255, 225 !important;
+  --palette-accent3-dark: 112, 80, 0 !important;
+  --palette-error: rgba(192, 0, 0, 1) !important;
+  --palette-error-6: rgba(160, 0, 0, 1) !important;
+  --palette-error-10: rgba(128, 0, 0, 1) !important;
+  --background-color: #c0c0c0 !important;
+  --border-subtle-color: #808080 !important;
+  --callout-background-color: #c0c0c0 !important;
+  --callout-filtered-background-color: #c0c0c0 !important;
+  --callout-shadow-color: transparent !important;
+  --callout-shadow-secondary-color: transparent !important;
+  --panel-shadow-color: transparent !important;
+  --panel-shadow-secondary-color: transparent !important;
+  --communication-background: #000080 !important;
+  --communication-foreground: #000080 !important;
+  --text-on-communication-background: #fff !important;
+  --focus-border-color: #000 !important;
+  --focus-pulse-max-color: transparent !important;
+  --focus-pulse-min-color: transparent !important;
+  --text-primary-color: #000 !important;
+  --text-secondary-color: #404040 !important;
+  --text-disabled-color: #808080 !important;
+  --nav-header-background: #c0c0c0 !important;
+  --nav-header-active-item-background: transparent !important;
+  --nav-header-item-hover-background: transparent !important;
+  --nav-header-product-color: #000 !important;
+  --nav-header-text-primary-color: #000 !important;
+  --nav-header-text-secondary-color: #404040 !important;
+  --nav-header-text-disabled-color: #808080 !important;
+  --nav-vertical-background-color: #c0c0c0 !important;
+  --nav-vertical-active-group-background: transparent !important;
+  --nav-vertical-active-item-background: #000080 !important;
+  --nav-vertical-item-hover-background: #000080 !important;
+  --nav-vertical-text-primary-color: #000 !important;
+  --nav-vertical-text-secondary-color: #404040 !important;
+  --component-grid-row-hover-color: transparent !important;
+  --component-grid-selected-row-color: #000080 !important;
+  --component-grid-focus-border-color: #000 !important;
+  --component-grid-cell-bottom-border-color: transparent !important;
+  --component-grid-action-hover-color: #c0c0c0 !important;
+  --component-menu-selected-item-background: #000080 !important;
+  --component-label-default-color: #c0c0c0 !important;
+  --component-label-default-color-hover: #dfdfdf !important;
+  --component-htmlEditor-background-color: #fff !important;
+  --component-htmlEditor-foreground-color: #000 !important;
+  --component-status-error: #c00000 !important;
+  --component-status-success: #008000 !important;
+  --component-status-warning: #a07000 !important;
+  --component-status-info: #000080 !important;
+  --component-status-neutral: #808080 !important;
+  --status-error-foreground: #c00000 !important;
+  --status-error-text: #a00000 !important;
+  --status-error-strong: #800000 !important;
+  --status-error-background: #ffe0e0 !important;
+  --status-success-foreground: #008000 !important;
+  --status-success-text: #006000 !important;
+  --status-success-background: #e0ffe0 !important;
+  --status-warning-foreground: #a07000 !important;
+  --status-warning-text: #705000 !important;
+  --status-warning-icon-foreground: #a07000 !important;
+  --status-warning-background: #ffffe1 !important;
+  --status-info-foreground: #000080 !important;
+  --status-info-background: #e8e8ff !important;
+  --splitter-border-color: #808080 !important;
+  --diff-color-original: rgba(255, 0, 0, 0.18) !important;
+  --diff-color-modified: rgba(0, 160, 0, 0.18) !important;
+  --icon-folder-color: #e0c000 !important;
+  --search-match-background: #ffff00 !important;
+  --search-selected-match-background: #000080 !important;
+
+  color-scheme: light;
+  accent-color: #000080;
+  font-family: var(--fix-ado-win98-font);
+  -webkit-font-smoothing: none;
+  scrollbar-color: #767676 #dfdfdf;
+}
+
+/* ===== Top bar: a title bar with the page title, then an Address bar ===== */
+
+html[data-fix-ado-win98] :is(.project-header, .top-level-header) {
+  position: relative;
+  padding-top: 22px;
+  background: #c0c0c0;
+  box-shadow: inset 0 -1px #808080;
+  color: #000;
+
+  &::before {
+    content: attr(data-fix-ado-window-title) / "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    height: 18px;
+    padding: 0 58px 0 21px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: #fff;
+    font: 700 11px/18px var(--fix-ado-win98-font);
+    /* The icon, the minimise, maximise and close buttons, and the title gradient. */
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 18 18' shape-rendering='crispEdges'%3E%3Crect x='1' y='2' width='16' height='11' fill='%23c0c0c0' stroke='%23000'/%3E%3Crect x='3' y='4' width='12' height='7' fill='%23008080'/%3E%3Crect x='6' y='13' width='6' height='2' fill='%23808080'/%3E%3Crect x='4' y='15' width='10' height='2' fill='%23c0c0c0' stroke='%23000'/%3E%3C/svg%3E")
+        3px center / 14px no-repeat,
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='14' shape-rendering='crispEdges'%3E%3Cdefs%3E%3Cg id='b'%3E%3Crect width='16' height='14' fill='%23c0c0c0'/%3E%3Cpath d='M0 0h15v1H1v12H0z' fill='%23fff'/%3E%3Cpath d='M15 0h1v14H0v-1h15z' fill='%230a0a0a'/%3E%3Cpath d='M1 1h13v1H2v10H1z' fill='%23dfdfdf'/%3E%3Cpath d='M14 1h1v12H1v-1h13z' fill='%23808080'/%3E%3C/g%3E%3C/defs%3E%3Cuse href='%23b'/%3E%3Cuse href='%23b' x='16'/%3E%3Cuse href='%23b' x='34'/%3E%3Crect x='4' y='9' width='6' height='2'/%3E%3Cpath d='M19 2h9v9h-9zM20 4v6h7V4z' fill-rule='evenodd'/%3E%3Cpath d='M38 3h2l2 2 2-2h2l-3 3.5 3 3.5h-2l-2-2-2 2h-2l3-3.5z'/%3E%3C/svg%3E")
+        right 2px center / 50px 14px no-repeat,
+      var(--fix-ado-win98-title);
+    pointer-events: none;
+  }
+
+  :is(.region-header, .region-header-menubar) {
+    height: 28px;
+    min-height: 28px;
+    background: transparent;
+    box-shadow: none;
+    color: #000;
+    font-family: var(--fix-ado-win98-font);
+    font-size: 11px;
+  }
+
+  :is(.region-header, .region-header-menubar) > * {
+    height: 28px;
+    min-height: 0;
+  }
+
+  /* The logo becomes the Address label. */
+  .suite-logo {
+    color: #000;
+    padding: 0 4px 0 6px;
+
+    & > * {
+      display: none;
+    }
+
+    &::after {
+      content: "Address";
+    }
+  }
+
+  .region-header > .bolt-breadcrumb-with-items {
+    align-self: center;
+    height: 22px;
+    margin: 0 6px 0 2px;
+    padding: 0 4px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    align-items: center;
+  }
+
+  .bolt-breadcrumb-item-text,
+  .bolt-breadcrumb-item a {
+    color: #000;
+    font-weight: 400;
+    font-size: 11px;
+  }
+
+  .bolt-breadcrumb-divider {
+    width: auto;
+    padding: 0 1px;
+    color: #000;
+    font-size: 0;
+
+    & > * {
+      display: none;
+    }
+
+    &::before {
+      content: "\\\\";
+      font-size: 11px;
+    }
+  }
+
+  .bolt-breadcrumb .bolt-button {
+    min-height: 0;
+    padding: 0 2px;
+    background: transparent;
+    box-shadow: none;
+    font-weight: 400;
+  }
+
+  .search {
+    width: 200px;
+    height: 21px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    color: #000;
+  }
+
+  .expandable-search-header {
+    padding: 3px 0;
+  }
+}
+
+/* ===== Side bar: a Start menu pane with a banner ===== */
+
+html[data-fix-ado-win98] .navigation-container {
+  background: #c0c0c0;
+  box-shadow: var(--fix-ado-win98-raised);
+  font-size: 11px;
+
+  .project-navigation {
+    position: relative;
+    background: transparent;
+    border-right: 0;
+    color: #000;
+
+    &.expanded {
+      /* 220px with its banner, as in the design. */
+      width: 220px;
+      padding-left: 22px;
+
+      /* The banner: a gradient strip, and on it a box as long as its text, turned to read
+         upwards, 8px from the bottom. */
+      &::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        bottom: 2px;
+        left: 2px;
+        width: 22px;
+        background: linear-gradient(180deg, #000080, #1084d0);
+      }
+
+      &::before {
+        content: "Azure DevOps 98" / "";
+        position: absolute;
+        z-index: 1;
+        bottom: 10px;
+        left: 6px;
+        width: 14px;
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        color: #fff;
+        font: 700 16px/14px var(--fix-ado-win98-font);
+        white-space: nowrap;
+      }
+    }
+
+    .separator {
+      height: 2px;
+      background: transparent;
+      border-top: 1px solid #808080;
+      border-bottom: 1px solid #fff;
+    }
+  }
+
+  /* Items 24px and sub items 20px tall, with 16px icons, as in the design. */
+  .navigation-element {
+    height: 24px;
+    min-height: 0;
+    color: #000;
+
+    &.hub:not(.hub-group, .stand-alone) {
+      height: 20px;
+    }
+  }
+
+  .navigation-icon {
+    width: 32px;
+    padding: 0;
+  }
+
+  .contributed-icon-image {
+    width: 16px;
+    height: 16px;
+  }
+
+  .navigation-element {
+    &:hover,
+    &.displayed.hub,
+    &.displayed:not(:has(~ [role="menu"])) {
+      background: #000080;
+      color: #fff;
+
+      .navigation-text,
+      .contributed-icon {
+        color: #fff;
+      }
+    }
+  }
+
+  .hub-group-container.expanded-container {
+    background: transparent;
+  }
+
+  .navigation-text {
+    font-size: 11px;
+  }
+}
+
+/* The organization side bar, on organization pages such as the pull request inbox, as in the
+   PullRequestsInbox artboard: the project side bar's Start menu pane with its banner. */
+html[data-fix-ado-win98] .top-level-navigation {
+  position: relative;
+  box-sizing: border-box;
+  width: 220px;
+  min-width: 220px;
+  padding: 2px 2px 2px 24px;
+  border: 0;
+  background: #c0c0c0;
+  box-shadow: var(--fix-ado-win98-raised);
+  color: #000;
+  font-size: 11px;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    width: 22px;
+    background: linear-gradient(180deg, #000080, #1084d0);
+  }
+
+  &::before {
+    content: "Azure DevOps 98" / "";
+    position: absolute;
+    z-index: 1;
+    bottom: 10px;
+    left: 6px;
+    width: 14px;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    color: #fff;
+    font: 700 16px/14px var(--fix-ado-win98-font);
+    white-space: nowrap;
+  }
+
+  .top-level-section {
+    padding: 4px 2px 0 4px;
+  }
+
+  /* Items 24px, the organization 34px with its persona; the shown one and the hovered one navy. */
+  /* The class three times outweighs the page's blue for links: these are menu items. */
+  .top-navigation-item.top-navigation-item.top-navigation-item {
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+    min-height: 0;
+    margin: 0;
+    padding: 0 6px;
+    border: 0;
+    background: transparent;
+    color: #000;
+    font-size: 11px;
+    text-decoration: none;
+
+    &.host-link {
+      height: 34px;
+    }
+
+    &::before,
+    &::after {
+      display: none;
+    }
+
+    &:is(.displayed, :hover, :focus) {
+      background: #000080;
+      color: #fff;
+    }
+
+    .vss-Persona,
+    .fluent-icons-enabled,
+    .fluent-icons-enabled > * {
+      flex: none;
+      margin: 0;
+    }
+
+    .fluent-icons-enabled {
+      width: 16px;
+    }
+  }
+
+  /* An etched line under the organizations, and one above the footer. */
+  .action-section,
+  .navigation-footer {
+    margin: 3px 0 0;
+    padding: 5px 0 0;
+    border: 0;
+    box-shadow:
+      inset 0 1px #808080,
+      inset 0 2px #fff;
+  }
+
+  .action-section {
+    margin-top: 3px;
+  }
+
+  .navigation-footer {
+    padding: 5px 2px 4px 4px;
+  }
+}
+
+/* ===== Everywhere the look applies: controls ===== */
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body,
+html[data-fix-ado-win98]
+  :is(
+    .project-header,
+    .top-level-header,
+    .navigation-container,
+    .bolt-portal-host,
+    .fix-ado-settings
+  ) {
+  .body-s,
+  .body-m,
+  .body-l,
+  .bolt-button,
+  .bolt-tab,
+  .bolt-textfield-input,
+  .bolt-list,
+  .bolt-table {
+    font-family: var(--fix-ado-win98-font);
+    font-size: 11px;
+  }
+
+  /* Push buttons. */
+  .bolt-button,
+  .bolt-split-button-main,
+  .bolt-split-button-option {
+    /* 23px tall, as in the design; text buttons at least 75px wide. */
+    height: 23px;
+    min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+    font-weight: 400;
+
+    &:not(.icon-only, .subtle, .bolt-split-button-option, .bolt-split-button-main) {
+      min-width: 75px;
+    }
+
+    &.primary.disabled,
+    &.primary:disabled {
+      background: #c0c0c0;
+      color: #808080;
+      text-shadow: 1px 1px #fff;
+    }
+
+    &:hover {
+      background: #c0c0c0;
+    }
+
+    &:active,
+    &.active,
+    &[aria-pressed="true"],
+    &[aria-expanded="true"] {
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-pressed);
+    }
+
+    &.primary {
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-default);
+      color: #000;
+    }
+
+    /* Disabled: the normal bevel, embossed grey text, at full opacity. */
+    &.disabled,
+    &:disabled {
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+      color: #808080;
+      text-shadow: 1px 1px #fff;
+      opacity: 1;
+    }
+
+    &.subtle:not(:hover, :active, [aria-expanded="true"]) {
+      background: transparent;
+      box-shadow: none;
+    }
+
+    &.subtle:hover {
+      box-shadow: var(--fix-ado-win98-thin);
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: -4px;
+    }
+  }
+
+  /* Text fields and combo boxes. */
+  .bolt-textfield,
+  .bolt-dropdown-expandable-text-field,
+  textarea {
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    color: #000;
+
+    &.focused,
+    &:focus-within,
+    &.bolt-identitypickerdropdown-textField.focused {
+      border: 0;
+      box-shadow: var(--fix-ado-win98-sunken);
+    }
+  }
+
+  /* A one-line field is 21px tall, as in the design. */
+  .bolt-textfield:not(:has(textarea)) {
+    min-height: 21px;
+  }
+
+  .bolt-textfield-input {
+    min-height: 0;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    line-height: 15px;
+    color: #000;
+    background: transparent;
+  }
+
+  /* Checkboxes. */
+  .bolt-checkbox .bolt-checkmark {
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    color: #000;
+  }
+
+  /* Pills: status wells. */
+  .bolt-pill {
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-well);
+    color: #000;
+    font-size: 11px;
+  }
+
+  /* Avatars: square tiles. */
+  :is(.bolt-coin, .vss-Persona) {
+    border-radius: 0;
+  }
+
+  :is(.bolt-coin, .vss-Persona) img {
+    border-radius: 0;
+  }
+
+  /* Links. */
+  a.bolt-link:not(.navigation-link, .no-underline-link) {
+    color: #0000ee;
+  }
+}
+
+/* ===== Menus, callouts, panels and dialogs: on every page ===== */
+
+html[data-fix-ado-win98] .bolt-portal-host {
+  .bolt-callout-content,
+  .bolt-contextual-menu {
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-menu-shadow);
+    padding: 3px;
+    color: #000;
+  }
+
+  .bolt-menuitem-row {
+    color: #000;
+
+    &:hover,
+    &.focused {
+      background: #000080;
+      color: #fff;
+
+      /* Only the text: a vote's icon keeps its colour. */
+      :is(.bolt-menuitem-cell-text, .bolt-menuitem-cell-secondary) {
+        color: #fff;
+      }
+    }
+
+    &.disabled {
+      color: #808080;
+      text-shadow: 1px 1px #fff;
+    }
+  }
+
+  /* Win98 menu metrics, as in the Menus artboard: 20px items, a 20px icon column, no spacer
+     above or below the items, and an 8px separator with its etched line in the middle. */
+  .bolt-menu-spacer {
+    display: none;
+  }
+
+  .bolt-menuitem-row {
+    height: 20px;
+
+    & > .bolt-menuitem-cell {
+      height: 20px;
+      padding-top: 0;
+      padding-bottom: 0;
+      border: 0;
+    }
+
+    & > .bolt-menuitem-cell:first-child {
+      width: 2px;
+      min-width: 2px;
+      padding: 0;
+
+      & > .bolt-menuitem-cell-content {
+        display: none;
+      }
+    }
+  }
+
+  .bolt-menuitem-cell-icon {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .bolt-menuitem-cell-text {
+    height: 20px;
+    padding: 0 20px 0 2px;
+    align-items: center;
+  }
+
+  /* A submenu's arrow: a small black triangle pointing right, white on the highlighted item. */
+  .bolt-menuitem-cell-content:has(> .fluent-icons-enabled > .ms-Icon--ChevronRightMed) {
+    width: 16px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='7' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h1v7H0zM1 1h1v5H1zM2 2h1v3H2zM3 3h1v1H3z' fill='%23000'/%3E%3C/svg%3E")
+      center / 4px 7px no-repeat;
+
+    & > .fluent-icons-enabled {
+      visibility: hidden;
+    }
+  }
+
+  .bolt-menuitem-row:is(:hover, .focused)
+    .bolt-menuitem-cell-content:has(> .fluent-icons-enabled > .ms-Icon--ChevronRightMed) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='7' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h1v7H0zM1 1h1v5H1zM2 2h1v3H2zM3 3h1v1H3z' fill='%23fff'/%3E%3C/svg%3E");
+  }
+
+  /* The separator is a row of its own: its cells draw the etched line. */
+  .bolt-menuitem-row.bolt-menuitem-divider {
+    height: 8px;
+    border: 0;
+    background: transparent;
+
+    & > .bolt-menuitem-cell {
+      height: 8px;
+      padding: 0;
+      background: linear-gradient(transparent 3px, #808080 3px 4px, #fff 4px 5px, transparent 5px);
+    }
+
+    & > .bolt-menuitem-cell > * {
+      display: none;
+    }
+  }
+
+  .bolt-list-row.selected,
+  .bolt-list-row:hover,
+  .bolt-list-row.focused {
+    background: #000080;
+    color: #fff;
+
+    /* Icons keep their colour: a vote or status icon says something. */
+    :not(svg, svg *) {
+      color: #fff;
+    }
+  }
+
+  /* Black text, also in Azure DevOps's dark theme, whose body colour the portal inherits. */
+  .bolt-panel-callout-content,
+  .bolt-dialog-callout-content {
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-menu-shadow);
+    color: #000;
+  }
+
+  .bolt-panel-header,
+  .bolt-dialog-header {
+    margin: 3px 3px 0;
+    padding: 2px 4px;
+    background: var(--fix-ado-win98-title);
+    color: #fff;
+
+    .title-m,
+    .bolt-header-title {
+      color: #fff;
+      font: 700 11px/18px var(--fix-ado-win98-font);
+    }
+
+    .bolt-button {
+      min-width: 16px;
+      min-height: 14px;
+      padding: 0;
+    }
+  }
+
+  /* A tooltip is one yellow box: its callout drops the menu's frame, padding and shadow. */
+  .bolt-callout-content:has(.bolt-tooltip-content) {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .bolt-tooltip-content {
+    padding: 2px 4px;
+    border: 1px solid #000;
+    border-radius: 0;
+    background: #ffffe1;
+    color: #000;
+    font: 11px/14px var(--fix-ado-win98-font);
+    box-shadow: none;
+  }
+}
+
+/* ===== Captured pages: page content ===== */
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  background: #c0c0c0;
+  color: #000;
+  font-size: 11px;
+
+  .region-content,
+  .bolt-page,
+  .page-content {
+    background: #c0c0c0;
+  }
+
+  :is(.title-m, .title-s, .title-l, .bolt-header-title) {
+    font-family: var(--fix-ado-win98-font);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .monospaced-m,
+  .monospaced-s,
+  code,
+  pre {
+    font-family: var(--fix-ado-win98-mono);
+  }
+
+  /* Tabs: property sheet tabs on top of a raised panel. */
+  .bolt-tabbar-tabs {
+    align-items: flex-end;
+    padding-left: 4px;
+    border-bottom: 0;
+  }
+
+  .bolt-tab {
+    height: 20px;
+    margin-right: -1px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 3px 3px 0 0;
+    background: #c0c0c0;
+    box-shadow:
+      inset 1px 1px #fff,
+      inset -1px 0 #0a0a0a,
+      inset -2px 0 #808080;
+    color: #000;
+
+    &.selected {
+      position: relative;
+      z-index: 1;
+      height: 23px;
+      margin: 0 -1px -2px -3px;
+      padding: 0 13px;
+    }
+
+    /* After another tab it covers only that tab's 2px edge, as it covers 1px on its right. */
+    &.selected:not(:first-child) {
+      margin-left: -1px;
+    }
+
+    &::after,
+    .bolt-tab-focus-indicator,
+    .bolt-tab-underline {
+      display: none;
+    }
+  }
+
+  .bolt-tabbar {
+    border-bottom: 0;
+    box-shadow: inset 0 -1px #fff;
+  }
+
+  /* Cards: group boxes on the window face. */
+  .bolt-card,
+  .bolt-card.bolt-table-card {
+    border: 1px solid #808080;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow:
+      inset 1px 1px #fff,
+      1px 1px #fff;
+  }
+
+  .bolt-card-white,
+  .depth-8,
+  .depth-16 {
+    background: #c0c0c0;
+  }
+
+  .bolt-card .bolt-header-title {
+    font-size: 11px;
+  }
+
+  /* Tables: list views with header buttons. */
+  .bolt-table-container,
+  .bolt-table-card {
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    padding: 2px;
+  }
+
+  .bolt-table {
+    background: #fff;
+  }
+
+  .bolt-table-header-cell {
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+    font-weight: 400;
+  }
+
+  .bolt-table-row,
+  .bolt-list-row {
+    &:hover {
+      background: transparent;
+    }
+
+    &.selected {
+      background: #000080;
+      color: #fff;
+
+      :is(.secondary-text, a, .bolt-link, .text-ellipsis) {
+        color: #fff;
+      }
+    }
+  }
+
+  .bolt-table-cell {
+    border-bottom: 0;
+  }
+
+  /* Trees: +/- boxes. Win98 tree views have no hover state. */
+  .bolt-tree-expand-button {
+    color: #000;
+
+    &:hover {
+      background-color: transparent;
+    }
+  }
+
+  /* The pull request list, its sections. */
+  .repos-pr-section-header {
+    font-weight: 700;
+  }
+
+  /* Diffs and logs. */
+  .repos-diff-contents,
+  .monaco-editor,
+  .monaco-editor-background {
+    background: #fff;
+  }
+
+  /* The diff editor's gutter: Win98 grey, as in the Files artboards. */
+  .monaco-editor .margin {
+    background: #dfdfdf;
+  }
+
+  .logs-view,
+  .log-reader,
+  .run-logs-content {
+    background: #000;
+    color: #c0c0c0;
+    font-family: var(--fix-ado-win98-mono);
+  }
+
+  /* Discussion threads: small windows. */
+  .repos-discussion-thread,
+  .repos-comment-thread {
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  .repos-discussion-comment .repos-comment-viewer {
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    padding: 4px 6px;
+  }
+
+  /* Board: columns as windows on the teal desktop, cards as raised white tiles. */
+  .kanban-board-content,
+  .kanban-board {
+    background: #008080;
+  }
+
+  .kanban-board-column {
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  .kanban-board-column-header {
+    padding: 2px 4px;
+    background: var(--fix-ado-win98-title);
+    color: #fff;
+
+    /* Buttons stay grey with black text. */
+    :not(svg, svg *, .bolt-button, .bolt-button *) {
+      color: #fff;
+    }
+  }
+
+  /* A card is a raised panel on the window face, its type colour a strip inside the bevel. */
+  .wit-card {
+    border: 0;
+    border-left: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+
+    /* Only the bevel draws the card's edge: the content's own border stays, unseen. */
+    .card-content {
+      border-color: transparent;
+    }
+
+    .card-flag {
+      box-sizing: border-box;
+      border-block: 2px solid transparent;
+      background-clip: padding-box;
+      transform: translateX(2px);
+    }
+
+    /* Tags: flat white boxes with a grey line, like static fields. */
+    .tags-list .bolt-pill {
+      box-sizing: border-box;
+      padding: 0 5px;
+      border: 1px solid #808080;
+      background: #fff;
+      box-shadow: none;
+
+      .bolt-pill-content {
+        padding: 0;
+      }
+    }
+  }
+
+  /* Work item form: a window with group boxes. */
+  .work-item-form-header,
+  .work-item-form-title {
+    background: #c0c0c0;
+  }
+
+  .work-item-form-header-title-bar,
+  .witform-header {
+    background: var(--fix-ado-win98-title);
+    color: #fff;
+  }
+}
+
+/* ===== The script's own parts, as in the design's "Script ·" artboards ===== */
+
+/* Settings panel: a dialog window, on every page. */
+/* The settings button's count of new and updated features, as in the SettingsButton artboard:
+   a small yellow tag on its top right corner, over the top edge, so the puzzle piece shows. The
+   class twice outweighs the top bar's font rule. */
+html[data-fix-ado-win98] .fix-ado-settings-button .fix-ado-settings-badge.fix-ado-settings-badge {
+  top: -3px;
+  right: -1px;
+  min-width: 13px;
+  height: 11px;
+  padding: 0 2px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #ffffe1;
+  color: #000;
+  font: 700 9px/9px var(--fix-ado-win98-font);
+}
+
+/* The settings panel, as in the Settings artboards: a window whose frame is a border image, so
+   the features scroll inside it, under a title bar that stays at the top and buttons that stay
+   at the bottom. */
+html[data-fix-ado-win98] .fix-ado-settings {
+  box-sizing: border-box;
+  overflow-y: auto;
+  border: 3px solid transparent;
+  border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7' shape-rendering='crispEdges'%3E%3Crect width='7' height='7' fill='%230a0a0a'/%3E%3Cpath d='M0 0h6v1H1v5H0z' fill='%23dfdfdf'/%3E%3Crect x='1' y='1' width='5' height='5' fill='%23808080'/%3E%3Cpath d='M1 1h4v1H2v3H1z' fill='%23fff'/%3E%3Crect x='2' y='2' width='3' height='3' fill='%23c0c0c0'/%3E%3C/svg%3E")
+    3 / 3px stretch;
+  border-radius: 0;
+  padding: 0 7px 7px;
+  background: #c0c0c0;
+  box-shadow: none;
+  color: #000;
+  font: 11px/14px var(--fix-ado-win98-font);
+
+  &::backdrop {
+    background: transparent;
+  }
+
+  .fix-ado-settings-title {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: 18px;
+    margin: 0 -7px;
+    padding: 0 4px;
+    background: var(--fix-ado-win98-title);
+    color: #fff;
+    font: 700 11px/18px var(--fix-ado-win98-font);
+  }
+
+  .fix-ado-settings-category,
+  .fix-ado-settings-category + .fix-ado-settings-category {
+    position: relative;
+    margin-top: 14px;
+    padding: 12px 8px 6px;
+    border: 1px solid #808080;
+    box-shadow:
+      inset 1px 1px #fff,
+      1px 1px #fff;
+  }
+
+  .fix-ado-settings-category-name {
+    position: absolute;
+    top: -7px;
+    left: 6px;
+    margin: 0;
+    padding: 0 3px;
+    background: #c0c0c0;
+    color: #000;
+    font: 400 11px/14px var(--fix-ado-win98-font);
+  }
+
+  .fix-ado-settings-feature,
+  .fix-ado-settings-feature:hover {
+    gap: 6px;
+    border: 0;
+    border-radius: 0;
+    padding: 3px 2px;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .fix-ado-settings-feature-name {
+    font-weight: 700;
+  }
+
+  .fix-ado-settings-feature-description {
+    color: #404040;
+  }
+
+  .fix-ado-settings-checkbox {
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    margin: 1px 0 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    &:checked {
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E")
+          center / 7px 7px no-repeat,
+        #fff;
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: 2px;
+    }
+  }
+
+  /* New: tooltip yellow. Updated: the face grey, so the two read apart. The class twice
+     outweighs the 11px font rule of captured pages. */
+  .fix-ado-settings-chip.fix-ado-settings-chip {
+    margin-left: 6px;
+    border: 1px solid #000;
+    border-radius: 0;
+    padding: 0 4px;
+    background: #ffffe1;
+    color: #000;
+    font: 700 10px/12px var(--fix-ado-win98-font);
+    text-transform: uppercase;
+  }
+
+  .fix-ado-settings-chip-updated.fix-ado-settings-chip {
+    background: #c0c0c0;
+  }
+
+  /* A feature's tag, such as WIP: white, so it reads apart from New and Updated. */
+  .fix-ado-settings-chip-tag.fix-ado-settings-chip {
+    background: #fff;
+  }
+
+  /* The buttons: Save and reload page first as the default, then Cancel, as Win98 orders them. */
+  .fix-ado-settings-buttons {
+    position: sticky;
+    bottom: -7px;
+    z-index: 1;
+    gap: 6px;
+    margin: 0 -7px -7px;
+    padding: 8px 7px 7px;
+    background: #c0c0c0;
+
+    & > .primary {
+      order: -1;
+    }
+
+    & > .bolt-button:disabled {
+      box-shadow: var(--fix-ado-win98-raised);
+      color: #808080;
+      text-shadow: 1px 1px #fff;
+      opacity: 1;
+    }
+  }
+
+  .fix-ado-settings-issue-link {
+    order: -2;
+    color: #0000ee;
+    text-decoration: underline;
+  }
+}
+
+/* The review's Finish your review dialog, as in the ReviewFinish artboard: a window with a
+   title bar, a sunken comment field, the votes in a "Your vote" group box, the pending comments
+   behind a tree-view box, and Win98 buttons with Submit review as the default. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) .fix-ado-review-dialog {
+  box-sizing: border-box;
+  width: 560px;
+  border: 0;
+  border-radius: 0;
+  padding: 3px 10px 10px;
+  background: #c0c0c0;
+  box-shadow: var(--fix-ado-win98-window);
+  color: #000;
+  font: 11px/14px var(--fix-ado-win98-font);
+
+  &::backdrop {
+    background: transparent;
+  }
+
+  .fix-ado-review-title {
+    height: 18px;
+    margin: 0 -7px 8px;
+    padding: 0 4px;
+    background: var(--fix-ado-win98-title);
+    color: #fff;
+    font: 700 11px/18px var(--fix-ado-win98-font);
+  }
+
+  .fix-ado-review-textarea {
+    display: block;
+    box-sizing: border-box;
+    height: 80px;
+    min-height: 0;
+    padding: 4px 5px;
+    font: 11px/14px var(--fix-ado-win98-font);
+
+    &::placeholder {
+      color: #808080;
+      opacity: 1;
+    }
+  }
+
+  .fix-ado-review-votes {
+    position: relative;
+    gap: 6px;
+    min-width: 0;
+    margin: 14px 0 0;
+    padding: 13px 8px 8px;
+    border: 1px solid #808080;
+    box-shadow:
+      inset 1px 1px #fff,
+      1px 1px #fff;
+
+    & > legend {
+      position: absolute;
+      top: -8px;
+      left: 6px;
+      inline-size: auto;
+      block-size: auto;
+      padding: 0 3px;
+      overflow: visible;
+      clip-path: none;
+      background: #c0c0c0;
+    }
+  }
+
+  .fix-ado-review-vote {
+    gap: 6px;
+  }
+
+  .fix-ado-review-vote input[type="radio"] {
+    appearance: none;
+    flex: none;
+    width: 12px;
+    height: 12px;
+    margin: 1px 0 0;
+    border: 0;
+    border-radius: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath fill='%23808080' d='M4 0h4v1H4zM2 1h2v1H2zM8 1h2v1H8zM1 2h1v1H1zM1 3h1v1H1zM0 4h1v1H0zM0 5h1v1H0zM0 6h1v1H0zM0 7h1v1H0zM1 8h1v1H1zM1 9h1v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M4 1h4v1H4zM2 2h2v1H2zM8 2h2v1H8zM2 3h1v1H2zM1 4h1v1H1zM1 5h1v1H1zM1 6h1v1H1zM1 7h1v1H1zM2 8h1v1H2z'/%3E%3Cpath fill='%23fff' d='M4 2h4v1H4zM10 2h1v1H10zM3 3h6v1H3zM10 3h1v1H10zM2 4h8v1H2zM11 4h1v1H11zM2 5h8v1H2zM11 5h1v1H11zM2 6h8v1H2zM11 6h1v1H11zM2 7h8v1H2zM11 7h1v1H11zM3 8h6v1H3zM10 8h1v1H10zM4 9h4v1H4zM10 9h1v1H10zM2 10h2v1H2zM8 10h2v1H8zM4 11h4v1H4z'/%3E%3Cpath fill='%23dfdfdf' d='M9 3h1v1H9zM10 4h1v1H10zM10 5h1v1H10zM10 6h1v1H10zM10 7h1v1H10zM9 8h1v1H9zM2 9h2v1H2zM8 9h2v1H8zM4 10h4v1H4z'/%3E%3C/svg%3E")
+      0 0 / 12px no-repeat;
+    box-shadow: none;
+
+    &:checked {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath fill='%23808080' d='M4 0h4v1H4zM2 1h2v1H2zM8 1h2v1H8zM1 2h1v1H1zM1 3h1v1H1zM0 4h1v1H0zM0 5h1v1H0zM0 6h1v1H0zM0 7h1v1H0zM1 8h1v1H1zM1 9h1v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M4 1h4v1H4zM2 2h2v1H2zM8 2h2v1H8zM2 3h1v1H2zM1 4h1v1H1zM1 5h1v1H1zM1 6h1v1H1zM1 7h1v1H1zM2 8h1v1H2z'/%3E%3Cpath fill='%23fff' d='M4 2h4v1H4zM10 2h1v1H10zM3 3h6v1H3zM10 3h1v1H10zM2 4h3v1H2zM7 4h3v1H7zM11 4h1v1H11zM2 5h2v1H2zM8 5h2v1H8zM11 5h1v1H11zM2 6h2v1H2zM8 6h2v1H8zM11 6h1v1H11zM2 7h3v1H2zM7 7h3v1H7zM11 7h1v1H11zM3 8h6v1H3zM10 8h1v1H10zM4 9h4v1H4zM10 9h1v1H10zM2 10h2v1H2zM8 10h2v1H8zM4 11h4v1H4z'/%3E%3Cpath fill='%23dfdfdf' d='M9 3h1v1H9zM10 4h1v1H10zM10 5h1v1H10zM10 6h1v1H10zM10 7h1v1H10zM9 8h1v1H9zM2 9h2v1H2zM8 9h2v1H8zM4 10h4v1H4z'/%3E%3Cpath fill='%23000' d='M5 4h2v1H5zM4 5h4v1H4zM4 6h4v1H4zM5 7h2v1H5z'/%3E%3C/svg%3E");
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: 1px;
+    }
+  }
+
+  .fix-ado-review-pending-list > summary {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 14px;
+    margin-top: 10px;
+    list-style: none;
+    font-weight: 700;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::before {
+      content: "";
+      flex: none;
+      width: 9px;
+      height: 9px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2zM4 2h1v5H4z'/%3E%3C/svg%3E")
+        0 0 / 9px no-repeat;
+    }
+  }
+
+  .fix-ado-review-pending-list[open] > summary::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2z'/%3E%3C/svg%3E");
+  }
+
+  .fix-ado-review-pending-item {
+    margin: 6px 0 0 14px;
+    padding: 0;
+    border: 0;
+
+    .fix-ado-review-card-text {
+      margin-top: 2px;
+    }
+  }
+
+  .fix-ado-review-status {
+    margin: 10px 0 0;
+    min-height: 0;
+    color: #800000;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  /* Save your edits?: a Win98 message box, its buttons centred as Yes, No, Cancel. */
+  &.fix-ado-review-unsaved {
+    width: 360px;
+
+    /* 14px below the title bar: this margin and the title's 8px collapse into one. */
+    & > p {
+      margin: 14px 4px 0;
+    }
+
+    .fix-ado-review-buttons {
+      justify-content: center;
+      margin-top: 14px;
+
+      & > :first-child {
+        order: 1;
+      }
+    }
+  }
+
+  /* Sending: the progress in black, every control greyed out as Win98 disables it. */
+  &[aria-busy] {
+    .fix-ado-review-status {
+      color: #000;
+    }
+
+    .fix-ado-review-textarea {
+      background: #c0c0c0;
+    }
+
+    .fix-ado-review-vote input[type="radio"] {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath fill='%23808080' d='M4 0h4v1H4zM2 1h2v1H2zM8 1h2v1H8zM1 2h1v1H1zM1 3h1v1H1zM0 4h1v1H0zM0 5h1v1H0zM0 6h1v1H0zM0 7h1v1H0zM1 8h1v1H1zM1 9h1v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M4 1h4v1H4zM2 2h2v1H2zM8 2h2v1H8zM2 3h1v1H2zM1 4h1v1H1zM1 5h1v1H1zM1 6h1v1H1zM1 7h1v1H1zM2 8h1v1H2z'/%3E%3Cpath fill='%23c0c0c0' d='M4 2h4v1H4zM3 3h6v1H3zM2 4h8v1H2zM2 5h8v1H2zM2 6h8v1H2zM2 7h8v1H2zM3 8h6v1H3zM4 9h4v1H4z'/%3E%3Cpath fill='%23fff' d='M10 2h1v1H10zM10 3h1v1H10zM11 4h1v1H11zM11 5h1v1H11zM11 6h1v1H11zM11 7h1v1H11zM10 8h1v1H10zM10 9h1v1H10zM2 10h2v1H2zM8 10h2v1H8zM4 11h4v1H4z'/%3E%3Cpath fill='%23dfdfdf' d='M9 3h1v1H9zM10 4h1v1H10zM10 5h1v1H10zM10 6h1v1H10zM10 7h1v1H10zM9 8h1v1H9zM2 9h2v1H2zM8 9h2v1H8zM4 10h4v1H4z'/%3E%3C/svg%3E");
+
+      &:checked {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath fill='%23808080' d='M4 0h4v1H4zM2 1h2v1H2zM8 1h2v1H8zM1 2h1v1H1zM1 3h1v1H1zM0 4h1v1H0zM5 4h2v1H5zM0 5h1v1H0zM4 5h4v1H4zM0 6h1v1H0zM4 6h4v1H4zM0 7h1v1H0zM5 7h2v1H5zM1 8h1v1H1zM1 9h1v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M4 1h4v1H4zM2 2h2v1H2zM8 2h2v1H8zM2 3h1v1H2zM1 4h1v1H1zM1 5h1v1H1zM1 6h1v1H1zM1 7h1v1H1zM2 8h1v1H2z'/%3E%3Cpath fill='%23c0c0c0' d='M4 2h4v1H4zM3 3h6v1H3zM2 4h3v1H2zM7 4h3v1H7zM2 5h2v1H2zM8 5h2v1H8zM2 6h2v1H2zM8 6h2v1H8zM2 7h3v1H2zM7 7h3v1H7zM3 8h6v1H3zM4 9h4v1H4z'/%3E%3Cpath fill='%23fff' d='M10 2h1v1H10zM10 3h1v1H10zM11 4h1v1H11zM11 5h1v1H11zM11 6h1v1H11zM11 7h1v1H11zM10 8h1v1H10zM10 9h1v1H10zM2 10h2v1H2zM8 10h2v1H8zM4 11h4v1H4z'/%3E%3Cpath fill='%23dfdfdf' d='M9 3h1v1H9zM10 4h1v1H10zM10 5h1v1H10zM10 6h1v1H10zM10 7h1v1H10zM9 8h1v1H9zM2 9h2v1H2zM8 9h2v1H8zM4 10h4v1H4z'/%3E%3C/svg%3E");
+      }
+    }
+
+    :is(.fix-ado-review-vote, .fix-ado-review-vote .secondary-text, .bolt-button) {
+      color: #808080;
+      text-shadow: 1px 1px #fff;
+    }
+  }
+
+  .fix-ado-review-dialog-buttons {
+    margin-top: 14px;
+  }
+
+  .fix-ado-review-buttons {
+    gap: 6px;
+    margin: 0;
+
+    & > .primary {
+      order: -1;
+    }
+  }
+}
+
+/* Everything below is page content, so only on captured pages. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* Pipeline tab, as in the PipelineTab artboard: a sunken tree view beside the log window.
+     Start new run sits on a grey toolbar strip at the top of the tree, which scrolls with it. */
+  .fix-ado-pipeline-tree {
+    gap: 0;
+    padding: 3px;
+    background:
+      linear-gradient(#c0c0c0 0 0) 0 0 / 100% 31px no-repeat local,
+      linear-gradient(#808080 0 0) 0 31px / 100% 1px no-repeat local,
+      #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    & > .fix-ado-pipeline-run-action {
+      flex: none;
+      align-self: flex-start;
+      margin: 2px 2px 6px;
+    }
+  }
+
+  .fix-ado-pipeline-stages,
+  .fix-ado-pipeline-jobs,
+  .fix-ado-pipeline-steps {
+    gap: 0;
+  }
+
+  /* A run is two lines; a dotted line stands between runs. */
+  .fix-ado-pipeline-run.fix-ado-pipeline-run {
+    margin-top: 0;
+    padding: 4px 6px 2px;
+    border-top: 0;
+
+    /* Bold only when picked, as below. */
+    &:not([aria-current="true"]) .fix-ado-pipeline-item-name {
+      font-weight: 400;
+    }
+  }
+
+  .fix-ado-pipeline-run ~ .fix-ado-pipeline-run.fix-ado-pipeline-run {
+    margin-top: 4px;
+    border-top: 1px dotted #808080;
+  }
+
+  /* A row: a +/- box on a run, stage or job that opens and closes, the status icon, the label.
+     Rows without children keep the box's room, so icons line up. */
+  .fix-ado-pipeline-item {
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 0;
+    font-size: 11px;
+
+    &::before {
+      content: "";
+      flex: none;
+      width: 9px;
+      height: 9px;
+    }
+
+    &[aria-expanded="true"]::before {
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2z'/%3E%3C/svg%3E")
+        0 0 / 9px no-repeat;
+    }
+
+    &[aria-expanded="false"]::before {
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2zM4 2h1v5H4z'/%3E%3C/svg%3E")
+        0 0 / 9px no-repeat;
+    }
+
+    &:hover {
+      background: transparent;
+    }
+
+    .fix-ado-pipeline-item-text {
+      padding: 0 2px;
+    }
+
+    /* The picked run, stage and job are bold; the deepest pick's label is navy, as in a
+       Win98 tree view, which highlights the label and not the row. */
+    &[aria-current="true"] {
+      background: transparent;
+      box-shadow: none;
+
+      .fix-ado-pipeline-item-name {
+        font-weight: 700;
+      }
+    }
+
+    &[aria-current="true"]:not(
+        :has(
+          ~ :is(.fix-ado-pipeline-stages, .fix-ado-pipeline-jobs, .fix-ado-pipeline-steps)
+            [aria-current="true"]
+        )
+      ) {
+      .fix-ado-pipeline-item-text {
+        background: #000080;
+        color: #fff;
+      }
+
+      .fix-ado-pipeline-item-name {
+        font-weight: 400;
+      }
+
+      .fix-ado-pipeline-item-details {
+        color: #fff;
+      }
+    }
+
+    &:focus-visible {
+      outline: 0;
+
+      .fix-ado-pipeline-item-text {
+        outline: 1px dotted #000;
+        outline-offset: -1px;
+      }
+    }
+  }
+
+  .fix-ado-pipeline-item-details {
+    color: #404040;
+    font-size: 11px;
+    font-weight: 400;
+  }
+
+  /* Cancel current run: a plain raised button; Win98 has no red ones. Starting… and
+     Cancelling… are greyed out as Win98 disables a button. */
+  .fix-ado-pipeline-run-action.danger {
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+  }
+
+  .fix-ado-pipeline-run-action:is(.disabled, :disabled) {
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #808080;
+    text-shadow: 1px 1px #fff;
+  }
+
+  /* With several checks, the button opens a drop-down list under it. */
+  .fix-ado-pipeline-run-action-choices {
+    flex: none;
+    gap: 0;
+    margin: 0 2px 6px;
+    padding: 1px;
+    border: 1px solid #000;
+    background: #fff;
+
+    .fix-ado-pipeline-item {
+      padding: 2px 4px;
+
+      &::before {
+        content: none;
+      }
+    }
+  }
+
+  /* Notes in the tree: under the button when Azure DevOps refused, in maroon; under a run
+     while its stages load, indented as stages are. */
+  .fix-ado-pipeline-note {
+    flex: none;
+    padding: 2px 6px;
+    color: #404040;
+    font-size: 11px;
+
+    &[role="alert"] {
+      color: #800000;
+    }
+  }
+
+  .fix-ado-pipeline-run + .fix-ado-pipeline-note {
+    padding-left: 22px;
+  }
+
+  /* A message in place of the whole panel: an empty Win98 list view holding the text. */
+  .fix-ado-pipeline-panel > .fix-ado-pipeline-message {
+    grid-row: 1 / -1;
+    margin: 0;
+    padding: 4px 6px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    color: #000;
+    font-size: 11px;
+
+    &[role="alert"] {
+      color: #800000;
+    }
+  }
+
+  /* While there is no step to show, the console holds the note. */
+  .fix-ado-pipeline-panel > .fix-ado-pipeline-log-note {
+    margin: 0;
+    padding: 4px 6px;
+    border: 1px solid;
+    border-color: #0a0a0a #dfdfdf #dfdfdf #0a0a0a;
+    background: #000;
+    box-shadow:
+      -1px -1px #808080,
+      1px 1px #fff;
+    color: #c0c0c0;
+    font-size: 11px;
+  }
+
+  /* The warnings and errors above the log close with a tree-view +/- box. */
+  .fix-ado-issue-box-collapse.bolt-button.bolt-button {
+    flex: none;
+    width: 9px;
+    min-width: 9px;
+    height: 9px;
+    margin: 0;
+    padding: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2z'/%3E%3C/svg%3E")
+      0 0 / 9px no-repeat;
+    box-shadow: none;
+
+    &[aria-expanded="false"] {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2zM4 2h1v5H4z'/%3E%3C/svg%3E");
+    }
+
+    & > * {
+      display: none;
+    }
+  }
+
+  /* The log: a sunken frame. */
+  .fix-ado-pipeline-frame {
+    border: 1px solid;
+    border-color: #0a0a0a #dfdfdf #dfdfdf #0a0a0a;
+    box-shadow:
+      -1px -1px #808080,
+      1px 1px #fff;
+  }
+
+  /* Warning and error counts: tooltip-yellow chips. */
+  .fix-ado-issue-count {
+    border: 1px solid #000;
+    border-radius: 0;
+    padding: 0 4px;
+    background: #ffffe1;
+    color: #000;
+    font-weight: 700;
+  }
+
+  /* The warnings and errors box: a group box around a sunken list. */
+  .fix-ado-issue-box {
+    border: 1px solid #808080;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow:
+      inset 1px 1px #fff,
+      1px 1px #fff;
+
+    & > table {
+      background: #fff;
+      box-shadow: var(--fix-ado-win98-sunken);
+    }
+  }
+
+  .fix-ado-issue:hover {
+    background: transparent;
+  }
+
+  .fix-ado-issue-output {
+    font-family: var(--fix-ado-win98-mono);
+  }
+
+  /* Go to first unread: the default button while something is unread, greyed out when not. */
+  .bolt-button.fix-ado-first-unread:not(:disabled) {
+    box-shadow: var(--fix-ado-win98-default);
+    font-weight: 700;
+  }
+
+  /* Unread comments: one tooltip-yellow box with a black outline per group. The class keeps the
+     yellow over the threads' transparent comments further down. */
+  .repos-comment-viewer[data-fix-ado-unread],
+  [data-fix-ado-unread] .repos-comment-viewer {
+    background: #ffffe1;
+  }
+
+  /* The box reaches 2px past the comments, so the coins keep a yellow edge before the outline. */
+  .repos-comment-viewer[data-fix-ado-unread] {
+    box-shadow: 0 0 0 2px #ffffe1;
+  }
+
+  [data-fix-ado-unread]::after {
+    left: -2px;
+    right: -2px;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px #000;
+  }
+
+  [data-fix-ado-unread="first"]::after {
+    top: -2px;
+  }
+
+  [data-fix-ado-unread="last"]::after {
+    bottom: -2px;
+  }
+
+  [data-fix-ado-unread="only"]::after {
+    inset: -2px;
+  }
+
+  /* Go to next unread: a push button at the bottom right of its group, not a bar across it. */
+  .bolt-button.fix-ado-next-unread {
+    width: auto;
+    margin: 8px 6px 6px auto;
+  }
+
+  /* Azure DevOps's unread dot: the yellow box says it, and the dot's margin moved the time. */
+  .repos-unread-comment-marker {
+    display: none;
+  }
+
+  /* An open thread without a file header: its first comment header is its navy title bar. */
+  [data-fix-ado-thread="open"]:not(.comment-file-header + *)
+    > .repos-comment-viewer:first-child
+    > .repos-discussion-comment
+    .repos-discussion-comment-header {
+    margin: 0 0 6px;
+    padding: 1px 3px;
+    background: var(--fix-ado-win98-title);
+    color: #fff;
+    font-weight: 700;
+
+    :not(.bolt-button, .bolt-button *, .bolt-pill, .bolt-pill *, svg, svg *) {
+      color: #fff;
+    }
+
+    .bolt-button {
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+      color: #000;
+    }
+  }
+
+  /* Fold toggles on threads and pushes: a small +/- box. */
+  /* .subtle matches the specificity of the flat-button rule above, so this one wins. */
+  .bolt-button.subtle:is(.fix-ado-thread-toggle, .fix-ado-push-toggle) {
+    width: 13px;
+    min-width: 0;
+    height: 13px;
+    min-height: 0;
+    padding: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+
+    & > * {
+      display: none;
+    }
+
+    &::before {
+      content: "+" / "";
+      color: #000;
+      font: 700 11px/11px var(--fix-ado-win98-mono);
+    }
+
+    &[aria-expanded="true"]::before {
+      content: "\\2212" / "";
+    }
+  }
+
+  /* Folded pushes: a plain line in the feed, no box. */
+  [data-fix-ado-push="folded"],
+  [data-fix-ado-push="folded"] .iteration-card-header {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Thread chips: status wells, Unresolved in bold. */
+  .bolt-pill.fix-ado-thread-chip {
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-thin);
+    color: #000;
+    font-weight: 400;
+  }
+
+  .bolt-pill.fix-ado-unresolved-chip {
+    font-weight: 700;
+
+    .bolt-pill-content {
+      font-weight: inherit;
+    }
+  }
+
+  /* Scroll to bottom: a square push button. */
+  .fix-ado-scroll-to-bottom,
+  .fix-ado-scroll-to-bottom:hover {
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+  }
+
+  /* Stars: a flat toolbar button that raises on hover; yellow when starred. */
+  .fix-ado-star {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+
+    &:hover {
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-thin);
+    }
+
+    &[aria-pressed="true"] .fix-ado-star-icon path {
+      fill: #ffd800;
+      stroke: #000;
+    }
+  }
+
+  .fix-ado-starred-empty {
+    padding: 8px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    color: #404040;
+  }
+
+  /* Required reviewers in a list: a black frame, then a gap before the optional ones. */
+  .pr-reviewer[data-fix-ado-required] :is(.bolt-coin, [data-fix-ado-initials]) {
+    outline: 2px solid #000;
+    outline-offset: 1px;
+  }
+
+  [data-fix-ado-reviewers]
+    > .pr-reviewer[data-fix-ado-required]
+    + .pr-reviewer:not([data-fix-ado-required]) {
+    margin-left: 6px;
+  }
+
+  /* Review: a pending comment is a small inactive window, as in the ReviewPending artboard.
+     Its title bar holds the yellow PENDING tag and Edit and Delete comment as caption buttons;
+     the comment sits in a yellow sunken well, the note under it. The header's parts are
+     placed on the card's grid, so the title bar is painted on the card. */
+  .fix-ado-review-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    grid-template-rows: 18px auto auto;
+    column-gap: 2px;
+    border: 0;
+    border-radius: 0;
+    padding: 3px;
+    background:
+      var(--fix-ado-win98-title-off) 3px 3px / calc(100% - 6px) 18px no-repeat,
+      #c0c0c0;
+    box-shadow: var(--fix-ado-win98-window);
+  }
+
+  .fix-ado-review-card-header {
+    display: contents;
+
+    .fix-ado-review-pending {
+      grid-area: 1 / 1;
+      align-self: center;
+      height: 14px;
+      margin-left: 2px;
+      padding: 0 4px;
+      font-size: 10px;
+      line-height: 12px;
+    }
+
+    .fix-ado-review-card-note {
+      grid-area: 3 / 1 / 4 / -1;
+      margin: 4px 3px 3px;
+      color: #404040;
+      font-size: 11px;
+      font-weight: 400;
+    }
+
+    & > .bolt-button.bolt-button {
+      grid-row: 1;
+      align-self: center;
+      width: 16px;
+      min-width: 16px;
+      height: 14px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #c0c0c0
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='14' shape-rendering='crispEdges'%3E%3Cpath d='M10 3h1v1h-1zM11 3h1v1h-1zM9 4h1v1h-1zM11 4h1v1h-1zM8 5h1v1h-1zM10 5h1v1h-1zM7 6h1v1h-1zM9 6h1v1h-1zM6 7h1v1h-1zM8 7h1v1h-1zM5 8h1v1h-1zM6 8h1v1h-1zM7 8h1v1h-1zM5 9h1v1h-1zM6 9h1v1h-1z'/%3E%3C/svg%3E")
+        0 0 / 16px 14px no-repeat;
+      box-shadow: var(--fix-ado-win98-raised);
+      font-size: 0;
+
+      &:active {
+        background-position: 1px 1px;
+        box-shadow: var(--fix-ado-win98-pressed);
+      }
+    }
+
+    & > [data-fix-ado-review-action="edit"] {
+      grid-column: 3;
+    }
+
+    & > [data-fix-ado-review-action="remove"].bolt-button {
+      grid-column: 4;
+      margin-right: 2px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='14' shape-rendering='crispEdges'%3E%3Cpath d='M4 3h2l2 2 2-2h2l-3 3.5 3 3.5h-2l-2-2-2 2H4l3-3.5z'/%3E%3C/svg%3E");
+    }
+  }
+
+  :is(.fix-ado-review-card-text, .fix-ado-review-card-editor) {
+    grid-area: 2 / 1 / 3 / -1;
+    margin: 6px 3px 0;
+  }
+
+  .fix-ado-review-card-text {
+    padding: 4px 6px;
+    background: #ffffe1;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  .fix-ado-review-card-editor {
+    .fix-ado-review-textarea {
+      display: block;
+      height: 80px;
+      min-height: 0;
+      padding: 4px 5px;
+      font: 11px/14px var(--fix-ado-win98-font);
+    }
+
+    .fix-ado-review-buttons {
+      gap: 6px;
+      margin-top: 6px;
+
+      & > .primary {
+        order: -1;
+      }
+    }
+  }
+
+  :is(.fix-ado-review-pending, .fix-ado-review-count) {
+    border: 1px solid #000;
+    border-radius: 0;
+    padding: 0 5px;
+    background: #ffffe1;
+    color: #000;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .fix-ado-review-pending-dot {
+    border-radius: 0;
+    background: #ffffe1;
+    box-shadow: inset 0 0 0 1px #000;
+  }
+
+  /* A pending comment's row in the Files tree, as in the ReviewTree artboard: its dot where a
+     thread row has its author's coin, and as tall as that row. */
+  .fix-ado-review-tree-indent {
+    width: 16px;
+  }
+
+  .fix-ado-review-tree-row .repos-file-explorer-tree-thread-item {
+    height: 20px;
+  }
+
+  /* The pending comments in this file, over the single-file view's editor, as in the
+     ReviewFileList artboards: a small floating window whose title bar opens and closes it
+     with a tree-view box. */
+  .fix-ado-review-file-pending {
+    border: 0;
+    border-radius: 0;
+    padding: 3px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-menu-shadow);
+    color: #000;
+    font: 11px/14px var(--fix-ado-win98-font);
+
+    & > summary {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 18px;
+      padding: 0 4px;
+      list-style: none;
+      background: var(--fix-ado-win98-title);
+      color: #fff;
+      font-weight: 700;
+      white-space: nowrap;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+
+      &::before {
+        content: "";
+        flex: none;
+        width: 9px;
+        height: 9px;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2zM4 2h1v5H4z'/%3E%3C/svg%3E")
+          0 0 / 9px no-repeat;
+      }
+    }
+
+    &[open] > summary::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2z'/%3E%3C/svg%3E");
+    }
+
+    .fix-ado-review-card {
+      margin: 3px 0 0;
+    }
+  }
+
+  .fix-ado-review-textarea {
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  /* Published since, too long ago: dark red and bold. */
+  .fix-ado-published-since-too-long {
+    color: #a00000;
+    font-weight: 700;
+  }
+
+  /* Avatar initials: square tiles with a 1px bevel. */
+  [data-fix-ado-initials] {
+    border-radius: 0;
+    box-shadow:
+      inset 1px 1px rgba(255, 255, 255, 0.55),
+      inset -1px -1px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Days in column: a progress bar. A 6x5 segment per day in a sunken white track, navy, then
+     olive once aging, then maroon once old; sunken while they load. The track takes no room of
+     its own, so the card keeps its height. */
+  .fix-ado-days-in-column {
+    gap: 2px;
+    margin: 4px -2px -2px;
+    padding: 2px;
+    background: #fff;
+    box-shadow:
+      inset 1px 1px #808080,
+      inset -1px -1px #fff;
+  }
+
+  .fix-ado-days-in-column > span {
+    width: 6px;
+    border-radius: 0;
+    background: #000080;
+  }
+
+  .fix-ado-days-in-column > span[data-age="aging"] {
+    background: #808000;
+  }
+
+  .fix-ado-days-in-column > span[data-age="old"] {
+    background: #800000;
+  }
+
+  .fix-ado-days-in-column > span[data-age="loading"] {
+    background: #dfdfdf;
+    box-shadow: inset 1px 1px #808080;
+  }
+
+  /* The days toggle, as in the DaysInColumn artboard: a 16x14 caption button in the column's
+     title bar, pressed in while the dots show. Caption buttons always show in Win98, so it
+     does not wait for the pointer. */
+  .kanban-board-column-header .fix-ado-days-toggle {
+    justify-content: center;
+    gap: 1px;
+    width: 16px;
+    height: 14px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    opacity: 1;
+
+    & > span {
+      width: 2px;
+      height: 2px;
+      border-radius: 0;
+      background: #000;
+      box-shadow: none;
+    }
+
+    &[aria-pressed="true"] {
+      padding: 1px 0 0 1px;
+      box-shadow: var(--fix-ado-win98-pressed);
+    }
+
+    &[aria-pressed="false"] > span {
+      background: #808080;
+    }
+  }
+}
+
+/* ===== Fonts on captured pages, found by measuring the win98 captures ===== */
+
+/* Many of Azure DevOps's classes set their own font and size, so the body's font does not reach
+   them. Every text gets the Win98 font at 11px, except icons, which are fonts too, and the code
+   editor, whose cursor depends on its own font. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
+  body
+  :not(
+    svg,
+    svg *,
+    .fabric-icon,
+    [class*="ms-Icon"],
+    [class*="bowtie"],
+    .monaco-editor,
+    .monaco-editor *,
+    :is(h1, h2, h3, .title-s, .title-m, .title-l, .bolt-header-title),
+    :is(h1, h2, h3, .title-s, .title-m, .title-l, .bolt-header-title) *,
+    .bolt-breadcrumb-divider
+  ) {
+  font-family: var(--fix-ado-win98-font);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+/* Headings: 13px bold. The script's dialogs keep their 11px: a title is a title bar there,
+   a group name a group box label. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
+  body
+  :is(h1, h2, h3, .title-s, .title-m, .title-l, .bolt-header-title):not(
+    .monaco-editor *,
+    .fix-ado-review-dialog *,
+    .fix-ado-settings *
+  ) {
+  font-family: var(--fix-ado-win98-font);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+/* Code, diffs and logs: Courier New. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
+  body
+  :is(
+    [class*="monospaced"],
+    [class*="monospaced"] *,
+    code,
+    pre,
+    kbd,
+    samp,
+    .repos-line-content,
+    .repos-line-content *,
+    .token,
+    [class*="prism"],
+    .logs-view .pl-reader,
+    .logs-view .pl-reader *
+  ):not(.monaco-editor *) {
+  font-family: var(--fix-ado-win98-mono);
+  font-size: 12px;
+}
+
+/* ===== Focus, pickers and suggestion lists ===== */
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* A field shows its caret when it has focus, no coloured border, as in Win98. */
+  .bolt-tag-picker,
+  .bolt-tag-picker.edit,
+  .bolt-tag-picker.focused {
+    border: 0;
+    border-radius: 0;
+    animation: none;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  .fix-ado-review-textarea:focus,
+  .bolt-textfield-input:focus,
+  textarea:focus {
+    border-color: transparent;
+    outline: none;
+  }
+
+  /* The star picker: a small window with a title bar around the search field and its list. */
+  .fix-ado-star-picker {
+    position: relative;
+    padding: 24px 6px 6px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+
+    &::before {
+      content: "Add person/group to starred" / "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      right: 3px;
+      height: 18px;
+      padding: 0 4px;
+      background: var(--fix-ado-win98-title);
+      color: #fff;
+      font: 700 11px/18px var(--fix-ado-win98-font);
+    }
+  }
+
+  /* Suggestion lists, such as the reviewer search and the star picker: a sunken white list
+     whose picked row is navy. */
+  .bolt-suggestions-container {
+    background: #fff;
+  }
+
+  :is(.bolt-suggestions-container, .bolt-callout) .bolt-list-row {
+    &:hover,
+    &.selected,
+    &.focused {
+      background: #000080;
+      color: #fff;
+
+      :not(svg, svg *, [data-fix-ado-initials], .bolt-coin, .vss-Persona) {
+        color: #fff;
+      }
+    }
+  }
+}
+
+/* Callouts outside the portal, such as the star picker's list: square corners. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body .bolt-callout-content {
+  border-radius: 0;
+}
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* Azure DevOps pulses a ring around a focused field. Its animation overrides the sunken
+     bevel while it runs, and Win98 shows focus with the caret only. */
+  .bolt-textfield.focused,
+  .focus-treatment:focus,
+  .focus-treatment.focused {
+    animation: none;
+  }
+
+  /* Tabs are never bold, the selected one neither, as in the design. */
+  .bolt-tabbar .bolt-tab,
+  .bolt-tabbar .bolt-tab .bolt-tab-text {
+    font-weight: 400;
+  }
+}
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* One-line inputs fit the 21px field. */
+  input.bolt-textfield-input {
+    height: 17px;
+    /* Azure DevOps gives an empty combo box input 29px with !important. */
+    min-height: 0 !important;
+  }
+
+  /* A combo box's arrow is a raised button on the right of the field. */
+  .bolt-dropdown-expandable-text-field > .fluent-icons-enabled:last-child {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    margin-right: 2px;
+    background: #c0c0c0;
+    box-shadow:
+      inset -1px -1px #0a0a0a,
+      inset 1px 1px #dfdfdf,
+      inset -2px -2px #808080,
+      inset 2px 2px #fff;
+    color: #000;
+  }
+}
+
+/* ===== Pull request list and inbox, as in the design's "Pull request list" artboard ===== */
+
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body {
+  .bolt-page {
+    padding: 12px 16px;
+  }
+
+  /* The page's own header: the title, then its buttons on the right. */
+  .bolt-page > .bolt-header {
+    height: 33px;
+    margin: 0;
+    padding: 0 0 10px;
+    align-items: center;
+
+    .bolt-header-title {
+      padding: 0;
+    }
+
+    .bolt-header-commandbar,
+    .bolt-header-commandbar-button-group {
+      margin: 0;
+      padding: 0;
+      gap: 6px;
+    }
+  }
+
+  /* The tabs, with the filter button at their right. */
+  .bolt-page > .bolt-tabbar {
+    position: static;
+    height: 23px;
+    min-height: 0;
+    margin: 0;
+    padding: 0 0 0 4px;
+    align-items: flex-end;
+    box-shadow: none;
+
+    .bolt-tabbar-tabs {
+      height: 23px;
+      padding: 0;
+    }
+
+    .bolt-header-commandbar {
+      margin: 0 0 2px;
+      padding: 0;
+    }
+  }
+
+  /* The tab panel: raised, holding the sections. */
+  .page-content {
+    flex: 1;
+    margin: 0;
+    padding: 14px 12px 12px;
+    gap: 14px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+
+    & > * + * {
+      margin-top: 0;
+    }
+  }
+
+  /* A section: a sunken white list with a raised header bar. */
+  .repos-pr-section-card {
+    margin: 0;
+    padding: 2px;
+    border: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    /* The header row; a list without sections, as on the Active tab, has none. */
+    & > .flex-row:first-child:not(.bolt-card-content) {
+      height: 34px;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-thin);
+    }
+
+    &:has(.repos-pr-section-tabs) > .flex-row:first-child:not(.bolt-card-content) {
+      height: 46px;
+      align-items: flex-end;
+      padding-bottom: 4px;
+    }
+
+    .repos-pr-section-expand-button {
+      align-self: center;
+      margin: 0;
+    }
+
+    .repos-pr-section-header {
+      padding: 0;
+      margin: 0;
+    }
+
+    .repos-pr-section-header .bolt-header-title {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 0;
+    }
+
+    .bolt-card-content {
+      padding: 0;
+    }
+
+    .bolt-card-content > * {
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* The expand button: the design's +/- box, before the title. */
+    .bolt-button.repos-pr-section-expand-button {
+      width: 13px;
+      min-width: 0;
+      height: 13px;
+      padding: 0;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+
+      & > * {
+        display: none;
+      }
+
+      &::before {
+        content: "\\2212" / "";
+        color: #000;
+        font: 700 11px/11px var(--fix-ado-win98-mono);
+      }
+
+      &[aria-expanded="false"]::before {
+        content: "+" / "";
+      }
+    }
+
+    .bolt-table-container,
+    .bolt-table {
+      box-shadow: none;
+      padding: 0;
+    }
+  }
+
+  /* A row: avatar, title and details, reviewers, comments, times, on one grid. */
+  a.bolt-table-row {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) 120px 70px 160px;
+    align-items: center;
+    gap: 12px;
+    height: 54px;
+    padding: 0 12px;
+
+    & > .bolt-table-spacer-cell,
+    & > .bolt-table-cell-side-action {
+      display: none;
+    }
+
+    & > td {
+      display: block;
+      height: auto;
+      padding: 0;
+      border: 0;
+    }
+
+    .bolt-table-cell-content {
+      padding: 0;
+    }
+  }
+
+  .bolt-list-row-spacer,
+  .repos-pr-list > colgroup {
+    display: none;
+  }
+
+  /* The table and its body are blocks, so each row's grid spans the list. */
+  .repos-pr-list,
+  .repos-pr-list > tbody {
+    display: block;
+    width: 100%;
+  }
+}
+
+html[data-fix-ado-win98] {
+  /* The search field: the Win98 magnifier, then the text. */
+  :is(.project-header, .top-level-header) .search {
+    padding: 0 4px;
+    gap: 4px;
+    align-items: center;
+
+    .search-icon {
+      width: 12px;
+      height: 12px;
+      margin: 0;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='5' cy='5' r='3.5' fill='%23fff' stroke='%23000' stroke-width='1.5'/%3E%3Cpath d='M7.5 7.5 11 11' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E")
+        center / 12px no-repeat;
+
+      & > * {
+        display: none;
+      }
+    }
+
+    .search-input {
+      padding: 0;
+    }
+  }
+
+  /* The menu bar: each item a raised 23px button, 2px apart. */
+  :is(.project-header, .top-level-header) .region-header-menubar {
+    align-items: center;
+    gap: 2px;
+    padding-right: 4px;
+
+    & > * {
+      height: 23px;
+      margin: 0;
+    }
+
+    .bolt-button,
+    .me-control-div {
+      width: 23px;
+      min-width: 0;
+      height: 23px;
+      padding: 0;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+    }
+  }
+
+  /* The side bar's project row: 34px, with a raised + button. */
+  .navigation-container .project-item {
+    height: 34px;
+    font-weight: 700;
+  }
+
+  .navigation-container .collapsible-section .bolt-expandable-container {
+    width: 19px;
+    height: 19px;
+    margin-right: 2px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+}
+
+/* ===== Exact geometry, measured against the design artboards ===== */
+
+html[data-fix-ado-win98] {
+  /* Breadcrumbs: no padding of their own, 6px apart, centred in the Address field. */
+  :is(.project-header, .top-level-header) .region-header > .bolt-breadcrumb-with-items {
+    padding: 0 4px;
+
+    .bolt-breadcrumb,
+    .bolt-breadcrumb-container {
+      align-items: center;
+      gap: 6px;
+      padding: 0;
+    }
+
+    :is(
+      .bolt-breadcrumb-list-item,
+      .bolt-breadcrumb-item,
+      .bolt-breadcrumb-item a,
+      .bolt-breadcrumb-item-text-container,
+      .bolt-breadcrumb-item-text,
+      .bolt-breadcrumb-divider
+    ) {
+      margin: 0;
+      padding: 0;
+    }
+
+    .bolt-breadcrumb-list-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .bolt-breadcrumb-overflow {
+      display: none;
+    }
+  }
+
+  /* Side bar: 6px down for the panel's bevel and padding; top items' text at 36px, sub items'
+     at 44px from the side bar's inner edge, selected item bold. */
+  .navigation-container .project-navigation {
+    padding-top: 6px;
+
+    .separator {
+      margin: 3px 0;
+    }
+
+    .navigation-element {
+      padding-left: 6px;
+      gap: 8px;
+    }
+
+    .navigation-element.hub:not(.hub-group, .stand-alone) {
+      padding-left: 18px;
+    }
+
+    .navigation-element.displayed,
+    .navigation-element.displayed .navigation-text {
+      font-weight: 700;
+    }
+  }
+}
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* Buttons: 10px padding each side, no extra space around their text. */
+  .bolt-button {
+    padding-left: 10px;
+    padding-right: 10px;
+
+    .bolt-button-text {
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  .bolt-button.icon-only {
+    padding: 0;
+  }
+
+  /* Tabs: 10px padding, the selected one 13px; text centred. */
+  .bolt-tab {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+
+    .bolt-tab-inner-container {
+      height: auto;
+      padding: 0;
+    }
+
+    .bolt-tab-text {
+      height: auto;
+      margin: 0;
+      padding: 0;
+    }
+
+    &.selected {
+      padding: 0 13px;
+    }
+  }
+
+  /* A page's own title: centred on its 23px row. */
+  .bolt-page > .bolt-header .bolt-header-title {
+    line-height: 23px;
+  }
+}
+
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body {
+  /* Section headers: the +/- box, 8px, then the title and its count in normal weight. */
+  .repos-pr-section-card > .flex-row:first-child:not(.bolt-card-content) {
+    .repos-pr-section-header,
+    .bolt-header-content-area,
+    .bolt-header-title-area,
+    .bolt-header-title-row {
+      margin: 0;
+      padding: 0;
+    }
+
+    .repos-pr-section-header-title {
+      align-items: center;
+      gap: 8px;
+    }
+
+    .bolt-pill {
+      margin: 0;
+      font-weight: 400;
+    }
+  }
+
+  /* A row's two lines: the first 16px tall, centred, the second 14px. */
+  .bolt-table-two-line-cell .bolt-table-two-line-cell-item {
+    padding: 0;
+  }
+
+  .bolt-table-two-line-cell .bolt-table-two-line-cell-item:first-child {
+    height: 16px;
+    align-items: center;
+  }
+
+  .bolt-table-two-line-cell .bolt-table-two-line-cell-item + .bolt-table-two-line-cell-item {
+    height: 14px;
+    margin: 0;
+  }
+}
+
+html[data-fix-ado-win98] .navigation-container .project-navigation.expanded {
+  /* Items from 28px to 4px before the edge, as in the design: the banner, 2px, 4px. */
+  padding: 6px 4px 6px 28px;
+
+  .navigation-section {
+    margin: 0;
+  }
+
+  .project-item {
+    padding-left: 6px;
+    gap: 8px;
+
+    .navigation-icon {
+      width: 24px;
+    }
+  }
+
+  .navigation-element .navigation-icon {
+    width: 16px;
+  }
+
+  .navigation-element.hub:not(.hub-group, .stand-alone) {
+    padding-left: 14px;
+  }
+}
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* Azure DevOps reserves room for a bold tab label; Win98 tabs are never bold. */
+  .bolt-tab :is(.bolt-tab-text, .bolt-tab-inner-container)::after,
+  .bolt-tab :is(.bolt-tab-text, .bolt-tab-inner-container)::before {
+    display: none;
+  }
+
+  .bolt-page > .bolt-header .bolt-button {
+    margin: 0;
+  }
+
+  .bolt-page > .bolt-header .bolt-header-commandbar {
+    align-self: flex-start;
+  }
+
+  .bolt-pill {
+    height: 16px;
+    padding: 0 6px;
+  }
+}
+
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body {
+  /* The tab row is 25px: the filter button and its 2px below. */
+  .bolt-page > .bolt-tabbar {
+    height: 25px;
+  }
+
+  .repos-pr-section-card .repos-pr-section-header-title {
+    padding: 0;
+  }
+
+  .repos-pr-section-card .repos-pr-section-header .bolt-header-title {
+    margin: 0;
+  }
+}
+
+html[data-fix-ado-win98] {
+  /* Raised buttons in the menu bar and the side bar, also where Azure DevOps marks them flat. */
+  :is(.project-header, .top-level-header) .region-header-menubar .bolt-button.subtle,
+  .navigation-container .bolt-button.subtle,
+  .navigation-container .collapsible-section .bolt-expandable-container {
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  .navigation-container .bolt-button.subtle {
+    width: 19px;
+    min-width: 0;
+    height: 19px;
+    padding: 0;
+  }
+
+  /* Breadcrumb text 2px from the field's top, as in the design. */
+  :is(.project-header, .top-level-header) .region-header > .bolt-breadcrumb-with-items {
+    align-items: flex-start;
+    padding-top: 0;
+
+    .bolt-breadcrumb,
+    .bolt-breadcrumb-container {
+      align-items: flex-start;
+      line-height: 14px;
+    }
+  }
+}
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* No room kept for overflow buttons that do not show. */
+  .bolt-header-commandbar .overflow-button-empty-div {
+    display: none;
+  }
+}
+
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body {
+  /* A row's first line: title, status icon, pills, 6px apart; the status icon's ring shows. */
+  .bolt-table-two-line-cell .bolt-table-two-line-cell-item:first-child {
+    gap: 6px;
+    overflow: visible;
+
+    & > * {
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
+
+  /* The sub-tabs in a section's header: small property sheet tabs. */
+  .repos-pr-section-tabs {
+    margin: 0;
+    padding: 0;
+
+    .bolt-tabbar-tabs {
+      height: 20px;
+      padding: 0;
+      align-items: flex-end;
+    }
+
+    .bolt-tab {
+      height: 18px;
+      margin: 0 -1px 0 0;
+      padding: 0 8px;
+      gap: 6px;
+
+      &.selected {
+        height: 20px;
+        margin: 0 -1px 0 0;
+        padding: 0 8px;
+      }
+    }
+
+    .bolt-tab-badge,
+    .bolt-tab .bolt-pill {
+      margin: 0;
+      font-weight: 400;
+    }
+  }
+}
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* The selected tab's own underline, padding and bold, which Win98 tabs do not have. */
+  .bolt-tab .bolt-tab-inner-container {
+    border: 0;
+    padding: 0;
+    font-weight: 400;
+  }
+
+  /* Pills fit their text: 6px each side, no minimum width. */
+  .bolt-pill {
+    min-width: 0;
+
+    .bolt-pill-content {
+      height: auto;
+      margin: 0;
+      padding: 0;
+      font-weight: 400;
+    }
+  }
+}
+
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body {
+  .repos-pr-section-card .repos-pr-section-header-title {
+    gap: 8px;
+  }
+
+  /* A section header with sub-tabs: the +/- box at the bottom, the title 14px high and 3px
+     above the tabs. */
+  .repos-pr-section-card:has(.repos-pr-section-tabs) {
+    .bolt-button.repos-pr-section-expand-button {
+      align-self: flex-end;
+      margin-bottom: 5px;
+    }
+
+    .repos-pr-section-header-title {
+      height: 14px;
+      margin-bottom: 3px;
+    }
+  }
+
+  /* A sub-tab's label and count, 6px apart, without the selected tab's extra padding. */
+  .repos-pr-section-tabs .bolt-tab .bolt-tab-inner-container,
+  .repos-pr-section-tabs .bolt-tab.selected .bolt-tab-inner-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+  }
+}
+
+html[data-fix-ado-win98] :is(.project-header, .top-level-header) {
+  /* The Address row: every part 3px below the row's top, the label's text 5px. */
+  :is(.region-header, .region-header-menubar) {
+    align-items: flex-start;
+  }
+
+  .suite-logo {
+    align-items: flex-start;
+    padding-top: 5px;
+  }
+
+  .region-header > .bolt-breadcrumb-with-items,
+  .region-header-menubar > * {
+    margin-top: 3px;
+  }
+
+  .expandable-search-header {
+    margin-right: 6px;
+    padding: 3px 0 0;
+  }
+}
+
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
+  /* Azure DevOps underlines the selected tab with a more specific rule. */
+  .bolt-tabbar .bolt-tabbar-tabs .bolt-tab.selected .bolt-tab-inner-container {
+    border-bottom: 0;
+    padding: 0;
+    font-weight: 400;
+  }
+
+  /* The status icon's ring may reach past its cell. */
+  .bolt-table-two-line-cell,
+  .bolt-table-two-line-cell .bolt-table-cell-content {
+    overflow: visible;
+  }
+}
+
+/* Initials in whole pixels and bold, as in the design: 13px on a 32px avatar, 10px on 24px. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body [data-fix-ado-initials]::after {
+  font-size: round(down, calc(var(--fix-ado-avatar-size, 24px) * 0.42), 1px);
+  font-weight: 700;
+}
+
+/* The repository selector in the breadcrumbs: its icon, 4px, then the name, on the text line. */
+html[data-fix-ado-win98] .region-header .region-headerBreadcrumb .bolt-button {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  align-items: flex-start;
+
+  .bolt-dropdown-expandable-button-label,
+  .bolt-dropdown-expandable-button-label > .flex-row {
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    align-items: flex-start;
+  }
+
+  .artifact-dropdown-icon,
+  .icon-right {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* Breadcrumbs: every level aligned to the top, the text where the design has it. */
+html[data-fix-ado-win98]
+  :is(.project-header, .top-level-header)
+  .region-header
+  > .bolt-breadcrumb-with-items {
+  padding-top: 4px;
+
+  :is(
+    .bolt-breadcrumb,
+    .bolt-breadcrumb-container,
+    .bolt-breadcrumb-list-item,
+    .bolt-breadcrumb-item,
+    .bolt-breadcrumb-item a,
+    .bolt-breadcrumb-item-text-container,
+    .region-headerBreadcrumb,
+    .repository-selector
+  ) {
+    height: auto;
+    align-items: flex-start;
+  }
+
+  .artifact-dropdown-icon {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+  }
+}
+
+html[data-fix-ado-win98] {
+  /* Menu bar buttons raised; doubled classes outrank the flat-button rule. */
+  :is(.project-header, .top-level-header) .region-header-menubar .bolt-button.bolt-button.subtle {
+    width: 23px;
+    min-width: 0;
+    height: 23px;
+    padding: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  /* The project row centres its + button, as in the design. */
+  .navigation-container .collapsible-section {
+    align-items: center;
+  }
+
+  /* No grey bar beside an expanded group. */
+  .navigation-container .hub-group-container.expanded-container {
+    border: 0;
+    box-shadow: none;
+
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+}
+
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body {
+  /* Reviewers 8px apart, also before the required reviewers feature has marked the row: the
+     rhythm margins that space them natively are off in Windows 98 mode. */
+  .rhythm-horizontal-8:has(> .pr-reviewer):not([data-fix-ado-reviewers]) {
+    gap: 8px;
+  }
+
+  /* The reviewers' cell shows each required reviewer's whole frame. */
+  a.bolt-table-row > td,
+  a.bolt-table-row .bolt-table-cell-content,
+  a.bolt-table-row .pr-reviewer {
+    overflow: visible;
+  }
+}
+
+html[data-fix-ado-win98] {
+  /* The repository selector is plain text in the Address field, not a raised button. */
+  .region-header .region-headerBreadcrumb .bolt-button.bolt-button {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* Win98 text has no letter spacing; Azure DevOps tightens its titles. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
+  body
+  :is(h1, h2, h3, .title-s, .title-m, .title-l, .bolt-header-title) {
+  letter-spacing: normal;
+}
+
+/* Pill and tab labels show their first letter whole: no clipping at the left edge. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body :is(.bolt-pill-content, .bolt-tab-text) {
+  overflow: visible;
+}
+
+/* A dropdown button's label keeps its ellipsis but gets 1px of slack, so its first letter shows
+   whole on a half-pixel position. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body .bolt-dropdown-expandable-button-label {
+  overflow: clip;
+  overflow-clip-margin: 1px;
+}
+
+html[data-fix-ado-win98] {
+  :is(.project-header, .top-level-header) .region-header > .bolt-breadcrumb-with-items {
+    align-self: flex-start;
+  }
+
+  /* The account button shows its bevel around the avatar. */
+  :is(.project-header, .top-level-header) .me-control-div > * {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Side bar buttons keep 6px to the side bar's edge, as the items' text does. */
+  .navigation-container .collapsible-section .bolt-expandable-container {
+    margin-right: 6px;
+  }
+}
+
+html[data-fix-ado-win98] {
+  /* The side bar's collapse button: a raised 19px button, like the + button. */
+  .navigation-container .hub.stand-alone[role="button"] {
+    flex: none;
+    align-self: center;
+    width: 19px;
+    height: 19px;
+    margin-right: 6px;
+    padding: 0;
+    justify-content: center;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  /* The account control is larger than its 23px button; the button shows what fits. */
+  :is(.project-header, .top-level-header) .me-control-div {
+    overflow: hidden;
+  }
+}
+
+/* ===== Pull request Overview, as in the design's "Pull request" artboard ===== */
+
+html[data-fix-ado-win98="pull-request"] body {
+  .repos-pr-details-page {
+    padding: 12px 16px 0;
+  }
+
+  /* The header: the title row, then the details row, 6px apart. */
+  .repos-pr-header {
+    height: auto;
+    margin: 0;
+    padding: 0;
+
+    & > .flex-column {
+      gap: 6px;
+    }
+
+    & > .flex-column > * {
+      margin: 0;
+      padding: 0;
+    }
+
+    & > .flex-column > :first-child {
+      height: 23px;
+      align-items: center;
+      gap: 6px;
+    }
+
+    & > .flex-column > :nth-child(2) {
+      height: 24px;
+      align-items: center;
+    }
+
+    .repos-pr-title-row {
+      flex: 1;
+      height: 23px;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+
+      & > :first-child {
+        flex: 1;
+        margin: 0;
+      }
+    }
+
+    .bolt-textfield {
+      margin: 0;
+    }
+  }
+
+  /* Icon buttons in the header: 23px square and raised, also where Azure DevOps marks them flat. */
+  .repos-pr-header .bolt-button.bolt-button.subtle,
+  .repos-pr-header .bolt-expandable-button .bolt-button.icon-only {
+    width: 23px;
+    min-width: 0;
+    padding: 0;
+    justify-content: center;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  .repos-pr-header .bolt-split-button-main {
+    gap: 4px;
+    padding: 0 10px;
+  }
+
+  /* The details row: everything 6px apart, the branch copy button a raised 19px one. */
+  .pr-secondary-title-row,
+  .pr-secondary-title-row-persona,
+  .pr-header-branches {
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+
+    & > * {
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  .pr-secondary-title-row {
+    height: 24px;
+  }
+
+  .pr-header-branches .bolt-clipboard-button {
+    width: auto;
+  }
+
+  .pr-header-branches .bolt-clipboard-button .bolt-button.bolt-button.subtle {
+    width: 19px;
+    height: 19px;
+  }
+
+  .pr-header-reviewers > * {
+    gap: 2px;
+  }
+
+  /* The tabs: 6px below the details, on top of the panel. */
+  /* The tab bar stays on top while the page scrolls: an opaque strip from the window's top
+     edge, the tabs, then the panel's top edge, so the selected tab still joins the panel. */
+  .repos-pr-details-page-tabbar {
+    top: -12px;
+    height: 31px;
+    min-height: 0;
+    margin: 0 0 -2px;
+    padding: 6px 0 2px;
+    align-items: flex-end;
+    background: #c0c0c0;
+    box-shadow: none;
+
+    &::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      bottom: -6px;
+      left: 0;
+      height: 8px;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+      clip-path: inset(0 0 6px 0);
+    }
+
+    .bolt-tabbar-tabs {
+      position: relative;
+      z-index: 1;
+      height: 23px;
+      padding: 0 0 0 4px;
+      margin: 0;
+      background: transparent;
+    }
+  }
+
+  /* The tab panel: raised, holding the two columns. */
+  .repos-pr-details-page > .page-content {
+    margin: 0;
+    padding: 14px 12px 12px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+
+    & > .flex-row {
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+    }
+
+    & > .flex-row > :first-child {
+      gap: 14px;
+      margin: 0;
+      padding: 0;
+    }
+
+    & > .flex-row > :first-child > * + *,
+    .repos-overview-right-pane > * + * {
+      margin-top: 0;
+    }
+  }
+
+  .repos-overview-right-pane {
+    width: 340px;
+    gap: 14px;
+    margin: 0;
+  }
+
+  /* Every card and right-pane block: a group box, 8px 10px inside. */
+  .page-content > .flex-row > :first-child > .bolt-card,
+  .repos-overview-right-pane > * {
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px solid #808080;
+    background: #c0c0c0;
+    box-shadow:
+      inset 1px 1px #fff,
+      1px 1px #fff;
+  }
+
+  .page-content > .flex-row > :first-child > .bolt-card > .bolt-card-content,
+  .page-content > .flex-row > :first-child > .bolt-card > .bolt-card-header {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The title's copy button shows on hover only; its room stays. The branch's copy button
+     takes its own 19px, so the text after it moves along. */
+  .pr-header-branches .bolt-clipboard-button {
+    width: 19px;
+    height: 19px;
+  }
+
+  /* Card and block titles: 11px bold on a 23px row, their buttons 23px square and raised. */
+  :is(.bolt-card, .repos-overview-right-pane) .bolt-header {
+    height: 23px;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+
+    .bolt-header-content-area,
+    .bolt-header-title-area,
+    .bolt-header-title-row,
+    .bolt-header-commandbar,
+    .bolt-header-commandbar-button-group {
+      height: 23px;
+      margin: 0;
+      padding: 0;
+      align-items: center;
+    }
+
+    .bolt-header-title.bolt-header-title {
+      font-size: 11px;
+      line-height: 14px;
+    }
+
+    .bolt-header-command-item-button.bolt-button.icon-only,
+    .bolt-header-command-item-button.bolt-button.bolt-icon-button {
+      width: 23px;
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      justify-content: center;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+    }
+  }
+
+  /* The status card: rows of a 24px icon and its text, between etched lines. */
+  .page-content > .flex-row > :first-child > .bolt-card:first-child > .bolt-card-content > div {
+    & > * {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 0;
+    }
+
+    /* A section with a check list: its heading, then the list under it. */
+    & > :has(> .status-details-container) {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    & > :first-child {
+      padding-top: 0;
+    }
+
+    & > :last-child {
+      padding-bottom: 0;
+    }
+
+    .separator-line-bottom {
+      border: 0;
+      padding-bottom: 10px;
+      box-shadow:
+        inset 0 -1px #fff,
+        inset 0 -2px #808080;
+    }
+
+    /* A completed pull request's banner, as wide as the card: the merge icon, who completed it
+       and when, then Cherry-pick and Revert 8px apart at the right end. Under it the merge
+       commit and Show details. */
+    & > .flex-column:has(.repos-commits-table) {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+
+      & > .flex-column > .flex-row {
+        min-height: 24px;
+        gap: 4px;
+
+        & > * {
+          margin: 0;
+        }
+      }
+
+      .circle-icon {
+        display: flex;
+        width: 24px;
+        height: 24px;
+        margin: 0;
+        padding: 0;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        font-size: 16px;
+      }
+
+      .fluent-icons-enabled:has(> .circle-icon) {
+        flex: none;
+      }
+
+      .justify-end > .bolt-button + .bolt-button {
+        margin-left: 8px;
+      }
+
+      /* Show details is a link, in link blue and underlined like the page's other links. */
+      & > div > .bolt-link {
+        color: #0000ee;
+        text-decoration: underline;
+      }
+
+      /* The merge commit: one 44px row, as on the Commits tab, the well tight around it. */
+      table.repos-commits-table {
+        border: 0;
+        border-spacing: 0;
+      }
+    }
+  }
+
+  /* A status heading: the 24px icon, 4px, the text. */
+  .bolt-card-content > div > div > div:first-child:has(> svg.bolt-status) {
+    height: 24px;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+  }
+
+  .bolt-card-content svg.bolt-status {
+    margin: 0;
+  }
+
+  /* The check list under a heading: rows on the window face, under the heading's text. With
+     every check passed it holds a link to the checks instead of a failing check. */
+  .status-details-container:not(.fix-ado-issue-box, table) {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: auto;
+    min-height: 0;
+    padding-left: 28px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+
+    .preview-check-list,
+    .preview-check-list > tbody {
+      display: block;
+      width: 100%;
+    }
+
+    .bolt-list-row-spacer {
+      display: none;
+    }
+
+    .bolt-list-row,
+    .bolt-list-cell,
+    .bolt-list-cell-content,
+    .bolt-list-cell-content > a,
+    .bolt-list-cell-content > a > div,
+    .bolt-list-cell-content > div {
+      display: block;
+      height: 23px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    /* A check's row, with or without a link around it: icon, name, state, then its button. */
+    .bolt-list-cell-content > a > div > .flex,
+    .bolt-list-cell-content > div > .flex {
+      height: 23px;
+      align-items: center;
+      gap: 6px;
+      padding: 0;
+
+      & > * {
+        margin: 0;
+      }
+    }
+
+    .pr-completion-status-header {
+      padding: 0;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .bolt-button.bolt-button.subtle {
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+    }
+  }
+
+  /* The warnings and errors box on the Overview: one sunken list of three 30px rows. */
+  .status-details-container.fix-ado-issue-box {
+    border: 0;
+    padding: 2px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    & > table {
+      box-shadow: none;
+    }
+
+    .preview-check-list,
+    .preview-check-list > tbody,
+    .bolt-list-row,
+    .bolt-list-cell,
+    .bolt-list-cell-content,
+    .bolt-list-cell-content > div,
+    .bolt-list-cell-content > div > a {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    /* A collapsed box keeps its header row only; the rule above would show its issues. */
+    &[data-collapsed] .bolt-list-cell-content > div > a.fix-ado-issue {
+      display: none;
+    }
+
+    .fix-ado-issue-box-header {
+      height: 30px;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+    }
+
+    .fix-ado-issue-box-header .pr-completion-status-header {
+      padding: 0;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .fix-ado-issue-place {
+      height: 30px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border: 0;
+      box-shadow: inset 0 1px #c0c0c0;
+    }
+
+    .fix-ado-issue-output {
+      height: 30px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      background: #000;
+    }
+
+    .fix-ado-issue-message {
+      color: #ff0;
+    }
+
+    /* Errors in the console's red, warnings in its yellow. */
+    .fix-ado-issue-message.error-text {
+      color: #f00;
+    }
+
+    /* A log line's number before its message, in the console's light grey. */
+    .fix-ado-issue-output > .line-number {
+      padding: 0 8px 0 0;
+      color: #c0c0c0;
+    }
+  }
+
+  .fix-ado-overview-issues > .bolt-card-content > div > div {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* The description: its title, then the text, 10px apart. */
+  .repos-pr-description-card {
+    gap: 10px;
+
+    .bolt-card-content,
+    .repos-pr-description,
+    .markdown-content {
+      margin: 0;
+      padding: 0;
+    }
+
+    .markdown-content > :first-child {
+      margin-top: 0;
+    }
+
+    h2,
+    h3 {
+      margin: 0 0 10px;
+      padding: 0;
+      border: 0;
+    }
+
+    h3 {
+      margin-top: 4px;
+    }
+
+    .task-list {
+      margin: 0 0 10px;
+      padding: 0;
+    }
+
+    .task-list-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 14px;
+      margin: 0 0 8px;
+      padding: 0;
+    }
+
+    .task-list-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .wit-markdown-checkbox-container,
+    .pr-markdown-checkbox,
+    .pr-markdown-checkbox .bolt-checkmark {
+      width: 13px;
+      height: 13px;
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  /* The right column: Reviewers, Tags and work items, each a group box. */
+  .repos-overview-right-pane > * {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    & > * {
+      margin: 0;
+    }
+  }
+
+  .pr-required-reviewers-section,
+  .pr-optional-reviewers-section,
+  .fix-ado-starred-reviewers {
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+
+    & > * {
+      margin: 0;
+    }
+  }
+
+  .fix-ado-starred-reviewers {
+    margin-top: 4px;
+  }
+
+  .repos-pr-no-items-well {
+    display: flex;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    color: #404040;
+  }
+
+  .repos-pr-no-items-well.fix-ado-starred-empty {
+    display: block;
+    height: auto;
+    padding: 8px;
+  }
+
+  .fix-ado-starred-list {
+    margin: 0;
+    padding: 0;
+  }
+
+  .fix-ado-star-someone.bolt-button {
+    align-self: flex-start;
+    gap: 4px;
+    margin: 0;
+    padding: 0 6px;
+  }
+
+  /* A reviewer: vote, avatar, name, then the star and menu buttons, 8px apart, 30px tall. */
+  .repos-reviewer {
+    height: 30px;
+    gap: 8px;
+    padding: 0 0 0 2px;
+
+    & > * {
+      margin: 0;
+    }
+
+    & > div:nth-child(2) {
+      width: auto;
+    }
+
+    .bolt-coin,
+    .icon-large-margin {
+      margin: 0;
+    }
+  }
+
+  /* Linked work items: one sunken list. */
+  .region-pullRequestDetailsOverviewExtensions > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .linked-wit-pr-details {
+    display: block;
+
+    colgroup,
+    .bolt-list-row-spacer,
+    .bolt-table-spacer-cell {
+      display: none;
+    }
+
+    tbody,
+    .bolt-table-row {
+      display: block;
+    }
+
+    .bolt-table-row {
+      display: flex;
+      align-items: center;
+      padding: 6px 10px;
+      border: 0;
+    }
+
+    .bolt-table-cell {
+      display: block;
+      flex: 1;
+      height: auto;
+      padding: 0;
+      border: 0;
+    }
+
+    .bolt-table-cell:last-child {
+      flex: none;
+    }
+
+    .bolt-table-cell-content,
+    .bolt-table-two-line-cell-item {
+      margin: 0;
+      padding: 0;
+    }
+
+    .bolt-table-two-line-cell-item:first-child {
+      gap: 6px;
+      align-items: center;
+    }
+
+    .work-item-state {
+      gap: 5px;
+      align-items: center;
+    }
+
+    .work-item-state-circle {
+      width: 8px;
+      height: 8px;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      box-shadow: 0 0 0 1px #000;
+    }
+
+    .bolt-button.subtle {
+      width: 23px;
+      min-width: 0;
+      padding: 0;
+      justify-content: center;
+    }
+  }
+
+  .bolt-table-container:has(> .linked-wit-pr-details) {
+    padding: 0;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  .repos-pr-header .bolt-expandable-button {
+    margin: 0;
+  }
+
+  /* Icons in header buttons take a whole 12px. */
+  .repos-pr-header .bolt-split-button-main > .fluent-icons-enabled {
+    flex: none;
+    width: 12px;
+  }
+
+  /* Titles sit on the left, as in a group box. */
+  :is(.bolt-card, .repos-overview-right-pane) .bolt-header .bolt-header-title-area {
+    flex: 1;
+    justify-content: flex-start;
+  }
+
+  .pr-required-reviewers-section > .secondary-text,
+  .pr-optional-reviewers-section > .secondary-text,
+  .fix-ado-starred-reviewers > .secondary-text {
+    font-weight: 400;
+  }
+
+  .fix-ado-overview-issues > .bolt-card-content > div > div {
+    padding: 0;
+  }
+
+  .status-details-container.fix-ado-issue-box .fix-ado-issue-message {
+    padding: 0;
+  }
+
+  .repos-pr-description-card .task-list .task-list-item.task-list-item {
+    height: 14px;
+    min-height: 0;
+    line-height: 14px;
+  }
+
+  .linked-wit-pr-details .bolt-table-row > .bolt-table-spacer-cell {
+    display: none;
+  }
+
+  .linked-wit-pr-details a.bolt-link {
+    color: #0000ee;
+  }
+
+  .repos-overview-right-pane .bolt-button .icon-right {
+    width: auto;
+    padding-left: 4px;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The title area is a column: its title on the left, centred on the row. */
+  :is(.bolt-card, .repos-overview-right-pane) .bolt-header .bolt-header-title-area {
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .status-details-container:not(.fix-ado-issue-box, table) .bolt-button.bolt-button.subtle {
+    min-width: 75px;
+  }
+
+  .fix-ado-issue-box .fix-ado-issue-box-header.fix-ado-issue-box-header {
+    height: 30px;
+    min-height: 0;
+    padding: 0 10px;
+  }
+
+  .repos-pr-description-card .task-list {
+    margin-bottom: 14px;
+  }
+
+  .repos-pr-description-card h3 {
+    margin-top: 0;
+  }
+
+  /* A work item: its 14px type icon and link, then its id, state dot and state, 5px apart. */
+  .linked-wit-pr-details .bolt-table-two-line-cell-item {
+    &:first-child > span:first-child {
+      width: 14px;
+      margin: 0;
+    }
+
+    & > .secondary-text {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      width: auto;
+    }
+
+    & > .secondary-text > *,
+    .work-item-state-circle,
+    .work-item-state-name {
+      flex: none;
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  .repos-overview-right-pane .bolt-button .icon-right {
+    width: 9px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .repos-overview-right-pane .bolt-header-commandbar .bolt-button {
+    gap: 4px;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The left column shows each group box's white outer edge. */
+  .page-content > .flex-row > :first-child {
+    overflow: visible;
+  }
+
+  .repos-overview-right-pane .bolt-expandable-button {
+    margin: 0;
+  }
+
+  /* A work item: its two lines take the row, the remove button stays on the right. */
+  .linked-wit-pr-details .bolt-table-row > .bolt-table-cell {
+    flex: none;
+    width: auto;
+  }
+
+  .linked-wit-pr-details .bolt-table-row > .bolt-table-two-line-cell {
+    flex: 1;
+  }
+
+  .linked-wit-pr-details .bolt-table-two-line-cell-item {
+    height: 14px;
+    line-height: 14px;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  .status-details-container.fix-ado-issue-box .fix-ado-issue-output {
+    border-radius: 0;
+  }
+
+  /* The work item list's bevel shows around its white table. */
+  .bolt-table-container:has(> .linked-wit-pr-details) {
+    padding: 2px;
+  }
+
+  .linked-wit-pr-details .bolt-table-row.bolt-table-row {
+    padding: 4px 8px;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The title's text 4px from the field's left, centred on its line. */
+  .repos-pr-title .bolt-textfield-input {
+    padding: 0 4px;
+    line-height: 14px;
+  }
+
+  .fix-ado-star-someone > .fluent-icons-enabled {
+    flex: none;
+    width: 9px;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* No white line under the tabs: the panel's bevel draws the edge. */
+  .repos-pr-details-page-tabbar.repos-pr-details-page-tabbar {
+    box-shadow: none;
+  }
+}
+
+/* ===== Pull request Files, as in the design's "Files" artboard ===== */
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The tab panel: the toolbar, 8px, then the tree and the changes side by side. */
+  /* Azure DevOps sets this padding with !important utility classes. */
+  .repos-pr-details-page > .page-content.page-content:has(.repos-compare-toolbar) {
+    padding: 14px 12px 12px !important;
+
+    & > div {
+      gap: 8px;
+    }
+  }
+
+  /* The toolbar: one 23px row, its parts 6px apart. */
+  .repos-compare-toolbar {
+    height: 23px;
+    padding: 0;
+    gap: 6px;
+
+    & > div,
+    & > div > div {
+      gap: 6px;
+      margin: 0;
+    }
+
+    & > div > div > * + * {
+      margin-left: 0;
+    }
+
+    .margin-left-16 {
+      margin-left: 10px;
+    }
+
+    .repos-compare-header-commandbar {
+      margin: 0;
+      padding: 0;
+    }
+
+    .overflow-button-empty-div {
+      display: none;
+    }
+
+    .bolt-dropdown-expandable .bolt-button {
+      gap: 4px;
+    }
+
+    .bolt-dropdown-expandable .icon-right {
+      width: 9px;
+      margin: 0;
+      padding: 0;
+    }
+
+    .bolt-split-button-main {
+      gap: 4px;
+      padding: 0 10px;
+    }
+
+    .bolt-split-button-main > .fluent-icons-enabled,
+    .repos-compare-filter .bolt-button > .fluent-icons-enabled {
+      flex: none;
+      width: 12px;
+    }
+
+    .repos-compare-filter .bolt-button {
+      gap: 4px;
+    }
+
+    .bolt-header-command-item-button.bolt-button.bolt-button.subtle {
+      width: 23px;
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      justify-content: center;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+    }
+  }
+
+  /* The tree and the changes: two sunken white panes, 4px apart. */
+  .repos-changes-explorer-splitter {
+    background: #c0c0c0;
+
+    .vss-Splitter--pane-fixed,
+    .vss-Splitter--pane-flexible {
+      background: #fff;
+      box-shadow: var(--fix-ado-win98-sunken);
+    }
+
+    .vss-Splitter--pane-fixed > .absolute-fill,
+    .vss-Splitter--pane-flexible > .absolute-fill {
+      inset: 2px;
+      background: #fff;
+    }
+
+    .vss-Splitter--divider {
+      background: #c0c0c0;
+    }
+  }
+
+  /* The tree's top row: a raised bar with the repository and its menu. */
+  .repos-changes-explorer-tree-root {
+    background: #c0c0c0;
+
+    & > .bolt-table-row {
+      height: 24px;
+      gap: 4px;
+      padding: 0 4px;
+      background: #c0c0c0;
+      box-shadow:
+        inset -1px -1px #808080,
+        inset 1px 1px #fff;
+    }
+
+    .bolt-checkbox {
+      margin: 0;
+    }
+
+    & > .bolt-table-row > div:nth-child(2) {
+      flex: 1;
+      padding: 0;
+      margin: 0;
+    }
+
+    .repos-changes-explorer-tree-root-content {
+      gap: 4px;
+      padding: 0;
+      margin: 0;
+    }
+
+    .bolt-table-button-more .bolt-button.bolt-button {
+      width: 19px;
+      height: 19px;
+      min-width: 0;
+      padding: 0;
+      justify-content: center;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+    }
+  }
+
+  /* Tree rows: 20px, a 13px checkbox, the indent and +/- box, the icon and the name. */
+  .repos-changes-explorer-tree {
+    display: block;
+
+    colgroup,
+    .bolt-list-row-spacer,
+    td.bolt-table-cell-compact {
+      display: none;
+    }
+
+    & > tbody {
+      display: block;
+    }
+
+    tr.bolt-tree-row {
+      display: flex;
+      align-items: center;
+      height: 20px;
+      gap: 4px;
+      padding-left: 4px;
+      border: 0;
+      background: transparent;
+    }
+
+    tr.bolt-tree-row > td {
+      display: block;
+      height: auto;
+      padding: 0;
+      border: 0;
+    }
+
+    tr.bolt-tree-row > td:nth-child(2) {
+      width: 13px;
+      flex: none;
+    }
+
+    tr.bolt-tree-row > td:nth-child(2) .bolt-table-cell-content {
+      padding: 0;
+    }
+
+    .bolt-checkbox {
+      margin: 0;
+    }
+
+    td.bolt-tree-cell {
+      flex: 1;
+      min-width: 0;
+    }
+
+    td.bolt-tree-cell > .bolt-table-cell-content {
+      gap: 4px;
+      padding: 0;
+    }
+
+    td.bolt-tree-cell > .bolt-table-cell-content > .fluent-icons-enabled {
+      height: 20px;
+      background-repeat: no-repeat;
+      background-position: right 4px center;
+      background-size: 9px;
+    }
+
+    .bolt-tree-expand-button {
+      width: 16px;
+      height: 20px;
+      margin-right: 0;
+      padding: 0;
+      color: transparent;
+    }
+
+    td.bolt-tree-cell .padding-vertical-8 {
+      gap: 4px;
+      padding: 0;
+    }
+
+    td.bolt-tree-cell .padding-vertical-8 > .fluent-icons-enabled {
+      width: 16px;
+    }
+
+    td.bolt-tree-cell .padding-vertical-8 .fabric-icon {
+      margin: 0;
+    }
+
+    .bolt-pill {
+      margin: 0;
+    }
+  }
+
+  /* The +/- box of an open or closed folder, drawn where the arrow was. */
+  .repos-changes-explorer-tree
+    td.bolt-tree-cell
+    > .bolt-table-cell-content
+    > .fluent-icons-enabled:has(> .ms-Icon--ChevronDownMed:not(.invisible)) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2z'/%3E%3C/svg%3E");
+  }
+
+  .repos-changes-explorer-tree
+    td.bolt-tree-cell
+    > .bolt-table-cell-content
+    > .fluent-icons-enabled:has(> .ms-Icon--ChevronRightMed:not(.invisible)) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2zM4 2h1v5H4z'/%3E%3C/svg%3E");
+  }
+}
+
+html[data-fix-ado-win98] {
+  /* Side bar buttons: a small glyph centred in the 19px button. */
+  .navigation-container
+    :is(.collapsible-section .bolt-expandable-container, .hub.stand-alone[role="button"]) {
+    justify-content: center;
+
+    .fluent-icons-enabled,
+    .navigation-icon {
+      width: auto;
+      height: auto;
+      font-size: 9px;
+      line-height: 9px;
+    }
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The tree's checkboxes are 13px, its table has no bevel of its own. */
+  :is(.repos-changes-explorer-tree, .repos-changes-explorer-tree-root) .bolt-checkbox,
+  :is(.repos-changes-explorer-tree, .repos-changes-explorer-tree-root) .bolt-checkmark {
+    width: 13px;
+    height: 13px;
+  }
+
+  .vss-Splitter--pane-fixed .bolt-table-container {
+    padding: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  /* The changes: file cards 8px 10px from the pane's edge, 12px apart. */
+  .repos-changes-viewer.repos-changes-viewer {
+    gap: 12px;
+    padding: 8px 10px;
+  }
+
+  /* A file card: white, in a grey line, its header a raised bar. */
+  .repos-summary-header.bolt-card {
+    flex: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: #fff;
+    box-shadow: 0 0 0 1px #808080;
+
+    & > div:first-child {
+      height: 40px;
+      align-items: stretch;
+      gap: 6px;
+      padding: 0 6px;
+      background: #c0c0c0;
+      box-shadow:
+        inset -1px -1px #808080,
+        inset 1px 1px #fff;
+    }
+
+    & > div:first-child > .sticky {
+      align-items: flex-start;
+      gap: 6px;
+      background: transparent;
+    }
+
+    .repos-change-summary-file-icon-container,
+    .repos-change-summary-file-icon-container > .fluent-icons-enabled {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      padding: 0;
+    }
+
+    .repos-change-summary-file-icon {
+      background: transparent;
+    }
+
+    .repos-change-summary-file-icon-container + div {
+      margin: 0;
+    }
+
+    .repos-change-summary-file-icon-container + div > :first-child {
+      gap: 8px;
+    }
+
+    .repos-change-summary-file-icon-container + div > :first-child > * {
+      margin: 0;
+    }
+
+    .font-weight-semibold {
+      font-weight: 700;
+    }
+
+    .repos-compare-removed-lines {
+      color: #c00000;
+    }
+
+    .repos-compare-added-lines {
+      color: #008000;
+    }
+
+    .repos-compare-removed-lines + .repos-compare-added-lines {
+      margin-left: 8px;
+    }
+
+    .bolt-card-content {
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  /* The card's fold button: the Win98 +/- box. */
+  .repos-summary-header .bolt-button.bolt-card-expand-button {
+    flex: none;
+    align-self: center;
+    width: 9px;
+    min-width: 0;
+    height: 9px;
+    margin: 0 3px;
+    padding: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2z'/%3E%3C/svg%3E")
+      center / 9px no-repeat;
+    box-shadow: none;
+
+    & > * {
+      visibility: hidden;
+    }
+
+    &[aria-expanded="false"] {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2zM4 2h1v5H4z'/%3E%3C/svg%3E");
+    }
+  }
+
+  /* Diff lines: a grey gutter with 36px line numbers, then the code. */
+  .repos-diff-contents-row > .text-right {
+    box-sizing: border-box;
+    width: 36px;
+    padding: 0 6px 0 0;
+    background: #dfdfdf;
+    color: #404040;
+  }
+
+  .repos-line-content.added {
+    background: #cfc;
+  }
+
+  .repos-line-content.removed {
+    background: #fcc;
+  }
+
+  .repos-line-content .added-content {
+    background: #9e9;
+  }
+
+  .repos-line-content .removed-content {
+    background: #f99;
+  }
+
+  /* Skipped lines: a 24px etched grey band. */
+  .repos-diff-contents-row.repos-elliplis-row {
+    height: 24px;
+    background: #dfdfdf;
+    box-shadow:
+      inset 0 1px #808080,
+      inset 0 -1px #fff;
+
+    & > * {
+      height: 24px;
+      border: 0;
+      background: transparent;
+    }
+
+    & > * > * {
+      display: none;
+    }
+  }
+}
+
+html[data-fix-ado-win98] :is(.project-header, .top-level-header) .me-control-div {
+  /* The account control fits its 23px button: no frame, a 17px photo in the middle. */
+  :is(.mectrl_root, .mectrl_dropdown, .mectrl_trigger, .mectrl_topHeader),
+  .mectrl_trigger > div {
+    width: 23px;
+    height: 23px;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    box-shadow: none;
+  }
+
+  .mectrl_topHeader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mectrl_topHeader .mectrl_profilepic {
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background-size: cover;
+
+    & img {
+      width: 17px;
+      height: 17px;
+      border-radius: 0;
+    }
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  .repos-changes-explorer-tree
+    tr.bolt-tree-row
+    > td:is(:first-child, :last-child):not(.bolt-tree-cell) {
+    display: none;
+  }
+
+  .repos-changes-viewer.repos-changes-viewer {
+    padding: 6px 8px;
+  }
+
+  .repos-summary-header > div:first-child > .sticky {
+    padding: 0;
+  }
+
+  .repos-diff-contents-row > .text-right {
+    min-width: 36px;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  .repos-summary-header .change-summary-card-content {
+    padding: 0;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"]
+  body
+  .status-details-container:not(.fix-ado-issue-box, table) {
+  .preview-check-list:not(:has(.bolt-list-row:not(.bolt-list-row-spacer))) {
+    display: none;
+  }
+
+  /* With every check passed: one 23px line, a link to the checks and an info icon. */
+  .status-details-container-row:not(:empty) {
+    display: flex;
+    margin: 0;
+    padding: 0;
+  }
+
+  .status-details-container-row > div {
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    height: 23px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+
+    & > * {
+      margin: 0;
+    }
+  }
+
+  .status-details-container-row .bolt-link {
+    color: #0000ee;
+    text-decoration: underline;
+  }
+}
+
+/* Split buttons: one raised control holding the label and a small black arrow. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body,
+html[data-fix-ado-win98] .bolt-portal-host {
+  .bolt-split-button {
+    gap: 0;
+    height: 23px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  .bolt-split-button .bolt-button.bolt-button {
+    border: 0;
+    outline: 0;
+    background-color: transparent;
+    box-shadow: none;
+    color: #000;
+  }
+
+  .bolt-split-button .bolt-split-button-main.bolt-split-button-main {
+    gap: 4px;
+    padding: 0 2px 0 10px;
+
+    & > .fluent-icons-enabled {
+      flex: none;
+      width: 12px;
+    }
+
+    & > .fluent-icons-enabled > .fabric-icon {
+      width: 12px;
+      font-size: 12px;
+    }
+  }
+
+  .bolt-split-button .bolt-split-button-divider {
+    display: none;
+  }
+
+  .bolt-split-button .bolt-split-button-option.bolt-split-button-option {
+    width: 15px;
+    min-width: 0;
+    padding: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
+      center / 7px 4px no-repeat;
+
+    & > * {
+      visibility: hidden;
+    }
+  }
+
+  /* Pressed: the whole control sinks. */
+  .bolt-split-button:has(.bolt-button:active, .bolt-button[aria-expanded="true"]) {
+    box-shadow: var(--fix-ado-win98-pressed);
+  }
+
+  .bolt-split-button .bolt-button::before,
+  .bolt-split-button .bolt-button::after {
+    display: none;
+  }
+
+  /* Reviewers in the header: 2px apart. */
+  .pr-header-reviewers .pr-reviewer {
+    margin: 0;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The comment columns and the code sit on white. */
+  .repos-summary-header
+    .repos-diff-contents-row
+    > :is(.repos-add-comment-widget, .repos-collapsed-comment),
+  .repos-summary-header .repos-summary-code-diff {
+    background: #fff;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The compare menu's label sits in the middle of its button, as on other buttons. */
+  .repos-compare-toolbar .bolt-dropdown-expandable-button-label {
+    flex-grow: 0;
+  }
+
+  .repos-changes-explorer-tree-root-content > .fluent-icons-enabled {
+    width: 16px;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body .repos-summary-header > div:first-child {
+  /* The card header's parts on whole pixels: box 15px down, icon 12px, text 6px, button 8px. */
+  align-items: flex-start;
+
+  .bolt-card-expand-button.bolt-card-expand-button {
+    align-self: flex-start;
+    margin-top: 15px;
+  }
+
+  & > .sticky {
+    align-items: flex-start;
+  }
+
+  .repos-change-summary-file-icon-container {
+    margin-top: 12px;
+  }
+
+  .repos-change-summary-file-icon-container + div {
+    margin-top: 6px;
+  }
+
+  .repos-change-summary-file-icon-container ~ div:last-child {
+    margin-top: 8px;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body .repos-summary-header > div:first-child {
+  .repos-change-summary-file-icon-container + div > :first-child,
+  .repos-change-summary-file-icon-container + div > :first-child > * {
+    height: 14px;
+    line-height: 14px;
+  }
+
+  a.bolt-link-button {
+    align-self: flex-start;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body .repos-summary-header.bolt-card {
+  /* Square corners, and no shadow under the sticky header. */
+  border-radius: 0;
+
+  & > div:first-child,
+  & > div:first-child > .sticky {
+    border: 0;
+    border-radius: 0;
+  }
+
+  & > div:first-child > .sticky {
+    box-shadow: none;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"]
+  body
+  .repos-changes-explorer-splitter
+  .vss-Splitter--divider {
+  /* The gap between the panes is plain window face. */
+  border: 0;
+  background-image: none;
+  box-shadow: none;
+
+  &::before,
+  &::after {
+    display: none;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The file type badge: no grey disc behind it. */
+  .repos-change-summary-file-icon-container {
+    border-radius: 0;
+    background: transparent;
+  }
+
+  /* The add-comment button beside a diff line: flat until the pointer is on it. */
+  .repos-add-comment-widget .bolt-button.bolt-button:not(:hover, :focus-visible) {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* Windows 98 has no rounded corners: only tabs keep their 3px top corners, and SVG shapes and
+   radio buttons stay as drawn. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body,
+html[data-fix-ado-win98]
+  :is(
+    .project-header,
+    .top-level-header,
+    .navigation-container,
+    .bolt-portal-host,
+    .fix-ado-settings
+  ) {
+  :not(svg, svg *, .bolt-tab, [role="radio"], [role="radio"] *, input[type="radio"]),
+  :not(svg, svg *, .bolt-tab, [role="radio"], [role="radio"] *)::before,
+  :not(svg, svg *, .bolt-tab, [role="radio"], [role="radio"] *)::after {
+    border-radius: 0 !important;
+  }
+}
+
+/* The review's comment box buttons, as in the ReviewComposer artboards: 6px apart, "Add single
+   comment" drawn by the review feature in 11px Tahoma on a plain raised button; disabled ones as
+   the kit draws them. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
+  body
+  .repos-discussion-thread-reply
+  :has(> .fix-ado-review-add) {
+  gap: 6px;
+
+  /* "Start a review" or "Add review comment" is the default button once it is enabled. */
+  & > .fix-ado-review-add:not(.disabled, :disabled) {
+    box-shadow: var(--fix-ado-win98-default);
+  }
+
+  & > .bolt-button.primary:not(.fix-ado-review-add) {
+    background-color: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+
+    &::after {
+      font: 11px/14px var(--fix-ado-win98-font);
+    }
+
+    &:is(.disabled, :disabled) {
+      color: #808080;
+      text-shadow: 1px 1px #fff;
+    }
+  }
+
+  & > .fix-ado-review-add:is(.disabled, :disabled) {
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #808080;
+    text-shadow: 1px 1px #fff;
+    opacity: 1;
+  }
+}
+
+/* ===== Side panels, such as Enable auto-complete: a Win98 dialog window ===== */
+
+html[data-fix-ado-win98] .bolt-portal-host {
+  /* Win98 dialogs leave the window behind them as it is. */
+  .bolt-callout-modal {
+    background: transparent;
+  }
+
+  .bolt-panel-callout-content {
+    padding: 3px;
+  }
+
+  .bolt-panel-root {
+    margin: 0;
+  }
+
+  /* The title bar: 18px, the title on the left, a close button on the right. */
+  .bolt-panel-header.bolt-panel-header {
+    height: 18px;
+    min-height: 0;
+    margin: 0;
+    padding: 0 2px 0 4px;
+
+    .bolt-header-content-area,
+    .bolt-header-title-area,
+    .bolt-header-title-row,
+    .bolt-header-commandbar,
+    .bolt-header-commandbar-button-group {
+      height: 18px;
+      margin: 0;
+      padding: 0;
+      align-items: center;
+    }
+
+    .bolt-header-title {
+      line-height: 18px;
+    }
+
+    .bolt-header-command-item-button.bolt-button.bolt-button {
+      width: 16px;
+      min-width: 0;
+      height: 14px;
+      min-height: 0;
+      padding: 0;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='14' shape-rendering='crispEdges'%3E%3Crect width='16' height='14' fill='%23c0c0c0'/%3E%3Cpath d='M0 0h15v1H1v12H0z' fill='%23fff'/%3E%3Cpath d='M15 0h1v14H0v-1h15z' fill='%230a0a0a'/%3E%3Cpath d='M1 1h13v1H2v10H1z' fill='%23dfdfdf'/%3E%3Cpath d='M14 1h1v12H1v-1h13z' fill='%23808080'/%3E%3Cpath d='M4 3h2l2 2 2-2h2l-3 3.5 3 3.5h-2l-2-2-2 2H4l3-3.5z'/%3E%3C/svg%3E")
+        0 0 / 16px 14px no-repeat;
+      box-shadow: none;
+
+      & > * {
+        visibility: hidden;
+      }
+    }
+  }
+
+  .bolt-panel-content.bolt-panel-content {
+    padding: 10px 12px;
+  }
+
+  .bolt-panel-content > div {
+    padding: 0;
+  }
+
+  .bolt-formitem-label {
+    margin: 0 0 4px;
+    padding: 0;
+    font-weight: 400;
+  }
+
+  /* A combo box: a sunken field with a raised arrow button inside its right edge. */
+  .bolt-dropdown-expandable-text-field .bolt-textfield {
+    position: relative;
+    height: 21px;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .bolt-dropdown-expandable-text-field .bolt-textfield-input {
+    padding: 0 4px;
+  }
+
+  .bolt-dropdown-expandable-text-field .bolt-textfield > .fluent-icons-enabled {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 17px;
+    height: 17px;
+    background: #c0c0c0
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
+      center / 7px 4px no-repeat;
+    box-shadow: var(--fix-ado-win98-menu-shadow);
+
+    & > * {
+      visibility: hidden;
+    }
+  }
+
+  .repos-merge-animation {
+    height: 46px;
+    margin: 0;
+  }
+
+  /* The options: a group box with its title on the frame. */
+  .bolt-panel-content > div > div:has(> .bolt-checkbox) {
+    position: relative;
+    margin-top: 6px;
+    padding: 14px 10px 10px;
+    border: 1px solid #808080;
+    box-shadow:
+      inset 1px 1px #fff,
+      1px 1px #fff;
+
+    & > .bolt-formitem-label {
+      position: absolute;
+      top: -7px;
+      left: 8px;
+      margin: 0;
+      padding: 0 2px;
+      background: #c0c0c0;
+    }
+  }
+
+  .bolt-checkbox.labelled,
+  .bolt-panel-content .bolt-checkbox {
+    height: 20px;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+
+    .bolt-checkmark {
+      width: 13px;
+      height: 13px;
+      margin: 0;
+    }
+
+    .bolt-checkbox-label {
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  /* The info line: its icon, then the text, on the dialog face. */
+  .bolt-panel-content .bolt-messagecard {
+    margin-top: 6px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+
+    .bolt-messagebar,
+    .bolt-messagebar-content {
+      padding: 0;
+      background: transparent;
+    }
+
+    .bolt-messagebar-content > div {
+      gap: 8px;
+      margin: 0;
+      align-items: flex-start;
+    }
+
+    .bolt-messagebar-icons {
+      margin: 0;
+    }
+
+    .bolt-messagebar-message {
+      margin: 0;
+      padding-top: 7px;
+    }
+  }
+
+  /* The buttons: OK first, then Cancel, 12px from the dialog's edge. */
+  .bolt-panel-footer.bolt-panel-footer {
+    padding: 12px;
+  }
+
+  .bolt-panel-footer-buttons {
+    gap: 6px;
+    justify-content: flex-end;
+
+    & > * {
+      margin: 0;
+    }
+
+    & > .primary {
+      order: -1;
+    }
+  }
+}
+
+html[data-fix-ado-win98] .bolt-portal-host {
+  .bolt-panel-header.bolt-panel-header {
+    .bolt-header-title-area {
+      align-items: flex-start;
+    }
+
+    .bolt-header-title.bolt-header-title {
+      font-size: 11px;
+    }
+
+    .bolt-header-commandbar-button-group > * {
+      margin: 0;
+    }
+  }
+
+  .bolt-panel-footer.bolt-panel-footer {
+    height: auto;
+    min-height: 0;
+  }
+
+  .bolt-panel-content .bolt-messagebar-icons {
+    flex: none;
+    width: 28px;
+  }
+}
+
+html[data-fix-ado-win98]
+  .bolt-portal-host
+  .bolt-dropdown-expandable-text-field
+  .bolt-textfield
+  > .fluent-icons-enabled {
+  /* A combo box's arrow button: raised, with no drop shadow. */
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #dfdfdf,
+    inset -2px -2px #808080,
+    inset 2px 2px #fff;
+}
+
+/* The theme panel, as in the design's ThemePanel artboard: the tiles sit in a sunken white
+   large-icon list view, and the selected tile's name is navy, as a selected icon's label. */
+html[data-fix-ado-win98] .bolt-portal-host .theme-panel {
+  .bolt-panel-content.bolt-panel-content {
+    padding: 8px;
+
+    & > div {
+      flex: 1;
+      padding: 10px;
+      background: #fff;
+      box-shadow: var(--fix-ado-win98-sunken);
+    }
+  }
+
+  .theme-management-container {
+    align-content: flex-start;
+    gap: 8px 4px;
+  }
+
+  .theme-tile-container {
+    width: 106px;
+    margin: 0;
+    padding: 4px 0 0;
+    border: 0;
+  }
+
+  .theme-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .theme-name {
+    width: auto;
+    padding: 0 2px;
+    font-size: 11px;
+    line-height: 14px;
+  }
+
+  .theme-tile-container.selected .theme-name {
+    background: #000080;
+    color: #fff;
+  }
+
+  /* Focus: a dotted rectangle round the name, not round the tile. */
+  .theme-tile-container:focus-visible {
+    outline: none;
+
+    .theme-name {
+      outline: 1px dotted #000;
+    }
+  }
+}
+
+html[data-fix-ado-win98="pull-request"]
+  body
+  .page-content
+  > .flex-row
+  > :first-child
+  > .bolt-card:first-child
+  > .bolt-card-content
+  > div
+  > :has(.auto-complete-icon) {
+  /* Auto-complete set: a Win98 info strip, yellow in a black line, above the checks. */
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid #000;
+  background: #ffffe1;
+  box-shadow: none;
+
+  & > * {
+    margin: 0;
+  }
+
+  & > :first-child > div {
+    height: 16px;
+    gap: 6px;
+  }
+
+  .fluent-icons-enabled {
+    flex: none;
+    width: 16px;
+    height: 16px;
+  }
+
+  /* The glyph fills its 16px box, centred on the text line. */
+  .circle-icon {
+    display: flex;
+    width: 16px;
+    height: 16px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    font-size: 16px;
+    line-height: 16px;
+  }
+
+  .font-weight-semibold:not(.circle-icon) {
+    font-weight: 700;
+  }
+
+  & > :last-child {
+    margin-left: 22px;
+  }
+
+  .bolt-link {
+    color: #0000ee;
+    text-decoration: underline;
+  }
+}
+
+/* ===== Files with a file selected: its header in the toolbar, the diff editor ===== */
+
+html[data-fix-ado-win98="pull-request"] body {
+  /* The toolbar grows to 29px for the file's two-line header; buttons sit 3px down. */
+  .repos-compare-toolbar:has(.repos-compare-removed-lines, .repos-compare-added-lines) {
+    height: 29px;
+    align-items: flex-start;
+
+    & > div,
+    & > div > div {
+      align-items: flex-start;
+    }
+
+    .bolt-button,
+    .bolt-split-button {
+      margin-top: 3px;
+    }
+
+    .bolt-split-button .bolt-button {
+      margin-top: 0;
+    }
+  }
+
+  /* The file's name, counts and path: a sunken grey field filling the toolbar's middle. */
+  .repos-compare-toolbar:has(.repos-compare-removed-lines, .repos-compare-added-lines)
+    > div
+    > div:has(> .margin-left-16) {
+    flex: 1;
+    min-width: 0;
+    height: 29px;
+    margin: 0 0 0 4px;
+
+    & > .margin-left-16 {
+      flex: 1;
+      height: 29px;
+      margin: 0;
+      padding: 1px 6px 0;
+      box-shadow: var(--fix-ado-win98-well);
+    }
+
+    .flex-row {
+      gap: 8px;
+    }
+
+    .repos-compare-removed-lines,
+    .repos-compare-added-lines {
+      font-weight: 700;
+    }
+
+    .repos-compare-removed-lines {
+      color: #c00000;
+    }
+
+    .repos-compare-added-lines {
+      color: #008000;
+    }
+  }
+
+  .repos-compare-toolbar .bolt-header-commandbar-button-group {
+    gap: 2px;
+  }
+
+  .repos-compare-toolbar .bolt-header-commandbar-button-group > * {
+    margin: 0;
+  }
+
+  /* The tree's selected row: navy, its checkbox and menu button drawn as on other rows. */
+  .repos-changes-explorer-tree tr.bolt-tree-row.selected {
+    background: #000080;
+    color: #fff;
+
+    .bolt-table-button-more .bolt-button.bolt-button {
+      width: 16px;
+      height: 16px;
+      min-width: 0;
+      padding: 0;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+      color: #000;
+    }
+  }
+
+  .repos-changes-explorer-tree .bolt-table-button-more .bolt-button {
+    width: 16px;
+    height: 16px;
+    min-width: 0;
+    padding: 0;
+  }
+
+  /* The diff editor: a grey gutter with Tahoma numbers, then the code in Courier New. */
+  .monaco-editor .margin,
+  .monaco-editor .margin-view-overlays {
+    background: #dfdfdf;
+  }
+
+  .monaco-editor .line-numbers {
+    color: #404040;
+    font-family: var(--fix-ado-win98-font);
+    font-size: 11px;
+    line-height: 18px;
+  }
+
+  /* Code on Monaco's 18px rows, centred as the line numbers are. */
+  .monaco-editor .view-line,
+  .monaco-editor .view-line * {
+    font-family: var(--fix-ado-win98-mono);
+    line-height: 18px;
+  }
+
+  .monaco-editor .current-line,
+  .monaco-editor .current-line-margin-both {
+    border: 0;
+    background: transparent;
+  }
+
+  .monaco-editor .line-insert,
+  .monaco-diff-editor .line-insert {
+    background: #cfc;
+  }
+
+  .monaco-editor .char-insert,
+  .monaco-diff-editor .char-insert {
+    background: #9e9;
+  }
+
+  .monaco-editor .line-delete,
+  .monaco-diff-editor .line-delete {
+    background: #fcc;
+  }
+
+  .monaco-editor .char-delete,
+  .monaco-diff-editor .char-delete {
+    background: #f99;
+  }
+}
+
+/* Azure DevOps spaces children with rhythm-* margins; Windows 98 mode spaces them with its own
+   gaps instead, so the margins would add up. :where() keeps these below every rule above. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body,
+html[data-fix-ado-win98]
+  :is(
+    .project-header,
+    .top-level-header,
+    .navigation-container,
+    .bolt-portal-host,
+    .fix-ado-settings
+  ) {
+  :where([class*="rhythm-horizontal-"]) > :where(:not(:first-child)) {
+    margin-left: 0;
+  }
+
+  :where([class*="rhythm-vertical-"]) > :where(:not(:first-child)) {
+    margin-top: 0;
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body .repos-editor-discussion {
+  /* No light frame of its own around the thread window: the code shows up to its edge. */
+  border-color: transparent;
+  background: transparent;
+
+  /* A thread beside the code: a Win98 small window on the window face. */
+  .repos-discussion-thread {
+    padding: 3px;
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  .repos-comment-viewer,
+  .repos-discussion-comment,
+  .repos-discussion-thread-reply {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .repos-discussion-comment-header .padding-right-8 {
+    font-weight: 700;
+  }
+
+  /* Code in a comment: a sunken white well in Courier New. */
+  .markdown-content pre {
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  /* The thread's status: a small raised drop-down button. */
+  .repos-discussion-comment-header .bolt-dropdown-expandable .bolt-button.bolt-button {
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+}
+
+html[data-fix-ado-win98="pull-request"]
+  body
+  .repos-compare-toolbar:has(.repos-compare-removed-lines, .repos-compare-added-lines)
+  .bolt-header-command-item-button.bolt-button.bolt-button {
+  /* In the 29px toolbar, tool buttons sit 3px down like the others. */
+  margin-top: 3px;
+}
+
+html[data-fix-ado-win98="pull-request"] body button.repos-changes-explorer-tree-root-content {
+  /* The tree's top bar is one flat row on its raised bar, without the browser's button frame. */
+  border: 0;
+  background: transparent;
+}
+
+/* Keyboard focus as in Win98. Azure DevOps draws focus as a box-shadow ring, which replaces the
+   bevel. A focused tab keeps its shape, with a dotted rectangle around its label. A focused
+   button keeps its bevel, gets a 1px black frame, and a dotted rectangle inside the bevel.
+   Azure DevOps marks keyboard focus with a class on body itself, which these nested rules can't
+   reach, so they use :focus and :focus-visible. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body,
+html[data-fix-ado-win98] .bolt-portal-host {
+  .bolt-tab.focus-treatment:is(:focus, .focused) {
+    border: 0;
+    border-radius: 3px 3px 0 0;
+    outline: none;
+    box-shadow:
+      inset 1px 1px #fff,
+      inset -1px 0 #0a0a0a,
+      inset -2px 0 #808080;
+    color: #000;
+    animation: none;
+  }
+
+  .bolt-tab:is(:focus-visible, .focused) .bolt-tab-text {
+    outline: 1px dotted #000;
+  }
+
+  .bolt-button.bolt-focus-treatment:focus {
+    border-color: transparent;
+    outline: none;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+    animation: none;
+  }
+
+  .bolt-button:focus-visible,
+  .bolt-button.bolt-focus-treatment:focus-visible {
+    box-shadow: var(--fix-ado-win98-default);
+    outline: 1px dotted #000;
+    outline-offset: -4px;
+  }
+
+  .bolt-button.bolt-focus-treatment:focus:is(
+      :active,
+      .active,
+      [aria-pressed="true"],
+      [aria-expanded="true"]
+    ) {
+    box-shadow:
+      inset 0 0 0 1px #000,
+      inset -2px -2px #808080,
+      inset 2px 2px #808080;
+  }
+
+  .bolt-button.bolt-focus-treatment.subtle:focus:not(:hover, :active, [aria-expanded="true"]) {
+    background: transparent;
+    box-shadow: none;
+    outline-offset: -2px;
+  }
+
+  /* A split button: the frame goes around the whole control, the dotted line inside the part. */
+  .bolt-split-button .bolt-button.bolt-button:is(:focus, :focus-visible) {
+    background: transparent;
+    box-shadow: none;
+    outline-offset: -3px;
+  }
+
+  .bolt-split-button:has(.bolt-button:focus-visible):not(
+      :has(.bolt-button:active, .bolt-button[aria-expanded="true"])
+    ) {
+    box-shadow: var(--fix-ado-win98-default);
+  }
+
+  /* Checkboxes, links and pills: only the dotted rectangle, no ring. */
+  :is(.bolt-checkbox, .bolt-link, .bolt-pill):focus {
+    outline: 1px dotted #000;
+    outline-offset: 0;
+    animation: none;
+  }
+
+  :is(.bolt-checkbox, .bolt-link):focus {
+    box-shadow: none;
+  }
+
+  /* Links have no hover fill: Win98 has no hover state. */
+  .bolt-link:hover {
+    background-color: transparent;
+  }
+
+  .bolt-pill:focus {
+    border-color: transparent;
+    box-shadow: var(--fix-ado-win98-well);
+  }
+
+  /* The top bar's items: a dotted rectangle on focus, nothing on the selected one. */
+  .commandbar-item.selected::after {
+    border: 0;
+  }
+
+  .commandbar-item:focus::after {
+    border: 1px dotted #000;
+  }
+}
+
+/* A file card's header sticks inside the changes pane's padding, so code would show above it
+   and beside it. White bands over the padding hide it; the first four layers redraw the card's
+   grey frame around the header. The top band stops 1px short of the 12px gap between cards. */
+html[data-fix-ado-win98="pull-request"] body .repos-summary-header.bolt-card > div:first-child {
+  box-shadow:
+    inset -1px -1px #808080,
+    inset 1px 1px #fff,
+    0 -1px #808080,
+    -1px 0 #808080,
+    1px 0 #808080,
+    -1px -1px #808080,
+    1px -1px #808080,
+    0 -11px #fff,
+    -10px 0 #fff,
+    10px 0 #fff,
+    -10px -11px #fff,
+    10px -11px #fff;
+}
+
+/* With a file selected, the diff editor is a card: no group box frame inside the sunken pane. */
+html[data-fix-ado-win98="pull-request"]
+  body
+  .repos-changes-viewer
+  > .bolt-card.no-padding:not(.repos-summary-header) {
+  border-color: #fff;
+  box-shadow: none;
+}
+
+/* The Files tree shows every row's checkbox, as a Win98 checked tree view does, not only on hover. */
+html[data-fix-ado-win98="pull-request"]
+  body
+  .repos-changes-explorer-tree
+  .bolt-table-cell-content-reveal {
+  visibility: visible;
+}
+
+/* The pull request list draws no lines between rows. The site's 1px cell border would shift
+   each row's centred content by half a pixel and blur its text. */
+html[data-fix-ado-win98="pull-request-list"]
+  body
+  .repos-pr-list.bolt-table-show-lines
+  .bolt-list-row
+  > td {
+  border-top-width: 0;
+}
+
+/* The description's text: 14px lines, 16px between paragraphs. Mentions are plain hyperlinks
+   with their icon, and a work item's state is a small square, as in the work items panel.
+   A work item's rich text and comments read the same. */
+html[data-fix-ado-win98="pull-request"] body .repos-pr-description-card .markdown-content,
+html[data-fix-ado-win98="work-item"] body .markdown-content,
+html[data-fix-ado-win98] .work-item-form-dialog .markdown-content {
+  line-height: 14px;
+
+  p,
+  ul,
+  ol {
+    margin: 0 0 16px;
+  }
+
+  .mention-widget-workitem-state {
+    margin: 0;
+  }
+
+  /* Inline code is Courier New without a chip; table rows are 18px, list items 4px apart. */
+  code {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    font: 12px / 14px var(--fix-ado-win98-mono);
+    vertical-align: top;
+  }
+
+  table {
+    margin: 0 0 16px;
+    border-collapse: collapse;
+    border-spacing: 0;
+  }
+
+  tr {
+    line-height: 14px;
+  }
+
+  :is(td, th) {
+    padding: 2px 13px;
+    border: 0;
+    line-height: 14px;
+  }
+
+  /* The header row: bold, with a grey line under it. */
+  th {
+    padding-bottom: 1px;
+    box-shadow: inset 0 -1px #808080;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  li {
+    margin: 0 0 4px;
+    line-height: 14px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  & > :last-child {
+    margin-bottom: 0;
+  }
+
+  h2 {
+    line-height: 16px;
+  }
+
+  :is(.mention-widget-item, .mention-link) {
+    display: inline-flex;
+    align-items: center;
+    height: 14px;
+    vertical-align: top;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #0000ee;
+    text-decoration: underline;
+  }
+
+  :is(
+    .mention-widget-typeid,
+    .mention-widget-title,
+    .mention-workitem-id-no-flex,
+    .mention-widget-workitem-title
+  ) {
+    color: #0000ee;
+    font-weight: 400;
+  }
+
+  .mention-widget-workitem-state-divider {
+    display: none;
+  }
+}
+
+/* A work item's state: a small square with a black edge, as in the work items panel. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body .work-item-state-circle {
+  width: 8px;
+  height: 8px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 0 0 1px #000;
+}
+
+/* Status icons: start */
+/* Status icons: Windows 98 pixel icons in place of Azure DevOps's round ones and the script's
+   pipeline icons. Each one fills its icon's box, and the round shapes inside are hidden.
+   Generated from the pixel maps the design kit draws them from. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body,
+html[data-fix-ado-win98] .bolt-portal-host {
+  :is(svg.bolt-status, .fix-ado-pipeline-status) {
+    border-radius: 0;
+    background: center / 100% 100% no-repeat;
+    box-shadow: none;
+    image-rendering: pixelated;
+    animation: none;
+    opacity: 1;
+
+    & > * {
+      visibility: hidden;
+    }
+  }
+
+  /* A 24px status icon is the 16px one, centred, so every status icon has one size. */
+  svg.bolt-status[width="24"] {
+    background-size: 16px 16px;
+  }
+
+  :is(svg.bolt-status.success, .fix-ado-pipeline-status[data-status="succeeded"]) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M13 3h1v1h-1zM12 4h2v1h-2zM11 5h3v1h-3zM2 6h1v1h-1zM10 6h3v1h-3zM2 7h2v1h-2zM9 7h3v1h-3zM2 8h3v1h-3zM8 8h3v1h-3zM3 9h3v1h-3zM7 9h3v1h-3zM4 10h5v1h-5zM5 11h3v1h-3zM6 12h1v1h-1z'/%3E%3C/svg%3E");
+  }
+
+  :is(svg.bolt-status.failed, .fix-ado-pipeline-status[data-status="failed"]) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23800000' d='M5 0h6v1h-6zM3 1h2v1h-2zM11 1h2v1h-2zM2 2h1v1h-1zM13 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM2 12h1v1h-1zM13 12h1v1h-1zM3 13h2v1h-2zM11 13h2v1h-2zM5 14h6v1h-6z'/%3E%3Cpath fill='%23ff0000' d='M5 1h6v1h-6zM3 2h10v1h-10zM2 3h12v1h-12zM2 4h2v1h-2zM6 4h4v1h-4zM12 4h2v1h-2zM1 5h4v1h-4zM7 5h2v1h-2zM11 5h4v1h-4zM1 6h5v1h-5zM10 6h5v1h-5zM1 7h6v1h-6zM9 7h6v1h-6zM1 8h5v1h-5zM10 8h5v1h-5zM1 9h4v1h-4zM7 9h2v1h-2zM11 9h4v1h-4zM2 10h2v1h-2zM6 10h4v1h-4zM12 10h2v1h-2zM2 11h12v1h-12zM3 12h10v1h-10zM5 13h6v1h-6z'/%3E%3Cpath fill='%23ffffff' d='M4 4h2v1h-2zM10 4h2v1h-2zM5 5h2v1h-2zM9 5h2v1h-2zM6 6h4v1h-4zM7 7h2v1h-2zM6 8h4v1h-4zM5 9h2v1h-2zM9 9h2v1h-2zM4 10h2v1h-2zM10 10h2v1h-2z'/%3E%3C/svg%3E");
+  }
+
+  :is(svg.bolt-status.warning, .fix-ado-pipeline-status[data-status="expired"]) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M7 0h2v1h-2zM6 1h1v1h-1zM9 1h1v1h-1zM6 2h1v1h-1zM9 2h1v1h-1zM5 3h1v1h-1zM10 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM4 5h1v1h-1zM7 5h2v1h-2zM11 5h1v1h-1zM4 6h1v1h-1zM7 6h2v1h-2zM11 6h1v1h-1zM3 7h1v1h-1zM7 7h2v1h-2zM12 7h1v1h-1zM3 8h1v1h-1zM7 8h2v1h-2zM12 8h1v1h-1zM2 9h1v1h-1zM13 9h1v1h-1zM2 10h1v1h-1zM7 10h2v1h-2zM13 10h1v1h-1zM1 11h1v1h-1zM7 11h2v1h-2zM14 11h1v1h-1zM1 12h1v1h-1zM14 12h1v1h-1zM0 13h1v1h-1zM15 13h1v1h-1zM0 14h16v1h-16z'/%3E%3Cpath fill='%23ffff00' d='M7 1h2v1h-2zM7 2h2v1h-2zM6 3h4v1h-4zM6 4h4v1h-4zM5 5h2v1h-2zM9 5h2v1h-2zM5 6h2v1h-2zM9 6h2v1h-2zM4 7h3v1h-3zM9 7h3v1h-3zM4 8h3v1h-3zM9 8h3v1h-3zM3 9h10v1h-10zM3 10h4v1h-4zM9 10h4v1h-4zM2 11h5v1h-5zM9 11h5v1h-5zM2 12h12v1h-12zM1 13h14v1h-14z'/%3E%3C/svg%3E");
+  }
+
+  :is(
+    svg.bolt-status.active,
+    svg.bolt-status.running,
+    svg.bolt-status.queued,
+    svg.bolt-status.waiting,
+    .fix-ado-pipeline-status[data-status="running"],
+    .fix-ado-pipeline-status[data-status="queued"]
+  ) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 1h10v1h-10zM4 2h1v1h-1zM11 2h1v1h-1zM4 3h1v1h-1zM11 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM7 6h2v1h-2zM6 7h1v1h-1zM9 7h1v1h-1zM5 8h1v1h-1zM10 8h1v1h-1zM4 9h1v1h-1zM11 9h1v1h-1zM4 10h1v1h-1zM11 10h1v1h-1zM4 11h1v1h-1zM11 11h1v1h-1zM3 12h10v1h-10z'/%3E%3Cpath fill='%23ffffff' d='M5 2h6v1h-6zM7 7h1v1h-1zM6 8h2v1h-2zM9 8h1v1h-1zM5 9h3v1h-3zM9 9h2v1h-2zM5 10h2v1h-2z'/%3E%3Cpath fill='%23808000' d='M5 3h6v1h-6zM6 4h4v1h-4zM7 5h2v1h-2zM8 7h1v1h-1zM8 8h1v1h-1zM8 9h1v1h-1zM7 10h4v1h-4zM5 11h6v1h-6z'/%3E%3C/svg%3E");
+  }
+
+  :is(
+    svg.bolt-status.neutral,
+    svg.bolt-status.skipped,
+    svg.bolt-status.canceled,
+    svg.bolt-status.cancelled,
+    .fix-ado-pipeline-status[data-status="notStarted"],
+    .fix-ado-pipeline-status[data-status="none"],
+    .fix-ado-pipeline-status[data-status="loading"],
+    .fix-ado-pipeline-status[data-status="cancelling"]
+  ) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23808080' d='M4 7h8v1h-8zM4 8h8v1h-8z'/%3E%3C/svg%3E");
+  }
+
+  :is(svg.bolt-status.system-task, svg.bolt-status.information, svg.bolt-status.info) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 0h10v1h-10zM2 1h1v1h-1zM13 1h1v1h-1zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM1 6h1v1h-1zM14 6h1v1h-1zM1 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM14 8h1v1h-1zM1 9h1v1h-1zM14 9h1v1h-1zM2 10h1v1h-1zM13 10h1v1h-1zM3 11h4v1h-4zM8 11h5v1h-5zM6 12h1v1h-1zM8 12h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM4 14h2v1h-2z'/%3E%3Cpath fill='%23ffffff' d='M3 1h10v1h-10zM2 2h5v1h-5zM9 2h5v1h-5zM2 3h5v1h-5zM9 3h5v1h-5zM2 4h12v1h-12zM2 5h4v1h-4zM9 5h5v1h-5zM2 6h5v1h-5zM9 6h5v1h-5zM2 7h5v1h-5zM9 7h5v1h-5zM2 8h5v1h-5zM9 8h5v1h-5zM2 9h4v1h-4zM10 9h4v1h-4zM3 10h10v1h-10zM7 11h1v1h-1zM7 12h1v1h-1zM6 13h1v1h-1z'/%3E%3Cpath fill='%230000ff' d='M7 2h2v1h-2zM7 3h2v1h-2zM6 5h3v1h-3zM7 6h2v1h-2zM7 7h2v1h-2zM7 8h2v1h-2zM6 9h4v1h-4z'/%3E%3C/svg%3E");
+  }
+
+  /* The star of a starred reviewer: yellow when starred, a grey outline when not. */
+  .fix-ado-star-icon {
+    width: 16px;
+    height: 16px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23808080' d='M7 0h1v1h-1zM6 1h1v1h-1zM8 1h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM5 3h1v1h-1zM9 3h1v1h-1zM0 4h6v1h-6zM9 4h6v1h-6zM1 5h1v1h-1zM13 5h1v1h-1zM2 6h1v1h-1zM12 6h1v1h-1zM3 7h1v1h-1zM11 7h1v1h-1zM4 8h1v1h-1zM10 8h1v1h-1zM4 9h1v1h-1zM10 9h1v1h-1zM3 10h1v1h-1zM7 10h1v1h-1zM11 10h1v1h-1zM3 11h1v1h-1zM6 11h3v1h-3zM11 11h1v1h-1zM2 12h1v1h-1zM5 12h2v1h-2zM8 12h2v1h-2zM12 12h1v1h-1zM2 13h1v1h-1zM4 13h2v1h-2zM9 13h2v1h-2zM12 13h1v1h-1zM1 14h3v1h-3zM11 14h3v1h-3z'/%3E%3C/svg%3E")
+      center / 16px no-repeat;
+
+    & > * {
+      visibility: hidden;
+    }
+  }
+
+  :is(.fix-ado-star[aria-pressed="true"] .fix-ado-star-icon, .fix-ado-starred-chips-icon) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M7 0h1v1h-1zM6 1h1v1h-1zM8 1h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM5 3h1v1h-1zM9 3h1v1h-1zM0 4h6v1h-6zM9 4h6v1h-6zM1 5h1v1h-1zM13 5h1v1h-1zM2 6h1v1h-1zM12 6h1v1h-1zM3 7h1v1h-1zM11 7h1v1h-1zM4 8h1v1h-1zM10 8h1v1h-1zM4 9h1v1h-1zM10 9h1v1h-1zM3 10h1v1h-1zM7 10h1v1h-1zM11 10h1v1h-1zM3 11h1v1h-1zM6 11h3v1h-3zM11 11h1v1h-1zM2 12h1v1h-1zM5 12h2v1h-2zM8 12h2v1h-2zM12 12h1v1h-1zM2 13h1v1h-1zM4 13h2v1h-2zM9 13h2v1h-2zM12 13h1v1h-1zM1 14h3v1h-3zM11 14h3v1h-3z'/%3E%3Cpath fill='%23ffff00' d='M7 1h1v1h-1zM7 2h1v1h-1zM6 3h3v1h-3zM6 4h3v1h-3zM2 5h11v1h-11zM3 6h9v1h-9zM4 7h7v1h-7zM5 8h5v1h-5zM5 9h5v1h-5zM4 10h3v1h-3zM8 10h3v1h-3zM4 11h2v1h-2zM9 11h2v1h-2zM3 12h2v1h-2zM10 12h2v1h-2zM3 13h1v1h-1zM11 13h1v1h-1z'/%3E%3C/svg%3E");
+  }
+}
+/* Status icons: end */
+
+/* The Commits tab: the commits are a Win98 list box, one two-line row per commit. The title
+   is bold; under it the id in Courier, the author's avatar, name and the time, 6px apart. */
+html[data-fix-ado-win98="pull-request"] body .bolt-card.bolt-table-card:has(.repos-commits-table) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+
+  .bolt-card-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  .bolt-table-container {
+    padding: 2px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+}
+
+html[data-fix-ado-win98="pull-request"] body .repos-commits-table {
+  :is(colgroup, .bolt-list-row-spacer, .bolt-table-spacer-cell, td.bolt-table-cell-compact) {
+    display: none;
+  }
+
+  .bolt-table-two-line-cell {
+    width: 100%;
+  }
+
+  .bolt-table-row {
+    height: 44px;
+  }
+
+  td {
+    padding: 0;
+    border: 0;
+  }
+
+  .repos-commits-table-content {
+    height: 44px;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 10px;
+  }
+
+  .bolt-table-two-line-cell-item {
+    margin: 0;
+    padding: 0;
+  }
+
+  .bolt-table-link {
+    padding: 0;
+    color: #000;
+  }
+
+  .commit-title {
+    font-weight: 700;
+    line-height: 14px;
+  }
+
+  .body-s {
+    flex-wrap: nowrap;
+    height: 16px;
+    gap: 6px;
+    color: #404040;
+    font-size: 11px;
+    line-height: 14px;
+  }
+
+  .rhythm-horizontal-4 {
+    gap: 6px;
+  }
+
+  .monospaced-xs {
+    color: #000;
+    font-family: var(--fix-ado-win98-mono);
+    font-size: 12px;
+  }
+
+  .bolt-coin.size16 {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* New pull request: the branches are combo boxes, the tabs sit on a raised panel and the form
+   is a group box. The description is a 110px text area, and its toolbar flat toolbar buttons. */
+html[data-fix-ado-win98="pull-request-create"] body {
+  .repos-pr-create-header {
+    margin: 0;
+    padding: 12px 16px 0;
+
+    & > .flex-column {
+      gap: 6px;
+    }
+
+    & > .flex-column > .flex-row {
+      height: 23px;
+      gap: 6px;
+    }
+
+    .margin-right-8,
+    .margin-left-8 {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+    }
+  }
+
+  .repos-pr-create-header-first-row {
+    padding: 0;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 16px;
+  }
+
+  .bolt-tab .bolt-pill {
+    margin-left: 0;
+  }
+
+  .version-dropdown .bolt-dropdown-expandable-button-label > .flex-row {
+    gap: 4px;
+  }
+
+  .version-dropdown > .bolt-button.bolt-button.subtle {
+    width: 160px;
+    height: 21px;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 0 2px 0 4px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+    font-weight: 700;
+
+    & > .fluent-icons-enabled:last-child {
+      width: 17px;
+      height: 17px;
+      margin-left: auto;
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
+          center / 7px 4px no-repeat,
+        #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+
+      & > * {
+        visibility: hidden;
+      }
+    }
+  }
+
+  .repos-pr-create-header .bolt-button.icon-only {
+    width: 23px;
+    height: 23px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  .repos-pr-create-form {
+    width: auto;
+    max-width: none;
+    margin: 0 16px;
+    padding: 14px 12px 12px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+
+    & > .bolt-card {
+      width: 736px;
+      margin: 0;
+    }
+  }
+
+  textarea.repos-pr-create-description:not(.bolt-textfield-auto-adjust-hidden) {
+    min-height: 110px;
+  }
+
+  .repos-pr-create-form .bolt-textfield-counter {
+    margin-top: 6px;
+  }
+
+  .bolt-tabbar {
+    margin: 8px 16px 0;
+    padding: 0;
+  }
+
+  .repos-pr-create-form .bolt-card-content > .flex-grow {
+    gap: 10px;
+
+    & > .flex-column {
+      gap: 6px;
+    }
+  }
+
+  .repos-pr-create-form .bolt-header-commandbar {
+    height: 14px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .repos-pr-create-form .bolt-formitem-label {
+    margin: 0;
+  }
+
+  .repos-pr-create-form
+    .bolt-card-content
+    > .flex-grow
+    > .flex-column
+    > .flex-row.flex-center:not(.fix-ado-starred-chips) {
+    height: 14px;
+  }
+
+  .repos-pr-create-form .bolt-formitem-message {
+    margin-top: 6px;
+  }
+
+  .repos-pr-create-form .markdown-toolbar {
+    height: 23px;
+    align-items: center;
+  }
+
+  .repos-pr-create-form .bolt-tag-picker {
+    height: 21px;
+    padding: 0 3px;
+  }
+
+  .region-createPullRequestOverviewExtensions {
+    & > .flex-column {
+      gap: 6px;
+    }
+
+    & > .flex-column > .flex-row.flex-center {
+      height: 16px;
+    }
+
+    .bolt-pill {
+      margin-left: 4px;
+    }
+
+    .bolt-link {
+      padding: 0;
+      color: #0000ee;
+      text-decoration: underline;
+    }
+
+    .bolt-table-two-line-cell-item {
+      height: 16px;
+    }
+
+    .bolt-table-container {
+      height: 52px;
+    }
+
+    .bolt-table td {
+      border-top-width: 0;
+    }
+
+    .bolt-table-two-line-cell > .bolt-table-cell-content {
+      padding: 4px 12px;
+    }
+  }
+
+  .repos-pr-create-form .bolt-card-content > .flex-grow > .justify-end {
+    gap: 6px;
+    margin-top: 2px;
+
+    .bolt-checkbox {
+      gap: 6px;
+      padding: 0;
+    }
+
+    .bolt-checkbox-label {
+      padding: 0;
+    }
+  }
+
+  .markdown-text-container .flex-center {
+    gap: 4px;
+
+    .fluent-icons-enabled {
+      width: 12px;
+    }
+  }
+
+  .repos-pr-create-form > .bolt-card {
+    padding: 10px 12px;
+
+    & > .bolt-card-content {
+      padding: 0;
+    }
+  }
+
+  .repos-pr-create-form .bolt-header-commandbar .bolt-button.bolt-button {
+    margin: 0;
+    min-width: 0;
+    height: auto;
+    gap: 4px;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .markdown-toolbar .bolt-button.bolt-button {
+    width: 22px;
+    min-width: 0;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* People search results, such as the reviewer search and the star picker, drop down as a Win98
+   list: white in a black frame with a shadow, one 32px row per person with the avatar, name and
+   mail. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""])
+  :is(.bolt-portal-host, .fix-ado-star-picker-callout) {
+  :is(.bolt-tag-picker-callout-content, .bolt-identitypickerdropdown-callout-content) {
+    padding: 2px 0;
+    background: #fff;
+    box-shadow:
+      0 0 0 1px #000,
+      2px 2px 0 1px rgba(0, 0, 0, 0.35);
+  }
+
+  .bolt-suggestion-spacer {
+    display: none;
+  }
+
+  .bolt-suggestions-item {
+    height: 32px;
+    padding: 0 8px;
+  }
+
+  .bolt-picker-suggesteditem-text {
+    gap: 8px;
+  }
+
+  .bolt-suggestions-item-button {
+    height: 32px;
+    padding: 0;
+
+    & > .flex-row {
+      height: 32px;
+      align-items: center;
+    }
+  }
+
+  .bolt-picker-suggesteditem {
+    height: 32px;
+  }
+
+  .bolt-picker-persona-name {
+    justify-content: center;
+
+    & > * {
+      line-height: 14px;
+    }
+  }
+
+  .bolt-contact-card-button.bolt-button {
+    width: 22px;
+    min-width: 0;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* Starred reviewers on a new pull request: each one a small raised push button with its
+   16px avatar and name, after the star. One click adds the person, as before. */
+html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body .fix-ado-starred-chips {
+  height: 20px;
+  gap: 4px;
+
+  .fix-ado-starred-chip-list {
+    gap: 4px;
+  }
+
+  .fix-ado-starred-chip.bolt-pill {
+    height: 20px;
+    margin: 0;
+    padding: 0 6px 0 3px;
+    gap: 4px;
+    border: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+
+    &:active {
+      box-shadow: var(--fix-ado-win98-pressed);
+    }
+  }
+
+  .bolt-pill-filled-visual {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+  }
+
+  .bolt-coin.size20 {
+    width: 16px;
+    height: 16px;
+  }
+
+  .bolt-pill-content {
+    padding: 0;
+  }
+}
+
+/* A starred person's star lines up with the reviewers' stars above it. */
+html[data-fix-ado-win98="pull-request"] body .fix-ado-starred-reviewer > .fix-ado-star {
+  margin-right: 20px;
+}
+
+/* The Overview's timeline: dotted grey connector lines, as in a Win98 tree view, and each event
+   a 7px white square with a grey edge. */
+html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
+  :is(.bolt-timeline-icon-prefix, .bolt-timeline-icon-suffix) {
+    border-left: 1px dotted #808080;
+  }
+
+  .activity-feed-timeline-iteration {
+    font: 700 11px / 22px var(--fix-ado-win98-font);
+  }
+
+  :has(> .text-ellipsis > .activity-card-time) {
+    align-self: center;
+  }
+
+  /* A push row's time lines up with the other rows' times. */
+  .iteration-card-header :has(> .text-ellipsis > .bolt-time-item) {
+    margin-right: 20px;
+  }
+
+  .activity-feed-timeline-dot {
+    width: 7px;
+    height: 7px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px #808080;
+  }
+}
+
+/* A thread's title bar on the Overview: its action buttons are caption buttons, 16 by 14 and
+   2px apart, and its status a small 18px drop-down button. */
+html[data-fix-ado-win98="pull-request"] body .activity-feed-list .repos-discussion-comment-header {
+  & > .justify-end {
+    gap: 2px;
+    padding-right: 2px;
+  }
+
+  .bolt-button.bolt-button {
+    min-width: 16px;
+    height: 14px;
+    margin: 0;
+    padding: 0 2px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+
+    .fluent-icons-enabled {
+      height: 12px;
+      font-size: 10px;
+    }
+  }
+
+  .bolt-dropdown-expandable > .bolt-button.bolt-button {
+    height: 18px;
+    padding: 0 2px 0 6px;
+  }
+}
+
+/* Code in a comment on the Overview: a sunken white well in Courier New, as in the Files tab,
+   with its copy button beside it on the window face. */
+html[data-fix-ado-win98="pull-request"] body .activity-feed-list .copy-btn-container {
+  background: transparent;
+}
+
+html[data-fix-ado-win98="pull-request"] body .activity-feed-list .markdown-content pre {
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: var(--fix-ado-win98-sunken);
+
+  code {
+    background: transparent;
+  }
+}
+
+/* Threads on the Overview, as in the MainThreads and MainThreadReply artboards: each a small
+   window. Collapsed, it is one grey title bar: +/- box, the author's coin as window icon, name,
+   time, and the status chip at the right end. Open, its file header is the navy title bar, the
+   code a sunken white well, the comments sit on the window face, and the reply closes it. */
+html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
+  /* Azure DevOps keeps a thread row at its old height while a reply is open; the window sets it. */
+  .padding-bottom-16:has(> .bolt-card [data-fix-ado-thread]) {
+    min-height: 0 !important;
+  }
+
+  .bolt-card:has(.comment-file-header, [data-fix-ado-thread]) {
+    border: 0;
+    border-radius: 0;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-window);
+
+    /* The card's own padding is held at 0 by Azure DevOps, so the frame's 3px sit inside it. */
+    & > .bolt-card-content {
+      padding: 3px;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+  }
+
+  [data-fix-ado-thread] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+
+    .repos-comment-viewer,
+    .repos-discussion-comment,
+    .repos-discussion-thread-reply {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    /* Unread comments keep their yellow box, 2px past their edges. */
+    .repos-comment-viewer[data-fix-ado-unread] {
+      background: #ffffe1;
+      box-shadow: 0 0 0 2px #ffffe1;
+    }
+  }
+
+  /* The thread clips what spills out; its unread box reaches 2px past the comments. */
+  [data-fix-ado-thread]:has([data-fix-ado-unread]) {
+    overflow: clip;
+    overflow-clip-margin: 2px;
+  }
+
+  /* Times stay whole: overflow would cut the left edge of Tahoma's first letter. */
+  .text-ellipsis:has(> time) {
+    overflow: visible;
+  }
+
+  .bolt-pill.fix-ado-thread-chip {
+    padding: 0 4px;
+
+    .bolt-pill-content {
+      padding: 0;
+    }
+  }
+
+  .bolt-pill.fix-ado-unresolved-chip {
+    font-weight: 700;
+  }
+
+  /* The timeline icon of a thread row sits beside its title bar. */
+  tr:has([data-fix-ado-thread]) {
+    .bolt-timeline-icon-prefix {
+      height: 1px;
+      min-height: 0;
+    }
+
+    .bolt-timeline-icon-suffix {
+      min-height: 0;
+    }
+  }
+
+  /* Collapsed: the first comment's row is the title bar. */
+  [data-fix-ado-thread="collapsed"]
+    > .repos-comment-viewer:first-child
+    > .repos-discussion-comment
+    > .flex-column
+    > .flex-row {
+    height: 18px;
+    align-items: center;
+    gap: 4px;
+    padding: 0 2px 0 3px;
+    background: var(--fix-ado-win98-title-off);
+    color: #fff;
+
+    .fix-ado-thread-toggle {
+      margin: 0;
+    }
+
+    & > div:has(> .bolt-coin) {
+      width: auto;
+      display: flex;
+    }
+
+    .bolt-coin,
+    .bolt-coin-content {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      font-size: 8px;
+    }
+
+    .repos-comment-editor-fit {
+      padding: 0;
+    }
+
+    .repos-discussion-comment-header {
+      height: 18px;
+      margin: 0;
+      padding: 0;
+      background: none;
+
+      & > .scroll-hidden {
+        flex: 1;
+        gap: 4px;
+      }
+
+      & > .scroll-hidden > div:last-child {
+        flex: 1;
+        margin: 0;
+        gap: 4px;
+      }
+
+      .padding-right-8 {
+        padding: 0;
+        font-weight: 700;
+      }
+
+      :is(.padding-right-8, time) {
+        color: #fff;
+      }
+
+      time {
+        margin: 0;
+      }
+
+      .fix-ado-thread-chip {
+        height: 14px;
+        margin-left: auto;
+      }
+    }
+  }
+
+  /* Open file thread: the file header is the navy title bar. */
+  .comment-file-header:has(+ [data-fix-ado-thread="open"]) {
+    padding: 0;
+    border: 0;
+    background: transparent;
+
+    .comment-file-header-title {
+      height: 18px;
+      margin: 0;
+      padding: 0 2px 0 3px;
+      align-items: center;
+      gap: 4px;
+      background: var(--fix-ado-win98-title);
+      color: #fff;
+      white-space: nowrap;
+
+      .fix-ado-thread-toggle.fix-ado-thread-toggle {
+        width: 13px;
+        margin: 0;
+        padding: 0;
+      }
+
+      & > .secondary-text {
+        display: flex;
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      & > .flex-column {
+        flex-direction: row;
+        align-items: center;
+        gap: 4px;
+      }
+
+      :is(.comment-file-header-link, .secondary-text, time) {
+        margin: 0;
+        color: #fff;
+        line-height: 14px;
+      }
+
+      .comment-file-header-link {
+        font-weight: 700;
+      }
+
+      & > .flex-row {
+        gap: 6px;
+      }
+
+      /* The iteration it was made on: a small raised button on the title bar. */
+      .bolt-button:not(.fix-ado-thread-toggle) {
+        height: 14px;
+        min-width: 16px;
+        padding: 0 3px;
+        background: #c0c0c0;
+        box-shadow: var(--fix-ado-win98-raised);
+        color: #000;
+      }
+    }
+
+    /* The code: up/down boxes beside a sunken white well. */
+    .comment-file-diff-container {
+      margin: 0;
+      padding: 6px 3px 0;
+      border: 0;
+      gap: 4px;
+    }
+
+    .code-view-buttons {
+      width: 13px;
+      padding: 0;
+      justify-content: space-between;
+
+      & > div {
+        padding: 0;
+      }
+    }
+
+    .expand-code-button {
+      width: 13px;
+      height: 13px;
+      min-width: 0;
+      padding: 0;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+    }
+
+    .repos-summary-code-diff {
+      flex: 1;
+      margin: 0;
+      padding: 2px;
+      background: #fff;
+      box-shadow: var(--fix-ado-win98-sunken);
+    }
+  }
+
+  /* Open thread without a file: its first comment's header is the navy title bar, across the
+     whole window, with the +/- box and the author's coin inside it, as when collapsed. */
+  [data-fix-ado-thread="open"]:not(.comment-file-header + *) {
+    padding: 0 0 5px;
+
+    & > .repos-comment-viewer:first-child > .repos-discussion-comment > .flex-column > .flex-row {
+      position: relative;
+
+      & > div:has(> .bolt-coin) {
+        width: 0;
+      }
+
+      .fix-ado-thread-toggle {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        margin: 0;
+      }
+
+      & > div > .bolt-coin {
+        position: absolute;
+        top: 1px;
+        left: 20px;
+        z-index: 1;
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        font-size: 8px;
+      }
+
+      .repos-comment-editor-fit {
+        padding: 0;
+      }
+
+      .repos-discussion-comment-header {
+        height: 18px;
+        margin: 0;
+        padding: 0 2px 0 40px;
+
+        & > .scroll-hidden {
+          gap: 4px;
+        }
+
+        & > .scroll-hidden > div:last-child {
+          margin: 0;
+          gap: 6px;
+        }
+
+        .padding-right-8,
+        time {
+          margin: 0;
+          padding: 0;
+        }
+
+        time {
+          font-weight: 400;
+        }
+
+        .fix-ado-thread-chip {
+          height: 14px;
+          margin: 0;
+        }
+      }
+
+      .markdown-content {
+        margin-top: 6px;
+        padding: 0 6px;
+      }
+    }
+  }
+
+  /* Open thread: comments on the window face, the reply under an etched line. */
+  .comment-file-header + [data-fix-ado-thread="open"] {
+    padding: 0 3px 5px;
+
+    .repos-discussion-comment {
+      margin-top: 8px;
+
+      & > .flex-column > .flex-row > div:has(> .bolt-coin) {
+        width: 30px;
+      }
+
+      .bolt-coin {
+        width: 24px;
+        margin: 0;
+      }
+    }
+
+    .repos-comment-editor-fit {
+      padding: 0;
+    }
+
+    .repos-discussion-comment-header {
+      height: 20px;
+      margin: 0;
+      padding: 0;
+
+      & > .scroll-hidden {
+        gap: 6px;
+      }
+
+      & > .scroll-hidden > div:last-child {
+        margin: 0;
+        gap: 6px;
+      }
+
+      .padding-right-8 {
+        padding: 0;
+        font-weight: 700;
+      }
+
+      time {
+        margin: 0;
+        color: #404040;
+      }
+
+      .fix-ado-thread-chip {
+        height: 14px;
+        margin: 0;
+      }
+    }
+
+    .markdown-content {
+      margin-top: 6px;
+      padding: 0;
+
+      & > p {
+        margin: 0;
+      }
+
+      .copy-btn-container {
+        margin-top: 10px;
+      }
+
+      pre {
+        margin: 0 22px 0 0;
+        padding: 8px 6px;
+
+        &,
+        * {
+          font: 12px / 15px var(--fix-ado-win98-mono);
+        }
+      }
+    }
+
+    .repos-discussion-thread-reply {
+      margin-top: 10px;
+      padding-top: 10px;
+      box-shadow:
+        inset 0 1px #808080,
+        inset 0 2px #fff;
+
+      & > .flex-row {
+        gap: 6px;
+        padding: 0;
+
+        & > div:first-child {
+          width: 24px;
+        }
+
+        .bolt-coin {
+          margin: 0;
+        }
+
+        & > .flex-row {
+          padding: 0;
+        }
+      }
+
+      .bolt-formitem-message {
+        margin-top: 6px;
+      }
+
+      .repos-comment-editor-fit > .justify-end {
+        margin-top: 4px;
+
+        & > .flex-wrap {
+          gap: 6px;
+        }
+      }
+    }
+  }
+}
+
+/* An unfolded push on the Overview, as in the MainPushOpen artboard: the same one-line header as
+   a folded push, and under it its commits in a sunken white list box, indented under the coin. */
+html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
+  [style*="min-height"]:has(> [data-fix-ado-push="open"]) {
+    min-height: 0 !important;
+  }
+
+  .bolt-timeline-row:has([data-fix-ado-push="open"]) .activity-feed-sequence {
+    .bolt-timeline-icon-prefix {
+      min-height: 3px;
+    }
+
+    .bolt-timeline-icon-suffix {
+      min-height: 0;
+    }
+  }
+
+  [data-fix-ado-push="open"] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+
+    .iteration-card-header,
+    .iteration-card-header:hover {
+      margin: 0;
+      background: transparent;
+    }
+
+    .iteration-header {
+      padding: 2px 0;
+      border-bottom: 0;
+    }
+
+    .bolt-table-container {
+      margin: 2px 4px 0 24px;
+      padding: 2px;
+      background: #fff;
+      box-shadow: var(--fix-ado-win98-sunken);
+    }
+
+    .iteration-commits-table {
+      border: 0;
+      background: transparent;
+
+      .bolt-list-row-spacer,
+      .bolt-table-spacer-cell {
+        display: none;
+      }
+
+      .bolt-table-row {
+        height: 44px;
+        border: 0;
+        background: transparent;
+      }
+
+      .bolt-table-cell {
+        padding: 0;
+        border: 0;
+      }
+
+      .bolt-table-two-line-cell {
+        box-sizing: border-box;
+        height: 44px;
+        padding: 7px 6px 0;
+        vertical-align: top;
+      }
+
+      .commit-title-div {
+        height: auto;
+        min-height: 0;
+        padding: 0;
+        justify-content: flex-start;
+        gap: 0;
+      }
+
+      .commit-title {
+        height: 14px;
+        line-height: 14px;
+        font-weight: 700;
+      }
+
+      .bolt-table-two-line-cell-item + .bolt-table-two-line-cell-item {
+        height: 16px;
+        margin-top: 3px;
+      }
+
+      .secondary-text {
+        gap: 8px;
+        color: #404040;
+      }
+
+      .monospaced-xs {
+        font: 11px / 14px var(--fix-ado-win98-mono);
+        color: #000080;
+      }
+    }
+  }
+}
+
+/* ===== Work item, as in the design's WorkItem artboards ===== */
+
+/* A document window: a navy title bar with the type, the title field, a toolbar row, the
+   State, Reason, Area and Iteration combo boxes with the tabs on the right, and the tab's page
+   as a raised property sheet whose sections are group boxes. A work item opened as a pop-up,
+   such as from a board, looks the same inside a dialog window (WorkItemPopup artboard). */
+:is(html[data-fix-ado-win98="work-item"] body, html[data-fix-ado-win98] .work-item-form-dialog) {
+  .work-item-form-header-type-deco {
+    display: none;
+  }
+
+  .work-item-form-header {
+    height: auto;
+    padding: 0;
+    overflow: visible;
+    background: #c0c0c0;
+
+    /* The title bar: the type's icon and name. */
+    & > .secondary-text {
+      height: 18px;
+      margin: 2px 2px 0;
+      padding: 0 3px;
+      align-items: center;
+      background: var(--fix-ado-win98-title);
+      color: #fff;
+      font: 700 11px / 14px var(--fix-ado-win98-font);
+
+      & > div:first-child {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      a.bolt-link {
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .work-item-type-icon {
+        margin: 0;
+        color: #fff;
+      }
+    }
+
+    /* The id, then the title field. */
+    & > .body-xl {
+      position: relative;
+      height: 23px;
+      margin: 4px 8px 0;
+      padding: 0;
+      align-items: center;
+      gap: 6px;
+      font: 700 13px / 16px var(--fix-ado-win98-font);
+
+      & > div {
+        flex: 1;
+        min-width: 0;
+      }
+
+      & > div > .padding-left-8 {
+        flex: 1;
+        padding: 0;
+      }
+
+      .work-item-title-textfield {
+        height: 23px;
+        padding: 0;
+      }
+
+      .work-item-title-textfield input {
+        height: 19px;
+        padding: 0 4px;
+        font: 700 13px / 20px var(--fix-ado-win98-font);
+      }
+
+      .bolt-clipboard-button {
+        position: absolute;
+        top: 0;
+        right: 2px;
+      }
+    }
+
+    /* Assigned to, comments, tags, and the command bar on the right. */
+    & > div:nth-child(3) {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 23px;
+      margin: 4px 8px 0;
+
+      & > .work-item-header-command-bar {
+        order: 1;
+        flex: none;
+        margin-left: auto;
+        padding: 0;
+        height: 23px;
+      }
+
+      .bolt-header-commandbar-button-group {
+        flex: none;
+        gap: 6px;
+        padding: 0;
+        overflow: visible;
+      }
+
+      .bolt-header-command-item-button {
+        margin: 0;
+      }
+
+      .bolt-header-command-item-button.bolt-icon-button:not(
+          .bolt-split-button,
+          :has(.bolt-button-text)
+        ),
+      .bolt-expandable-button .bolt-button {
+        width: 23px;
+        padding: 0;
+        justify-content: center;
+      }
+
+      .bolt-header-commandbar-button-group .bolt-button {
+        gap: 4px;
+      }
+
+      /* Refresh, Undo and More: raised square buttons, as on the top bar. */
+      .bolt-header-commandbar-button-group .bolt-button.subtle.subtle {
+        background: #c0c0c0;
+        box-shadow: var(--fix-ado-win98-raised);
+      }
+    }
+
+    /* Assigned to: a 21px field with a 16px coin. */
+    .work-item-assignment-dropdown {
+      height: 21px;
+      min-height: 0;
+      padding: 0 4px 0 3px;
+      align-items: center;
+
+      & > div:first-child {
+        width: auto;
+        padding: 0;
+        margin-right: 4px;
+      }
+
+      .bolt-coin {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+      }
+
+      input {
+        padding: 0;
+      }
+    }
+
+    .bolt-identitypickerdropdown,
+    .bolt-identitypickerdropdown-container {
+      height: 21px;
+    }
+
+    .wif-comment-count-link {
+      & > .fluent-icons-enabled {
+        width: 12px;
+      }
+
+      align-self: center;
+      gap: 0;
+      padding: 0 4px;
+      color: #0000ee;
+
+      .wif-comment-count-link-text {
+        text-decoration: underline;
+      }
+    }
+
+    .work-item-tag-picker {
+      height: 23px;
+      align-items: center;
+      gap: 4px;
+      padding: 0;
+
+      .bolt-pill {
+        height: 16px;
+        margin: 0;
+        padding: 0 3px 0 6px;
+        gap: 4px;
+      }
+
+      .bolt-pill-content {
+        padding: 0;
+      }
+
+      .bolt-pill-button {
+        width: 8px;
+        min-width: 0;
+        height: 8px;
+        padding: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      & > .bolt-button {
+        width: 19px;
+        height: 19px;
+        margin: 0;
+        justify-content: center;
+      }
+    }
+  }
+
+  /* The fields: labels in two columns, combo boxes, and the tabs on the right. */
+  .work-item-form-subheader {
+    height: 50px;
+    margin: 6px 8px 0;
+    padding: 0;
+    flex-wrap: nowrap;
+    gap: 16px;
+    overflow: visible;
+    background: #c0c0c0;
+
+    & > .padding-left-8:first-child,
+    & > .wif-node-dropdowns {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 0;
+    }
+
+    & > .wif-node-dropdowns {
+      flex: 1;
+      min-width: 0;
+    }
+
+    & > .wif-node-dropdowns > div,
+    & > .wif-node-dropdowns > div > div {
+      display: flex;
+      width: 100%;
+      min-height: 0;
+      height: 21px;
+    }
+
+    & > .padding-left-8:first-child > div,
+    & > .wif-node-dropdowns > div,
+    & > .wif-node-dropdowns > div > div,
+    & > .padding-left-8:first-child > div > div {
+      flex: none;
+      height: 21px;
+      min-height: 0;
+      margin: 0;
+    }
+
+    .work-item-control-label {
+      height: 21px;
+      padding: 0 4px 0 0;
+      white-space: nowrap;
+      align-items: center;
+      color: #000;
+      font-size: 11px;
+
+      label {
+        color: #000;
+      }
+    }
+
+    & > .padding-left-8:first-child .work-item-control-label {
+      width: 85px;
+    }
+
+    & > .wif-node-dropdowns .work-item-control-label {
+      width: 125px;
+    }
+
+    .wif-label-shortcut-char {
+      text-decoration: underline;
+    }
+
+    .work-item-control-before-content {
+      width: 16px;
+      align-items: center;
+    }
+
+    .state-circle {
+      width: 10px;
+      height: 10px;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      box-shadow: inset 0 0 0 1px #000;
+    }
+
+    & > .padding-left-8:first-child .work-item-control-control {
+      width: 160px;
+      flex: none;
+    }
+
+    & > .wif-node-dropdowns .work-item-control-control {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bolt-textfield {
+      position: relative;
+      height: 21px;
+      min-height: 0;
+      padding: 0 4px;
+    }
+
+    .bolt-textfield-input {
+      padding: 0;
+    }
+
+    /* A read-only field is grey with grey text, as Win98 shows a disabled one. */
+    .readOnly.bolt-textfield {
+      background: #c0c0c0;
+
+      input {
+        color: #808080;
+      }
+    }
+
+    /* The arrow button is drawn by the field, so it shows whatever the icon font does. The
+       icon stays on top, invisible, to take the click. */
+    .bolt-editable-dropdown .bolt-textfield::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 17px;
+      height: 17px;
+      background: #c0c0c0
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
+        center / 7px 4px no-repeat;
+      box-shadow:
+        inset -1px -1px #0a0a0a,
+        inset 1px 1px #dfdfdf,
+        inset -2px -2px #808080,
+        inset 2px 2px #fff;
+      pointer-events: none;
+    }
+
+    .bolt-expandable-textfield-icon {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      z-index: 1;
+      width: 17px;
+      height: 17px;
+      margin: 0;
+      padding: 0;
+      opacity: 0;
+    }
+
+    .wif-tabbar-container {
+      flex: none;
+      justify-content: space-between;
+      padding: 0;
+    }
+
+    .wif-tabbar-container > .secondary-text {
+      height: 14px;
+      color: #404040;
+
+      .text-ellipsis {
+        overflow: visible;
+      }
+    }
+
+    .wif-tabbar {
+      height: 23px;
+      margin-bottom: -4px;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    /* The last tab ends 1px from the sheet's right bevel, as in the design. */
+    .bolt-tabbar-tabs {
+      height: 23px;
+      padding: 0 1px 0 0;
+    }
+
+    .bolt-tab {
+      min-width: 0;
+      font-size: 11px;
+    }
+
+    .bolt-tab-inner-container,
+    .bolt-tab .bolt-tab-text.bolt-tab-text,
+    .bolt-tab .fluent-icons-enabled {
+      gap: 4px;
+      padding: 0;
+      overflow: visible;
+    }
+
+    .bolt-tab .fluent-icons-enabled {
+      flex: none;
+      width: 12px;
+    }
+
+    .bolt-tab .bolt-tab-badge.bolt-tab-badge {
+      height: auto;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .bolt-tab-badge .bolt-pill-content {
+      padding: 0;
+    }
+  }
+
+  /* The tab's page: a raised property sheet. Its bevel is a border image, so the page scrolls
+     inside the bevel instead of over it. */
+  .work-item-form-page-content {
+    width: auto;
+    margin: 4px;
+    padding: 12px 10px 10px;
+    border: 2px solid;
+    border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='5' shape-rendering='crispEdges'%3E%3Crect width='5' height='5' fill='%23c0c0c0'/%3E%3Cpath d='M0 0h5v2H0zM0 0h2v5H0z' fill='%23dfdfdf'/%3E%3Cpath d='M0 3h5v2H0zM3 0h2v5H3z' fill='%23808080'/%3E%3Cpath d='M0 0h5v1H0zM0 0h1v5H0z' fill='%23fff'/%3E%3Cpath d='M0 4h5v1H0zM4 0h1v5H4z' fill='%230a0a0a'/%3E%3C/svg%3E")
+      2 / 2px stretch;
+    background: #c0c0c0;
+    box-shadow: none;
+  }
+
+  .work-item-grid {
+    gap: 0 16px;
+  }
+
+  /* Each section is a group box: its name over the top edge, its buttons as caption buttons. */
+  .work-item-form-group,
+  .wit-discussion-group {
+    margin: 0;
+    padding: 0 0 14px;
+  }
+
+  .work-item-form-collapsible-section {
+    position: relative;
+    margin-top: 6px;
+    padding: 12px 8px 8px;
+    border: 1px solid #808080;
+    box-shadow:
+      inset 1px 1px #fff,
+      1px 1px #fff;
+  }
+
+  .work-item-form-collapsible-header {
+    position: absolute;
+    top: -7px;
+    left: 6px;
+    right: 6px;
+    height: 14px;
+    margin: 0;
+    border: 0;
+    align-items: center;
+
+    & > span {
+      height: 14px;
+      padding: 0 2px;
+      background: #c0c0c0;
+      font: 400 11px / 14px var(--fix-ado-win98-font);
+    }
+  }
+
+  .work-item-form-section-controls {
+    display: flex;
+    gap: 2px;
+    padding: 0 2px;
+    background: #c0c0c0;
+  }
+
+  /* Win98 caption buttons are always there; Azure DevOps shows them on hover. */
+  .work-item-form-collapsible-section .work-item-form-toggle.bolt-button.bolt-button {
+    opacity: 1;
+    width: 16px;
+    min-width: 0;
+    height: 14px;
+    padding: 0;
+    justify-content: center;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  .work-item-form-collapsible-section-content,
+  .work-item-form-control-wrapper,
+  .work-item-form-control-content-wrapper {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Rich text: a sunken white well. */
+  .work-item-form-control-content.show-markdown-preview {
+    padding: 2px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  .markdown-content.markdown-editor-preview,
+  .markdown-editor-placeholder {
+    padding: 4px 6px;
+    font: 11px / 14px var(--fix-ado-win98-font);
+
+    ul,
+    ol {
+      padding-left: 24px;
+    }
+  }
+
+  .markdown-editor-placeholder {
+    height: 46px;
+    padding: 4px 6px;
+    color: #808080;
+    font-style: normal;
+  }
+
+  /* Planning: each label over its field. */
+  .workitemcontrol-label {
+    color: #000;
+    font-size: 11px;
+  }
+
+  .work-item-form-control-wrapper + .work-item-form-control-wrapper {
+    margin-top: 6px;
+  }
+
+  .work-item-form-control-content-wrapper > div:first-child:has(> label) {
+    margin-bottom: 2px;
+  }
+
+  /* White, as every Win98 text field; a board's pop-up set the face colour through this variable. */
+  .work-item-form-control.bolt-textfield {
+    --background-color: #fff;
+    height: 21px;
+    padding: 0 4px;
+  }
+
+  .work-item-form-control .bolt-textfield-input {
+    padding: 0;
+  }
+
+  /* Deployment and Development: text on the face, beside the icon. */
+  .deployments-zero-data,
+  .links-control-zero-state {
+    background: transparent;
+  }
+
+  /* The icon keeps its 30px square, also before its image loads. */
+  .deployments-zero-data .zero-data-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Add link: a push button. */
+  .work-item-form-control-wrapper .bolt-button.subtle:not(.remove-item-button),
+  .work-item-form-control-wrapper
+    .bolt-button.subtle:not(.remove-item-button, :hover, :active, [aria-expanded="true"]) {
+    min-width: 75px;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  /* Links are Win98 hyperlinks: blue and underlined. */
+  .work-item-form-page-content :is(.bolt-link, .markdown-content a) {
+    color: #0000ee;
+    text-decoration: underline;
+  }
+
+  /* Azure DevOps takes the underline off these links with !important. */
+  :is(.artifact-link-link, .bolt-formitem-message .bolt-link).no-underline-link {
+    text-decoration: underline !important;
+  }
+
+  /* These clip their text for an ellipsis. On a half-pixel column they cut off the first letter's
+     edge, and the state square's black edge sits outside the square: 1px of slack shows both. */
+  :is(.artifact-link-link, .artifact-details .text-ellipsis) {
+    overflow: clip;
+    overflow-clip-margin: 1px;
+  }
+
+  .preview-mode-container {
+    min-height: 0;
+  }
+
+  /* Discussion: the new comment field, then each comment as a coin, a header line and its
+     text in a sunken white well. */
+  :is(.discussion-new-comment, .comment-item) {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .comment-item {
+    margin-top: 14px;
+  }
+
+  :is(.discussion-new-comment > div:first-child, .comment-item-left) {
+    flex: none;
+    width: 32px;
+    padding: 0;
+
+    /* A flex box, as elsewhere: as a block, the coin sat 4px under its column's top. */
+    .bolt-coin {
+      display: flex;
+      width: 24px;
+      height: 24px;
+      margin: 0;
+    }
+  }
+
+  .comment-item-left > div {
+    width: 24px;
+    margin: 0;
+    padding: 0;
+  }
+
+  :is(.new-comment-div, .comment-item-right, .comment-viewer, .comment-editor) {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  :is(
+    .markdown-editor-form-item-wrapper,
+    .markdown-editor-text-field-container,
+    .comment-editor,
+    .new-comment-div,
+    .discussion-new-comment > div:first-child
+  ) {
+    height: auto;
+    min-height: 0;
+  }
+
+  .comment-editor .toolbar-area {
+    display: none;
+  }
+
+  /* A screen reader's text: no height and no margins, which took a pixel off the new comment.
+     It stays relative, as Azure DevOps needs for its scroll bars. */
+  .comment-editor .markdown-formatting-announcer.visually-hidden {
+    height: 0;
+    margin: 0;
+  }
+
+  .markdown-editor.enter-new-comment textarea::placeholder {
+    color: #808080;
+  }
+
+  .markdown-editor.enter-new-comment {
+    height: 32px;
+    margin: 0;
+    padding: 4px 6px;
+
+    textarea {
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
+      font: 11px / 14px var(--fix-ado-win98-font);
+    }
+  }
+
+  .discussion-new-comment .bolt-formitem-message {
+    margin-top: 4px;
+    color: #404040;
+
+    .markdown-text-container > div {
+      gap: 4px;
+    }
+
+    .fluent-icons-enabled {
+      width: 12px;
+    }
+  }
+
+  .comment-viewer .comment-header.comment-header {
+    height: 23px;
+    margin: 0 0 2px;
+    padding: 0;
+    align-items: center;
+  }
+
+  .comment-header-main {
+    height: 23px;
+    margin: 0;
+    gap: 6px;
+    align-items: center;
+
+    .user-display-name.user-display-name {
+      margin: 0;
+      color: #000;
+      font-weight: 700;
+    }
+
+    .comment-timestamp {
+      margin: 0;
+      color: #404040;
+    }
+  }
+
+  .comment-viewer-toolbar .bolt-button {
+    width: 20px;
+    min-width: 0;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .comment-viewer > div:last-child > .markdown-content {
+    margin: 0;
+  }
+
+  .comment-viewer > div:last-child {
+    padding: 2px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  /* An external link's icon: a 12px glyph, so the text after it lands on whole pixels. */
+  .markdown-content .ms-Icon--NavigateExternalInline {
+    width: 12px;
+    vertical-align: top;
+  }
+
+  /* A person's mention: bold, in link blue, without its chip. */
+  .mention-preview-person {
+    padding: 0;
+    background: transparent;
+    color: #0000ee;
+    font-weight: 700;
+  }
+
+  /* Related work: each link type bold, 8px under the Add link button. */
+  .compact-links-list {
+    margin-top: 8px;
+  }
+
+  .link-type-name {
+    padding: 0 0 4px;
+    font-weight: 700;
+  }
+
+  .artifact-link .state-circle {
+    width: 8px;
+    height: 8px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: 0 0 0 1px #000;
+  }
+
+  /* Remove link: a small flat button that shows on hover, as before. */
+  .remove-item-button.bolt-button.bolt-button {
+    width: 16px;
+    min-width: 0;
+    height: 16px;
+    padding: 0;
+    justify-content: center;
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* The pop-up's window: a Win98 frame with no drop shadow, as the other dialogs. Its two header
+   buttons are caption buttons in the title bar; the resize grip sits in the corner. */
+html[data-fix-ado-win98] .bolt-portal-host .work-item-form-dialog {
+  box-shadow: var(--fix-ado-win98-window);
+
+  .bolt-dialog-root {
+    margin: 0;
+  }
+
+  .work-item-form-header > .secondary-text > .bolt-button {
+    width: 16px;
+    min-width: 0;
+    height: 14px;
+    margin-left: 2px;
+    padding: 0;
+    justify-content: center;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+    color: #000;
+  }
+}
+
+/* The New chip on a feed row, as in the NewChip artboard: the settings panel's NEW chip, tooltip
+   yellow with a black edge, 10px bold capitals, and no glow. Its yellow ties it to unread
+   comments. */
+html[data-fix-ado-win98="pull-request"] body .bolt-pill.fix-ado-new-chip {
+  height: 14px;
+  padding: 0 4px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #ffffe1;
+  box-shadow: none;
+  color: #000;
+  font: 700 10px / 12px var(--fix-ado-win98-font);
+  text-transform: uppercase;
+
+  .bolt-pill-content.bolt-pill-content {
+    padding: 0;
+    color: inherit;
+    font: inherit;
+  }
+}
+
+/* Pipeline run, logs view, as in the design's PipelineRunSteps and PipelineRunLog artboards:
+   the jobs and steps in one sunken white tree view, the log in a sunken black console under
+   a grey strip with the step's name and the buttons. */
+html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
+  .bolt-master-panel {
+    width: 280px;
+    border: 0;
+    background: #c0c0c0;
+  }
+
+  .bolt-master-panel-header .bolt-header-title-row > * {
+    font-size: 11px;
+  }
+
+  .bolt-master-panel-content {
+    flex: 1;
+    min-height: 0;
+    margin: 0 4px 4px;
+    padding: 4px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  .run-logs-tree {
+    .bolt-table-container.bolt-table-container,
+    .bolt-table-header-cell.bolt-table-header-cell {
+      box-shadow: none;
+    }
+
+    table,
+    thead,
+    tbody,
+    tr,
+    th,
+    td {
+      display: block;
+      border: 0;
+      background: none;
+    }
+
+    colgroup,
+    .bolt-table-header-border,
+    .bolt-table-cell-compact,
+    .bolt-list-row-spacer {
+      display: none;
+    }
+
+    .bolt-table-container {
+      overflow: visible;
+      padding: 0;
+    }
+
+    /* A stage after the first: a dotted line above it, as between runs in the pipeline tab. */
+    & > div + div {
+      margin-top: 4px;
+      padding-top: 4px;
+      border-top: 1px dotted #808080;
+    }
+
+    .bolt-table-header-cell,
+    .bolt-tree-cell {
+      height: 20px;
+      padding: 0 4px;
+    }
+
+    .bolt-table-header-cell-content,
+    .bolt-table-cell-content {
+      height: 20px;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    /* Jobs one level in from their stage. */
+    .bolt-tree-cell.bolt-tree-cell {
+      padding-left: 20px;
+      border: 0;
+    }
+
+    /* A stage: no +/- box, but its room, so all icons line up. */
+    .bolt-table-header-cell-content::before {
+      content: "";
+      width: 9px;
+      flex: none;
+      margin: 0;
+    }
+
+    .bolt-table-header-cell-text {
+      padding: 0 2px;
+      color: #000;
+      font-weight: 700;
+    }
+
+    .bolt-status {
+      margin: 0;
+    }
+
+    .bolt-tree-expand-button {
+      width: 9px;
+      height: 9px;
+      margin: 0;
+      padding: 0;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2z'/%3E%3C/svg%3E")
+        0 0 / 9px no-repeat;
+
+      &::before {
+        content: none;
+      }
+
+      &.invisible {
+        visibility: hidden;
+      }
+    }
+
+    .bolt-tree-row[aria-expanded="false"] .bolt-tree-expand-button {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' shape-rendering='crispEdges'%3E%3Crect x='.5' y='.5' width='8' height='8' fill='%23fff' stroke='%23808080'/%3E%3Cpath d='M2 4h5v1H2zM4 2h1v5H4z'/%3E%3C/svg%3E");
+    }
+
+    .job-detail {
+      align-items: center;
+      gap: 4px;
+      margin: 0;
+    }
+
+    .job-name-area {
+      align-items: center;
+      gap: 4px;
+      margin: 0;
+
+      & > span {
+        padding: 0 2px;
+        color: #000;
+      }
+    }
+
+    .run-job-cell .job-name-area > span {
+      font-weight: 700;
+    }
+
+    .job-duration {
+      width: auto;
+      align-self: center;
+      margin-left: auto;
+      color: #404040;
+    }
+
+    .bolt-tree-row:is(.selected, [aria-selected="true"]) {
+      background: none;
+
+      .job-name-area > span {
+        background: #000080;
+        color: #fff;
+        font-weight: 400;
+      }
+    }
+  }
+
+  .logs-view {
+    padding: 0 4px 4px;
+    background: #c0c0c0;
+
+    & > div {
+      display: flex;
+      flex-direction: column;
+    }
+  }
+
+  .log-header.log-header {
+    height: 31px;
+    flex: none;
+    margin: 0;
+    padding: 0 0 0 4px;
+    background: none;
+    color: #000;
+
+    & > div {
+      width: 100%;
+      height: 31px;
+      margin: 0;
+      align-items: center;
+    }
+
+    .bolt-header-title {
+      margin: 0;
+      padding: 0;
+      font-weight: 700;
+    }
+
+    /* The step's status icon at 16px, as a window's icon. */
+    .job-header {
+      align-items: center;
+      gap: 4px;
+      margin: 0;
+
+      .status,
+      .bolt-status {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+      }
+
+      .title-m {
+        font-size: 11px;
+        line-height: 14px;
+      }
+    }
+
+    .reader-actions,
+    .reader-actions > * {
+      height: 23px;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+    }
+
+    .log-header-button {
+      justify-content: center;
+      padding: 0 10px;
+
+      .bolt-button-text {
+        padding: 0;
+      }
+    }
+
+    /* The more button's wrapper keeps the console's black: none here. */
+    .reader-actions .themed {
+      background: none;
+    }
+
+    /* Icon buttons: 23px square toolbar buttons. */
+    .reader-actions button:not(.log-header-button) {
+      width: 23px;
+      min-width: 23px;
+      justify-content: center;
+    }
+  }
+
+  .pl-reader {
+    container-type: inline-size;
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 6px;
+    background: #000;
+    border: 1px solid;
+    border-color: #808080 #fff #fff #808080;
+    box-shadow:
+      inset 1px 1px #0a0a0a,
+      inset -1px -1px #dfdfdf;
+
+    /* Azure DevOps places the lines every 20px. */
+    .line-row {
+      padding: 0;
+    }
+
+    .content {
+      margin: 0;
+    }
+
+    /* A group's triangle sits in the gutter, 4px after the line number and 2px before the
+       text, so its text lines up with the others. */
+    .group-expand > .fluent-icons-enabled {
+      width: 12px;
+      margin-left: -14px;
+
+      .group-icon {
+        width: 12px;
+        padding: 0;
+      }
+    }
+
+    .line-area {
+      align-items: flex-start;
+      padding: 0;
+    }
+
+    .line {
+      width: 36px;
+      margin-right: 18px;
+      padding: 0;
+      color: #808080;
+      text-align: right;
+    }
+
+    /* The section bar that stays at the top while its step's lines scroll under it. It is as
+       wide as the console, not as the lines, which scroll sideways. */
+    .sec-sticky .sec-area.sec-area {
+      left: 0;
+      box-sizing: border-box;
+      width: 100cqw;
+      height: 20px;
+      min-height: 0;
+      margin: 0;
+      padding: 0 4px;
+      border: 0;
+      border-bottom: 1px solid #808080;
+      background: #000;
+      box-shadow: none;
+      color: #fff;
+      font:
+        700 11px / 14px Tahoma,
+        "MS Sans Serif",
+        Geneva,
+        Verdana,
+        sans-serif;
+
+      .status-area {
+        max-width: 100%;
+        height: 19px;
+        margin: 0;
+        align-items: center;
+      }
+
+      .sec-content {
+        gap: 4px;
+        margin: 0;
+      }
+
+      .title {
+        margin: 0;
+      }
+
+      .bolt-status {
+        margin: 0;
+      }
+
+      * {
+        font: inherit;
+      }
+
+      .far-right {
+        margin: 0 0 0 auto;
+        color: #c0c0c0;
+        font-weight: 400;
+      }
+    }
+
+    .pl-warning {
+      color: #ff0;
+    }
+
+    .pl-section {
+      color: #0f0;
+    }
+
+    .pl-command {
+      color: #0ff;
+    }
+
+    .pl-error {
+      color: #f00;
+    }
+  }
+}
+
+/* Pipeline run, summary, as in the design's PipelineRunSummary artboard. */
+html[data-fix-ado-win98="pipeline-run"] body .run-details-page {
+  /* The run's ⋮ menu: a 23px push button, 4px after the default button. */
+  .bolt-header-commandbar .bolt-expandable-button {
+    margin: 2px 2px 2px 4px;
+
+    .bolt-button {
+      width: 23px;
+      min-width: 0;
+      height: 23px;
+      padding: 0;
+      justify-content: center;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+    }
+  }
+
+  .run-view-header .bolt-header-title-row .bolt-header-title * {
+    font-size: 11px;
+  }
+
+  /* Win98 has no semibold. */
+  .stage-title {
+    font-weight: 700;
+  }
+
+  /* The info message: a yellow tip box with a black line. */
+  .bolt-messagecard {
+    border-color: #000;
+    background: #ffffe1;
+    box-shadow: none;
+
+    .bolt-messagebar {
+      background: transparent;
+    }
+  }
+
+  .pipeline-link:not(.primary-text) {
+    color: #0000ee;
+  }
+
+  /* The issues tab stands on its line; the list keeps its place. */
+  .issues-card-content > .bolt-tabbar {
+    margin-bottom: 16px;
+    padding-bottom: 0;
+  }
+
+  /* No line between the Stages and Jobs tabs and the stages: the tab row has its own. */
+  .jobs-card-content {
+    border-top: 0;
+  }
+
+  /* A stage is a raised box, as a button: it opens the stage's logs. */
+  .stage-card {
+    border-color: #fff #0a0a0a #0a0a0a #fff;
+    background: #c0c0c0;
+    box-shadow:
+      inset 1px 1px #dfdfdf,
+      inset -1px -1px #808080;
+  }
+
+  .stage-progress-row > .text-ellipsis {
+    overflow: visible;
+  }
+
+  /* The line from one stage to the next. */
+  .dtc-canvas-position path {
+    stroke: #000;
+    stroke-width: 1px;
+    shape-rendering: crispEdges;
+  }
+}
+
+/* Board, as in the design's Board artboard. */
+html[data-fix-ado-win98="board"] body {
+  /* The board picker: its name in bold. */
+  .wit-kanban-board-header-row .directory-selector-dropdown .bolt-button {
+    font-weight: 700;
+  }
+
+  /* Icon buttons in the headers and filter bar: 23px square toolbar buttons. */
+  :is(.wit-kanban-board-header-row, .boards-tabs-header, .vss-FilterBar)
+    .bolt-icon-button.icon-only,
+  .wit-kanban-board-header-row .title-l .bolt-icon-button,
+  .boards-tabs-header .bolt-header-commandbar-button-group > .bolt-icon-button {
+    justify-content: center;
+    width: 23px;
+    min-width: 23px;
+    padding: 0;
+  }
+
+  /* The pivot tabs stand on a line that runs to the toolbar. */
+  .boards-tabs-header .bolt-tabbar {
+    align-self: stretch;
+  }
+
+  /* The keyword field is white, as every Win98 text field. */
+  .vss-FilterBar .bolt-text-filterbaritem.bolt-text-filterbaritem {
+    background: #fff;
+  }
+
+  /* The board sits in a teal well. */
+  .board-wrapper {
+    background: #008080;
+  }
+
+  /* The board's scroll area is teal too, so the teal runs on under columns scrolled into view. */
+  :has(> .board-wrapper) {
+    background: #008080 local;
+  }
+
+  /* A column is a window: its title bar inside the frame, joined to its body. */
+  .kanban-board-column-header-container.kanban-board-column-header-container {
+    margin-bottom: 0;
+    background: transparent;
+  }
+
+  .kanban-board-column-header.kanban-board-column-header {
+    height: 22px;
+    padding: 3px 3px 1px;
+    background:
+      var(--fix-ado-win98-title) content-box,
+      #c0c0c0;
+    box-shadow:
+      inset 1px 1px #dfdfdf,
+      inset -1px 0 #0a0a0a,
+      inset 2px 2px #fff,
+      inset -2px 0 #808080;
+
+    & > .flex-row {
+      height: 18px;
+      align-items: center;
+      padding: 0 2px 0 3px;
+    }
+
+    .click-edit-field {
+      font-weight: 700;
+    }
+
+    .board-column-item-count {
+      line-height: 14px;
+    }
+  }
+
+  .kanban-board-column.kanban-board-column {
+    box-shadow:
+      inset -1px -1px #0a0a0a,
+      inset 1px 0 #dfdfdf,
+      inset -2px -2px #808080,
+      inset 2px 0 #fff;
+  }
+
+  /* Collapse: a caption button, as the days toggle beside the name. */
+  .kanban-board-column-header .kanban-board-column-collapse-button.bolt-button.bolt-button {
+    flex: none;
+    justify-content: center;
+    width: 16px;
+    min-width: 0;
+    height: 14px;
+    padding: 0;
+    margin: 2px 2px 0 0;
+    box-shadow: var(--fix-ado-win98-raised);
+  }
+
+  /* The search button beside New item: a 23px push button. */
+  .board-column-button.icon-only {
+    justify-content: center;
+    width: 23px;
+    padding: 0;
+  }
+
+  /* A card's type icon, number and title, 4px and 6px apart. */
+  .wit-card .card-content > .flex-row:first-child .rhythm-horizontal-8 {
+    display: flex;
+    gap: 4px;
+
+    .title {
+      margin-left: 2px;
+    }
+  }
+}
+
+/* A drop-down that checks several items, such as a board filter, as in the BoardFilter artboard:
+   a search field, then a white list box of checkbox rows, then Clear. A checked row stays white
+   with a check in its box; only the hovered or focused row is navy. */
+html[data-fix-ado-win98]
+  .bolt-portal-host
+  .bolt-callout-content:has(.bolt-list-row .bolt-checkbox) {
+  .bolt-textfield {
+    height: 21px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    /* The 16px magnifier, 4px, then the text. */
+    & > .fluent-icons-enabled,
+    & > .fluent-icons-enabled > * {
+      flex: none;
+      width: 16px;
+      margin: 0;
+      padding: 0;
+    }
+
+    input {
+      margin: 0;
+      padding: 0 0 0 4px;
+
+      &::placeholder {
+        color: #808080;
+        opacity: 1;
+      }
+    }
+  }
+
+  /* The list box, 4px under the search field when there is one. */
+  :has(> .bolt-textfield) + .v-scroll-auto:has(> .bolt-list) {
+    margin-top: 4px;
+  }
+
+  .v-scroll-auto:has(> .bolt-list) {
+    margin-top: 0;
+    padding: 2px;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+  }
+
+  .bolt-list {
+    width: 100%;
+    border-spacing: 0;
+  }
+
+  /* A row is 17px: its checkbox 4px in, then 6px, then the name; every cell fits the row, so the
+     hovered row's navy covers its whole name. */
+  .bolt-list-row {
+    height: 17px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px;
+    background: #fff;
+    color: #000;
+
+    & > .bolt-list-cell {
+      flex: none;
+      width: auto;
+      height: 17px;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      display: flex;
+      align-items: center;
+
+      &:last-child {
+        flex: 1;
+        min-width: 0;
+      }
+
+      :is(
+        .bolt-table-cell-content,
+        .bolt-list-box-cell-container,
+        .bolt-list-cell-child,
+        .flex-row,
+        .flex-row-inline
+      ):not(.bolt-checkmark) {
+        height: 17px;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        gap: 4px;
+        align-items: center;
+      }
+
+      /* The checkbox's wrappers are as tall as the box, so it sits on whole pixels. */
+      &.bolt-table-cell-select :is(.flex-row, .flex-row-inline) {
+        display: flex;
+        height: 13px;
+      }
+
+      /* A person's 16px avatar, 4px, then the name. A 1px margin under each centres them on
+         whole pixels in the 17px row. */
+      :is(.identity-view, .identity-avatar) {
+        margin: 0;
+      }
+
+      :is(.identity-view, .text-ellipsis) {
+        margin-bottom: 1px;
+      }
+    }
+
+    &:hover,
+    &.focused {
+      background: #000080;
+      color: #fff;
+    }
+
+    /* A checked row is selected, and the menus' rule makes a selected row's text white. */
+    &:not(:hover, .focused) :not(svg, svg *) {
+      color: #000;
+    }
+  }
+
+  /* The invented table form of the list, before the real capture, keeps its cell padding. */
+  td.bolt-list-cell {
+    padding: 0 4px;
+  }
+
+  .bolt-list-cell-content {
+    gap: 6px;
+  }
+
+  .bolt-checkbox {
+    flex: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .bolt-checkmark {
+    width: 13px;
+    height: 13px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    .fabric-icon {
+      visibility: hidden;
+    }
+  }
+
+  .bolt-checkbox[aria-checked="true"] .bolt-checkmark {
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E")
+        center / 7px 7px no-repeat,
+      #fff;
+  }
+
+  /* Clear: a push button at the right, under the list. */
+  :has(> .bolt-button):last-child {
+    margin-top: 4px;
+    padding: 0;
+    align-items: flex-end;
+    justify-content: flex-end;
+
+    .bolt-button {
+      min-width: 75px;
+      height: 23px;
+      margin: 0;
+      justify-content: center;
+      gap: 4px;
+      padding: 0 10px;
+      border-radius: 0;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+      color: #000;
+
+      & > * {
+        margin: 0;
+      }
+
+      .fluent-icons-enabled {
+        flex: none;
+        width: 16px;
+      }
+    }
+  }
+}
+
+/* The pull request list's filter bar, as in the PullRequestsMineFilter artboard: when it is open
+   it is the tab panel's first row, 14px above the list, so tabs, filter and list are one
+   property sheet. Its fields are 21px, sunken and white, 6px apart, and fit the row. The same
+   bar shows on the Mine, Active and Completed tabs. */
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body
+  .bolt-page
+  > div:has(> .vss-FilterBar) {
+  margin: 0;
+  padding: 14px 12px 0;
+  background: #c0c0c0;
+  box-shadow:
+    inset -1px 0 #0a0a0a,
+    inset 1px 1px #fff,
+    inset -2px 0 #808080,
+    inset 2px 2px #dfdfdf;
+
+  & + .page-content {
+    padding-top: 14px;
+    box-shadow:
+      inset -1px -1px #0a0a0a,
+      inset 1px 0 #fff,
+      inset -2px -2px #808080,
+      inset 2px 0 #dfdfdf;
+  }
+
+  .vss-FilterBar {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .vss-FilterBar--list {
+    height: 23px;
+    gap: 6px;
+  }
+
+  .vss-FilterBar--list > .vss-FilterBar--item {
+    flex: 0 1 200px;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+
+    &.vss-FilterBar--item-keyword-container {
+      flex: 1 1 auto;
+      min-width: 140px;
+      width: auto;
+      margin: 0;
+    }
+
+    &:has(.bolt-dropdown-expandable-text-field) {
+      flex-basis: 160px;
+    }
+
+    /* Each field fills its item. */
+    :is(.bolt-identitypickerdropdown, .bolt-dropdown-expandable-text-field, .flex-column) {
+      width: 100%;
+      min-width: 0;
+    }
+  }
+
+  .bolt-textfield.bolt-textfield {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 21px;
+    gap: 4px;
+    padding: 3px 4px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    .prefix,
+    .fluent-icons-enabled:has(> .prefix) {
+      flex: none;
+      width: 16px;
+      margin: 0;
+      padding: 0;
+    }
+
+    input {
+      min-width: 0;
+      height: 15px;
+      margin: 0;
+      padding: 0;
+
+      &::placeholder {
+        color: #808080;
+        opacity: 1;
+      }
+    }
+
+    /* The version field is a combo box: its arrow a raised button inside the right edge. */
+    &:has(.suffix) {
+      padding-right: 2px;
+    }
+
+    .fluent-icons-enabled:has(> .suffix) {
+      flex: none;
+      width: 16px;
+      height: 17px;
+      margin: 0;
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
+          center / 7px 4px no-repeat,
+        #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+
+      .suffix {
+        visibility: hidden;
+      }
+    }
+  }
+
+  /* Clear: a flat 23px toolbar button, like the filter button by the tabs. */
+  .vss-FilterBar--right-items {
+    flex: none;
+    margin: 0;
+
+    .bolt-button {
+      width: 23px;
+      height: 23px;
+      min-width: 0;
+      padding: 0;
+      justify-content: center;
+      background: transparent;
+      box-shadow: none;
+    }
+  }
+}
+`;
+
+  // azure-devops/src/features/windows-98-mode/index.ts
+  var windows98Mode = {
+    change: { kind: "new", version: "1.19.0" },
+    description: "Azure DevOps as Windows 98: title bar, Start menu side bar, bevelled buttons and grey windows.",
+    id: "windows-98-mode",
+    isOffByDefault: !0,
+    name: "Windows 98 mode",
+    start({ document: document2 }) {
+      let mode = createWindows98Mode(document2);
+      return mode.sync({ kind: "other" }, document2.location), {
+        sync({ page }) {
+          mode.sync(page, document2.location);
+        }
+      };
+    },
+    styles: [style_default2],
+    tag: "WIP"
+  };
+
+  // azure-devops/src/features/everywhere-features.ts
+  var EVERYWHERE_FEATURES = [
+    avatarInitials,
+    followSystemTheme,
+    reloadOnChanges,
+    windows98Mode
+  ];
+
   // azure-devops/src/features/activity-order/activity-order.ts
-  var FEED_SELECTOR = ".activity-feed-list", FILTER_SELECTOR = ".repos-activity-filter-dropdown", BUTTON_CLASS = "fix-ado-activity-order", TEXT_CLASS = "bolt-button-text", SVG_NAMESPACE = "http://www.w3.org/2000/svg", SORT_ICON_PATHS = ["M5 13V3M2.5 5.5L5 3l2.5 2.5", "M11 3v10M8.5 10.5L11 13l2.5-2.5"], DEFAULT_ORDER = "oldest-first", LABELS = {
+  var FEED_SELECTOR = ".activity-feed-list", FILTER_SELECTOR = ".repos-activity-filter-dropdown", BUTTON_CLASS = "fix-ado-activity-order", TEXT_CLASS = "bolt-button-text", SVG_NAMESPACE2 = "http://www.w3.org/2000/svg", SORT_ICON_PATHS = ["M5 13V3M2.5 5.5L5 3l2.5 2.5", "M11 3v10M8.5 10.5L11 13l2.5-2.5"], DEFAULT_ORDER = "oldest-first", LABELS2 = {
     "newest-first": "Newest first",
     "oldest-first": "Oldest first"
   }, flipped = (order) => order === "oldest-first" ? "newest-first" : "oldest-first";
   function sortIcon(document2) {
-    let svg = document2.createElementNS(SVG_NAMESPACE, "svg");
+    let svg = document2.createElementNS(SVG_NAMESPACE2, "svg");
     svg.setAttribute("aria-hidden", "true"), svg.setAttribute("class", "fix-ado-activity-order-icon"), svg.setAttribute("viewBox", "0 0 16 16");
     for (let data of SORT_ICON_PATHS) {
-      let path = document2.createElementNS(SVG_NAMESPACE, "path");
+      let path = document2.createElementNS(SVG_NAMESPACE2, "path");
       path.setAttribute("d", data), svg.append(path);
     }
     return svg;
@@ -59,7 +9240,7 @@
   function showOrder(feed, button2, order) {
     feed.dataset.fixAdoActivityOrder !== order && (feed.dataset.fixAdoActivityOrder = order);
     let text = button2?.querySelector(`.${TEXT_CLASS}`);
-    button2 !== null && text !== null && text !== void 0 && text.textContent !== LABELS[order] && (text.textContent = LABELS[order], button2.title = `Show ${LABELS[flipped(order)].toLowerCase()}`);
+    button2 !== null && text !== null && text !== void 0 && text.textContent !== LABELS2[order] && (text.textContent = LABELS2[order], button2.title = `Show ${LABELS2[flipped(order)].toLowerCase()}`);
   }
   function createActivityOrder(options) {
     let { document: document2, storage } = options, order = storage.load() ?? DEFAULT_ORDER, fullyRenderedFeeds = /* @__PURE__ */ new WeakSet();
@@ -74,7 +9255,7 @@
   }
 
   // azure-devops/src/features/activity-order/style.css
-  var style_default = `/* The activity feed on a pull request's Overview, oldest first. Azure DevOps renders the rows
+  var style_default3 = `/* The activity feed on a pull request's Overview, oldest first. Azure DevOps renders the rows
    newest first and keeps them that way in the DOM; the feed lays them out bottom to top. */
 .activity-feed-list[data-fix-ado-activity-order="oldest-first"] {
   display: block;
@@ -166,7 +9347,7 @@
         }
       };
     },
-    styles: [style_default]
+    styles: [style_default3]
   };
 
   // azure-devops/src/core/fold-toggle.ts
@@ -284,7 +9465,7 @@
   }
 
   // azure-devops/src/features/collapsible-threads/style.css
-  var style_default2 = `/* The toggle sits before the author of the first comment, level with the avatar, or before the
+  var style_default4 = `/* The toggle sits before the author of the first comment, level with the avatar, or before the
    file's icon on an open thread on a file. The box it is in gives up some room on the left. */
 .fix-ado-thread-toggle {
   flex: none;
@@ -391,7 +9572,7 @@
         }
       };
     },
-    styles: [style_default2]
+    styles: [style_default4]
   };
 
   // azure-devops/src/features/folded-pushes/folded-pushes.ts
@@ -439,7 +9620,7 @@
   }
 
   // azure-devops/src/features/folded-pushes/style.css
-  var style_default3 = `/* A push in the activity feed of a pull request's Overview. Its header is one line, like the
+  var style_default5 = `/* A push in the activity feed of a pull request's Overview. Its header is one line, like the
    feed's other updates: avatar, title, toggle, and the time at the right. */
 [data-fix-ado-push] .iteration-header {
   align-items: center;
@@ -532,7 +9713,7 @@
         }
       };
     },
-    styles: [style_default3]
+    styles: [style_default5]
   };
 
   // azure-devops/src/features/joined-reviewer-lines/joined-reviewer-lines.ts
@@ -623,7 +9804,7 @@
   }
 
   // azure-devops/src/features/joined-reviewer-lines/style.css
-  var style_default4 = `/* Lines that add a reviewer, joined to one. The newest row of a run shows the joined line in
+  var style_default6 = `/* Lines that add a reviewer, joined to one. The newest row of a run shows the joined line in
    place of Azure DevOps's own; the other rows hide. */
 [data-fix-ado-joined="hidden"] {
   /* The sort order of the feed sets a display on its rows. */
@@ -651,7 +9832,7 @@
         }
       };
     },
-    styles: [style_default4]
+    styles: [style_default6]
   };
 
   // azure-devops/src/features/new-activity-chips/new-activity-chips.ts
@@ -710,83 +9891,6 @@
     };
   }
 
-  // azure-devops/src/pull-requests/pull-request-link.ts
-  function apiBasePath(location2) {
-    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
-    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
-  }
-  function pathSegments(pathname) {
-    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
-  }
-  function projectOf(segments, gitIndex, basePath2) {
-    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
-    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
-  }
-  function parsePullRequestHref(href, basePath2) {
-    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
-    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
-  }
-  function parsePullRequestListLocation(location2, basePath2) {
-    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
-    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
-      return null;
-    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
-    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
-  }
-  function isPullRequestInboxLocation(location2) {
-    return pathSegments(location2.pathname).at(-1) === "_pulls";
-  }
-  function isPullRequestCreateLocation(location2) {
-    let segments = pathSegments(location2.pathname);
-    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
-  }
-
-  // azure-devops/src/boards/board.ts
-  var CARD_SELECTOR = ".wit-card[data-itemid]";
-  function isBoardLocation(location2) {
-    return location2.pathname.includes("/_boards/board/");
-  }
-  function findBoardCardIds(root) {
-    let ids = /* @__PURE__ */ new Set();
-    for (let card of root.querySelectorAll(CARD_SELECTOR)) {
-      let id = Number(card.dataset.itemid);
-      Number.isInteger(id) && id > 0 && ids.add(id);
-    }
-    return [...ids];
-  }
-  function hasBoardChanged(loaded, current) {
-    for (let [id, workItem] of current.workItems) {
-      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
-      if (isChanged && !isMyOwnChange)
-        return !0;
-    }
-    return !1;
-  }
-  function watchBoard(client, location2, cardIds) {
-    return {
-      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
-      extendLoaded: (loaded, current) => ({
-        myUserId: current.myUserId,
-        workItems: new Map([...current.workItems, ...loaded.workItems])
-      }),
-      async fetchSnapshot() {
-        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
-          client.getWorkItems(cardIds),
-          client.getAuthenticatedUserId()
-        ]);
-        return {
-          retryAfterSeconds,
-          snapshot: {
-            myUserId,
-            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
-          }
-        };
-      },
-      hasChanged: hasBoardChanged,
-      key: `board:${location2.pathname}${location2.search}`
-    };
-  }
-
   // azure-devops/src/core/page.ts
   function parsePullRequestPage(location2, basePath2) {
     if (isPullRequestCreateLocation(location2))
@@ -805,7 +9909,7 @@
   }
 
   // azure-devops/src/features/new-activity-chips/style.css
-  var style_default5 = `/* The New chip glows like an unread comment, in Azure DevOps's colour for links and focus. */
+  var style_default7 = `/* The New chip glows like an unread comment, in Azure DevOps's colour for links and focus. */
 .bolt-pill.fix-ado-new-chip {
   border-color: var(--communication-background, rgb(0, 120, 212));
   box-shadow: 0 0 6px 2px var(--communication-background, rgb(0, 120, 212));
@@ -858,7 +9962,7 @@
         }
       };
     },
-    styles: [style_default5]
+    styles: [style_default7]
   };
 
   // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
@@ -984,7 +10088,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/pipeline/pipeline-issue-list.ts
-  var SVG_NAMESPACE2 = "http://www.w3.org/2000/svg", ICON_SIZES = {
+  var SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", ICON_SIZES = {
     large: { className: " margin-4", drawing: 32, pixels: 24 },
     small: { className: "", drawing: 16, pixels: 16 }
   }, ICON_MARKS = {
@@ -1033,13 +10137,13 @@ ${issue.message ?? ""}`;
     }
     return wrapped;
   }
-  function setAttributes(element4, attributes) {
+  function setAttributes2(element4, attributes) {
     for (let [name, value] of Object.entries(attributes))
       element4.setAttribute(name, value);
   }
   function createKindIcon(document2, kind, size) {
-    let { className, drawing, pixels: pixels2 } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE2, "svg");
-    setAttributes(icon, {
+    let { className, drawing, pixels: pixels2 } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE3, "svg");
+    setAttributes2(icon, {
       "aria-label": KIND_LABELS[kind],
       class: `bolt-status flex-noshrink ${KIND_STATUSES[kind]}${className} fix-ado-kind-icon`,
       "data-kind": kind,
@@ -1048,10 +10152,10 @@ ${issue.message ?? ""}`;
       viewBox: `0 0 ${drawing} ${drawing}`,
       width: String(pixels2)
     });
-    let circle = document2.createElementNS(SVG_NAMESPACE2, "circle"), middle = String(drawing / 2);
-    setAttributes(circle, { cx: middle, cy: middle, r: middle });
-    let mark = document2.createElementNS(SVG_NAMESPACE2, "path");
-    return setAttributes(mark, { d: ICON_MARKS[kind][size], fill: "#fff" }), icon.append(circle, mark), icon;
+    let circle = document2.createElementNS(SVG_NAMESPACE3, "circle"), middle = String(drawing / 2);
+    setAttributes2(circle, { cx: middle, cy: middle, r: middle });
+    let mark = document2.createElementNS(SVG_NAMESPACE3, "path");
+    return setAttributes2(mark, { d: ICON_MARKS[kind][size], fill: "#fff" }), icon.append(circle, mark), icon;
   }
   function createIssueCounts(document2, counts) {
     return ["error", "warning"].flatMap((kind) => {
@@ -1107,20 +10211,6 @@ ${issue.message ?? ""}`;
     content.append(header, ...links);
     let wrapped = wrapIn(document2, content, LIST_ROW_WRAPPERS);
     return box.collapse !== void 0 && addCollapseButton(wrapped, header, box.collapse), wrapped;
-  }
-
-  // azure-devops/src/pipeline/pipeline-run-link.ts
-  var RUN_PATH_END = "/_build/results";
-  function parsePipelineRunLocation(location2) {
-    let query = new URLSearchParams(location2.search), buildId = Number(query.get("buildId") ?? Number.NaN);
-    if (!location2.pathname.endsWith(RUN_PATH_END) || !Number.isInteger(buildId))
-      return null;
-    let jobId = query.get("j"), stepId = query.get("t");
-    return query.get("view") !== "logs" ? { buildId, jobId: null, stepId: null, view: "summary" } : jobId !== null && stepId !== null ? { buildId, jobId, stepId, view: "log" } : { buildId, jobId: null, stepId: null, view: "steps" };
-  }
-  function pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) {
-    let step = `j=${encodeURIComponent(jobId)}&t=${encodeURIComponent(stepId)}`;
-    return `${apiBasePath2}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs&${step}`;
   }
 
   // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues-card.ts
@@ -1605,7 +10695,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/resolved-thread-chips/style.css
-  var style_default6 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success,
+  var style_default8 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success,
    Unresolved in its colour for warnings. */
 .bolt-pill.fix-ado-thread-chip {
   font-weight: 600;
@@ -1638,7 +10728,7 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default6]
+    styles: [style_default8]
   };
 
   // azure-devops/src/core/scroll-behavior.ts
@@ -1647,11 +10737,11 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/scroll-to-bottom/scroll-to-bottom.ts
-  var FEED_SELECTOR2 = ".activity-feed-list", SCROLLER_SELECTOR = ".v-scroll-auto", BUTTON_CLASS2 = "fix-ado-scroll-to-bottom", LABEL = "Scroll to bottom", BOTTOM_MARGIN = 16, FOLLOW_QUIET_MS = 2e3, SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", ARROW_DOWN_PATH = "M8 3v10M3.5 8.5L8 13l4.5-4.5";
+  var FEED_SELECTOR2 = ".activity-feed-list", SCROLLER_SELECTOR = ".v-scroll-auto", BUTTON_CLASS2 = "fix-ado-scroll-to-bottom", LABEL = "Scroll to bottom", BOTTOM_MARGIN = 16, FOLLOW_QUIET_MS = 2e3, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg", ARROW_DOWN_PATH = "M8 3v10M3.5 8.5L8 13l4.5-4.5";
   function arrowDownIcon(document2) {
-    let svg = document2.createElementNS(SVG_NAMESPACE3, "svg");
+    let svg = document2.createElementNS(SVG_NAMESPACE4, "svg");
     svg.setAttribute("aria-hidden", "true"), svg.setAttribute("viewBox", "0 0 16 16");
-    let path = document2.createElementNS(SVG_NAMESPACE3, "path");
+    let path = document2.createElementNS(SVG_NAMESPACE4, "path");
     return path.setAttribute("d", ARROW_DOWN_PATH), svg.append(path), svg;
   }
   function scrollerOf(feed) {
@@ -1726,7 +10816,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/scroll-to-bottom/style.css
-  var style_default7 = `/* The button that scrolls a pull request's Overview to its bottom: round, in the corner of the window. */
+  var style_default9 = `/* The button that scrolls a pull request's Overview to its bottom: round, in the corner of the window. */
 .fix-ado-scroll-to-bottom {
   position: fixed;
   right: 32px;
@@ -1788,7 +10878,7 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default7]
+    styles: [style_default9]
   };
 
   // azure-devops/src/features/unread-comments/unread-comments.ts
@@ -1913,7 +11003,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/unread-comments/style.css
-  var style_default8 = `/* Unread comments glow like a required reviewer, one glow around each group of unread comments
+  var style_default10 = `/* Unread comments glow like a required reviewer, one glow around each group of unread comments
    that follow each other. The thread clips what spills outside it, so the glow sits inside. Each
    comment of a group draws its piece: across the 4px gap to a neighbour in the group, and cut off
    there, so no edge shows between them. */
@@ -2033,7 +11123,7 @@ ${issue.message ?? ""}`;
         }
       };
     },
-    styles: [style_default8]
+    styles: [style_default10]
   };
 
   // azure-devops/src/features/overview-features.ts
@@ -2071,79 +11161,6 @@ ${issue.message ?? ""}`;
   function closestHtmlElement(target, selector) {
     let found = closestElement(target, selector);
     return found !== null && isHtmlElement(found) ? found : null;
-  }
-
-  // azure-devops/src/pipeline/pipeline-status-icon.ts
-  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE4 = "http://www.w3.org/2000/svg", LABELS2 = {
-    cancelling: "Pipeline cancelling",
-    expired: "Pipeline result expired",
-    failed: "Pipeline failed",
-    loading: "Pipeline status loading",
-    none: "No pipeline status",
-    notStarted: "Pipeline not started",
-    queued: "Pipeline queued",
-    running: "Pipeline running",
-    succeeded: "Pipeline succeeded"
-  }, DISC = ["circle", { cx: "8", cy: "8", fill: "currentColor", r: "8" }], RING = [
-    "circle",
-    { cx: "8", cy: "8", fill: "none", r: "7", stroke: "currentColor", "stroke-width": "2" }
-  ], SPINNER = [
-    "circle",
-    {
-      cx: "8",
-      cy: "8",
-      fill: "none",
-      r: "6.5",
-      stroke: "currentColor",
-      "stroke-dasharray": "28 13",
-      "stroke-linecap": "round",
-      "stroke-width": "2.5"
-    }
-  ];
-  function line(pathData, stroke) {
-    return ["path", { d: pathData, ...{
-      fill: "none",
-      stroke,
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round",
-      "stroke-width": "1.75"
-    } }];
-  }
-  var SHAPES = {
-    cancelling: [RING, line("M5 11l6-6", "currentColor")],
-    expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
-    failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
-    loading: [DISC],
-    none: [DISC],
-    notStarted: [RING],
-    queued: [RING, line("M8 4.5V8l2.5 1.5", "currentColor")],
-    running: [SPINNER],
-    succeeded: [DISC, line("M4.5 8.3l2.3 2.3 4.7-5", "#fff")]
-  };
-  function setAttributes2(element4, attributes) {
-    for (let [name, value] of Object.entries(attributes))
-      element4.setAttribute(name, value);
-  }
-  function createShape(document2, [tag, attributes]) {
-    let shape = document2.createElementNS(SVG_NAMESPACE4, tag);
-    return setAttributes2(shape, attributes), shape;
-  }
-  function createStatusIcon(document2, status, label = LABELS2[status]) {
-    let icon = document2.createElementNS(SVG_NAMESPACE4, "svg");
-    setAttributes2(icon, {
-      "aria-label": label,
-      class: PIPELINE_STATUS_ICON_CLASS,
-      height: "16",
-      role: "img",
-      viewBox: "0 0 16 16",
-      width: "16"
-    }), icon.dataset.status = status;
-    let title = document2.createElementNS(SVG_NAMESPACE4, "title");
-    return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
-  }
-  function createPipelineStatusIcon(document2, status, pullRequestId) {
-    let icon = createStatusIcon(document2, status);
-    return icon.dataset.pullRequestId = String(pullRequestId), icon;
   }
 
   // azure-devops/src/features/pipeline-tab/pipeline-tab-tree.ts
@@ -2536,316 +11553,6 @@ ${issue.message ?? ""}`;
     return panel.className = PANEL_CLASS, panel.setAttribute("role", "tabpanel"), panel.setAttribute("aria-labelledby", TAB_ID), panel;
   }
 
-  // azure-devops/src/core/ado-request.ts
-  var AdoRequestError = class extends Error {
-    httpStatus;
-    retryAfterSeconds;
-    constructor(httpStatus, retryAfterSeconds) {
-      super(`Azure DevOps request failed with HTTP ${httpStatus}`), this.name = "AdoRequestError", this.httpStatus = httpStatus, this.retryAfterSeconds = retryAfterSeconds;
-    }
-  };
-  function retryAfterSecondsOf(response) {
-    let retryAfter = Number(response.headers.get("Retry-After"));
-    return response.headers.has("Retry-After") && Number.isFinite(retryAfter) ? retryAfter : null;
-  }
-  async function sendRequest(options, path, write) {
-    let accept = { Accept: "application/json" }, response = await options.fetch(options.origin + options.apiBasePath + path, {
-      credentials: "same-origin",
-      ...write === void 0 ? { headers: accept, method: "GET" } : {
-        body: JSON.stringify(write.body),
-        headers: { ...accept, "Content-Type": "application/json" },
-        method: write.method
-      }
-    });
-    if (!response.ok)
-      throw new AdoRequestError(response.status, retryAfterSecondsOf(response));
-    return response;
-  }
-  async function getJson(options, path) {
-    let response = await sendRequest(options, path), retryAfterSeconds = retryAfterSecondsOf(response);
-    return { body: await response.json() ?? {}, retryAfterSeconds };
-  }
-
-  // azure-devops/src/pull-requests/review-requests.ts
-  var API_VERSION = "api-version=7.1", CHANGES_PER_REQUEST = 500, ACTIVE_THREAD_STATUS = 1, TEXT_COMMENT_TYPE = 1;
-  function pullRequestPath({ project, repository, pullRequestId }) {
-    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}`;
-  }
-  async function getPullRequest(options, pullRequest) {
-    return await (await sendRequest(options, `${pullRequestPath(pullRequest)}?${API_VERSION}`)).json();
-  }
-  function pageAfter({ nextSkip, nextTop }) {
-    return nextSkip !== void 0 && nextSkip > 0 ? { skip: nextSkip, top: nextTop ?? CHANGES_PER_REQUEST } : null;
-  }
-  async function getIterationChanges(options, pullRequest, iteration) {
-    let changes = [], next = { skip: 0, top: CHANGES_PER_REQUEST };
-    for (; next !== null; ) {
-      let body = await (await sendRequest(
-        options,
-        `${pullRequestPath(pullRequest)}/iterations/${iteration}/changes?$top=${next.top}&$skip=${next.skip}&${API_VERSION}`
-      )).json(), page = body.changeEntries ?? [];
-      changes.push(...page), next = page.length === 0 ? null : pageAfter(body);
-    }
-    return changes;
-  }
-  function threadBody({ content, iteration, threadContext }) {
-    return {
-      comments: [{ commentType: TEXT_COMMENT_TYPE, content, parentCommentId: 0 }],
-      status: ACTIVE_THREAD_STATUS,
-      ...threadContext === void 0 ? {} : { threadContext },
-      ...iteration === void 0 ? {} : {
-        pullRequestThreadContext: {
-          changeTrackingId: iteration.changeTrackingId,
-          iterationContext: {
-            firstComparingIteration: iteration.id,
-            secondComparingIteration: iteration.id
-          }
-        }
-      }
-    };
-  }
-  async function createPullRequestThread(options, pullRequest, thread) {
-    return (await (await sendRequest(
-      options,
-      `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`,
-      { body: threadBody(thread), method: "POST" }
-    )).json()).id;
-  }
-  function createReviewRequests(options) {
-    return {
-      createPullRequestThread: async (pullRequest, thread) => createPullRequestThread(options, pullRequest, thread),
-      getIterationChanges: async (pullRequest, iteration) => getIterationChanges(options, pullRequest, iteration),
-      getPullRequestCreationDate: async (pullRequest) => getPullRequest(options, pullRequest).then(({ creationDate }) => creationDate ?? ""),
-      async getPullRequestIterationIds(pullRequest) {
-        let { body } = await getJson(
-          options,
-          `${pullRequestPath(pullRequest)}/iterations?${API_VERSION}`
-        );
-        return (body.value ?? []).map(({ id }) => id);
-      },
-      getPullRequestStatus: async (pullRequest) => getPullRequest(options, pullRequest).then(({ status }) => status ?? ""),
-      async getPullRequestThreads(pullRequest) {
-        let { body } = await getJson(
-          options,
-          `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`
-        );
-        return body.value ?? [];
-      },
-      async setPullRequestVote(pullRequest, { reviewerId, vote }) {
-        await sendRequest(
-          options,
-          `${pullRequestPath(pullRequest)}/reviewers/${encodeURIComponent(reviewerId)}?${API_VERSION}`,
-          { body: { vote }, method: "PUT" }
-        );
-      }
-    };
-  }
-
-  // shared/runtime/script-log.ts
-  var entries = [];
-  function log(message2, data) {
-    entries.push(data === void 0 ? { message: message2 } : { data, message: message2 }), entries.length > 500 && entries.shift();
-  }
-
-  // azure-devops/src/pull-requests/reviewer-requests.ts
-  var SEARCH_OPTIONS = { MaxResults: 40, MinResults: 5 }, SEARCH_PROPERTIES = [
-    "DisplayName",
-    "IsMru",
-    "ScopeName",
-    "SamAccountName",
-    "Active",
-    "SubjectDescriptor",
-    "Mail",
-    "MailNickname",
-    "SignInAddress",
-    "Guest"
-  ];
-  function reviewersPath({ project, repository, pullRequestId }) {
-    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/reviewers`;
-  }
-  async function getPullRequestReviewers(options, pullRequest) {
-    return ((await (await sendRequest(options, `${reviewersPath(pullRequest)}?api-version=7.1`)).json()).value ?? []).flatMap(
-      ({ id, displayName, uniqueName, isContainer }) => id === void 0 ? [] : [
-        {
-          displayName: displayName ?? "",
-          id,
-          isGroup: isContainer === !0,
-          signInAddress: isContainer === !0 ? "" : uniqueName ?? ""
-        }
-      ]
-    );
-  }
-  async function addPullRequestReviewer(options, pullRequest, { reviewerId, isRequired }) {
-    await sendRequest(
-      options,
-      `${reviewersPath(pullRequest)}/${encodeURIComponent(reviewerId)}?api-version=7.1`,
-      { body: { isRequired, vote: 0 }, method: "PUT" }
-    );
-  }
-  function identityOf(body) {
-    let { localId, displayName, signInAddress, mail, entityType } = body;
-    if (localId == null || localId === "")
-      return [];
-    let isGroup = entityType?.toLowerCase() === "group";
-    return [
-      {
-        displayName: displayName ?? "",
-        id: localId,
-        isGroup,
-        signInAddress: isGroup ? "" : signInAddress ?? mail ?? ""
-      }
-    ];
-  }
-  async function searchIdentities(options, query) {
-    let found = ((await (await sendRequest(
-      options,
-      "/_apis/IdentityPicker/Identities?api-version=5.0-preview.1",
-      {
-        body: {
-          identityTypes: ["user", "group"],
-          operationScopes: ["ims", "source"],
-          options: SEARCH_OPTIONS,
-          properties: SEARCH_PROPERTIES,
-          query
-        },
-        method: "POST"
-      }
-    )).json()).results ?? []).flatMap(({ identities }) => identities ?? []);
-    return logFound(found), found.flatMap((identity) => identityOf(identity));
-  }
-  function logFound(found) {
-    log("Starred reviewers: search answered", {
-      found: found.map((identity) => ({
-        entityType: identity.entityType,
-        // Field names only: each one maps to true, so the capture keeps them and no value.
-        fields: Object.fromEntries(Object.keys(identity).map((key) => [key, !0])),
-        hasLocalId: identityOf(identity).length > 0,
-        originDirectory: identity.originDirectory
-      })),
-      foundCount: found.length
-    });
-  }
-  function createReviewerRequests(options) {
-    return {
-      addPullRequestReviewer: async (pullRequest, reviewer) => addPullRequestReviewer(options, pullRequest, reviewer),
-      getPullRequestReviewers: async (pullRequest) => getPullRequestReviewers(options, pullRequest),
-      searchIdentities: async (query) => searchIdentities(options, query)
-    };
-  }
-
-  // azure-devops/src/core/ado-client.ts
-  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200, MAX_PULL_REQUEST_BUILDS = 50, MAX_LISTED_PULL_REQUESTS = 200, THEME_SETTING_KEY = "WebPlatform/Theme";
-  function createProjectIdCache(options) {
-    let projectIdRequests = /* @__PURE__ */ new Map();
-    return async (project) => {
-      let request = projectIdRequests.get(project);
-      return request || (request = getJson(
-        options,
-        `/_apis/projects/${encodeURIComponent(project)}?api-version=7.1`
-      ).then(({ body }) => String(body.id)), request.catch(() => projectIdRequests.delete(project)), projectIdRequests.set(project, request)), request;
-    };
-  }
-  function toBoardWorkItems(values) {
-    return values.flatMap(
-      (workItem) => workItem === null ? [] : [
-        {
-          changedById: workItem.fields?.["System.ChangedBy"]?.id ?? null,
-          id: workItem.id,
-          rev: workItem.rev
-        }
-      ]
-    );
-  }
-  async function getWorkItems(options, ids) {
-    let workItems = [], retryAfterSeconds = null;
-    for (let start = 0; start < ids.length; start += MAX_WORK_ITEMS_PER_REQUEST) {
-      let idsInRequest = ids.slice(start, start + MAX_WORK_ITEMS_PER_REQUEST), response = await getJson(
-        options,
-        `/_apis/wit/workitems?ids=${idsInRequest.join(",")}&fields=System.Rev,System.ChangedBy&errorPolicy=Omit&api-version=7.1`
-      );
-      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds, workItems.push(...toBoardWorkItems(response.body.value));
-    }
-    return { retryAfterSeconds, workItems };
-  }
-  async function getWorkItemUpdates(options, id) {
-    let updates = [], retryAfterSeconds = null;
-    for (let skip = 0; ; skip += MAX_UPDATES_PER_REQUEST) {
-      let response = await getJson(
-        options,
-        `/_apis/wit/workItems/${id}/updates?$top=${MAX_UPDATES_PER_REQUEST}&$skip=${skip}&api-version=7.1`
-      );
-      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
-      let page = response.body.value ?? [];
-      if (updates.push(...page), page.length < MAX_UPDATES_PER_REQUEST)
-        return { retryAfterSeconds, updates };
-    }
-  }
-  async function getPolicyEvaluations(options, projectId, { pullRequestId }) {
-    let artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`, { body, retryAfterSeconds } = await getJson(
-      options,
-      `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`
-    );
-    return { evaluations: body.value, retryAfterSeconds };
-  }
-  async function cancelBuild(options, project, buildId) {
-    await sendRequest(
-      options,
-      `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`,
-      { body: { status: "cancelling" }, method: "PATCH" }
-    );
-  }
-  async function saveTheme(options, themeId) {
-    await sendRequest(options, "/_apis/Settings/Entries/globalme?api-version=7.1-preview.1", {
-      body: { [THEME_SETTING_KEY]: themeId },
-      method: "PATCH"
-    });
-  }
-  async function requeuePolicyEvaluation(options, projectId, evaluationId) {
-    await sendRequest(
-      options,
-      `/${projectId}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}?api-version=7.1-preview.1`,
-      { body: { status: "queued" }, method: "PATCH" }
-    );
-  }
-  async function getPullRequestBuilds(options, { project, pullRequestId }) {
-    let branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`), { body, retryAfterSeconds } = await getJson(
-      options,
-      `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}&queryOrder=queueTimeDescending&$top=${MAX_PULL_REQUEST_BUILDS}&api-version=7.1`
-    );
-    return { builds: body.value ?? [], retryAfterSeconds };
-  }
-  function createAdoClient(options) {
-    let getProjectId = createProjectIdCache(options), authenticatedUserIdRequest = null;
-    return {
-      cancelBuild: async (project, buildId) => cancelBuild(options, project, buildId),
-      async getAuthenticatedUserId() {
-        return authenticatedUserIdRequest ??= getJson(options, "/_apis/connectionData").then(({ body }) => body.authenticatedUser?.id ?? null).catch(() => null), authenticatedUserIdRequest;
-      },
-      getPolicyEvaluations: async (pullRequest) => getPolicyEvaluations(options, await getProjectId(pullRequest.project), pullRequest),
-      getPullRequestBuilds: async (project, pullRequestId) => getPullRequestBuilds(options, { project, pullRequestId }),
-      async getPullRequests({ project, repository, status }) {
-        let { body, retryAfterSeconds } = await getJson(
-          options,
-          `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullrequests?searchCriteria.status=${status}&$top=${MAX_LISTED_PULL_REQUESTS}&api-version=7.1`
-        );
-        return { pullRequests: body.value, retryAfterSeconds };
-      },
-      async getTimeline(project, buildId) {
-        let { body, retryAfterSeconds } = await getJson(
-          options,
-          `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?api-version=7.1`
-        );
-        return { records: body.records ?? [], retryAfterSeconds };
-      },
-      getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
-      getWorkItems: async (ids) => getWorkItems(options, ids),
-      requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
-      saveTheme: async (themeId) => saveTheme(options, themeId),
-      ...createReviewRequests(options),
-      ...createReviewerRequests(options)
-    };
-  }
-
   // azure-devops/src/pipeline/pipeline-runs.ts
   var RESULT_STATUSES2 = {
     canceled: { label: "Canceled", status: "notStarted" },
@@ -3184,7 +11891,7 @@ ${issue.message ?? ""}`;
 `;
 
   // azure-devops/src/features/pipeline-tab/style.css
-  var style_default9 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+  var style_default11 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
 .repos-pr-details-page[data-fix-ado-pipeline-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
   display: none !important;
@@ -3412,7 +12119,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         }
       };
     },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default9]
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default11]
   };
 
   // azure-devops/src/features/review/review-store.ts
@@ -4775,7 +13482,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/style.css
-  var style_default10 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
+  var style_default12 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
    reads "Add single comment". Its aria-label carries that name, so the text here is
    left out of what a screen reader reads. */
 .repos-discussion-thread-reply
@@ -5108,7 +13815,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default10]
+    styles: [style_default12]
   };
 
   // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
@@ -5285,44 +13992,6 @@ ${content}`
   function showError(row, error) {
     let detail = row.querySelector(".fix-ado-starred-detail");
     detail !== null && (detail.textContent = error, detail.classList.replace("secondary-text", "error-text"), detail.setAttribute("role", "alert"));
-  }
-
-  // azure-devops/src/pull-requests/reviewers.ts
-  var EMAIL_ADDRESS = /^(?<localPart>[^\s@]+)@[^\s@]+$/u, TRAILING_SIGN_IN_ADDRESS = /\s+<?[^\s<>@]+@[^\s<>@]+>?$/u;
-  function personOrTeamName(displayName) {
-    return displayName.replace(/^\[[^\]]*\]\\/u, "").replaceAll(/\([^)]*\)/gu, "").trim();
-  }
-  function wordsOf(text) {
-    return text.split(/\s+/u).filter(Boolean);
-  }
-  function firstCharacter(word) {
-    let codePoint = (word ?? "").codePointAt(0);
-    return codePoint === void 0 ? "" : String.fromCodePoint(codePoint);
-  }
-  function nameInLabel(label) {
-    let localPart = EMAIL_ADDRESS.exec(label.trim())?.groups?.localPart;
-    return localPart === void 0 ? personOrTeamName(label.trim().replace(TRAILING_SIGN_IN_ADDRESS, "")) : localPart.replaceAll(/[._-]+/gu, " ");
-  }
-  function initialsOf(displayName) {
-    let name = nameInLabel(displayName), commaIndex = name.indexOf(","), isSurnameFirst = commaIndex !== -1, firstNames = wordsOf(isSurnameFirst ? name.slice(commaIndex + 1) : name), surnameWords = isSurnameFirst ? wordsOf(name.slice(0, commaIndex)) : firstNames.slice(1);
-    return [firstNames[0], surnameWords.at(-1)].map((word) => firstCharacter(word)).join("").toUpperCase();
-  }
-  function hueOf(label) {
-    let nameKey = wordsOf(nameInLabel(label).replaceAll(",", " ").toLowerCase()).toSorted().join(" "), hash = 2166136261;
-    for (let character of nameKey)
-      hash = Math.imul(hash ^ (character.codePointAt(0) ?? 0), 16777619) >>> 0;
-    return hash % 360;
-  }
-  function namesOf(reviewer) {
-    let { displayName } = reviewer;
-    return displayName === void 0 || displayName === "" ? [] : [displayName, personOrTeamName(displayName)];
-  }
-  function findReviewerByLabel(avatarLabel, reviewers) {
-    let label = avatarLabel.toLowerCase(), bestMatch = null, bestMatchLength = 0;
-    for (let reviewer of reviewers)
-      for (let name of namesOf(reviewer))
-        name.length > bestMatchLength && label.includes(name.toLowerCase()) && (bestMatch = reviewer, bestMatchLength = name.length);
-    return bestMatch;
   }
 
   // azure-devops/src/features/starred-reviewers/starred-reviewer-chips-markup.ts
@@ -5930,7 +14599,7 @@ ${content}`
   }
 
   // azure-devops/src/features/starred-reviewers/style.css
-  var style_default11 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
+  var style_default13 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
    Hidden by opacity, not visibility, so the keyboard can still reach it. */
 .repos-reviewer > .fix-ado-star {
   opacity: 0;
@@ -6108,84 +14777,11 @@ ${content}`
         }
       };
     },
-    styles: [style_default11]
+    styles: [style_default13]
   };
 
   // azure-devops/src/features/pull-request-features.ts
   var PULL_REQUEST_FEATURES = [pipelineTab, starredReviewers, review];
-
-  // azure-devops/src/pull-requests/avatars.ts
-  var AVATAR_SELECTOR = ".bolt-coin, .vss-Persona:not(.project-persona)";
-  function avatarName(avatar) {
-    let label = avatar.getAttribute("aria-label") ?? "", imageAlt = avatar.querySelector("img")?.getAttribute("alt") ?? "";
-    return (label === "" ? imageAlt : label).trim();
-  }
-  function markAvatar({ avatar, initials, hue, width }) {
-    initials ? avatar.dataset.fixAdoInitials = initials : delete avatar.dataset.fixAdoInitials, avatar.style.setProperty("--fix-ado-hue", hue || null), initials && width > 0 && avatar.style.setProperty("--fix-ado-avatar-size", `${width}px`);
-  }
-  function outdatedAvatars(root) {
-    let marks = [];
-    for (let avatar of root.querySelectorAll(AVATAR_SELECTOR)) {
-      let name = avatarName(avatar), initials = initialsOf(name), hue = initials ? String(hueOf(name)) : "";
-      (avatar.dataset.fixAdoInitials ?? "") === initials && avatar.style.getPropertyValue("--fix-ado-hue") === hue || marks.push({ avatar, hue, initials, width: initials ? avatar.offsetWidth : 0 });
-    }
-    return marks;
-  }
-  function showInitialsOnAvatars(root) {
-    for (let mark of outdatedAvatars(root))
-      markAvatar(mark);
-  }
-
-  // azure-devops/src/features/avatar-initials/style.css
-  var style_default12 = `/* Avatars as initials. avatars.ts sets the data attribute, the hue and the size. */
-[data-fix-ado-initials] {
-  position: relative;
-  border-radius: 50%;
-  /* OKLCH lightness is the same for every hue, so white initials keep 4.5:1 contrast on each. */
-  background: oklch(50% 0.11 var(--fix-ado-hue, 250));
-}
-
-[data-fix-ado-initials] > .bolt-coin-content,
-[data-fix-ado-initials] > .vss-Persona-content {
-  visibility: hidden;
-}
-
-[data-fix-ado-initials]::after {
-  content: attr(data-fix-ado-initials);
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: calc(var(--fix-ado-avatar-size, 24px) * 0.42);
-  line-height: 1;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-/* A text field's prefix pads the avatar on the left, which stretches the circle into an oval.
-   Margin keeps the avatar in the same spot. Azure DevOps sets padding-left 4px, margin-left 7px. */
-.bolt-textfield .prefix[data-fix-ado-initials] {
-  padding-left: 0;
-  margin-left: 11px;
-}
-`;
-
-  // azure-devops/src/features/avatar-initials/index.ts
-  var avatarInitials = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "Initials on avatars, in a colour per person.",
-    // The key of the earlier menu setting, so the owner's choice stays.
-    id: "avatar-initials",
-    name: "Avatar initials",
-    start: ({ document: document2 }) => ({
-      sync() {
-        showInitialsOnAvatars(document2);
-      }
-    }),
-    styles: [style_default12]
-  };
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
   var CARD_SELECTOR2 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS = "fix-ado-days-in-column";
@@ -6263,7 +14859,7 @@ ${content}`
         return;
     }
   }
-  function isCheckDue(tracker, ids) {
+  function isCheckDue2(tracker, ids) {
     let now = tracker.now(), isDue = ids.some((id) => !tracker.entries.has(id)) || now - tracker.lastCheckAt >= 6e4;
     return !tracker.isChecking && ids.length > 0 && isDue && now >= tracker.pausedUntil;
   }
@@ -6292,7 +14888,7 @@ ${content}`
         let cards = findCards(options.document);
         showBars(tracker, cards);
         let ids = [...cards.keys()];
-        isCheckDue(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
+        isCheckDue2(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
       }
     };
   }
@@ -6339,7 +14935,7 @@ ${content}`
   }
 
   // azure-devops/src/features/days-in-column/style.css
-  var style_default13 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+  var style_default14 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
 .fix-ado-days-in-column {
   display: flex;
   flex-wrap: wrap;
@@ -6457,185 +15053,11 @@ ${content}`
         }
       };
     },
-    styles: [style_default13]
+    styles: [style_default14]
   };
-
-  // azure-devops/src/features/system-theme/system-theme.ts
-  var LIGHT_THEME_ID = "ms.vss-web.vsts-theme", DARK_THEME_ID = "ms.vss-web.vsts-theme-dark", THEME_CLASS_PREFIX = "ms-vss-web-vsts-theme", PALETTE_VARIABLE = "--palette-neutral-0", LIGHT_THEME_CLASS = "ms-vss-web-vsts-theme", DARK_THEME_CLASS = "ms-vss-web-vsts-theme-dark";
-  function currentThemeId(document2) {
-    let { body } = document2;
-    if (body.dataset.theme !== void 0)
-      return body.dataset.theme;
-    let themeClasses = [...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX));
-    if (!themeClasses.some((name) => name !== LIGHT_THEME_CLASS && name !== DARK_THEME_CLASS))
-      return themeClasses.includes(DARK_THEME_CLASS) ? DARK_THEME_ID : themeClasses.includes(LIGHT_THEME_CLASS) ? LIGHT_THEME_ID : void 0;
-  }
-  function isFollowedTheme(themeId) {
-    return themeId === LIGHT_THEME_ID || themeId === DARK_THEME_ID;
-  }
-  function findRootStyle(document2) {
-    return [...document2.head.querySelectorAll("style")].find((style) => {
-      let text = style.textContent.trimStart();
-      return text.startsWith(":root") && text.includes(PALETTE_VARIABLE);
-    }) ?? null;
-  }
-  function readLook(document2) {
-    let rootStyle = findRootStyle(document2);
-    return rootStyle === null ? null : {
-      bodyClasses: [...document2.body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX)),
-      rootStyle: rootStyle.textContent
-    };
-  }
-  function applyLook(document2, themeId, look) {
-    let rootStyle = findRootStyle(document2);
-    if (rootStyle === null)
-      return !1;
-    rootStyle.textContent = look.rootStyle;
-    let { body } = document2;
-    return body.classList.remove(
-      ...[...body.classList].filter((name) => name.startsWith(THEME_CLASS_PREFIX))
-    ), body.classList.add(...look.bodyClasses), body.dataset.theme = themeId, !0;
-  }
-  function rememberLook({ document: document2, looks }) {
-    let themeId = currentThemeId(document2), look = readLook(document2);
-    if (!isFollowedTheme(themeId) || look === null)
-      return;
-    let stored = looks.load();
-    JSON.stringify(stored[themeId]) !== JSON.stringify(look) && looks.save({ ...stored, [themeId]: look });
-  }
-  function themeToSwitchTo(options) {
-    let current = currentThemeId(options.document), wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
-    return isFollowedTheme(current) && current !== wanted ? wanted : null;
-  }
-  async function trySaveTheme(options, themeId) {
-    try {
-      return await options.saveTheme(themeId), !0;
-    } catch (error) {
-      return log("System theme: Azure DevOps refused the theme save", {
-        httpStatus: error instanceof AdoRequestError ? error.httpStatus : null
-      }), !1;
-    }
-  }
-  async function switchToSystemTheme(options, isPageLoad) {
-    let wanted = themeToSwitchTo(options);
-    if (log("System theme: checked", {
-      current: currentThemeId(options.document) ?? null,
-      isPageLoad,
-      prefersDark: options.prefersDark(),
-      rememberedThemes: Object.keys(options.looks.load())
-    }), wanted === null || !await trySaveTheme(options, wanted))
-      return;
-    let look = options.looks.load()[wanted], isSwitched = look !== void 0 && applyLook(options.document, wanted, look);
-    log("System theme: saved", {
-      hasRootStyle: findRootStyle(options.document) !== null,
-      isSwitched,
-      wanted
-    }), !isSwitched && isPageLoad && options.reload();
-  }
-  function createSystemTheme(options) {
-    let lastSwitch = Promise.resolve(), seenPrefersDark = options.prefersDark(), isWaitingForTheme = !1;
-    function queueSwitch(isPageLoad) {
-      lastSwitch = lastSwitch.then(async () => switchToSystemTheme(options, isPageLoad));
-    }
-    function onPageChange() {
-      rememberLook(options), isWaitingForTheme && currentThemeId(options.document) !== void 0 && (isWaitingForTheme = !1, queueSwitch(!0));
-    }
-    function onSystemThemeChange() {
-      onPageChange();
-      let prefersDark = options.prefersDark();
-      prefersDark !== seenPrefersDark && (seenPrefersDark = prefersDark, queueSwitch(!1));
-    }
-    return options.onSystemThemeChange(() => {
-      log("System theme: the system's theme changed"), onSystemThemeChange();
-    }), {
-      onPageChange,
-      settled: async () => lastSwitch,
-      async start() {
-        seenPrefersDark = options.prefersDark(), rememberLook(options), isWaitingForTheme = currentThemeId(options.document) === void 0, isWaitingForTheme || queueSwitch(!0), await lastSwitch;
-      }
-    };
-  }
-
-  // azure-devops/src/features/system-theme/index.ts
-  var THEME_LOOKS_KEY = "system-theme-looks", SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)", followSystemTheme = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "Azure DevOps shows Light or Dark to match the system.",
-    // The key of the earlier menu setting, so the owner's choice stays.
-    id: "follow-system-theme",
-    name: "Follow system theme",
-    start({ client, document: document2, isInFrame: isInFrame2, reloadWhenIdle: reloadWhenIdle2 }) {
-      if (isInFrame2)
-        return null;
-      let systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY), theme = createSystemTheme({
-        document: document2,
-        looks: {
-          load: () => GM_getValue(THEME_LOOKS_KEY, {}),
-          save: (looks) => {
-            GM_setValue(THEME_LOOKS_KEY, looks);
-          }
-        },
-        onSystemThemeChange: (listener) => {
-          systemDark.addEventListener("change", listener);
-        },
-        prefersDark: () => systemDark.matches,
-        reload: reloadWhenIdle2,
-        saveTheme: async (themeId) => client.saveTheme(themeId)
-      });
-      return new MutationObserver(() => {
-        theme.onPageChange();
-      }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), theme.start(), null;
-    },
-    styles: []
-  };
-
-  // azure-devops/src/pull-requests/pr-list.ts
-  var PULL_REQUEST_ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]', TITLE_LINE_SELECTOR = ".bolt-table-two-line-cell-item";
-  function findPullRequestRows(root, apiBasePath2) {
-    let rows = [];
-    for (let row of root.querySelectorAll(PULL_REQUEST_ROW_SELECTOR)) {
-      let pullRequest = parsePullRequestHref(row.getAttribute("href") ?? "", apiBasePath2);
-      pullRequest && rows.push({ pullRequest, row });
-    }
-    return rows;
-  }
-  function showPipelineStatus(row, pullRequestId, status) {
-    let shownIcon = row.querySelector(`.${PIPELINE_STATUS_ICON_CLASS}`);
-    if (shownIcon?.dataset.status === status && shownIcon.dataset.pullRequestId === String(pullRequestId))
-      return;
-    shownIcon?.remove(), row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
-  }
-  var DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill", UPDATE_TIME_SELECTOR = "time.bolt-time-item", PUBLISHED_SINCE_CLASS = "fix-ado-published-since", TOO_LONG_AGO_CLASS = "fix-ado-published-since-too-long";
-  function isDraftRow(row) {
-    return row.querySelector(DRAFT_PILL_SELECTOR) !== null;
-  }
-  function publishedSinceLine(row) {
-    let shown = row.querySelector(`.${PUBLISHED_SINCE_CLASS}`);
-    if (shown)
-      return shown;
-    let updateLine = row.querySelector(UPDATE_TIME_SELECTOR)?.closest(".bolt-table-cell-content > *");
-    if (!updateLine)
-      return null;
-    let line2 = row.ownerDocument.createElement("div");
-    return line2.className = PUBLISHED_SINCE_CLASS, updateLine.after(line2), line2;
-  }
-  function showPublishedSince(row, shown) {
-    if (shown === null) {
-      row.querySelector(`.${PUBLISHED_SINCE_CLASS}`)?.remove();
-      return;
-    }
-    let line2 = publishedSinceLine(row);
-    line2 && (line2.textContent !== shown.text && (line2.textContent = shown.text), line2.classList.contains(TOO_LONG_AGO_CLASS) !== shown.isTooLongAgo && line2.classList.toggle(TOO_LONG_AGO_CLASS, shown.isTooLongAgo));
-  }
-  var REVIEWER_SELECTOR = ".pr-reviewer";
-  function markRequiredReviewers(row, reviewers) {
-    for (let reviewerElement of row.querySelectorAll(REVIEWER_SELECTOR)) {
-      let avatar = reviewerElement.querySelector(AVATAR_SELECTOR), reviewer = avatar ? findReviewerByLabel(avatarName(avatar), reviewers) : null;
-      reviewerElement.toggleAttribute("data-fix-ado-required", reviewer?.isRequired ?? !1), reviewerElement.parentElement?.toggleAttribute("data-fix-ado-reviewers", !0);
-    }
-  }
 
   // azure-devops/src/features/pipeline-status/pipeline-status-poller.ts
-  var IN_PROGRESS_POLL_INTERVAL_MS = 2e4, SETTLED_POLL_INTERVAL_MS = 18e4, FAILED_REQUEST_RETRY_MS = 6e4, MS_PER_SECOND = 1e3;
+  var IN_PROGRESS_POLL_INTERVAL_MS = 2e4, SETTLED_POLL_INTERVAL_MS = 18e4, FAILED_REQUEST_RETRY_MS = 6e4, MS_PER_SECOND2 = 1e3;
   function showStatuses(state) {
     for (let { row, pullRequest } of state.options.findRows()) {
       let polled = state.polledPullRequests.get(pullRequest.pullRequestId), status = polled?.hasBeenFetched === !0 ? polled.status ?? "none" : "loading";
@@ -6673,7 +15095,7 @@ ${content}`
     };
     state.polledPullRequests.set(pullRequest.pullRequestId, polled);
     let retryAfterSeconds = await fetchAndRecordStatus(state, pullRequest, polled);
-    retryAfterSeconds !== null && (state.pausedUntil = state.options.now() + retryAfterSeconds * MS_PER_SECOND);
+    retryAfterSeconds !== null && (state.pausedUntil = state.options.now() + retryAfterSeconds * MS_PER_SECOND2);
   }
   async function fetchDueStatuses(state) {
     for (let pullRequest of duePullRequests(state)) {
@@ -6805,7 +15227,7 @@ ${content}`
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default14 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+  var style_default15 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
 .bolt-table-cell-content:has(> .fix-ado-published-since) {
   flex-direction: column;
   align-items: flex-start;
@@ -6854,131 +15276,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default14]
-  };
-
-  // azure-devops/src/features/reload-on-changes/page-reloader.ts
-  var PAGE_CHECK_INTERVAL_MS = 3e4, FAILED_PAGE_CHECK_RETRY_MS = 6e4, MS_PER_SECOND2 = 1e3;
-  function isCheckDue2(state, page, immediately) {
-    return state.loadedSnapshots.has(page.key) ? !state.options.isTabActive() || state.options.now() < state.pausedUntil ? !1 : immediately || state.options.now() >= state.nextCheckAt : !0;
-  }
-  function pauseFor(state, retryAfterSeconds) {
-    retryAfterSeconds !== null && (state.pausedUntil = state.options.now() + retryAfterSeconds * MS_PER_SECOND2);
-  }
-  function compareWithLoaded(state, { page, hasLoadedSnapshot }, snapshot) {
-    hasLoadedSnapshot ? page.hasChanged(state.loadedSnapshots.get(page.key), snapshot) ? state.options.reload() : page.extendLoaded && state.loadedSnapshots.set(
-      page.key,
-      page.extendLoaded(state.loadedSnapshots.get(page.key), snapshot)
-    ) : state.loadedSnapshots.set(page.key, snapshot);
-  }
-  function recordFailure(state, error) {
-    error instanceof AdoRequestError && pauseFor(state, error.retryAfterSeconds), state.nextCheckAt = state.options.now() + FAILED_PAGE_CHECK_RETRY_MS;
-  }
-  async function runCheck(state, page) {
-    let checkedPage = { hasLoadedSnapshot: state.loadedSnapshots.has(page.key), page };
-    state.isChecking = !0;
-    try {
-      let { snapshot, retryAfterSeconds } = await page.fetchSnapshot();
-      pauseFor(state, retryAfterSeconds), state.nextCheckAt = state.options.now() + PAGE_CHECK_INTERVAL_MS, compareWithLoaded(state, checkedPage, snapshot);
-    } catch (error) {
-      recordFailure(state, error);
-    } finally {
-      state.isChecking = !1;
-    }
-  }
-  function createPageReloader(options) {
-    let state = {
-      isChecking: !1,
-      loadedSnapshots: /* @__PURE__ */ new Map(),
-      nextCheckAt: 0,
-      options,
-      pausedUntil: 0
-    };
-    return {
-      async check({ immediately = !1 } = {}) {
-        let page = options.currentPage();
-        !page || state.isChecking || !isCheckDue2(state, page, immediately) || await runCheck(state, page);
-      }
-    };
-  }
-
-  // azure-devops/src/features/reload-on-changes/pr-list-changes.ts
-  function snapshotOf(pullRequests) {
-    return new Map(
-      pullRequests.map((pullRequest) => [
-        pullRequest.pullRequestId,
-        JSON.stringify([
-          pullRequest.title,
-          pullRequest.isDraft,
-          pullRequest.status,
-          pullRequest.targetRefName,
-          pullRequest.lastMergeSourceCommit?.commitId,
-          pullRequest.autoCompleteSetBy?.id,
-          (pullRequest.reviewers ?? []).map((reviewer) => `${reviewer.id}:${reviewer.vote}:${reviewer.isRequired ?? !1}`).toSorted()
-        ])
-      ])
-    );
-  }
-  function hasListChanged(before, after, onScreenPullRequestIds) {
-    if (before.size !== after.size)
-      return !0;
-    for (let pullRequestId of before.keys())
-      if (!after.has(pullRequestId))
-        return !0;
-    for (let pullRequestId of onScreenPullRequestIds)
-      if (before.has(pullRequestId) && before.get(pullRequestId) !== after.get(pullRequestId))
-        return !0;
-    return !1;
-  }
-
-  // azure-devops/src/features/reload-on-changes/pr-list-watch.ts
-  function watchPullRequestList(client, listPage, onScreenPullRequestIds) {
-    return {
-      async fetchSnapshot() {
-        let { pullRequests, retryAfterSeconds } = await client.getPullRequests(listPage);
-        return { retryAfterSeconds, snapshot: snapshotOf(pullRequests) };
-      },
-      hasChanged: (loaded, current) => hasListChanged(loaded, current, onScreenPullRequestIds()),
-      key: `pull-request-list:${JSON.stringify(listPage)}`
-    };
-  }
-
-  // azure-devops/src/features/reload-on-changes/index.ts
-  var reloadOnChanges = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "Pull request lists and boards reload when their content changes on the server.",
-    id: "reload-on-changes",
-    name: "Reload on changes",
-    start({ basePath: basePath2, client, document: document2, now, reloadWhenIdle: reloadWhenIdle2 }) {
-      let shownPage = { kind: "other" };
-      function watchedPage() {
-        if (shownPage.kind === "pull-request-list")
-          return watchPullRequestList(
-            client,
-            shownPage.listPage,
-            () => findPullRequestRows(document2, basePath2).map(
-              ({ pullRequest }) => pullRequest.pullRequestId
-            )
-          );
-        if (shownPage.kind === "board") {
-          let cardIds = findBoardCardIds(document2);
-          return cardIds.length > 0 ? watchBoard(client, location, cardIds) : null;
-        }
-        return null;
-      }
-      let isTabActive2 = !1, reloader = createPageReloader({
-        currentPage: watchedPage,
-        isTabActive: () => isTabActive2,
-        now,
-        reload: reloadWhenIdle2
-      });
-      return {
-        sync(tick) {
-          shownPage = tick.page, { isTabActive: isTabActive2 } = tick, reloader.check({ immediately: tick.reason === "tab-shown" });
-        }
-      };
-    },
-    styles: []
+    styles: [style_default15]
   };
 
   // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
@@ -7047,7 +15345,7 @@ ${content}`
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default15 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default16 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -7094,7 +15392,7 @@ ${content}`
         }
       };
     },
-    styles: [style_default15]
+    styles: [style_default16]
   };
 
   // azure-devops/src/features/index.ts
@@ -7106,7 +15404,7 @@ ${content}`
     { features: PULL_REQUEST_FEATURES, name: "Pull request" },
     { features: OVERVIEW_FEATURES, name: "Pull request Overview" },
     { features: [daysInColumn], name: "Boards" },
-    { features: [avatarInitials, followSystemTheme, reloadOnChanges], name: "Everywhere" }
+    { features: EVERYWHERE_FEATURES, name: "Everywhere" }
   ], FEATURES = FEATURE_CATEGORIES.flatMap((category) => category.features);
 
   // azure-devops/src/core/feature-runner.ts
@@ -7197,7 +15495,7 @@ ${content}`
   }
 
   // azure-devops/src/core/settings-panel.ts
-  var ISSUE_LINK_TEXT = "Found a bug or have a suggestion?", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new", TOP_BAR_SELECTOR = ".region-header-menubar", DIALOG_CLASS2 = "fix-ado-settings", TITLE_ID3 = "fix-ado-settings-title", CHIP_TEXT = { new: "New", updated: "Updated" };
+  var ISSUE_LINK_TEXT = "Found a bug or have a suggestion?", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new", TOP_BAR_SELECTOR2 = ".region-header-menubar", DIALOG_CLASS2 = "fix-ado-settings", TITLE_ID3 = "fix-ado-settings-title", CHIP_TEXT = { new: "New", updated: "Updated" };
   function allFeatures({ categories }) {
     return categories.flatMap((category) => category.features);
   }
@@ -7209,17 +15507,18 @@ ${content}`
   function chipKind(feature, options) {
     return options.seenChangeVersion(feature) === null ? "new" : feature.change?.kind ?? "new";
   }
+  function chipElement(document2, text, kind) {
+    return element3(document2, "span", {
+      className: `fix-ado-settings-chip fix-ado-settings-chip-${kind}`,
+      text
+    });
+  }
   function featureName(document2, feature, chip) {
     let name = element3(document2, "span", {
       className: "fix-ado-settings-feature-name",
       text: feature.name
     });
-    return chip && name.append(
-      element3(document2, "span", {
-        className: `fix-ado-settings-chip fix-ado-settings-chip-${chip}`,
-        text: CHIP_TEXT[chip]
-      })
-    ), name;
+    return chip && name.append(chipElement(document2, CHIP_TEXT[chip], chip)), feature.tag !== void 0 && name.append(chipElement(document2, feature.tag, "tag")), name;
   }
   function featureRow(document2, { feature, isOn: isOn2, chip }) {
     let row = element3(document2, "label", { className: "fix-ado-settings-feature" }), checkbox = element3(document2, "input", { className: "fix-ado-settings-checkbox" });
@@ -7308,7 +15607,7 @@ ${content}`
     return {
       open,
       sync() {
-        let topBar = document2.querySelector(TOP_BAR_SELECTOR);
+        let topBar = document2.querySelector(TOP_BAR_SELECTOR2);
         topBar && !topBar.querySelector(`.${BUTTON_ITEM_CLASS}`) && topBar.prepend(
           createSettingsButtonItem(document2, open, featuresWithUnseenChange(options).length)
         );
@@ -7324,6 +15623,11 @@ ${content}`
         isPending2 = !1, sync4();
       }));
     };
+  }
+
+  // azure-devops/src/core/feature.ts
+  function isFeatureOn(feature, savedChoice) {
+    return savedChoice(feature.id, feature.isOffByDefault !== !0);
   }
 
   // azure-devops/src/core/reload-when-idle.ts
@@ -7497,6 +15801,11 @@ ${content}`
   color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
 }
 
+.fix-ado-settings-chip-tag {
+  border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+
 .fix-ado-settings-feature-description {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
 }
@@ -7522,7 +15831,7 @@ ${content}`
 `;
 
   // azure-devops/src/main.ts
-  var TIMER_INTERVAL_MS = 5e3, IS_ON_BY_DEFAULT = !0, basePath = apiBasePath(location), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, isOn = ({ id }) => GM_getValue(id, IS_ON_BY_DEFAULT), seenChangeKey = ({ id }) => `${id}-seen-change`, settingsPanel = isInFrame ? null : createSettingsPanel({
+  var TIMER_INTERVAL_MS = 5e3, basePath = apiBasePath(location), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, isOn = (feature) => isFeatureOn(feature, GM_getValue), seenChangeKey = ({ id }) => `${id}-seen-change`, settingsPanel = isInFrame ? null : createSettingsPanel({
     categories: FEATURE_CATEGORIES,
     document,
     isOn,
