@@ -5,17 +5,17 @@ import { createAdoClient } from "./core/ado-client.ts";
 import { createFeatureRunner } from "./core/feature-runner.ts";
 import { createSettingsPanel } from "./core/settings-panel.ts";
 import { createSyncBeforePaint } from "./core/sync-before-paint.ts";
+import { isFeatureOn } from "./core/feature.ts";
 import { parsePage } from "./core/page.ts";
 import { reloadWhenIdle } from "./core/reload-when-idle.ts";
 import settingsPanelStyle from "./core/settings-panel.css";
 
 const TIMER_INTERVAL_MS = 5000;
-const IS_ON_BY_DEFAULT = true;
 
 const basePath = apiBasePath(location);
 const isTabActive = (): boolean => document.visibilityState === "visible";
 const isInFrame = globalThis.top !== globalThis.self;
-const isOn = ({ id }: Feature): boolean => GM_getValue(id, IS_ON_BY_DEFAULT);
+const isOn = (feature: Feature): boolean => isFeatureOn(feature, GM_getValue);
 const seenChangeKey = ({ id }: Feature): string => `${id}-seen-change`;
 
 // A frame shows a run page inside the Pipeline tab. Only the top page gets the settings.

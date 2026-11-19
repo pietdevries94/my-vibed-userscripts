@@ -43,6 +43,8 @@ interface Feature {
   name: string;
   /** One line in the settings panel on what it does. */
   description: string;
+  /** True for a feature the owner turns on, such as a fun one. Others are on until turned off. */
+  isOffByDefault?: boolean;
   /** Its latest change worth flagging in the settings panel. */
   change?: FeatureChange;
   /** Its stylesheets. A stylesheet that several features list is added once. */
@@ -58,7 +60,17 @@ interface FeatureCategory {
   features: Feature[];
 }
 
+/** Reads a saved choice, or the fallback when the owner never saved one. `GM_getValue` fits. */
+type SavedChoice = (id: string, fallback: boolean) => boolean;
+
+/** On or off: the owner's saved choice, else the feature's default. */
+function isFeatureOn(feature: Feature, savedChoice: SavedChoice): boolean {
+  return savedChoice(feature.id, feature.isOffByDefault !== true);
+}
+
+export { isFeatureOn };
 export type {
+  SavedChoice,
   Feature,
   FeatureCategory,
   FeatureChange,
