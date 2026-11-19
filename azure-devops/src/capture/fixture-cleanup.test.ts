@@ -16,3 +16,8 @@ test("a capture of one element stays that element", () => {
     `<div class="bolt-panel">Reviewers</div>`,
   );
 });
+
+test("a row that is a link stays inside its table, with its cells", () => {
+  const html = `<div class="bolt-card"><table class="bolt-table"><tbody><a class="bolt-table-row" href="/pr/7"><td class="bolt-table-cell">Fix the login</td></a></tbody></table></div>`;
+  assert.equal(cleanFixtureHtml(html), html);
+});
