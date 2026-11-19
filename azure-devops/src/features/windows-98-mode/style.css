@@ -2351,7 +2351,8 @@ html[data-fix-ado-win98]:is(
     background: #fff;
     box-shadow: var(--fix-ado-win98-sunken);
 
-    & > .flex-row:first-child {
+    /* The header row; a list without sections, as on the Active tab, has none. */
+    & > .flex-row:first-child:not(.bolt-card-content) {
       height: 34px;
       align-items: center;
       gap: 8px;
@@ -2360,7 +2361,7 @@ html[data-fix-ado-win98]:is(
       box-shadow: var(--fix-ado-win98-thin);
     }
 
-    &:has(.repos-pr-section-tabs) > .flex-row:first-child {
+    &:has(.repos-pr-section-tabs) > .flex-row:first-child:not(.bolt-card-content) {
       height: 46px;
       align-items: flex-end;
       padding-bottom: 4px;
@@ -2634,7 +2635,7 @@ html[data-fix-ado-win98]:is(
   )
   body {
   /* Section headers: the +/- box, 8px, then the title and its count in normal weight. */
-  .repos-pr-section-card > .flex-row:first-child {
+  .repos-pr-section-card > .flex-row:first-child:not(.bolt-card-content) {
     .repos-pr-section-header,
     .bolt-header-content-area,
     .bolt-header-title-area,
