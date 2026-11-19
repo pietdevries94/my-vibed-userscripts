@@ -902,16 +902,38 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     }
   }
 
+  /* A card is a raised panel on the window face, its type colour a strip inside the bevel. */
   .wit-card {
     border: 0;
     border-left: 0;
     border-radius: 0;
-    background: #fff;
-    box-shadow:
-      inset -1px -1px #0a0a0a,
-      inset 1px 1px #dfdfdf,
-      inset -2px -2px #808080,
-      inset 2px 2px #fff;
+    background: #c0c0c0;
+    box-shadow: var(--fix-ado-win98-raised);
+
+    /* Only the bevel draws the card's edge: the content's own border stays, unseen. */
+    .card-content {
+      border-color: transparent;
+    }
+
+    .card-flag {
+      box-sizing: border-box;
+      border-block: 2px solid transparent;
+      background-clip: padding-box;
+      transform: translateX(2px);
+    }
+
+    /* Tags: flat white boxes with a grey line, like static fields. */
+    .tags-list .bolt-pill {
+      box-sizing: border-box;
+      padding: 0 5px;
+      border: 1px solid #808080;
+      background: #fff;
+      box-shadow: none;
+
+      .bolt-pill-content {
+        padding: 0;
+      }
+    }
   }
 
   /* Work item form: a window with group boxes. */
@@ -1917,9 +1939,31 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
       inset -1px -1px rgba(0, 0, 0, 0.6);
   }
 
-  /* Days in column: square dots; sunken while they load. */
+  /* Days in column: a progress bar. A 6x5 segment per day in a sunken white track, navy, then
+     olive once aging, then maroon once old; sunken while they load. The track takes no room of
+     its own, so the card keeps its height. */
+  .fix-ado-days-in-column {
+    gap: 2px;
+    margin: 4px -2px -2px;
+    padding: 2px;
+    background: #fff;
+    box-shadow:
+      inset 1px 1px #808080,
+      inset -1px -1px #fff;
+  }
+
   .fix-ado-days-in-column > span {
+    width: 6px;
     border-radius: 0;
+    background: #000080;
+  }
+
+  .fix-ado-days-in-column > span[data-age="aging"] {
+    background: #808000;
+  }
+
+  .fix-ado-days-in-column > span[data-age="old"] {
+    background: #800000;
   }
 
   .fix-ado-days-in-column > span[data-age="loading"] {
