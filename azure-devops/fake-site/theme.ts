@@ -60,6 +60,11 @@ function themeClassOf(themeId: string): string {
   return themeId === DARK_THEME_ID ? "ms-vss-web-vsts-theme-dark" : "ms-vss-web-vsts-theme";
 }
 
+/** The name on the theme's tile in the panel. */
+function themeNameOf(themeId: string): string {
+  return themeId === DARK_THEME_ID ? "Dark" : "Light";
+}
+
 function themePage(): FakeResponse {
   const { darkRoot, rest } = capturedCss();
   return htmlResponse(`<!doctype html>
@@ -76,6 +81,11 @@ function themePage(): FakeResponse {
     .replace(/<\\/body>\\s*$/u, "</div>");
   const root = buildFixtureDom(document, html);
   document.body.replaceChildren(...(root === null ? [] : [root]));
+  // The panel selects the saved theme's tile.
+  for (const tile of document.querySelectorAll(".theme-tile-container")) {
+    const name = tile.querySelector(".theme-name")?.textContent;
+    tile.classList.toggle("selected", name === ${JSON.stringify(themeNameOf(savedThemeId))});
+  }
   // Azure DevOps marks the theme on the body after the script has started.
   setTimeout(() => document.body.classList.add(${JSON.stringify(themeClassOf(savedThemeId))}), ${String(THEME_CLASS_DELAY_MS)});
   if (new URLSearchParams(location.search).get("panel") === "closed") {

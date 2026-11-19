@@ -38,4 +38,37 @@ const BOARD_STYLE = `${BASE_STYLE}
 .wit-card { border: 1px solid #ccc; border-radius: 4px; margin: 4px; padding: 6px; background: #fff; }
 nav, header, .region-header, .project-navigation { display: none; }`;
 
-export { BOARD_STYLE, PULL_REQUEST_STYLE, RUN_STYLE };
+/**
+ * With the site's own CSS: the capture's body becomes a div, so it fills the window as the
+ * site's body does, and the page is as tall as on the real site.
+ */
+const FULL_WINDOW_STYLE = `html, body { height: 100%; margin: 0; }
+body > div:first-of-type { height: 100%; width: 100%; }
+/* azure-devops-ui's own utility, which the captures leave out. */
+.full-size { height: 100%; width: 100%; }
+/* azure-devops-ui's spacing utilities, which captures made before the capture kept
+   structural selectors leave out. */
+.rhythm-horizontal-4 > :not(:first-child) { margin-left: 4px; }
+.rhythm-vertical-4 > :not(:first-child) { margin-top: 4px; }
+.rhythm-horizontal-8 > :not(:first-child) { margin-left: 8px; }
+.rhythm-vertical-8 > :not(:first-child) { margin-top: 8px; }
+.rhythm-horizontal-12 > :not(:first-child) { margin-left: 12px; }
+.rhythm-vertical-12 > :not(:first-child) { margin-top: 12px; }
+.rhythm-horizontal-16 > :not(:first-child) { margin-left: 16px; }
+.rhythm-vertical-16 > :not(:first-child) { margin-top: 16px; }
+.rhythm-horizontal-20 > :not(:first-child) { margin-left: 20px; }
+.rhythm-vertical-20 > :not(:first-child) { margin-top: 20px; }
+.rhythm-horizontal-24 > :not(:first-child) { margin-left: 24px; }
+.rhythm-vertical-24 > :not(:first-child) { margin-top: 24px; }
+.rhythm-horizontal-32 > :not(:first-child) { margin-left: 32px; }
+.rhythm-vertical-32 > :not(:first-child) { margin-top: 32px; }
+/* Monaco places its inline diff's editors and lines from script, which a capture does not keep. */
+.monaco-diff-editor > .editor { position: absolute; top: 0; left: 0; }
+.monaco-diff-editor > .editor.original { display: none; }
+.monaco-editor .overflow-guard { position: relative; overflow: hidden; }
+.monaco-editor .view-lines, .monaco-editor .view-zones, .monaco-editor .view-overlays { position: absolute; top: 0; left: 0; width: 100%; }
+.monaco-editor .view-zones > div { position: absolute; width: 100%; overflow: hidden; }
+.monaco-editor .inputarea { position: absolute; opacity: 0; pointer-events: none; }
+.monaco-editor .view-line { position: absolute; width: 100%; white-space: pre; }
+.monaco-editor .margin-view-overlays > div { position: absolute; width: 100%; }`;
+export { BOARD_STYLE, FULL_WINDOW_STYLE, PULL_REQUEST_STYLE, RUN_STYLE };

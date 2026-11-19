@@ -2,31 +2,22 @@
 // Pages: the board, the repository pull request list, the pull request inbox, a pull
 // request, a work item and a pipeline run's views, from the fixtures. API: the GET requests the script sends, answered from the fixtures and
 // the state the actions change. Open http://localhost:8787/__dev for links.
-import { BOARD_STYLE, PULL_REQUEST_STYLE, RUN_STYLE } from "./styles.ts";
 import type { FakeRequest, FakeResponse } from "../../shared/dev/fake-site/server.ts";
 import { THEME_PATH, themeAction, themeResponse } from "./theme.ts";
-import {
-  actions,
-  currentEvaluations,
-  currentPullRequest,
-  currentWorkItem,
-  draftPillScript,
-} from "./state.ts";
+import { actions, currentBuilds, currentEvaluations, currentPullRequest } from "./state.ts";
 import {
   boardData,
-  pageCss,
   pageHtml,
   pullRequestDetailData,
   pullRequestDetailPath,
   pullRequestListPath,
   pullRequestPageData,
 } from "./data.ts";
-import { htmlResponse, jsonResponse, startFakeSite } from "../../shared/dev/fake-site/server.ts";
-import { CREATE_PAGE_SCRIPT } from "./create-page.ts";
+import { jsonResponse, startFakeSite } from "../../shared/dev/fake-site/server.ts";
+import { pageAt, pageResponse } from "./page-response.ts";
+import { workItemUpdatesResponse, workItemsResponse } from "./board-api.ts";
 import { FAKE_SITE_PORT } from "../../build/bundle.ts";
 import type { Page } from "./data.ts";
-import { fixturePage } from "../../shared/dev/fake-site/fixture-page.ts";
-import { parsePipelineRunLocation } from "../src/pipeline/pipeline-run-link.ts";
 import { reviewerResponse } from "./reviewers.ts";
 
 const HTTP_OK = 200;
@@ -35,65 +26,6 @@ const BOARD_PATH = "/fake-org/text-2/_boards/board/t/text-3/Stories";
 const INBOX_PATH = "/fake-org/_pulls";
 const CREATE_PATH = "/fake-org/fake-project/_git/fake-repository/pullrequestcreate";
 const WORK_ITEM_PATH = "/fake-org/fake-project/_workitems/edit/1001/";
-const RUN_PAGES = {
-  log: "pipeline-log",
-  steps: "pipeline-steps",
-  summary: "pipeline-summary",
-} as const;
-
-/** The pages found by path alone, each with the test of its path. */
-const PAGE_PATHS: [Page, (pathname: string) => boolean][] = [
-  ["pr-detail", (pathname) => /\/_git\/[^/]+\/pullrequest\/\d+$/u.test(pathname)],
-  ["pr-list", (pathname) => /\/_git\/[^/]+\/pullrequests$/u.test(pathname)],
-  ["pr-create", (pathname) => /\/_git\/[^/]+\/pullrequestcreate$/u.test(pathname)],
-  ["pr-inbox", (pathname) => pathname.endsWith("/_pulls")],
-  ["board", (pathname) => pathname.includes("/_boards/board/")],
-  ["work-item", (pathname) => /\/_workitems\/edit\/\d+\/?$/u.test(pathname)],
-];
-
-/** The page at a URL, or null for an API path or an unknown page. */
-function pageAt(url: URL): Page | null {
-  if (url.pathname.includes("/_apis/")) {
-    return null;
-  }
-  const run = parsePipelineRunLocation(url);
-  if (run !== null) {
-    return RUN_PAGES[run.view];
-  }
-  const page = PAGE_PATHS.find(([, matches]) => matches(url.pathname))?.[0] ?? null;
-  return page === "pr-detail" && url.searchParams.get("_a") === "files" ? "pr-files" : page;
-}
-
-function statusColorStyle(page: "pr-list" | "pr-inbox"): string {
-  const colors = Object.entries(pullRequestPageData(page).meta.statusColors);
-  return `body { ${colors.map(([name, value]) => `${name}: ${value};`).join(" ")} }`;
-}
-
-function styleOf(page: Page): string {
-  if (page === "board") {
-    return BOARD_STYLE;
-  }
-  if (page === "pr-list" || page === "pr-inbox") {
-    return `${PULL_REQUEST_STYLE}\n${statusColorStyle(page)}`;
-  }
-  if (page === "pr-detail" || page === "pr-files" || page === "pr-create" || page === "work-item") {
-    return pageCss(page) ?? PULL_REQUEST_STYLE;
-  }
-  return RUN_STYLE;
-}
-
-function pageResponse(page: Page): FakeResponse {
-  const style = styleOf(page);
-  return htmlResponse(
-    fixturePage({
-      fixtureUrl: `/fake-site/${page}.html`,
-      script: page === "pr-create" ? CREATE_PAGE_SCRIPT : draftPillScript(page),
-      style,
-      title: `Fake Azure DevOps: ${page}`,
-    }),
-  );
-}
-
 /** The pull request page that sent an API request: the inbox, or else the repository list. */
 function pullRequestPageOf(request: FakeRequest): "pr-list" | "pr-inbox" {
   return request.refererPath?.endsWith("/_pulls") === true ? "pr-inbox" : "pr-list";
@@ -127,7 +59,7 @@ function buildsResponse(): FakeResponse {
   const { builds } = pullRequestDetailData().data;
   return builds?.body === null || builds === undefined
     ? jsonResponse({ message: "No runs" }, builds?.httpStatus ?? HTTP_NOT_FOUND)
-    : jsonResponse({ count: builds.body.value.length, value: builds.body.value });
+    : jsonResponse({ count: builds.body.value.length, value: currentBuilds(builds.body.value) });
 }
 
 function timelineResponse(_request: FakeRequest, match: RegExpExecArray): FakeResponse {
@@ -159,56 +91,6 @@ function pullRequestsResponse(request: FakeRequest): FakeResponse {
   const isActive = request.url.searchParams.get("searchCriteria.status") === "active";
   const listed = pullRequestPageData("pr-list").data.pullRequests ?? [];
   const value = isActive ? listed.map((pullRequest) => currentPullRequest(pullRequest)) : [];
-  return jsonResponse({ count: value.length, value });
-}
-
-function workItemsResponse(request: FakeRequest): FakeResponse {
-  const ids = (request.url.searchParams.get("ids") ?? "").split(",").map(Number);
-  const { workItems } = boardData().data;
-  const value = ids.map((id) => {
-    const workItem = workItems.find((captured) => captured.id === id);
-    if (workItem === undefined) {
-      return null;
-    }
-    const { changedById, rev } = currentWorkItem(workItem);
-    return { fields: { "System.ChangedBy": { id: changedById }, "System.Rev": rev }, id, rev };
-  });
-  return jsonResponse({ count: value.length, value });
-}
-
-const MS_PER_DAY = 86_400_000;
-/** Spreads the cards over 0 to 24 days in their column. */
-const DAYS_PER_ID = 7;
-const FAKE_DAYS_IN_COLUMN_SPREAD = 25;
-const DAYS_BEFORE_MOVE = 3;
-
-/**
- * Captured dates are minutes apart, so the updates are invented: each card was
- * created, then moved to its column a number of days ago that its id decides.
- */
-function workItemUpdatesResponse(_request: FakeRequest, match: RegExpExecArray): FakeResponse {
-  const id = Number(match.groups?.id);
-  const daysInColumn = (id * DAYS_PER_ID) % FAKE_DAYS_IN_COLUMN_SPREAD;
-  const movedAt = new Date(Date.now() - daysInColumn * MS_PER_DAY - MS_PER_DAY / 2).toISOString();
-  const createdAt = new Date(Date.parse(movedAt) - DAYS_BEFORE_MOVE * MS_PER_DAY).toISOString();
-  const value = [
-    {
-      fields: {
-        "System.BoardColumn": { newValue: "text-new" },
-        "System.ChangedDate": { newValue: createdAt },
-      },
-      id: 1,
-      rev: 1,
-    },
-    {
-      fields: {
-        "System.BoardColumn": { newValue: "text-active", oldValue: "text-new" },
-        "System.ChangedDate": { newValue: movedAt, oldValue: createdAt },
-      },
-      id: 2,
-      rev: 2,
-    },
-  ];
   return jsonResponse({ count: value.length, value });
 }
 

@@ -1,7 +1,15 @@
 // What the fake site's actions change, on top of the captured pages: build statuses,
 // pull request changes, required reviewers and work item changes.
-import { boardData, showFilesCapture, showPullRequestCapture } from "./data.ts";
+import {
+  boardData,
+  showCapture,
+  showDefaultCaptures,
+  showFilesCapture,
+  showPullRequestCapture,
+} from "./data.ts";
 import { currentIsDraft, draftActions, draftChanges } from "./drafts.ts";
+import { overviewVariantActions, resetOverviewVariants } from "./overview-variants.ts";
+import { resetStarredReviewers, starredReviewerActions } from "./starred-reviewers.ts";
 import { BUILD_POLICY_TYPE_ID } from "../src/pipeline/pipeline-status.ts";
 import type { BoardWorkItem } from "../src/boards/board.ts";
 import type { FakeSiteAction } from "../../shared/dev/fake-site/server.ts";
@@ -26,6 +34,7 @@ const buildStatuses = new Map<string, string>();
 const pullRequestRevisions = new Map<number, number>();
 const requiredReviewers = new Map<number, Set<number>>();
 const workItemChanges = new Map<number, { rev: number; changedById: string }>();
+let isNewestRunCancelling = false;
 
 function buildStatusKey(page: string, pullRequestId: string): string {
   return `${page}:${pullRequestId}`;
@@ -75,6 +84,18 @@ function currentPullRequest(pullRequest: ListedPullRequest): ListedPullRequest {
     current.lastMergeSourceCommit = { commitId: `fake-commit-${revision}` };
   }
   return current;
+}
+
+/** The captured runs of a pull request; the newest is still cancelling after the cancelling-run action. */
+function currentBuilds(builds: unknown[]): unknown[] {
+  if (!isNewestRunCancelling || builds.length === 0) {
+    return builds;
+  }
+  const [newest, ...older] = builds;
+  if (typeof newest !== "object" || newest === null) {
+    return builds;
+  }
+  return [{ ...newest, result: undefined, status: "cancelling" }, ...older];
 }
 
 /** A captured work item with the changes the actions made. */
@@ -143,6 +164,10 @@ function reset(): unknown {
     changes.clear();
   }
   addedReviewers.length = 0;
+  isNewestRunCancelling = false;
+  showDefaultCaptures();
+  resetOverviewVariants();
+  resetStarredReviewers();
   showPullRequestCapture("");
   showFilesCapture("");
   return "reset";
@@ -178,15 +203,9 @@ function pullRequestListActions(): FakeSiteAction[] {
   ];
 }
 
-function actions(): FakeSiteAction[] {
+/** The actions that show another capture as a page. */
+function captureActions(): FakeSiteAction[] {
   return [
-    ...pullRequestListActions(),
-    {
-      description: "Someone else (or by=me, the signed-in user) changes a work item on the board.",
-      example: `id=${firstWorkItemId()}&by=other`,
-      name: "change-work-item",
-      run: changeWorkItem,
-    },
     {
       description:
         "Shows another capture as the pull request page: reviewers, reviewers-add, reviewers-search, split-menu, or warnings (the default).",
@@ -202,6 +221,38 @@ function actions(): FakeSiteAction[] {
       run: (query) => showFilesCapture(query.get("name") ?? ""),
     },
     {
+      description:
+        "Shows a named capture as any page, such as page=pr-list&name=win98 for pr-list-win98. Without a name the page shows its default capture.",
+      example: "page=pr-list&name=win98",
+      name: "show-capture",
+      run: (query) => showCapture(query.get("page"), query.get("name") ?? ""),
+    },
+  ];
+}
+
+function actions(): FakeSiteAction[] {
+  return [
+    ...pullRequestListActions(),
+    {
+      description:
+        "The pull request's newest pipeline run is being cancelled (on=1), or not (on=0).",
+      example: "on=1",
+      name: "cancelling-run",
+      run: (query) => {
+        isNewestRunCancelling = query.get("on") === "1";
+        return { isNewestRunCancelling };
+      },
+    },
+    {
+      description: "Someone else (or by=me, the signed-in user) changes a work item on the board.",
+      example: `id=${firstWorkItemId()}&by=other`,
+      name: "change-work-item",
+      run: changeWorkItem,
+    },
+    ...captureActions(),
+    ...overviewVariantActions,
+    ...starredReviewerActions,
+    {
       description: "The reviewers the script added, with required or optional.",
       example: "",
       name: "added-reviewers",
@@ -213,4 +264,4 @@ function actions(): FakeSiteAction[] {
 }
 
 export { draftPillScript } from "./drafts.ts";
-export { actions, currentEvaluations, currentPullRequest, currentWorkItem };
+export { actions, currentBuilds, currentEvaluations, currentPullRequest, currentWorkItem };

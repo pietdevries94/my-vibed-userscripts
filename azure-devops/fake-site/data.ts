@@ -9,6 +9,7 @@ import type { PolicyEvaluation } from "../src/pipeline/pipeline-status.ts";
 import { fixtureReader } from "../../shared/dev/fake-site/server.ts";
 import fs from "node:fs";
 import path from "node:path";
+import { withOverviewVariants } from "./overview-variants.ts";
 
 type Page =
   | "board"
@@ -80,6 +81,20 @@ const PAGE_FIXTURES: Partial<Record<Page, string>> = {
   // A user story, with the assignee's avatar in the header.
   "work-item": "work-item-work-item-header",
 };
+/** The captures the pages show until an action picks another. */
+const DEFAULT_PAGE_FIXTURES = { ...PAGE_FIXTURES };
+const PAGES: Page[] = [
+  "board",
+  "pr-list",
+  "pr-inbox",
+  "pr-detail",
+  "pr-files",
+  "pr-create",
+  "pipeline-summary",
+  "pipeline-steps",
+  "pipeline-log",
+  "work-item",
+];
 const DEFAULT_PULL_REQUEST_CAPTURE = "warnings";
 const DEFAULT_FILES_CAPTURE = "composer";
 
@@ -102,6 +117,31 @@ function showFilesCapture(name: string): string {
   readFixture(`${fixture}.html`);
   PAGE_FIXTURES["pr-files"] = fixture;
   return fixture;
+}
+
+function isPage(name: string | null): name is Page {
+  return PAGES.some((page) => page === name);
+}
+
+/**
+ * Shows a named capture as any page, such as "win98" on pr-list for pr-list-win98. Without a
+ * name the page shows its default capture again.
+ */
+function showCapture(page: string | null, name: string): string {
+  if (!isPage(page)) {
+    return `Unknown page. Pick one of: ${PAGES.join(", ")}.`;
+  }
+  const fixture = name === "" ? (DEFAULT_PAGE_FIXTURES[page] ?? page) : `${page}-${name}`;
+  readFixture(`${fixture}.html`);
+  PAGE_FIXTURES[page] = fixture;
+  return fixture;
+}
+
+/** Every page shows its default capture again. */
+function showDefaultCaptures(): void {
+  for (const page of PAGES) {
+    showCapture(page, "");
+  }
 }
 
 /** The site's CSS the capture saved for a page, or null when it saved none. */
@@ -140,7 +180,8 @@ function labelsOf(page: Page): Map<string, string> {
 }
 
 function pageHtml(page: Page): string {
-  return withStandInLabels(readFixture(`${fixtureOfPage(page)}.html`), labelsOf(page));
+  const html = withStandInLabels(readFixture(`${fixtureOfPage(page)}.html`), labelsOf(page));
+  return page === "pr-detail" ? withOverviewVariants(html) : html;
 }
 
 function pageJson(page: Page): unknown {
@@ -194,6 +235,8 @@ export {
   pullRequestListPath,
   pullRequestPageData,
   reviewData,
+  showCapture,
+  showDefaultCaptures,
   showFilesCapture,
   showPullRequestCapture,
 };
