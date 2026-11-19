@@ -7917,3 +7917,141 @@ html[data-fix-ado-win98]
     }
   }
 }
+
+/* The pull request list's filter bar, as in the PullRequestsMineFilter artboard: when it is open
+   it is the tab panel's first row, 14px above the list, so tabs, filter and list are one
+   property sheet. Its fields are 21px, sunken and white, 6px apart, and fit the row. The same
+   bar shows on the Mine, Active and Completed tabs. */
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body
+  .bolt-page
+  > div:has(> .vss-FilterBar) {
+  margin: 0;
+  padding: 14px 12px 0;
+  background: #c0c0c0;
+  box-shadow:
+    inset -1px 0 #0a0a0a,
+    inset 1px 1px #fff,
+    inset -2px 0 #808080,
+    inset 2px 2px #dfdfdf;
+
+  & + .page-content {
+    padding-top: 14px;
+    box-shadow:
+      inset -1px -1px #0a0a0a,
+      inset 1px 0 #fff,
+      inset -2px -2px #808080,
+      inset 2px 0 #dfdfdf;
+  }
+
+  .vss-FilterBar {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .vss-FilterBar--list {
+    height: 23px;
+    gap: 6px;
+  }
+
+  .vss-FilterBar--list > .vss-FilterBar--item {
+    flex: 0 1 200px;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+
+    &.vss-FilterBar--item-keyword-container {
+      flex: 1 1 auto;
+      min-width: 140px;
+      width: auto;
+      margin: 0;
+    }
+
+    &:has(.bolt-dropdown-expandable-text-field) {
+      flex-basis: 160px;
+    }
+
+    /* Each field fills its item. */
+    :is(.bolt-identitypickerdropdown, .bolt-dropdown-expandable-text-field, .flex-column) {
+      width: 100%;
+      min-width: 0;
+    }
+  }
+
+  .bolt-textfield.bolt-textfield {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 21px;
+    gap: 4px;
+    padding: 3px 4px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--fix-ado-win98-sunken);
+
+    .prefix,
+    .fluent-icons-enabled:has(> .prefix) {
+      flex: none;
+      width: 16px;
+      margin: 0;
+      padding: 0;
+    }
+
+    input {
+      min-width: 0;
+      height: 15px;
+      margin: 0;
+      padding: 0;
+
+      &::placeholder {
+        color: #808080;
+        opacity: 1;
+      }
+    }
+
+    /* The version field is a combo box: its arrow a raised button inside the right edge. */
+    &:has(.suffix) {
+      padding-right: 2px;
+    }
+
+    .fluent-icons-enabled:has(> .suffix) {
+      flex: none;
+      width: 16px;
+      height: 17px;
+      margin: 0;
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E")
+          center / 7px 4px no-repeat,
+        #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+
+      .suffix {
+        visibility: hidden;
+      }
+    }
+  }
+
+  /* Clear: a flat 23px toolbar button, like the filter button by the tabs. */
+  .vss-FilterBar--right-items {
+    flex: none;
+    margin: 0;
+
+    .bolt-button {
+      width: 23px;
+      height: 23px;
+      min-width: 0;
+      padding: 0;
+      justify-content: center;
+      background: transparent;
+      box-shadow: none;
+    }
+  }
+}
