@@ -374,6 +374,109 @@ html[data-fix-ado-win98] .navigation-container {
   }
 }
 
+/* The organization side bar, on organization pages such as the pull request inbox, as in the
+   PullRequestsInbox artboard: the project side bar's Start menu pane with its banner. */
+html[data-fix-ado-win98] .top-level-navigation {
+  position: relative;
+  box-sizing: border-box;
+  width: 220px;
+  min-width: 220px;
+  padding: 2px 2px 2px 24px;
+  border: 0;
+  background: #c0c0c0;
+  box-shadow: var(--fix-ado-win98-raised);
+  color: #000;
+  font-size: 11px;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    width: 22px;
+    background: linear-gradient(180deg, #000080, #1084d0);
+  }
+
+  &::before {
+    content: "Azure DevOps 98" / "";
+    position: absolute;
+    z-index: 1;
+    bottom: 10px;
+    left: 6px;
+    width: 14px;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    color: #fff;
+    font: 700 16px/14px var(--fix-ado-win98-font);
+    white-space: nowrap;
+  }
+
+  .top-level-section {
+    padding: 4px 2px 0 4px;
+  }
+
+  /* Items 24px, the organization 34px with its persona; the shown one and the hovered one navy. */
+  /* The class three times outweighs the page's blue for links: these are menu items. */
+  .top-navigation-item.top-navigation-item.top-navigation-item {
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+    min-height: 0;
+    margin: 0;
+    padding: 0 6px;
+    border: 0;
+    background: transparent;
+    color: #000;
+    font-size: 11px;
+    text-decoration: none;
+
+    &.host-link {
+      height: 34px;
+    }
+
+    &::before,
+    &::after {
+      display: none;
+    }
+
+    &:is(.displayed, :hover, :focus) {
+      background: #000080;
+      color: #fff;
+    }
+
+    .vss-Persona,
+    .fluent-icons-enabled,
+    .fluent-icons-enabled > * {
+      flex: none;
+      margin: 0;
+    }
+
+    .fluent-icons-enabled {
+      width: 16px;
+    }
+  }
+
+  /* An etched line under the organizations, and one above the footer. */
+  .action-section,
+  .navigation-footer {
+    margin: 3px 0 0;
+    padding: 5px 0 0;
+    border: 0;
+    box-shadow:
+      inset 0 1px #808080,
+      inset 0 2px #fff;
+  }
+
+  .action-section {
+    margin-top: 3px;
+  }
+
+  .navigation-footer {
+    padding: 5px 2px 4px 4px;
+  }
+}
+
 /* ===== Everywhere the look applies: controls ===== */
 
 html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body,
@@ -2897,6 +3000,12 @@ html[data-fix-ado-win98]:is(
     [data-fix-ado-win98="pull-request-inbox"]
   )
   body {
+  /* Reviewers 8px apart, also before the required reviewers feature has marked the row: the
+     rhythm margins that space them natively are off in Windows 98 mode. */
+  .rhythm-horizontal-8:has(> .pr-reviewer):not([data-fix-ado-reviewers]) {
+    gap: 8px;
+  }
+
   /* The reviewers' cell shows each required reviewer's whole frame. */
   a.bolt-table-row > td,
   a.bolt-table-row .bolt-table-cell-content,
