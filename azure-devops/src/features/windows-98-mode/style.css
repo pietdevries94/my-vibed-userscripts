@@ -1044,6 +1044,11 @@ html[data-fix-ado-win98] .fix-ado-settings {
     background: #c0c0c0;
   }
 
+  /* A feature's tag, such as WIP: white, so it reads apart from New and Updated. */
+  .fix-ado-settings-chip-tag.fix-ado-settings-chip {
+    background: #fff;
+  }
+
   /* The buttons: Save and reload page first as the default, then Cancel, as Win98 orders them. */
   .fix-ado-settings-buttons {
     position: sticky;

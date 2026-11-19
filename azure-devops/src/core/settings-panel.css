@@ -150,6 +150,11 @@
   color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
 }
 
+.fix-ado-settings-chip-tag {
+  border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+
 .fix-ado-settings-feature-description {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
 }

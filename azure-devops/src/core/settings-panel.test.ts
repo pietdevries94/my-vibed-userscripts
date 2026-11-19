@@ -1,4 +1,5 @@
 import { TOP_BAR, featureNamed, flip, pageWith } from "./settings-panel.test-page.ts";
+import type { Feature } from "./feature.ts";
 import type { TestPage } from "./settings-panel.test-page.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -193,6 +194,25 @@ test("a feature the owner never saw shows New, even when its change is an update
   });
   page.panel.open();
   assert.equal(chip(page, "dots"), "New");
+});
+
+const chips = (page: TestPage, id: string): string[] =>
+  [...(page.checkbox(id).closest("label")?.querySelectorAll(".fix-ado-settings-chip") ?? [])].map(
+    (found) => found.textContent,
+  );
+
+test("a feature's tag shows as a chip after its name, also once its change is seen", () => {
+  const tagged: Feature = {
+    ...featureNamed("retro", "Retro look", { kind: "new", version: "2.0.0" }),
+    tag: "WIP",
+  };
+  const page = pageWith(TOP_BAR, { features: [tagged, featureNamed("tab", "Pipeline tab")] });
+  page.panel.open();
+  assert.deepEqual(chips(page, "retro"), ["New", "WIP"]);
+  assert.deepEqual(chips(page, "tab"), []);
+  page.button("Cancel").click();
+  page.panel.open();
+  assert.deepEqual(chips(page, "retro"), ["WIP"]);
 });
 
 test("the panel links to a new GitHub issue, opened in a new tab", () => {

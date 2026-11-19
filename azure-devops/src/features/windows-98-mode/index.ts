@@ -19,6 +19,7 @@ const windows98Mode: Feature = {
     };
   },
   styles: [style],
+  tag: "WIP",
 };
 
 export { windows98Mode };

@@ -47,6 +47,8 @@ interface Feature {
   isOffByDefault?: boolean;
   /** Its latest change worth flagging in the settings panel. */
   change?: FeatureChange;
+  /** A word the settings panel always shows as a chip after its name, such as "WIP". */
+  tag?: string;
   /** Its stylesheets. A stylesheet that several features list is added once. */
   styles: string[];
   /** Null when there is nothing to sync, such as in a frame the feature skips. */

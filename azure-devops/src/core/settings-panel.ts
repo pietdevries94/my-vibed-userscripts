@@ -54,7 +54,14 @@ function chipKind(feature: Feature, options: SettingsPanelOptions): FeatureChang
   return feature.change?.kind ?? "new";
 }
 
-/** The feature's name, with a New or Updated chip while its change is unseen. */
+function chipElement(document: Document, text: string, kind: string): HTMLElement {
+  return element(document, "span", {
+    className: `fix-ado-settings-chip fix-ado-settings-chip-${kind}`,
+    text,
+  });
+}
+
+/** The feature's name, with a New or Updated chip while its change is unseen, then its tag. */
 function featureName(
   document: Document,
   feature: Feature,
@@ -65,12 +72,10 @@ function featureName(
     text: feature.name,
   });
   if (chip) {
-    name.append(
-      element(document, "span", {
-        className: `fix-ado-settings-chip fix-ado-settings-chip-${chip}`,
-        text: CHIP_TEXT[chip],
-      }),
-    );
+    name.append(chipElement(document, CHIP_TEXT[chip], chip));
+  }
+  if (feature.tag !== undefined) {
+    name.append(chipElement(document, feature.tag, "tag"));
   }
   return name;
 }
