@@ -7645,10 +7645,16 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
       margin: 0;
     }
 
-    /* A group's triangle sits in the gutter, so its text lines up with the others. */
+    /* A group's triangle sits in the gutter, 4px after the line number and 2px before the
+       text, so its text lines up with the others. */
     .group-expand > .fluent-icons-enabled {
       width: 12px;
-      margin-left: -12px;
+      margin-left: -14px;
+
+      .group-icon {
+        width: 12px;
+        padding: 0;
+      }
     }
 
     .line-area {
@@ -7658,7 +7664,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
 
     .line {
       width: 36px;
-      margin-right: 12px;
+      margin-right: 18px;
       padding: 0;
       color: #808080;
       text-align: right;
@@ -7737,6 +7743,21 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
 
 /* Pipeline run, summary, as in the design's PipelineRunSummary artboard. */
 html[data-fix-ado-win98="pipeline-run"] body .run-details-page {
+  /* The run's ⋮ menu: a 23px push button, 4px after the default button. */
+  .bolt-header-commandbar .bolt-expandable-button {
+    margin: 2px 2px 2px 4px;
+
+    .bolt-button {
+      width: 23px;
+      min-width: 0;
+      height: 23px;
+      padding: 0;
+      justify-content: center;
+      background: #c0c0c0;
+      box-shadow: var(--fix-ado-win98-raised);
+    }
+  }
+
   .run-view-header .bolt-header-title-row .bolt-header-title * {
     font-size: 11px;
   }
