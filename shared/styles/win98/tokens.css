@@ -1,0 +1,66 @@
+/* Windows 98's visual language as custom properties: colours, bevels, fonts, sizes and the
+   16px pixel icons. Components (components.css) and a script's own rules build on these, so a
+   look is changed in one place. Import it before the rules that use it. */
+
+:root {
+  /* Colours. */
+  --win98-face: #c0c0c0;
+  --win98-light: #dfdfdf;
+  --win98-highlight: #fff;
+  --win98-shadow: #808080;
+  --win98-dark: #0a0a0a;
+  --win98-text: #000;
+  --win98-field-face: #fff;
+  --win98-navy: #000080;
+  --win98-title-end: #1084d0;
+  --win98-desktop: #008080;
+  --win98-tooltip: #ffffe1;
+  --win98-link: #0000ee;
+  --win98-olive: #808000;
+  --win98-maroon: #800000;
+  --win98-title: linear-gradient(90deg, var(--win98-navy), var(--win98-title-end));
+  --win98-title-inactive: linear-gradient(90deg, #808080, #b5b5b5);
+
+  /* Bevels, as inset box shadows: the outer line first. */
+  --win98-raised:
+    inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf;
+  --win98-pressed:
+    inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+  --win98-sunken:
+    inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
+  --win98-thin: inset -1px -1px #808080, inset 1px 1px #fff;
+  --win98-window:
+    inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff;
+  --win98-well: inset -1px -1px #fff, inset 1px 1px #808080;
+  --win98-default:
+    inset 0 0 0 1px #000, inset -2px -2px #0a0a0a, inset 2px 2px #fff, inset -3px -3px #808080,
+    inset 3px 3px #dfdfdf;
+  --win98-menu:
+    inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px #808080, inset 2px 2px #fff,
+    2px 2px 0 rgba(0, 0, 0, 0.35);
+  --win98-etched: inset 0 1px #808080, inset 0 2px #fff;
+
+  /* Fonts. */
+  --win98-font: Tahoma, "MS Sans Serif", Geneva, Verdana, sans-serif;
+  --win98-mono: "Courier New", Courier, monospace;
+  --win98-font-size: 11px;
+
+  /* Sizes. */
+  --win98-button-height: 23px;
+  --win98-button-min-width: 75px;
+  --win98-field-height: 21px;
+  --win98-row-height: 17px;
+  --win98-checkbox-size: 13px;
+  --win98-title-height: 18px;
+  --win98-gap: 6px;
+
+  /* The 16px pixel icons. In a 24px box they keep 16px, centred. */
+  --win98-icon-passed: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M13 3h1v1h-1zM12 4h2v1h-2zM11 5h3v1h-3zM2 6h1v1h-1zM10 6h3v1h-3zM2 7h2v1h-2zM9 7h3v1h-3zM2 8h3v1h-3zM8 8h3v1h-3zM3 9h3v1h-3zM7 9h3v1h-3zM4 10h5v1h-5zM5 11h3v1h-3zM6 12h1v1h-1z'/%3E%3C/svg%3E");
+  --win98-icon-failed: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23800000' d='M5 0h6v1h-6zM3 1h2v1h-2zM11 1h2v1h-2zM2 2h1v1h-1zM13 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM2 12h1v1h-1zM13 12h1v1h-1zM3 13h2v1h-2zM11 13h2v1h-2zM5 14h6v1h-6z'/%3E%3Cpath fill='%23ff0000' d='M5 1h6v1h-6zM3 2h10v1h-10zM2 3h12v1h-12zM2 4h2v1h-2zM6 4h4v1h-4zM12 4h2v1h-2zM1 5h4v1h-4zM7 5h2v1h-2zM11 5h4v1h-4zM1 6h5v1h-5zM10 6h5v1h-5zM1 7h6v1h-6zM9 7h6v1h-6zM1 8h5v1h-5zM10 8h5v1h-5zM1 9h4v1h-4zM7 9h2v1h-2zM11 9h4v1h-4zM2 10h2v1h-2zM6 10h4v1h-4zM12 10h2v1h-2zM2 11h12v1h-12zM3 12h10v1h-10zM5 13h6v1h-6z'/%3E%3Cpath fill='%23ffffff' d='M4 4h2v1h-2zM10 4h2v1h-2zM5 5h2v1h-2zM9 5h2v1h-2zM6 6h4v1h-4zM7 7h2v1h-2zM6 8h4v1h-4zM5 9h2v1h-2zM9 9h2v1h-2zM4 10h2v1h-2zM10 10h2v1h-2z'/%3E%3C/svg%3E");
+  --win98-icon-warning: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M7 0h2v1h-2zM6 1h1v1h-1zM9 1h1v1h-1zM6 2h1v1h-1zM9 2h1v1h-1zM5 3h1v1h-1zM10 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM4 5h1v1h-1zM7 5h2v1h-2zM11 5h1v1h-1zM4 6h1v1h-1zM7 6h2v1h-2zM11 6h1v1h-1zM3 7h1v1h-1zM7 7h2v1h-2zM12 7h1v1h-1zM3 8h1v1h-1zM7 8h2v1h-2zM12 8h1v1h-1zM2 9h1v1h-1zM13 9h1v1h-1zM2 10h1v1h-1zM7 10h2v1h-2zM13 10h1v1h-1zM1 11h1v1h-1zM7 11h2v1h-2zM14 11h1v1h-1zM1 12h1v1h-1zM14 12h1v1h-1zM0 13h1v1h-1zM15 13h1v1h-1zM0 14h16v1h-16z'/%3E%3Cpath fill='%23ffff00' d='M7 1h2v1h-2zM7 2h2v1h-2zM6 3h4v1h-4zM6 4h4v1h-4zM5 5h2v1h-2zM9 5h2v1h-2zM5 6h2v1h-2zM9 6h2v1h-2zM4 7h3v1h-3zM9 7h3v1h-3zM4 8h3v1h-3zM9 8h3v1h-3zM3 9h10v1h-10zM3 10h4v1h-4zM9 10h4v1h-4zM2 11h5v1h-5zM9 11h5v1h-5zM2 12h12v1h-12zM1 13h14v1h-14z'/%3E%3C/svg%3E");
+  --win98-icon-waiting: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 1h10v1h-10zM4 2h1v1h-1zM11 2h1v1h-1zM4 3h1v1h-1zM11 3h1v1h-1zM5 4h1v1h-1zM10 4h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM7 6h2v1h-2zM6 7h1v1h-1zM9 7h1v1h-1zM5 8h1v1h-1zM10 8h1v1h-1zM4 9h1v1h-1zM11 9h1v1h-1zM4 10h1v1h-1zM11 10h1v1h-1zM4 11h1v1h-1zM11 11h1v1h-1zM3 12h10v1h-10z'/%3E%3Cpath fill='%23ffffff' d='M5 2h6v1h-6zM7 7h1v1h-1zM6 8h2v1h-2zM9 8h1v1h-1zM5 9h3v1h-3zM9 9h2v1h-2zM5 10h2v1h-2z'/%3E%3Cpath fill='%23808000' d='M5 3h6v1h-6zM6 4h4v1h-4zM7 5h2v1h-2zM8 7h1v1h-1zM8 8h1v1h-1zM8 9h1v1h-1zM7 10h4v1h-4zM5 11h6v1h-6z'/%3E%3C/svg%3E");
+  --win98-icon-none: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23808080' d='M4 7h8v1h-8zM4 8h8v1h-8z'/%3E%3C/svg%3E");
+  --win98-icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 0h10v1h-10zM2 1h1v1h-1zM13 1h1v1h-1zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM1 6h1v1h-1zM14 6h1v1h-1zM1 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM14 8h1v1h-1zM1 9h1v1h-1zM14 9h1v1h-1zM2 10h1v1h-1zM13 10h1v1h-1zM3 11h4v1h-4zM8 11h5v1h-5zM6 12h1v1h-1zM8 12h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM4 14h2v1h-2z'/%3E%3Cpath fill='%23ffffff' d='M3 1h10v1h-10zM2 2h5v1h-5zM9 2h5v1h-5zM2 3h5v1h-5zM9 3h5v1h-5zM2 4h12v1h-12zM2 5h4v1h-4zM9 5h5v1h-5zM2 6h5v1h-5zM9 6h5v1h-5zM2 7h5v1h-5zM9 7h5v1h-5zM2 8h5v1h-5zM9 8h5v1h-5zM2 9h4v1h-4zM10 9h4v1h-4zM3 10h10v1h-10zM7 11h1v1h-1zM7 12h1v1h-1zM6 13h1v1h-1z'/%3E%3Cpath fill='%230000ff' d='M7 2h2v1h-2zM7 3h2v1h-2zM6 5h3v1h-3zM7 6h2v1h-2zM7 7h2v1h-2zM7 8h2v1h-2zM6 9h4v1h-4z'/%3E%3C/svg%3E");
+  --win98-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E");
+  --win98-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E");
+}

@@ -1,6 +1,7 @@
 import type { Feature } from "../../core/feature.ts";
 import { createWindows98Mode } from "./windows-98-mode.ts";
 import style from "./style.css";
+import win98Tokens from "../../../../shared/styles/win98/tokens.css";
 
 const windows98Mode: Feature = {
   change: { kind: "new", version: "1.19.0" },
@@ -18,7 +19,7 @@ const windows98Mode: Feature = {
       },
     };
   },
-  styles: [style],
+  styles: [win98Tokens, style],
   tag: "WIP",
 };
 

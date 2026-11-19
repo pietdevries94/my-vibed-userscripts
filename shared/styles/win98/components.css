@@ -1,0 +1,237 @@
+/* Windows 98's components as classes, built only from tokens.css: for elements a script draws
+   itself. A script that restyles a site's own markup maps its selectors onto the same tokens.
+   Each component is the Win98 control at its native size, 11px Tahoma. */
+
+/* A window: the raised frame, a navy title bar, and the grey face. */
+.win98-window {
+  padding: 3px;
+  background: var(--win98-face);
+  box-shadow: var(--win98-window);
+  color: var(--win98-text);
+  font: var(--win98-font-size) var(--win98-font);
+}
+
+.win98-title-bar {
+  height: var(--win98-title-height);
+  padding: 0 3px;
+  background: var(--win98-title);
+  color: var(--win98-highlight);
+  font-weight: 700;
+  line-height: var(--win98-title-height);
+}
+
+.win98-title-bar.is-inactive {
+  background: var(--win98-title-inactive);
+}
+
+/* A push button, 23px high and at least 75px wide; pressed while active; the default one has a
+   black frame. */
+.win98-button {
+  display: inline-flex;
+  min-width: var(--win98-button-min-width);
+  height: var(--win98-button-height);
+  padding: 0 10px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  background: var(--win98-face);
+  box-shadow: var(--win98-raised);
+  color: var(--win98-text);
+  font: var(--win98-font-size) var(--win98-font);
+
+  &:active,
+  &.is-pressed {
+    padding: 1px 9px 0 11px;
+    box-shadow: var(--win98-pressed);
+  }
+
+  &.is-default {
+    box-shadow: var(--win98-default);
+  }
+
+  &:disabled {
+    color: var(--win98-shadow);
+    text-shadow: 1px 1px var(--win98-highlight);
+  }
+}
+
+/* A text field: sunken and white, 21px high. */
+.win98-field {
+  box-sizing: border-box;
+  height: var(--win98-field-height);
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 0;
+  background: var(--win98-field-face);
+  box-shadow: var(--win98-sunken);
+  color: var(--win98-text);
+  font: var(--win98-font-size) var(--win98-font);
+}
+
+/* Property sheet tabs on a raised panel. The selected tab is 3px taller, comes 2px forward over
+   the panel's edge, and covers its left neighbour's edge. */
+.win98-tabs {
+  display: flex;
+  align-items: flex-end;
+  padding-left: 4px;
+}
+
+.win98-tab {
+  height: 20px;
+  margin-right: -1px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 3px 3px 0 0;
+  background: var(--win98-face);
+  box-shadow:
+    inset 1px 1px var(--win98-highlight),
+    inset -1px 0 var(--win98-dark),
+    inset -2px 0 var(--win98-shadow);
+
+  &.is-selected {
+    position: relative;
+    z-index: 1;
+    height: 23px;
+    margin: 0 -1px -2px -3px;
+    padding: 0 13px;
+  }
+
+  &.is-selected:not(:first-child) {
+    margin-left: -1px;
+  }
+}
+
+.win98-tab-panel {
+  padding: 14px 12px 12px;
+  background: var(--win98-face);
+  box-shadow: var(--win98-raised);
+}
+
+/* A list box: sunken and white, rows 17px; the hovered or focused row is navy. */
+.win98-list-box {
+  padding: 2px;
+  background: var(--win98-field-face);
+  box-shadow: var(--win98-sunken);
+}
+
+.win98-list-row {
+  display: flex;
+  height: var(--win98-row-height);
+  padding: 0 4px;
+  align-items: center;
+  gap: var(--win98-gap);
+  color: var(--win98-text);
+
+  &:hover,
+  &.is-focused {
+    background: var(--win98-navy);
+    color: var(--win98-highlight);
+  }
+}
+
+/* A checkbox: a 13px sunken white box, with the pixel check when checked. */
+.win98-checkbox {
+  flex: none;
+  width: var(--win98-checkbox-size);
+  height: var(--win98-checkbox-size);
+  background: var(--win98-field-face);
+  box-shadow: var(--win98-sunken);
+
+  &.is-checked {
+    background:
+      var(--win98-check) center / 7px 7px no-repeat,
+      var(--win98-field-face);
+  }
+}
+
+/* A tooltip: one yellow box with a black line. */
+.win98-tooltip {
+  padding: 2px 4px;
+  border: 1px solid var(--win98-text);
+  background: var(--win98-tooltip);
+  color: var(--win98-text);
+  font: var(--win98-font-size) / 14px var(--win98-font);
+}
+
+/* A progress bar: 6x5 segments, 2px apart, in a sunken white track. */
+.win98-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  background: var(--win98-field-face);
+  box-shadow: var(--win98-well);
+}
+
+.win98-progress-segment {
+  width: 6px;
+  height: 5px;
+  background: var(--win98-navy);
+}
+
+/* A group box: an etched frame with its label on the top line. */
+.win98-group-box {
+  position: relative;
+  margin-top: 7px;
+  padding: 12px 8px 6px;
+  border: 1px solid var(--win98-shadow);
+  box-shadow:
+    inset 1px 1px var(--win98-highlight),
+    1px 1px var(--win98-highlight);
+}
+
+.win98-group-box-label {
+  position: absolute;
+  top: -7px;
+  left: 6px;
+  padding: 0 3px;
+  background: var(--win98-face);
+}
+
+/* An etched line between sections. */
+.win98-separator {
+  height: 2px;
+  border: 0;
+  box-shadow: var(--win98-etched);
+}
+
+/* A 16px pixel icon; in a 24px box it stays 16px, centred. */
+.win98-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background: center / 16px 16px no-repeat;
+  image-rendering: pixelated;
+
+  &.is-24 {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.win98-icon-passed {
+  background-image: var(--win98-icon-passed);
+}
+
+.win98-icon-failed {
+  background-image: var(--win98-icon-failed);
+}
+
+.win98-icon-warning {
+  background-image: var(--win98-icon-warning);
+}
+
+.win98-icon-waiting {
+  background-image: var(--win98-icon-waiting);
+}
+
+.win98-icon-none {
+  background-image: var(--win98-icon-none);
+}
+
+.win98-icon-info {
+  background-image: var(--win98-icon-info);
+}
