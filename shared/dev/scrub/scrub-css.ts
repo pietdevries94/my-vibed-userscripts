@@ -6,6 +6,8 @@
 
 /** Pseudo-classes and pseudo-elements without arguments, such as `:hover` and `::before`. */
 const SIMPLE_PSEUDO = /::?[a-z-]+(?!\()/giu;
+/** Pseudo-elements, such as `::before`, which no element matches. */
+const PSEUDO_ELEMENT = /::[a-z-]+/giu;
 const URL_VALUE = /url\((?:"[^"]*"|'[^']*'|[^)]*)\)/giu;
 function matchesAny(selector: string, root: Element): boolean {
   const document = root.ownerDocument;
@@ -20,12 +22,24 @@ function matchesAny(selector: string, root: Element): boolean {
   }
 }
 
-/** True when the selector, without its state and pseudo-element parts, matches in `root`. */
+function matchesWithout(selector: string, parts: RegExp, root: Element): boolean {
+  const bare = selector.replaceAll(parts, "").trim();
+  return matchesAny(bare === "" ? "*" : bare, root);
+}
+
+/**
+ * True when the selector matches in `root` without its pseudo-elements, which keeps structural
+ * parts such as `:not(:first-child)`, or else without any pseudo part, for state rules such
+ * as `:hover`.
+ */
 function selectorApplies(selectorText: string, root: Element): boolean {
-  return selectorText.split(",").some((selector) => {
-    const bare = selector.replaceAll(SIMPLE_PSEUDO, "").trim();
-    return matchesAny(bare === "" ? "*" : bare, root);
-  });
+  return selectorText
+    .split(",")
+    .some(
+      (selector) =>
+        matchesWithout(selector, PSEUDO_ELEMENT, root) ||
+        matchesWithout(selector, SIMPLE_PSEUDO, root),
+    );
 }
 
 function withoutLinks(cssText: string): string {

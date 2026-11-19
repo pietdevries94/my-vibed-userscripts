@@ -4,7 +4,19 @@
 // such an <a> out of the table, so the fixture cannot be parsed as it is. A parser also
 // drops a <body> tag inside other content, which a capture of a whole page starts with.
 // This parses those tags under placeholder names and renames them afterwards.
-const PARSER_MOVED_TAGS = ["body", "table", "colgroup", "col", "tbody", "tr", "td"];
+const PARSER_MOVED_TAGS = [
+  "body",
+  "table",
+  "caption",
+  "colgroup",
+  "col",
+  "thead",
+  "tbody",
+  "tfoot",
+  "tr",
+  "th",
+  "td",
+];
 const PLACEHOLDER_PREFIX = "fixture-";
 
 function withPlaceholderTags(fixtureHtml: string): string {

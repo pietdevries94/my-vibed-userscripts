@@ -29,6 +29,15 @@ test("keeps state and pseudo-element rules of matching elements", () => {
   assert.doesNotMatch(css, /\.gone/u);
 });
 
+test("keeps rules with structural pseudo-classes, also inside :not()", () => {
+  const css = cssOf(
+    ".rhythm > :not(:first-child) { margin-top: 16px; } .list > :last-child { margin: 0; }",
+    '<div class="rhythm"><span></span><span></span></div><ul class="list"><li></li></ul>',
+  );
+  assert.match(css, /\.rhythm > :not\(:first-child\)/u);
+  assert.match(css, /\.list > :last-child/u);
+});
+
 test("keeps theme variables on the root", () => {
   assert.match(cssOf(":root { --accent: #0078d4; }", ""), /--accent/u);
 });
