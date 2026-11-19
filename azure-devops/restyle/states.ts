@@ -2,7 +2,14 @@
 // the audit opens. Run with `npm run restyle:diff azure-devops` and `npm run restyle:audit
 // azure-devops`; see the restyle skill. Dev file only.
 import type { DiffState, RestyleConfig } from "../../shared/dev/restyle/restyle-config.ts";
-import { boardWidth, dropDownVariants } from "./checks.ts";
+import {
+  LONG_LINE,
+  MANY_LINES,
+  boardWidth,
+  dropDownVariants,
+  issueBoxOverflow,
+  setIssueMessage,
+} from "./checks.ts";
 import type { Page } from "playwright";
 import { REPO_ROOT } from "../../build/scripts.ts";
 import fs from "node:fs";
@@ -61,6 +68,13 @@ async function hoverFilterRow(page: Page): Promise<void> {
   await page.waitForTimeout(200);
 }
 
+/** The Overview's warnings box with an invented log line. */
+function issueMessage(message: string): (page: Page) => Promise<void> {
+  return async (page) => {
+    await page.evaluate(setIssueMessage, message);
+  };
+}
+
 const states: DiffState[] = [
   { artboard: "PullRequests", capture: "win98", name: "list", page: "pr-list", path: LIST },
   {
@@ -87,6 +101,24 @@ const states: DiffState[] = [
     path: "/fake-org/_pulls",
   },
   { artboard: "Main", capture: "win98", name: "overview", page: "pr-detail", path: `${PR}/1005` },
+  {
+    act: issueMessage(LONG_LINE),
+    artboard: "MainIssueLongLine",
+    capture: "win98",
+    clip: { height: 400, width: 652, x: 248, y: 340 },
+    name: "overview-issue-long-line",
+    page: "pr-detail",
+    path: `${PR}/1005`,
+  },
+  {
+    act: issueMessage(MANY_LINES),
+    artboard: "MainIssueManyLines",
+    capture: "win98",
+    clip: { height: 400, width: 652, x: 248, y: 340 },
+    name: "overview-issue-many-lines",
+    page: "pr-detail",
+    path: `${PR}/1005`,
+  },
   {
     artboard: "MainChecksPassed",
     capture: "win98-checks-passed",
@@ -198,7 +230,7 @@ const config: RestyleConfig = {
     { capture: "win98", name: "run-summary", page: "pipeline-summary", path: RUN },
     { capture: "win98", name: "run-steps", page: "pipeline-steps", path: `${RUN}&view=logs` },
   ],
-  checks: [boardWidth, dropDownVariants],
+  checks: [boardWidth, dropDownVariants, issueBoxOverflow],
   masks: { design: "[data-glyph] { visibility: hidden !important; }", site: SITE_MASK },
   settings: { "windows-98-mode": true },
   states,

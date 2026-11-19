@@ -168,4 +168,63 @@ const dropDownVariants: FailureCheck = {
   name: "dropdown-variant-failures",
 };
 
-export { boardWidth, dropDownVariants };
+const OVERVIEW_PATH = "/fake-org/text-15/_git/text-16/pullrequest/1005";
+
+/** Invented log lines for the Overview's warnings box: one long minified line without a single
+    space, and many short lines. */
+const LONG_LINE = `${String.raw`x=function(a){return/^(?:\d+|[a-z]+)$/.test(a)};`.repeat(60)}end`;
+const MANY_LINES = Array.from({ length: 8 }, (_unused, index) => `step ${index + 1}: done`).join(
+  "\n",
+);
+
+/** Puts a message into the warnings box's log line, as a long issue would show. Runs in the browser. */
+function setIssueMessage(message: string): void {
+  for (const element of document.querySelectorAll(".fix-ado-issue-message")) {
+    element.textContent = message;
+  }
+}
+
+/** What overflows in the warnings box: a message past its row, or a row over the next. Runs in the browser. */
+function issueBoxOverflows(): string[] {
+  const failures: string[] = [];
+  for (const output of document.querySelectorAll(".fix-ado-issue-output")) {
+    const row = output.getBoundingClientRect();
+    const message = output.querySelector(".fix-ado-issue-message")?.getBoundingClientRect();
+    if (
+      message &&
+      (message.bottom > row.bottom + 0.5 ||
+        message.top < row.top - 0.5 ||
+        message.right > row.right + 0.5)
+    ) {
+      failures.push(
+        `the message runs ${Math.round(message.bottom - row.bottom)}px below its ${Math.round(row.height)}px row`,
+      );
+    }
+    const next = output.closest("a")?.nextElementSibling?.getBoundingClientRect();
+    if (next && next.height > 0 && next.top < row.bottom - 0.5) {
+      failures.push("the row overlaps the next one");
+    }
+  }
+  return failures;
+}
+
+/** The Overview's warnings box with a long unbroken log line and with many lines: no log text
+    leaves its row. */
+const issueBoxOverflow: FailureCheck = {
+  async failures(page, origin) {
+    const perMessage = await inSequence([LONG_LINE, MANY_LINES], async (message) => {
+      await page.request.get(`${origin}/__dev/show-capture?page=pr-detail&name=win98`);
+      await page.goto(origin + OVERVIEW_PATH);
+      await page.waitForTimeout(3000);
+      await page.evaluate(setIssueMessage, message);
+      const found = await page.evaluate(issueBoxOverflows);
+      return found.map(
+        (failure) => `${message === LONG_LINE ? "long line" : "many lines"}: ${failure}`,
+      );
+    });
+    return perMessage.flat();
+  },
+  name: "issue-box-overflow-failures",
+};
+
+export { LONG_LINE, MANY_LINES, boardWidth, dropDownVariants, issueBoxOverflow, setIssueMessage };

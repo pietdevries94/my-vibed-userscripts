@@ -3499,12 +3499,16 @@ html[data-fix-ado-win98="pull-request"] body {
       box-shadow: inset 0 1px var(--win98-face);
     }
 
+    /* A log line is at least 30px; a long or many-line message grows the row, wrapping anywhere,
+       as a console window does. */
     .fix-ado-issue-output {
-      height: 30px;
+      min-height: 30px;
+      height: auto;
       display: flex;
-      align-items: center;
-      padding: 0 10px;
+      align-items: flex-start;
+      padding: 8px 10px;
       background: #000;
+      line-height: 14px;
     }
 
     .fix-ado-issue-message {
