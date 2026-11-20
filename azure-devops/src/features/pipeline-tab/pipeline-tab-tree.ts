@@ -34,6 +34,7 @@ interface TreeContext {
   /** What the owner picked, with the level that is folded now. */
   pick: PipelineTabPick;
   onPick: (pick: PipelineTabPick) => void;
+  runPathOf: (buildId: number) => string;
 }
 
 function textElement(document: Document, className: string, text: string): HTMLElement {
@@ -205,6 +206,48 @@ function createStages(context: TreeContext): HTMLElement {
   return group(document, "fix-ado-pipeline-stages", items);
 }
 
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+/** A square with an arrow out of its corner, as Fluent's Open icon. */
+const OPEN_ICON_PATH = "M9 2h5v5h-1V3.7L7.35 9.35l-.7-.7L12.3 3H9V2zM3 4h4v1H4v8h8V9h1v5H3V4z";
+
+function createOpenIcon(document: Document): SVGElement {
+  const icon = document.createElementNS(SVG_NAMESPACE, "svg");
+  icon.setAttribute("viewBox", "0 0 16 16");
+  icon.setAttribute("width", "16");
+  icon.setAttribute("height", "16");
+  icon.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVG_NAMESPACE, "path");
+  path.setAttribute("d", OPEN_ICON_PATH);
+  path.setAttribute("fill", "currentColor");
+  icon.append(path);
+  return icon;
+}
+
+/** A link to the run's page in a new browser tab. Azure DevOps's subtle icon button, as a link. */
+function createOpenRunLink(context: TreeContext, run: PipelineRun): HTMLAnchorElement {
+  const { document } = context;
+  const link = document.createElement("a");
+  link.className =
+    "bolt-button bolt-link-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-pipeline-open-run";
+  link.href = context.runPathOf(run.buildId);
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.setAttribute("aria-label", "Open run in new tab");
+  link.title = "Open run in new tab";
+  link.append(createOpenIcon(document));
+  return link;
+}
+
+/** The run's row: its item, with the link to its page at the right end. */
+function createRunRow(
+  context: TreeContext,
+  item: HTMLButtonElement,
+  run: PipelineRun,
+): HTMLElement {
+  const link = createOpenRunLink(context, run);
+  return group(context.document, "fix-ado-pipeline-run-row", [item, link]);
+}
+
 function createRun(context: TreeContext, run: PipelineRun): HTMLElement[] {
   const isCurrent = run.buildId === context.shown.run.buildId;
   const item = createItem(context, {
@@ -216,8 +259,9 @@ function createRun(context: TreeContext, run: PipelineRun): HTMLElement[] {
     pick: { buildId: run.buildId, folded: null, jobId: null, stageId: null, stepId: null },
     status: run.status,
   });
+  const row = createRunRow(context, item, run);
   const isOpen = isCurrent && context.pick.folded !== "run";
-  return isOpen ? [item, createStages(context)] : [item];
+  return isOpen ? [row, createStages(context)] : [row];
 }
 
 /** Gives a row whose name does not fit its full name as a tooltip, when the pointer gets there. */

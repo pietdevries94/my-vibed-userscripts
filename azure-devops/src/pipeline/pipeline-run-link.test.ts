@@ -1,4 +1,4 @@
-import { parsePipelineRunLocation, pipelineLogPath } from "./pipeline-run-link.ts";
+import { parsePipelineRunLocation, pipelineLogPath, pipelineRunPath } from "./pipeline-run-link.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -68,5 +68,17 @@ test("the log path of a step reads back as that step's log", () => {
     jobId: JOB_ID,
     stepId: STEP_ID,
     view: "log",
+  });
+});
+
+test("the run path of a run reads back as its summary", () => {
+  const path = pipelineRunPath("/quillfield", "Ledger Works", 812);
+  assert.equal(path, "/quillfield/Ledger%20Works/_build/results?buildId=812");
+  const [pathname = "", search = ""] = path.split("?");
+  assert.deepEqual(parsePipelineRunLocation({ pathname, search: `?${search}` }), {
+    buildId: 812,
+    jobId: null,
+    stepId: null,
+    view: "summary",
   });
 });

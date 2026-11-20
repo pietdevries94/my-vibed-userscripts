@@ -225,3 +225,29 @@ test("a current run, stage or job says whether it is folded", async () => {
   click(stage());
   assert.equal(stage()?.getAttribute("aria-expanded"), "false");
 });
+
+test("each run has a link that opens its run page in a new tab, and a click on it picks nothing", async () => {
+  const { document } = setUp();
+  click(pipelineTab(document));
+  await settle();
+  const links = [...document.querySelectorAll<HTMLAnchorElement>(".fix-ado-pipeline-open-run")];
+  assert.deepEqual(
+    links.map((link) => [link.getAttribute("href"), link.target, link.rel]),
+    [
+      [`${LOG_PATH}502`, "_blank", "noopener"],
+      [`${LOG_PATH}501`, "_blank", "noopener"],
+    ],
+  );
+  assert.equal(links[0]?.getAttribute("aria-label"), "Open run in new tab");
+  assert.equal(
+    document.querySelectorAll(".fix-ado-pipeline-stage .fix-ado-pipeline-open-run").length,
+    0,
+  );
+
+  const view = document.defaultView;
+  assert.ok(view);
+  const event = new view.MouseEvent("click", { bubbles: true, cancelable: true });
+  links[1]?.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, false, "the browser opens the link");
+  assert.deepEqual(treeNames(document, "run"), ["ledger-lint*", "ledger-ci"]);
+});

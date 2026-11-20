@@ -33,6 +33,7 @@ interface PanelContent {
   /** What the owner picked, with the level of the run tree that is folded. */
   pick: PipelineTabPick;
   logPathOf: (buildId: number, step: RunStep) => string;
+  runPathOf: (buildId: number) => string;
   onPick: (pick: PipelineTabPick) => void;
   runActionState: RunActionState;
   onRunActionListToggle: (isOpen: boolean) => void;
@@ -235,6 +236,7 @@ function showRun(
     document: panel.ownerDocument,
     onPick: content.onPick,
     pick: content.pick,
+    runPathOf: content.runPathOf,
     runs: loaded.runs,
     shown,
   });

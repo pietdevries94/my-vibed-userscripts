@@ -32,6 +32,11 @@ function parsePipelineRunLocation(location: {
     : { buildId, jobId: null, stepId: null, view: "steps" };
 }
 
+/** A run's page, on its summary. */
+function pipelineRunPath(apiBasePath: string, project: string, buildId: number): string {
+  return `${apiBasePath}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}`;
+}
+
 /** One step's log in a run. */
 function pipelineLogPath(
   apiBasePath: string,
@@ -39,8 +44,8 @@ function pipelineLogPath(
   { buildId, jobId, stepId }: { buildId: number; jobId: string; stepId: string },
 ): string {
   const step = `j=${encodeURIComponent(jobId)}&t=${encodeURIComponent(stepId)}`;
-  return `${apiBasePath}/${encodeURIComponent(project)}${RUN_PATH_END}?buildId=${buildId}&view=logs&${step}`;
+  return `${pipelineRunPath(apiBasePath, project, buildId)}&view=logs&${step}`;
 }
 
 export type { PipelineRunLocation, PipelineRunView };
-export { parsePipelineRunLocation, pipelineLogPath };
+export { parsePipelineRunLocation, pipelineLogPath, pipelineRunPath };

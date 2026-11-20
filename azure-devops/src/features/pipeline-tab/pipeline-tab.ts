@@ -15,7 +15,11 @@ import {
   performRunAction,
   shownRunOfData,
 } from "./pipeline-tab-data.ts";
-import { parsePipelineRunLocation, pipelineLogPath } from "../../pipeline/pipeline-run-link.ts";
+import {
+  parsePipelineRunLocation,
+  pipelineLogPath,
+  pipelineRunPath,
+} from "../../pipeline/pipeline-run-link.ts";
 import type { PipelineRunLocation } from "../../pipeline/pipeline-run-link.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
 import { closestElement } from "../../core/closest-element.ts";
@@ -97,6 +101,7 @@ function render(state: TabState): void {
     },
     pick: data.pick,
     runActionState: data.runActionState,
+    runPathOf: (buildId) => pipelineRunPath(apiBasePath, project, buildId),
     runs: data.runs,
     shown: shownRunOfData(data),
   });

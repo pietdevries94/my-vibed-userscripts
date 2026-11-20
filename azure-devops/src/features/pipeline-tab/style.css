@@ -114,8 +114,23 @@
   padding-left: 16px;
 }
 
+/* A run's row holds its item and, at the right end, the link to its page. */
+.fix-ado-pipeline-run-row {
+  position: relative;
+}
+
+.fix-ado-pipeline-run-row > .fix-ado-pipeline-run {
+  padding-inline-end: 48px;
+}
+
+.fix-ado-pipeline-open-run {
+  position: absolute;
+  inset-inline-end: 8px;
+  bottom: 6px;
+}
+
 /* A line above each run but the first, so the runs stand apart. */
-.fix-ado-pipeline-run:not(:first-child) {
+.fix-ado-pipeline-run-row:not(:first-child) > .fix-ado-pipeline-run {
   margin-top: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));

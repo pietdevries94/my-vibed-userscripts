@@ -10,9 +10,9 @@ import {
   worstKindOf,
   wrapIn,
 } from "../../pipeline/pipeline-issue-list.ts";
+import { pipelineLogPath, pipelineRunPath } from "../../pipeline/pipeline-run-link.ts";
 import type { ElementSpec } from "../../pipeline/pipeline-issue-list.ts";
 import type { PipelineCheck } from "../../pipeline/pipeline-checks.ts";
-import { pipelineLogPath } from "../../pipeline/pipeline-run-link.ts";
 
 const OVERVIEW_ISSUES_CLASS = "fix-ado-overview-issues";
 
@@ -39,7 +39,7 @@ function runLinkOf(
 ): string {
   return jobId !== null && stepId !== null
     ? pipelineLogPath(apiBasePath, project, { buildId, jobId, stepId })
-    : `${apiBasePath}/${encodeURIComponent(project)}/_build/results?buildId=${buildId}`;
+    : pipelineRunPath(apiBasePath, project, buildId);
 }
 
 function createCheckIssueBox(

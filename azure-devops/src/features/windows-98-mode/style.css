@@ -1453,7 +1453,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   /* A run is two lines; a dotted line stands between runs. */
   .fix-ado-pipeline-run.fix-ado-pipeline-run {
     margin-top: 0;
-    padding: 4px 6px 2px;
+    padding: 4px 30px 2px 6px;
     border-top: 0;
 
     /* Bold only when picked, as below. */
@@ -1462,9 +1462,45 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     }
   }
 
-  .fix-ado-pipeline-run ~ .fix-ado-pipeline-run.fix-ado-pipeline-run {
+  .fix-ado-pipeline-run-row ~ .fix-ado-pipeline-run-row {
     margin-top: 4px;
     border-top: 1px dotted var(--win98-shadow);
+  }
+
+  /* Open run in new tab: a flat toolbar button with a window and an arrow out of it,
+     raised under the pointer and sunken while pressed. */
+  .fix-ado-pipeline-open-run.bolt-button.bolt-button {
+    inset-inline-end: 4px;
+    bottom: 2px;
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' shape-rendering='crispEdges'%3E%3Cpath fill='%23fff' d='M1 5h10v10H1z'/%3E%3Cpath fill='%23000080' d='M1 4h10v2H1z'/%3E%3Cpath d='M0 4h1v12H0zM1 15h11v1H1zM11 9h1v7h-1zM8 1h7v1H8zM14 1h1v7h-1zM13 2h1v1h-1zM12 3h1v1h-1zM11 4h1v1h-1zM10 5h1v1h-1zM9 6h1v1H9zM8 7h1v1H8z'/%3E%3C/svg%3E")
+      center / 16px no-repeat;
+    box-shadow: none;
+    color: #000;
+
+    & > svg {
+      display: none;
+    }
+
+    &:hover {
+      background-color: var(--win98-face);
+      box-shadow: var(--win98-raised);
+    }
+
+    &:active {
+      background-color: var(--win98-face);
+      box-shadow: var(--win98-sunken);
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: -4px;
+    }
   }
 
   /* A row: a +/- box on a run, stage or job that opens and closes, the status icon, the label.
@@ -1515,7 +1551,8 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
         :has(
           ~ :is(.fix-ado-pipeline-stages, .fix-ado-pipeline-jobs, .fix-ado-pipeline-steps)
             [aria-current="true"]
-        )
+        ),
+        .fix-ado-pipeline-run-row:has(~ .fix-ado-pipeline-stages [aria-current="true"]) > *
       ) {
       .fix-ado-pipeline-item-text {
         background: var(--win98-navy);
@@ -1592,7 +1629,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     }
   }
 
-  .fix-ado-pipeline-run + .fix-ado-pipeline-note {
+  .fix-ado-pipeline-run-row + .fix-ado-pipeline-note {
     padding-left: 22px;
   }
 
