@@ -27,6 +27,22 @@ test("the table between the markers is replaced, the rest stays", () => {
   );
 });
 
+test("a script's features show as a list in its cell, after its description", () => {
+  const readme = withScriptList(README, [
+    {
+      description: "Fixes an invented site.",
+      features: ["Hides ads | banners", "Shows <b> as text"],
+      id: "example-site",
+      name: "Fix Example",
+      version: "1.2.0",
+    },
+  ]);
+  assert.match(
+    readme,
+    /\| Fixes an invented site\.<ul><li>Hides ads \\\| banners<\/li><li>Shows &lt;b&gt; as text<\/li><\/ul> \| 1\.2\.0 \|/u,
+  );
+});
+
 test("with no released script the list says so", () => {
   assert.match(withScriptList(README, []), /No script is released yet\./u);
 });

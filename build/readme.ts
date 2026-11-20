@@ -10,6 +10,7 @@ interface ReleasedScript {
   id: string;
   name: string;
   description: string;
+  features?: string[];
   version: string;
 }
 
@@ -17,9 +18,22 @@ const README_FILE = path.join(REPO_ROOT, "README.md");
 const LIST_START = "<!-- scripts:start -->";
 const LIST_END = "<!-- scripts:end -->";
 
-/** A table cell's text: a pipe would end the cell. */
+/** A table cell's text: a pipe would end the cell, and the cell may hold HTML. */
 function cellText(text: string): string {
-  return text.replaceAll("|", String.raw`\|`);
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("|", String.raw`\|`);
+}
+
+/** The description, then the features as a list: a table cell holds no Markdown list. */
+function whatItDoes(description: string, features: string[] = []): string {
+  const list =
+    features.length === 0
+      ? ""
+      : `<ul>${features.map((point) => `<li>${cellText(point)}</li>`).join("")}</ul>`;
+  return `${cellText(description)}${list}`;
 }
 
 /** A table: the script's name links to its install file, the description says what it does. */
@@ -28,8 +42,8 @@ function scriptListMarkdown(scripts: ReleasedScript[]): string {
     return "No script is released yet.";
   }
   const rows = scripts.map(
-    ({ id, name, description, version }) =>
-      `| [${cellText(name)}](${releaseInstallUrl(id)}) | ${cellText(description)} | ${version} |`,
+    ({ id, name, description, features, version }) =>
+      `| [${cellText(name)}](${releaseInstallUrl(id)}) | ${whatItDoes(description, features)} | ${version} |`,
   );
   return ["| Script | What it does | Version |", "| --- | --- | --- |", ...rows].join("\n");
 }
@@ -53,8 +67,8 @@ function releasedScripts(): ReleasedScript[] {
     if (version === null) {
       return [];
     }
-    const { name, description } = readScript(id).config;
-    return [{ description, id, name, version }];
+    const { name, description, features } = readScript(id).config;
+    return [{ description, features, id, name, version }];
   });
 }
 

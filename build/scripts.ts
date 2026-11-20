@@ -19,7 +19,10 @@ interface PostExemption {
 /** The contents of `<script>/script.json`. */
 interface ScriptConfig {
   name: string;
+  /** One short line on what the script does. */
   description: string;
+  /** Short points, one per feature: a list in the README, joined into @description. */
+  features?: string[];
   match: string[];
   grant: string[];
   version: string;
@@ -69,6 +72,11 @@ function problemsOf(config: Record<string, unknown>): string[] {
   const checks: [isValid: boolean, problem: string][] = [
     [typeof config.name === "string" && config.name !== "", "name is missing"],
     [typeof config.description === "string", "description is missing"],
+    [
+      config.features === undefined ||
+        (isStringArray(config.features) && config.features.length > 0),
+      "features must be a list of short points",
+    ],
     [isStringArray(config.match) && config.match.length > 0, "match needs at least one pattern"],
     [isStringArray(config.grant), "grant must be a list"],
     [
@@ -82,6 +90,15 @@ function problemsOf(config: Record<string, unknown>): string[] {
     ],
   ];
   return checks.filter(([isValid]) => !isValid).map(([, problem]) => problem);
+}
+
+/** The description and the features as one line, for the @description header. */
+function oneLineDescription({ description, features = [] }: ScriptConfig): string {
+  if (features.length === 0) {
+    return description;
+  }
+  const points = features.map((point) => `${point.charAt(0).toLowerCase()}${point.slice(1)}`);
+  return `${description.replace(/\.$/u, "")}: ${points.join("; ")}.`;
 }
 
 /** Parsed JSON, typed as unknown so callers narrow it. */
@@ -144,6 +161,7 @@ export {
   devFilePath,
   findScriptIds,
   isRecord,
+  oneLineDescription,
   problemsOf,
   readJsonFile,
   readScript,

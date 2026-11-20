@@ -1,9 +1,9 @@
+import { oneLineDescription, repositoryUrl } from "./scripts.ts";
 import type { BuildOptions } from "esbuild";
 import type { Script } from "./scripts.ts";
 import { build } from "esbuild";
 import fs from "node:fs";
 import path from "node:path";
-import { repositoryUrl } from "./scripts.ts";
 
 type BuildTarget = "release" | "dev";
 
@@ -51,7 +51,7 @@ function metadataLines(script: Script, target: BuildTarget): [key: string, value
     ["name", isDev ? `${config.name} (dev)` : config.name],
     ["namespace", repositoryUrl()],
     ["version", config.version],
-    ["description", config.description],
+    ["description", oneLineDescription(config)],
     ...matches.map((pattern): [string, string] => ["match", pattern]),
     ...(grants.length > 0 ? grants : ["none"]).map((grant): [string, string] => ["grant", grant]),
     ["run-at", config.runAt ?? "document-idle"],

@@ -41,3 +41,28 @@ test("runAt must be a Violentmonkey run-at value", () => {
     'runAt must be "document-start", "document-body", "document-end" or "document-idle"',
   ]);
 });
+
+function descriptionOf(block: string): string | undefined {
+  return /^\/\/ @description\s+(?<text>.+)$/mu.exec(block)?.groups?.text;
+}
+
+test("@description is the description alone for a script without features", () => {
+  const block = metadataBlock(scriptWith({}), "release");
+  assert.equal(descriptionOf(block), "An invented script.");
+});
+
+test("@description joins a script's features into its one line", () => {
+  const script = scriptWith({
+    description: "Fixes an invented site.",
+    features: ["Hides ads", "Shows the time"],
+  });
+  assert.equal(
+    descriptionOf(metadataBlock(script, "release")),
+    "Fixes an invented site: hides ads; shows the time.",
+  );
+});
+
+test("features must be a list of points", () => {
+  const config: Record<string, unknown> = { ...scriptWith({}).config, features: "Hides ads" };
+  assert.deepEqual(problemsOf(config), ["features must be a list of short points"]);
+});
