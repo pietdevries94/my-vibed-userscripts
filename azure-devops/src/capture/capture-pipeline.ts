@@ -2,6 +2,7 @@
 // evaluations and run timelines the Pipeline tab reads. Dev file only.
 import { AdoRequestError, createAdoClient } from "../core/ado-client.ts";
 import { apiBasePath, parsePullRequestHref } from "../pull-requests/pull-request-link.ts";
+import { parsePipelineRunLocation, pipelineRunTabOf } from "../pipeline/pipeline-run-link.ts";
 import type { AdoClient } from "../core/ado-client.ts";
 import type { CapturePage } from "../../../shared/dev/capture/capture.ts";
 import type { PipelineRunView } from "../pipeline/pipeline-run-link.ts";
@@ -10,7 +11,6 @@ import type { Pseudonyms } from "../../../shared/dev/scrub/pseudonyms.ts";
 import type { PullRequestBuild } from "../pipeline/pipeline-checks.ts";
 import type { PullRequestRef } from "../pull-requests/pull-request-link.ts";
 import { pageProbesOf } from "./capture-probes.ts";
-import { parsePipelineRunLocation } from "../pipeline/pipeline-run-link.ts";
 import { pipelineChecksOf } from "../pipeline/pipeline-checks.ts";
 import { reviewResponsesOf } from "./capture-review.ts";
 import { withoutScriptMarks } from "./capture-script-marks.ts";
@@ -142,8 +142,12 @@ function pullRequestPage(pullRequest: PullRequestRef, location: Location): Captu
   };
 }
 
+/** A run page on one of its tabs, such as Code Coverage, is a page of its own. */
+const PIPELINE_RUN_TAB_PAGE_NAME = "pipeline-run-tab";
+
 /** A pipeline run page, with the run's timeline. */
 function pipelineRunPage(view: PipelineRunView, buildId: number): CapturePage {
+  const isOnTab = view === "summary" && pipelineRunTabOf(location) !== null;
   return {
     async collect(fetch, pseudonyms) {
       const client = clientFor(fetch, pseudonyms);
@@ -157,7 +161,7 @@ function pipelineRunPage(view: PipelineRunView, buildId: number): CapturePage {
       );
       return { data: { timelinesByBuildId }, meta: {} };
     },
-    name: PIPELINE_RUN_PAGE_NAMES[view],
+    name: isOnTab ? PIPELINE_RUN_TAB_PAGE_NAME : PIPELINE_RUN_PAGE_NAMES[view],
     root: withoutScriptMarks(document.body),
     // The fake site styles the run with the site's own CSS, as Windows 98 mode needs.
     styleRoot: document.body,

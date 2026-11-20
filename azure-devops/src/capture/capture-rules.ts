@@ -19,7 +19,11 @@ const rules: ScrubRules = {
     "data-side",
     "data-theme",
   ],
-  keepIdPatterns: [/^__bolt-[\w-]+$/u],
+  keepIdPatterns: [
+    /^__bolt-[\w-]+$/u,
+    // A run page tab of Microsoft's own, by its contribution id.
+    /^__bolt-tab-ms\.vss-[\w.-]{1,80}$/u,
+  ],
   keepJsonPaths: [
     // Policy evaluation and pull request states: "approved", "running", "active".
     { path: /(?:^|\.)status$/u, value: /^[A-Za-z]{1,30}$/u },
@@ -125,6 +129,8 @@ const rules: ScrubRules = {
     "Tests",
     "Stages",
     "Jobs",
+    "Extensions",
+    "Code Coverage",
     // The theme settings.
     "Theme",
     "Light",

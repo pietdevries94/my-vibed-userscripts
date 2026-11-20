@@ -1,140 +1,21 @@
-import { BUILD_POLICY_TYPE_ID } from "./pipeline/pipeline-status.ts";
+import {
+  BUILD_ID,
+  JOB_GUID,
+  ORGANISATION,
+  PERSON,
+  PROJECT,
+  ROW_LINK,
+  STEP_GUID,
+  assertNoRealValue,
+  runCapture,
+} from "./capture.test-page.ts";
+import type { CapturedPullRequestList } from "./capture.test-page.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
 import { createPseudonyms } from "../../shared/dev/scrub/pseudonyms.ts";
 import { findPullRequestRows } from "./pull-requests/pr-list.ts";
 import { scrubJson } from "../../shared/dev/scrub/scrub-json.ts";
 import { test } from "node:test";
-
-// Invented values that play the real ones. None of them may reach a capture file.
-const ORGANISATION = "quillfield";
-const PROJECT = "Ledger Works";
-const REPOSITORY = "ledger-api";
-const PULL_REQUEST_ID = 4711;
-const BUILD_ID = 99_123;
-const PERSON = "Quill Barrow";
-const PROJECT_GUID = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
-const PERSON_GUID = "1b4e28ba-2fa1-11d2-883f-0016d3cca427";
-const JOB_GUID = "3dc8fd7e-4368-5a92-293e-d53cefc8c4b3";
-const STEP_GUID = "8c3e1b2a-77f0-5d1e-9a4b-6c2d0e9f1a35";
-const REAL_VALUES = [
-  ORGANISATION,
-  PROJECT,
-  REPOSITORY,
-  String(PULL_REQUEST_ID),
-  String(BUILD_ID),
-  PERSON,
-  PROJECT_GUID,
-  PERSON_GUID,
-  JOB_GUID,
-  STEP_GUID,
-];
-
-const PAGE_URL = `https://dev.azure.com/${ORGANISATION}/${encodeURIComponent(PROJECT)}/_git/${REPOSITORY}/pullrequests`;
-const ROW_LINK = `/${ORGANISATION}/${encodeURIComponent(PROJECT)}/_git/${REPOSITORY}/pullrequest/${PULL_REQUEST_ID}`;
-const PAGE = `<!doctype html><body><div class="page-content">
-  <a class="bolt-table-row" href="${ROW_LINK}">
-    <div class="bolt-table-two-line-cell-item"><span>Fix the totals of ${PROJECT}</span><svg class="fix-ado-pipeline-status"></svg></div>
-    <div class="pr-reviewer" data-fix-ado-required=""><div class="bolt-coin" aria-label="${PERSON}" data-fix-ado-initials="QB" style="--fix-ado-hue: 120"><img alt="${PERSON}"></div></div>
-  </a>
-</div></body>`;
-
-function respond(url: string): Response {
-  if (url.includes("/_apis/build/builds?")) {
-    return Response.json({
-      value: [{ buildNumber: `${PROJECT} 7`, id: BUILD_ID, result: "failed", status: "completed" }],
-    });
-  }
-  if (url.includes("/timeline")) {
-    const step = { id: STEP_GUID, name: `Test ${PROJECT}`, order: 3, parentId: JOB_GUID };
-    return Response.json({
-      records: [
-        {
-          ...step,
-          errorCount: 1,
-          issues: [
-            { category: "General", message: `Lint ${PROJECT} failed`, type: "error" },
-            { category: "General", message: `${PERSON} left a TODO`, type: "warning" },
-          ],
-          result: "failed",
-          state: "completed",
-          type: "Task",
-          warningCount: 12,
-        },
-      ],
-    });
-  }
-  if (url.includes("/_apis/projects/")) {
-    return Response.json({ id: PROJECT_GUID, name: PROJECT });
-  }
-  if (url.includes("/_apis/policy/evaluations")) {
-    const configuration = {
-      isBlocking: true,
-      type: { displayName: "Build", id: BUILD_POLICY_TYPE_ID },
-    };
-    return Response.json({
-      value: [{ configuration, context: { buildId: BUILD_ID }, status: "approved" }],
-    });
-  }
-  const reviewer = { displayName: PERSON, id: PERSON_GUID, isRequired: true, vote: 10 };
-  return Response.json({
-    value: [
-      {
-        pullRequestId: PULL_REQUEST_ID,
-        reviewers: [reviewer],
-        status: "active",
-        title: `Fix ${PROJECT}`,
-      },
-    ],
-  });
-}
-
-interface CapturedPullRequestList {
-  data: { evaluationsByPullRequestId: Record<string, { body: { value: { status: string }[] } }> };
-}
-
-interface CaptureRunResult {
-  alerts: string[];
-  files: Map<string, string>;
-}
-
-async function runCapture(page = PAGE, pageUrl = PAGE_URL): Promise<CaptureRunResult> {
-  const { window } = new JSDOM(page, { url: pageUrl });
-  const alerts: string[] = [];
-  const blobs: Blob[] = [];
-  const names: string[] = [];
-  const commands: (() => void)[] = [];
-  window.HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement): void {
-    names.push(this.download);
-  };
-  Object.assign(globalThis, {
-    GM_registerMenuCommand: (_caption: string, onClick: () => void) => {
-      commands.push(onClick);
-    },
-    addEventListener: (): void => undefined,
-    alert: (message: string) => alerts.push(message),
-    document: window.document,
-    fetch: async (url: string) => respond(url),
-    getComputedStyle: window.getComputedStyle.bind(window),
-    location: window.location,
-  });
-  URL.createObjectURL = (blob: Blob): string => {
-    blobs.push(blob);
-    return "blob:capture";
-  };
-  URL.revokeObjectURL = (): void => undefined;
-  const { captureDefinition } = await import("./capture.ts");
-  const { registerCapture } = await import("../../shared/dev/capture/capture.ts");
-  registerCapture(captureDefinition);
-  for (const command of commands) {
-    command();
-  }
-  await new Promise((resolve) => {
-    setTimeout(resolve, 200);
-  });
-  const texts = await Promise.all(blobs.map(async (blob) => blob.text()));
-  return { alerts, files: new Map(names.map((name, index) => [name, texts[index] ?? ""])) };
-}
 
 test("a pull request list capture keeps no real value and lines up its stand-ins", async () => {
   const { alerts, files } = await runCapture();
@@ -156,13 +37,6 @@ test("a pull request list capture keeps no real value and lines up its stand-ins
     captured.data.evaluationsByPullRequestId[String(row?.pullRequest.pullRequestId)];
   assert.equal(evaluations?.body.value[0]?.status, "approved");
 });
-
-function assertNoRealValue(files: Map<string, string>): void {
-  const text = [...files.values()].join("").toLowerCase();
-  for (const value of REAL_VALUES) {
-    assert.ok(!text.includes(value.toLowerCase()), `a real value is in the capture: ${value}`);
-  }
-}
 
 test("a pull request page capture saves the CSS that applies to it, without links", async () => {
   const page = `<!doctype html><head><style>
@@ -241,6 +115,38 @@ test("a pipeline log capture keeps the job and step of its links as stand-ins", 
     files.get("azure-devops--pipeline-log.html") ?? "",
     /buildId=\d+&amp;view=logs&amp;j=0{8}-[\d-]+&amp;t=0{8}-[\d-]+/u,
   );
+});
+
+test("a run page on one of its tabs is its own page, and keeps the tab bar's views and labels", async () => {
+  const runPath = `/${ORGANISATION}/${encodeURIComponent(PROJECT)}/_build/results?buildId=${BUILD_ID}`;
+  const tab = (id: string, view: string | null, label: string): string =>
+    `<a role="tab" id="__bolt-tab-${id}" href="${runPath}${view === null ? "" : `&view=${view}`}"><span class="bolt-tab-text">${label}</span></a>`;
+  const page = `<!doctype html><body><div role="tablist">
+    ${tab("results", null, "Summary")}
+    ${tab("ms.vss-build-web.run-extensions-tab", "ms.vss-build-web.run-extensions-tab", "Extensions")}
+    ${tab("codecoverage-tab", "codecoverage-tab", "Code Coverage")}
+    ${tab(`${ORGANISATION}.deploys.deploy-tab`, `${ORGANISATION}.deploys.deploy-tab`, `${PROJECT} deploys`)}
+  </div></body>`;
+  const { alerts, files } = await runCapture(
+    page,
+    `https://dev.azure.com${runPath}&view=codecoverage-tab`,
+  );
+  assert.deepEqual(alerts, []);
+  assert.deepEqual(
+    [...files.keys()],
+    ["html", "json", "css"].map((kind) => `azure-devops--pipeline-run-tab.${kind}`),
+  );
+  assertNoRealValue(files);
+  const html = files.get("azure-devops--pipeline-run-tab.html") ?? "";
+  for (const view of ["codecoverage-tab", "ms.vss-build-web.run-extensions-tab"]) {
+    assert.ok(html.includes(`id="__bolt-tab-${view}"`), `the tab ${view} keeps its id`);
+    assert.match(
+      html,
+      new RegExp(String.raw`buildId=\d+&amp;view=${view.replaceAll(".", String.raw`\.`)}"`, "u"),
+    );
+  }
+  assert.match(html, />Code Coverage</u);
+  assert.match(html, />Extensions</u);
 });
 
 test("the capture keeps the kinds of identities a search found, and drops their names", async () => {
