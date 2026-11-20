@@ -23,6 +23,7 @@ The repo is public. Real values from a site stay out of code, tests, comments, c
 ## Commits and pushes
 
 - Run `npm run precommit` before every commit, and commit only when it exits 0. A pipe such as `| tail` hides its exit code, and `;` before `git commit` ignores it: chain the commit with `&&`. Never use `--no-verify`.
+- Format with `npm run format` (oxfmt). Never run prettier: it rewraps lines oxfmt leaves alone.
 - Push only when the owner says "push" or "release".
 - In a new worktree, run `npm ci` and `npm run fixtures:link` first.
 
