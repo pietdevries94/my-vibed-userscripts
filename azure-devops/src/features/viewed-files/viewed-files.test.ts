@@ -163,3 +163,22 @@ test("ticking a folder's last file in the tree while a single file is open leave
   assert.equal(tree.isFolded("/api"), false);
   assert.equal(barToggle(tree.document).checked, true);
 });
+
+test("Viewed in the bar ticks the file the bar shows now, also when the bar changed its text in place since the last sync", async () => {
+  const { tree, viewed } = await startedPage([], "/api/orders.ts");
+  tree.showFileInBar("/web/home.ts");
+  barToggle(tree.document).click();
+  await viewed.idle();
+  assert.equal(tree.isTicked("/web/home.ts"), true);
+  assert.equal(tree.isTicked("/api/orders.ts"), false);
+});
+
+test("after the bar changed its text in place, Viewed flips the shown file, not what the stale checkbox showed", async () => {
+  const { tree, viewed } = await startedPage(["/api/orders.ts"], "/api/orders.ts");
+  tree.showFileInBar("/web/home.ts");
+  barToggle(tree.document).click();
+  await viewed.idle();
+  assert.equal(tree.isTicked("/web/home.ts"), true);
+  assert.equal(tree.isTicked("/api/orders.ts"), true);
+  assert.equal(barToggle(tree.document).checked, true);
+});

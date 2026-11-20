@@ -16,6 +16,8 @@ const FOLDER_VIEW_SELECTOR = ".repos-changes-viewer.is-folder";
 const BAR_PATH_SELECTOR = ".secondary-text.text-ellipsis";
 /** The Inline or Side-by-side button: the toggle goes before it. */
 const BAR_LAYOUT_SELECTOR = ".bolt-split-button";
+/** The Up, Down and full-screen buttons: the toggle goes before them when the bar has no Inline button. */
+const BAR_COMMANDS_SELECTOR = ":scope > div > .repos-compare-header-commandbar";
 const TOGGLE_CLASS = "fix-ado-viewed-toggle";
 const PATH_ATTRIBUTE = "data-fix-ado-viewed-path";
 const LABEL = "Viewed";
@@ -40,12 +42,23 @@ function asTreePath(shown: string): string {
 /** What the toggles show and do now. A toggle reads it on each click. */
 const stateByDocument = new WeakMap<Document, ToggleState>();
 
-/** The header a toggle sits in now: Azure DevOps reuses a card for another file. */
+/** The path a card or the bar shows now, or "" when it shows none. */
+function shownPath(container: Element, selector: string): string {
+  const shown = container.querySelector(selector)?.textContent.trim() ?? "";
+  return shown === "" ? "" : asTreePath(shown);
+}
+
+/**
+ * The header a toggle sits in now, with the path it shows now. Azure DevOps reuses a
+ * card or the bar for another file, and changes its text in place, which no sync sees.
+ */
 function headerOf(toggle: HTMLLabelElement): FileHeader {
-  return {
-    card: toggle.closest(FILE_CARD_SELECTOR),
-    path: toggle.getAttribute(PATH_ATTRIBUTE) ?? "",
-  };
+  const card = toggle.closest(FILE_CARD_SELECTOR);
+  const bar = toggle.closest(FILE_BAR_SELECTOR);
+  const path =
+    (card === null ? "" : shownPath(card, CARD_PATH_SELECTOR)) ||
+    (bar === null ? "" : shownPath(bar, BAR_PATH_SELECTOR));
+  return { card, path: path || (toggle.getAttribute(PATH_ATTRIBUTE) ?? "") };
 }
 
 function createToggle(document: Document): HTMLLabelElement {
@@ -54,7 +67,14 @@ function createToggle(document: Document): HTMLLabelElement {
   const input = document.createElement("input");
   input.type = "checkbox";
   input.addEventListener("change", () => {
-    stateByDocument.get(document)?.onToggle(headerOf(label), input.checked);
+    const state = stateByDocument.get(document);
+    const header = headerOf(label);
+    // The checkbox showed another file's state when the header changed since the last sync.
+    const isStale = header.path !== label.getAttribute(PATH_ATTRIBUTE);
+    const isViewed = isStale ? state?.isViewed(header.path) !== true : input.checked;
+    input.checked = isViewed;
+    label.setAttribute(PATH_ATTRIBUTE, header.path);
+    state?.onToggle(header, isViewed);
   });
   label.append(input, LABEL);
   return label;
@@ -82,15 +102,15 @@ function toggleIn(
 
 function syncCardToggles(document: Document, state: ToggleState): void {
   for (const card of document.querySelectorAll(FILE_CARD_SELECTOR)) {
-    const shown = card.querySelector(CARD_PATH_SELECTOR)?.textContent.trim() ?? "";
+    const path = shownPath(card, CARD_PATH_SELECTOR);
     const actions = card.querySelector(CARD_ACTIONS_SELECTOR);
-    if (shown !== "" && actions !== null) {
+    if (path !== "" && actions !== null) {
       toggleIn(
         actions,
         (toggle) => {
           actions.prepend(toggle);
         },
-        { path: asTreePath(shown), state },
+        { path, state },
       );
     }
   }
@@ -107,15 +127,16 @@ function syncBarToggle(document: Document, state: ToggleState): void {
     return;
   }
   const bar = document.querySelector(FILE_BAR_SELECTOR);
-  const shown = bar?.querySelector(BAR_PATH_SELECTOR)?.textContent.trim() ?? "";
-  const layout = bar?.querySelector(BAR_LAYOUT_SELECTOR);
-  if (bar !== null && layout !== null && layout !== undefined && shown !== "") {
+  const path = bar === null ? "" : shownPath(bar, BAR_PATH_SELECTOR);
+  // A file without a diff to lay out, or whose diff has not loaded, has no Inline button.
+  const next = bar?.querySelector(BAR_LAYOUT_SELECTOR) ?? bar?.querySelector(BAR_COMMANDS_SELECTOR);
+  if (bar !== null && next !== null && next !== undefined && path !== "") {
     toggleIn(
       bar,
       (toggle) => {
-        layout.before(toggle);
+        next.before(toggle);
       },
-      { path: asTreePath(shown), state },
+      { path, state },
     );
   }
 }

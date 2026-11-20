@@ -70,6 +70,21 @@ test(
   },
 );
 
+test(
+  "the bar above a captured file without the Inline button gets the toggle before its command bar",
+  { skip: fixtures.skip },
+  () => {
+    const { document } = loadCapturedPullRequest("pr-files-scrolled-tree");
+    toggled(document, new Set());
+    const toggles = document.querySelectorAll(".repos-compare-toolbar .fix-ado-viewed-toggle");
+    assert.equal(toggles.length, 1);
+    assert.equal(
+      toggles[0]?.nextElementSibling?.classList.contains("repos-compare-header-commandbar"),
+      true,
+    );
+  },
+);
+
 test("the bar above a captured open folder gets no toggle", { skip: fixtures.skip }, () => {
   const { document } = loadCapturedPullRequest("pr-files-tree-empty-area");
   toggled(document, new Set());

@@ -27,6 +27,8 @@ interface VirtualTree {
   isFolded: (path: string) => boolean;
   /** Ticks or unticks a row as a click on its checkbox does. */
   clickTick: (path: string) => void;
+  /** Shows another file in the bar, changing its text in place as React does. */
+  showFileInBar: (path: string) => void;
   /** Waits until the tree drew what its last change asks for. */
   settled: () => Promise<void>;
 }
@@ -205,6 +207,12 @@ function createVirtualTree({
     isTicked: (path) => isTicked(tree, path),
     scroller,
     settled: async () => tree.drawn,
+    showFileInBar: (path) => {
+      const text = document.querySelector(".repos-compare-toolbar .secondary-text")?.firstChild;
+      if (text !== null && text !== undefined) {
+        text.nodeValue = path;
+      }
+    },
   };
 }
 
