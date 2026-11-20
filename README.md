@@ -8,7 +8,7 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 ### Fix Azure DevOps
 
-[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.21.0
+[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.22.0
 
 Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones.
 
@@ -33,8 +33,9 @@ Adds missing features to Azure DevOps. A settings panel in the top bar turns eac
 - A button that scrolls to the bottom
 - Pushes folded to one line, with a button that shows their commits
 - Lines that add reviewers joined to one
-- Resolved and Unresolved chips on threads
-- Threads that collapse, with a button that expands them all
+- A chip with each thread's status
+- Threads that collapse, with buttons that collapse or expand all of them, or only the done ones
+- Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread
 - Unread comments that glow, with buttons to the first and next unread
 - A New chip that glows on pushes and other changes you have not seen
 

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.21.0
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; Resolved and Unresolved chips on threads; Threads that collapse, with a button that expands them all; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
+// @version      1.22.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -9742,6 +9742,65 @@ html[data-fix-ado-win98]:is(
     chevron?.classList.toggle(CHEVRONS.open, isOpen), chevron?.classList.toggle(CHEVRONS.folded, !isOpen);
   }
 
+  // azure-devops/src/features/collapsible-threads/bulk-buttons.ts
+  var FILTER_SELECTOR2 = ".repos-activity-filter-dropdown", BULK_BOX_CLASS = "fix-ado-thread-bulk-buttons", BULK_BUTTONS = [
+    {
+      className: "fix-ado-all-threads-button",
+      group: "all",
+      labels: { collapse: "Collapse all threads", expand: "Expand all threads" }
+    },
+    {
+      className: "fix-ado-done-threads-button",
+      group: "done",
+      labels: { collapse: "Collapse done threads", expand: "Expand done threads" }
+    }
+  ], isEveryCollapsed = (feedThreads) => feedThreads.length > 0 && feedThreads.every((feedThread) => feedThread.thread.dataset.fixAdoThread === "collapsed"), doneThreadsOf = (feedThreads) => feedThreads.filter((feedThread) => feedThread.isDone);
+  function groupStatesAfter(group2, feedThreads, current) {
+    if (group2 === "all") {
+      let state = isEveryCollapsed(feedThreads) ? "open" : "collapsed";
+      return { done: state, other: state };
+    }
+    return isEveryCollapsed(doneThreadsOf(feedThreads)) ? { ...current, done: "open" } : { done: "collapsed", other: "open" };
+  }
+  function createBulkButton(document2, { className, group: group2, labels }, onClick3) {
+    let text = Object.assign(document2.createElement("span"), {
+      className: "bolt-button-text",
+      textContent: labels.collapse
+    }), button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = `${className} bolt-button enabled bolt-focus-treatment`, button2.append(text), button2.addEventListener("click", () => {
+      onClick3(group2);
+    }), button2;
+  }
+  function createBulkBox(document2, onClick3) {
+    let box = Object.assign(document2.createElement("div"), {
+      className: `${BULK_BOX_CLASS} margin-bottom-16 inline-flex-row`
+    });
+    return box.append(...BULK_BUTTONS.map((bulkButton) => createBulkButton(document2, bulkButton, onClick3))), box;
+  }
+  function findOrAddBulkBox(document2, onClick3) {
+    let bar = document2.querySelector(FILTER_SELECTOR2)?.parentElement;
+    if (bar == null)
+      return null;
+    let existing = bar.querySelector(`.${BULK_BOX_CLASS}`);
+    if (existing !== null)
+      return existing;
+    let box = createBulkBox(document2, onClick3);
+    return bar.prepend(box), box;
+  }
+  function setHidden(element4, hidden) {
+    element4.hidden !== hidden && (element4.hidden = hidden);
+  }
+  function setLabel(button2, label) {
+    let text = button2.querySelector(".bolt-button-text");
+    text !== null && text.textContent !== label && (text.textContent = label);
+  }
+  function showBulkButtons(box, feedThreads) {
+    for (let { className, group: group2, labels } of BULK_BUTTONS) {
+      let button2 = box.querySelector(`.${className}`), groupThreads = group2 === "all" ? feedThreads : doneThreadsOf(feedThreads);
+      button2 !== null && (setLabel(button2, isEveryCollapsed(groupThreads) ? labels.expand : labels.collapse), setHidden(button2, group2 === "done" && groupThreads.length === 0));
+    }
+  }
+
   // azure-devops/src/pull-requests/feed-threads.ts
   var FEED_THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread", HEADER_SELECTOR = ".repos-discussion-comment-header", STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label", RESOLVED_STATUS = "Resolved", UNREAD_COMMENT_MARKER_SELECTOR = ".repos-unread-comment-marker", UNRESOLVED_STATUSES = /* @__PURE__ */ new Set(["Active", "Pending"]);
   function timeBoxOf(header) {
@@ -9752,12 +9811,14 @@ html[data-fix-ado-win98]:is(
     let header = thread.querySelector(HEADER_SELECTOR), timeBox = header === null ? null : timeBoxOf(header);
     if (header === null || timeBox === null)
       return null;
-    let status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "";
+    let status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "", isUnresolved = UNRESOLVED_STATUSES.has(status);
     return {
       hasUnreadComment: thread.querySelector(UNREAD_COMMENT_MARKER_SELECTOR) !== null,
       header,
+      isDone: status !== "" && !isUnresolved,
       isResolved: status === RESOLVED_STATUS,
-      isUnresolved: UNRESOLVED_STATUSES.has(status),
+      isUnresolved,
+      status,
       thread,
       timeBox
     };
@@ -9767,7 +9828,7 @@ html[data-fix-ado-win98]:is(
   ];
 
   // azure-devops/src/features/collapsible-threads/collapsible-threads.ts
-  var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", name: "Thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u, FILE_HEADER_SELECTOR = ".comment-file-header", FILE_TITLE_SELECTOR = ".comment-file-header-title", AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit", FILTER_SELECTOR2 = ".repos-activity-filter-dropdown", EXPAND_ALL_CLASS = "fix-ado-expand-all-threads", EXPAND_ALL_LABEL = "Expand all threads";
+  var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", name: "Thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u, FILE_HEADER_SELECTOR = ".comment-file-header", FILE_TITLE_SELECTOR = ".comment-file-header-title", AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
   function threadIdOf(thread, knownIds) {
     let field = thread.querySelector(".repos-discussion-thread-reply input"), id = THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id;
     return id !== void 0 && knownIds.set(thread, id), id ?? knownIds.get(thread) ?? null;
@@ -9792,28 +9853,32 @@ html[data-fix-ado-win98]:is(
   function placeToggle(toggle, box) {
     box.firstElementChild !== toggle && box.prepend(toggle);
   }
-  function createExpandAllBox(document2, onClick3) {
-    let text = Object.assign(document2.createElement("span"), {
-      className: "bolt-button-text",
-      textContent: EXPAND_ALL_LABEL
-    }), button2 = document2.createElement("button");
-    button2.type = "button", button2.className = `${EXPAND_ALL_CLASS} bolt-button enabled bolt-focus-treatment`, button2.append(text), button2.addEventListener("click", onClick3);
-    let box = Object.assign(document2.createElement("div"), {
-      className: `${EXPAND_ALL_CLASS}-box margin-bottom-16 inline-flex-row`
-    });
-    return box.append(button2), box;
+  function unpickedStateOf(feedThread, groupStates) {
+    return (feedThread.isDone ? groupStates.done : groupStates.other) ?? (feedThread.isDone && !feedThread.hasUnreadComment ? "collapsed" : "open");
   }
-  function addExpandAllButton(document2, onClick3) {
-    let bar = document2.querySelector(FILTER_SELECTOR2)?.parentElement;
-    bar != null && bar.querySelector(`.${EXPAND_ALL_CLASS}`) === null && bar.prepend(createExpandAllBox(document2, onClick3));
-  }
-  function createCollapsibleThreads({ document: document2 }) {
-    let pickedStates = /* @__PURE__ */ new Map(), knownIds = /* @__PURE__ */ new WeakMap(), isAllExpanded = !1;
-    function stateOf({ hasUnreadComment, isResolved, thread }) {
-      return pickedStates.get(threadIdOf(thread, knownIds) ?? "") ?? (isResolved && !hasUnreadComment && !isAllExpanded ? "collapsed" : "open");
+  function dropPicks({
+    feedThreads,
+    group: group2,
+    knownIds,
+    pickedStates
+  }) {
+    let doneThreads = doneThreadsOf(feedThreads);
+    if (group2 !== "done" || !isEveryCollapsed(doneThreads)) {
+      pickedStates.clear();
+      return;
     }
-    function expandAll() {
-      pickedStates.clear(), isAllExpanded = !0, sync4();
+    for (let { thread } of doneThreads)
+      pickedStates.delete(threadIdOf(thread, knownIds) ?? "");
+  }
+  var loadedFeedThreads = (document2) => feedThreadElements(document2).map((thread) => feedThreadOf(thread)).filter((feedThread) => feedThread !== null);
+  function createCollapsibleThreads({ document: document2 }) {
+    let pickedStates = /* @__PURE__ */ new Map(), knownIds = /* @__PURE__ */ new WeakMap(), groupStates = { done: null, other: null };
+    function stateOf(feedThread) {
+      return pickedStates.get(threadIdOf(feedThread.thread, knownIds) ?? "") ?? unpickedStateOf(feedThread, groupStates);
+    }
+    function applyBulk(group2) {
+      let feedThreads = loadedFeedThreads(document2);
+      dropPicks({ feedThreads, group: group2, knownIds, pickedStates }), groupStates = groupStatesAfter(group2, feedThreads, groupStates), sync4();
     }
     function flip2(thread) {
       let threadId = threadIdOf(thread, knownIds);
@@ -9826,11 +9891,10 @@ html[data-fix-ado-win98]:is(
       placeToggle(toggle, toggleBoxOf(feedThread, state)), showFoldToggleState(toggle, state === "open", TOGGLE_LABELS);
     }
     function sync4() {
-      addExpandAllButton(document2, expandAll);
-      for (let thread of feedThreadElements(document2)) {
-        let feedThread = feedThreadOf(thread);
-        feedThread !== null && syncThread2(feedThread);
-      }
+      let box = findOrAddBulkBox(document2, applyBulk), feedThreads = loadedFeedThreads(document2);
+      for (let feedThread of feedThreads)
+        syncThread2(feedThread);
+      box !== null && showBulkButtons(box, feedThreads);
     }
     return { sync: sync4 };
   }
@@ -9919,18 +9983,24 @@ html[data-fix-ado-win98]:is(
   min-height: 0 !important;
 }
 
-/* Expand all threads sits on the left of the bar above the feed. The bar puts its filters on
-   the right. */
-.fix-ado-expand-all-threads-box {
+/* Collapse all threads and Collapse done threads sit on the left of the bar above the feed.
+   The bar puts its filters on the right. */
+.fix-ado-thread-bulk-buttons {
   order: -1;
+  gap: 8px;
   margin-right: auto;
+}
+
+/* A hidden bulk button leaves no gap. Azure DevOps's button classes would show it. */
+.fix-ado-thread-bulk-buttons > [hidden] {
+  display: none !important;
 }
 `;
 
   // azure-devops/src/features/collapsible-threads/index.ts
   var collapsibleThreads = {
-    change: { kind: "updated", version: "1.17.0" },
-    description: "A button on every thread on a pull request's Overview collapses it. Resolved threads start collapsed, unless one of their comments is unread. Expand all threads, above the feed, opens every thread, also ones that load later.",
+    change: { kind: "updated", version: "1.22.0" },
+    description: "A button on every thread on a pull request's Overview collapses it. Resolved, Won't fix and Closed threads start collapsed, unless one of their comments is unread. Above the feed, Collapse all threads collapses every thread and turns into Expand all threads. Collapse done threads collapses the done ones, opens the others and turns into Expand done threads, which opens the done ones only. Both also apply to threads that load later.",
     id: "collapsible-threads",
     name: "Collapsible threads",
     start({ document: document2, isInFrame: isInFrame2 }) {
@@ -11054,9 +11124,15 @@ ${issue.message ?? ""}`;
   };
 
   // azure-devops/src/features/resolved-thread-chips/resolved-thread-chips.ts
-  var CHIP_CLASS2 = "fix-ado-thread-chip", UNRESOLVED_LABEL = "Unresolved", RESOLVED_CHIP = { className: "fix-ado-resolved-chip", label: RESOLVED_STATUS }, UNRESOLVED_CHIP = { className: "fix-ado-unresolved-chip", label: UNRESOLVED_LABEL };
+  var CHIP_CLASS2 = "fix-ado-thread-chip";
   function chipKindOf(feedThread) {
-    return feedThread?.isResolved === !0 ? RESOLVED_CHIP : feedThread?.isUnresolved === !0 ? UNRESOLVED_CHIP : null;
+    if (feedThread === null || feedThread.status === "")
+      return null;
+    let { isResolved, isUnresolved, status } = feedThread;
+    return isResolved ? { className: "fix-ado-resolved-chip", label: status } : {
+      className: isUnresolved ? "fix-ado-unresolved-chip" : "fix-ado-done-chip",
+      label: status
+    };
   }
   function createChip2(document2, { className, label }) {
     let chip = document2.createElement("div");
@@ -11066,7 +11142,7 @@ ${issue.message ?? ""}`;
   }
   function syncThread(thread) {
     let feedThread = feedThreadOf(thread), kind = chipKindOf(feedThread), chip = thread.querySelector(`.${CHIP_CLASS2}`);
-    kind !== null && chip?.classList.contains(kind.className) === !0 || (chip?.remove(), feedThread !== null && kind !== null && feedThread.timeBox.append(createChip2(thread.ownerDocument, kind)));
+    kind !== null && chip?.classList.contains(kind.className) === !0 && chip.textContent === kind.label || (chip?.remove(), feedThread !== null && kind !== null && feedThread.timeBox.append(createChip2(thread.ownerDocument, kind)));
   }
   function createResolvedThreadChips({ document: document2 }) {
     function sync4() {
@@ -11077,8 +11153,8 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/resolved-thread-chips/style.css
-  var style_default8 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success,
-   Unresolved in its colour for warnings. */
+  var style_default8 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success, Active and
+   Pending in its colour for warnings, another done status in its secondary text colour. */
 .bolt-pill.fix-ado-thread-chip {
   font-weight: 600;
 }
@@ -11092,14 +11168,19 @@ ${issue.message ?? ""}`;
   border-color: var(--status-warning-text, rgba(184, 94, 6, 1));
   color: var(--status-warning-text, rgba(184, 94, 6, 1));
 }
+
+.bolt-pill.fix-ado-done-chip {
+  border-color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
 `;
 
   // azure-devops/src/features/resolved-thread-chips/index.ts
   var resolvedThreadChips = {
-    change: { kind: "updated", version: "1.14.0" },
-    description: "A Resolved chip on every resolved thread on a pull request's Overview, and an Unresolved chip on every active or pending one.",
+    change: { kind: "updated", version: "1.22.0" },
+    description: "A chip with its status on every thread on a pull request's Overview: green for Resolved, orange for Active and Pending, grey for Won't fix and Closed.",
     id: "resolved-thread-chips",
-    name: "Resolved and Unresolved chips on threads",
+    name: "Status chips on threads",
     start({ document: document2, isInFrame: isInFrame2 }) {
       if (isInFrame2)
         return null;
