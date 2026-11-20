@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.19.1
+// @version      1.19.2
 // @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs and a button to start or cancel a run, the warnings and errors of each check's latest run above the pull request description, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, a New chip that glows on pushes and other changes you have not seen, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, pull request lists and boards that reload on changes, and a Windows 98 mode, still a work in progress and off by default. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -1513,6 +1513,38 @@ html[data-fix-ado-win98]
     box-shadow: var(--win98-well);
     color: #000;
     font-size: 11px;
+  }
+
+  /* A pull request's status: the well filled with a palette colour, white text. */
+  .bolt-pill:is(
+    .pr-status-active,
+    .pr-status-draft,
+    .pr-status-completed,
+    .pr-status-abandoned,
+    .repos-pr-list-draft-pill,
+    .repos-pr-list-auto-complete-pill
+  ) {
+    color: #fff;
+  }
+
+  .bolt-pill.pr-status-active {
+    background: var(--win98-navy);
+  }
+
+  .bolt-pill:is(.pr-status-draft, .repos-pr-list-draft-pill) {
+    background: var(--win98-shadow);
+  }
+
+  .bolt-pill.pr-status-completed {
+    background: var(--win98-green);
+  }
+
+  .bolt-pill.pr-status-abandoned {
+    background: var(--win98-maroon);
+  }
+
+  .bolt-pill.repos-pr-list-auto-complete-pill {
+    background: var(--win98-teal);
   }
 
   /* Avatars: square tiles. */
@@ -7136,9 +7168,20 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       }
 
       & > .flex-column {
+        min-width: 0;
         flex-direction: row;
         align-items: center;
         gap: 4px;
+      }
+
+      /* A long path ends in an ellipsis before the file name does. */
+      .comment-file-header-link {
+        min-width: 0;
+      }
+
+      .comment-file-header-link + .secondary-text {
+        min-width: 0;
+        flex-shrink: 1000;
       }
 
       :is(.comment-file-header-link, .secondary-text, time) {
@@ -7202,8 +7245,9 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
     }
   }
 
-  /* Open thread without a file: its first comment's header is the navy title bar, across the
-     whole window, with the +/- box and the author's coin inside it, as when collapsed. */
+  /* Open thread without a file, as in the ThreadTitleBars artboard: its first comment's header is
+     the navy title bar, one line across the whole window: the +/- box, the author's coin, name,
+     time and chip. The thread's buttons sit in a toolbar under it, above an etched line. */
   [data-fix-ado-thread="open"]:not(.comment-file-header + *) {
     padding: 0 0 5px;
 
@@ -7221,18 +7265,16 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
         margin: 0;
       }
 
-      & > div > .bolt-coin {
+      & > div:has(> .bolt-coin) > .bolt-coin {
         position: absolute;
         top: 1px;
         left: 20px;
         z-index: 1;
-        width: 16px;
-        height: 16px;
         margin: 0;
-        font-size: 8px;
       }
 
       .repos-comment-editor-fit {
+        min-width: 0;
         padding: 0;
       }
 
@@ -7240,23 +7282,15 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
         height: 18px;
         margin: 0;
         padding: 0 2px 0 40px;
-
-        & > .scroll-hidden {
-          gap: 4px;
-        }
+        white-space: nowrap;
 
         & > .scroll-hidden > div:last-child {
           margin: 0;
           gap: 6px;
         }
 
-        .padding-right-8,
         time {
           margin: 0;
-          padding: 0;
-        }
-
-        time {
           font-weight: 400;
         }
 
@@ -7266,9 +7300,84 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
         }
       }
 
+      /* The toolbar: link and work item on the left, the status drop-down at the right end. */
+      .repos-discussion-comment-header > .justify-end {
+        position: absolute;
+        top: 18px;
+        right: 0;
+        left: 0;
+        height: 28px;
+        padding: 0 3px 2px;
+        gap: 2px;
+        box-shadow:
+          inset 0 -1px #fff,
+          inset 0 -2px var(--win98-shadow);
+
+        .bolt-button.bolt-button {
+          min-width: 22px;
+          height: 18px;
+          padding: 0 4px;
+        }
+
+        /* Edit, delete and like show only on hover: they follow the two that always show. */
+        & > :not(.repos-discussion-comment-auto-hide-button) {
+          order: -1;
+        }
+
+        .bolt-dropdown-expandable {
+          order: 0;
+          margin-left: auto;
+        }
+
+        .bolt-dropdown-expandable > .bolt-button.bolt-button {
+          padding: 0 2px 0 6px;
+          font-weight: 400;
+        }
+      }
+
       .markdown-content {
-        margin-top: 6px;
+        margin-top: 34px;
         padding: 0 6px;
+      }
+    }
+  }
+
+  /* A title bar is one line, also where Azure DevOps puts the time under a long name: the name
+     ends in an ellipsis, the time and chip stay whole, and the coin is 16px, initials too. */
+  [data-fix-ado-thread="collapsed"],
+  [data-fix-ado-thread="open"]:not(.comment-file-header + *) {
+    & > .repos-comment-viewer:first-child > .repos-discussion-comment > .flex-column > .flex-row {
+      & > div:has(> .bolt-coin) > .bolt-coin,
+      & > div:has(> .bolt-coin) > .bolt-coin > .bolt-coin-content {
+        width: 16px;
+        height: 16px;
+        font-size: 8px;
+        line-height: 16px;
+      }
+
+      /* The initials feature sized them for the avatar before it shrank. */
+      & > div > [data-fix-ado-initials]::after {
+        font-size: 8px;
+      }
+
+      .repos-discussion-comment-header > .scroll-hidden {
+        min-width: 0;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 4px;
+
+        .padding-right-8 {
+          min-width: 0;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        & > div:last-child {
+          flex-shrink: 0;
+        }
       }
     }
   }
@@ -9170,11 +9279,13 @@ html[data-fix-ado-win98]:is(
   --win98-field-face: #fff;
   --win98-navy: #000080;
   --win98-title-end: #1084d0;
-  --win98-desktop: #008080;
+  --win98-desktop: var(--win98-teal);
   --win98-tooltip: #ffffe1;
   --win98-link: #0000ee;
   --win98-olive: #808000;
   --win98-maroon: #800000;
+  --win98-green: #008000;
+  --win98-teal: #008080;
   --win98-title: linear-gradient(90deg, var(--win98-navy), var(--win98-title-end));
   --win98-title-inactive: linear-gradient(90deg, #808080, #b5b5b5);
 
