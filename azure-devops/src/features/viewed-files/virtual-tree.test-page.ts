@@ -15,6 +15,12 @@ interface VirtualTreeOptions {
   /** How many rows fit in view. */
   rowsInView: number;
   ticked?: string[];
+  /** How long the tree takes to show a tick after a click, as when it saves the tick first. */
+  tickDelayMs?: number;
+  /** How long the tree takes to draw after a scroll or a fold. */
+  drawDelayMs?: number;
+  /** The tree draws rows in pages of this many: a scroll within a page draws nothing new. */
+  pageRows?: number;
   /** The file open on the right; without one, the folder view with a card per file. */
   openFile?: string;
 }
@@ -43,6 +49,11 @@ interface FakeTree {
   folded: Set<string>;
   top: number;
   drawn: Promise<void>;
+  tickDelayMs: number;
+  drawDelayMs: number;
+  pageRows: number;
+  /** What the drawn rows show, to leave the DOM alone when nothing changed, as React does. */
+  drawnKey: string;
 }
 
 type ListedRow = ReturnType<typeof listedRows>[number];
@@ -64,21 +75,45 @@ function shownRows(tree: FakeTree): ListedRow[] {
   );
 }
 
+/** The place of the first drawn row, and the rows drawn: whole pages over the part in view. */
+function pagesInView(tree: FakeTree): { first: number; rows: ListedRow[] } {
+  const firstInView = Math.floor(tree.top / ROW_HEIGHT);
+  const lastInView = Math.ceil((tree.top + tree.rowsInView * ROW_HEIGHT) / ROW_HEIGHT) - 1;
+  const first = Math.floor(firstInView / tree.pageRows) * tree.pageRows;
+  const end = (Math.floor(lastInView / tree.pageRows) + 1) * tree.pageRows;
+  return { first, rows: shownRows(tree).slice(first, end) };
+}
+
 function draw(tree: FakeTree): void {
-  const first = Math.floor(tree.top / ROW_HEIGHT);
-  const rows = shownRows(tree).slice(first, first + tree.rowsInView);
+  const { first, rows } = pagesInView(tree);
+  const key = rows
+    .map(({ path }) => `${path}:${String(isTicked(tree, path))}:${String(tree.folded.has(path))}`)
+    .join("|");
+  if (key === tree.drawnKey) {
+    return;
+  }
+  tree.drawnKey = key;
   // oxlint-disable-next-line typescript/no-use-before-define -- a row's clicks draw the tree again
   tree.body.replaceChildren(...rows.map((row, offset) => treeRow(tree, row, first + offset)));
 }
 
+/** Gives an element a place on screen, as layout would: `top` is read on each call. */
+function placeAt(element: Element, top: () => number, height: () => number): void {
+  element.getBoundingClientRect = (): DOMRect => {
+    const at = top();
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the walk reads only top and bottom
+    return { bottom: at + height(), top: at } as DOMRect;
+  };
+}
+
 /** Draws in a later task, as Azure DevOps does after a scroll or a click. */
-function drawSoon(tree: FakeTree): void {
+function drawSoon(tree: FakeTree, delayMs = 0): void {
   const view = tree.document.defaultView;
   tree.drawn = new Promise((resolve) => {
     view?.setTimeout(() => {
       draw(tree);
       resolve();
-    }, 0);
+    }, delayMs);
   });
 }
 
@@ -91,7 +126,7 @@ function clickTick(tree: FakeTree, path: string): void {
       tree.tickedFiles.delete(file);
     }
   }
-  drawSoon(tree);
+  drawSoon(tree, Math.max(tree.tickDelayMs, tree.drawDelayMs));
 }
 
 function clickFold(tree: FakeTree, path: string): void {
@@ -100,7 +135,7 @@ function clickFold(tree: FakeTree, path: string): void {
   } else {
     tree.folded.add(path);
   }
-  drawSoon(tree);
+  drawSoon(tree, tree.drawDelayMs);
 }
 
 function treeRow(tree: FakeTree, { level, name, path }: ListedRow, index: number): HTMLElement {
@@ -121,6 +156,11 @@ function treeRow(tree: FakeTree, { level, name, path }: ListedRow, index: number
     clickFold(tree, path);
   });
   row.querySelector(".text-ellipsis span")?.append(name);
+  placeAt(
+    row,
+    () => index * ROW_HEIGHT - tree.top,
+    () => ROW_HEIGHT,
+  );
   return row;
 }
 
@@ -160,6 +200,12 @@ function fillViewer(document: Document, changedPaths: string[], openFile?: strin
 /** Makes the scroller scroll as a browser's does: it stops where the rows end, and the tree draws after. */
 function scrollLikeABrowser(scroller: HTMLElement, tree: FakeTree): void {
   const end = (): number => shownRows(tree).length * ROW_HEIGHT;
+  placeAt(
+    scroller,
+    () => 0,
+    () => tree.rowsInView * ROW_HEIGHT,
+  );
+  placeAt(tree.body.closest("table") ?? tree.body, () => -tree.top, end);
   Object.defineProperties(scroller, {
     clientHeight: { get: () => tree.rowsInView * ROW_HEIGHT },
     scrollHeight: { get: end },
@@ -167,7 +213,7 @@ function scrollLikeABrowser(scroller: HTMLElement, tree: FakeTree): void {
       get: () => tree.top,
       set(value: number) {
         tree.top = Math.max(0, Math.min(value, end() - tree.rowsInView * ROW_HEIGHT));
-        drawSoon(tree);
+        drawSoon(tree, tree.drawDelayMs);
       },
     },
   });
@@ -176,7 +222,10 @@ function scrollLikeABrowser(scroller: HTMLElement, tree: FakeTree): void {
 function createVirtualTree({
   changedPaths,
   openFile,
+  drawDelayMs = 0,
+  pageRows = 1,
   rowsInView,
+  tickDelayMs = 0,
   ticked = [],
 }: VirtualTreeOptions): VirtualTree {
   const { document } = new JSDOM(PAGE_MARKUP).window;
@@ -190,9 +239,13 @@ function createVirtualTree({
     body,
     changedPaths,
     document,
+    drawDelayMs,
     drawn: Promise.resolve(),
+    drawnKey: "",
     folded: new Set(),
+    pageRows,
     rowsInView,
+    tickDelayMs,
     tickedFiles: new Set(ticked),
     top: 0,
   };

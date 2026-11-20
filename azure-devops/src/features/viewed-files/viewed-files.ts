@@ -12,7 +12,7 @@ import {
 } from "./tree-ticks.ts";
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
 import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
-import { keepingScroll, nextTreeDraw, walkTree, withDrawnRow } from "./tree-walk.ts";
+import { keepingScroll, untilTreeShows, walkTree, withDrawnRow } from "./tree-walk.ts";
 import type { FileHeader } from "./viewed-toggles.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
 import type { ReviewRequests } from "../../pull-requests/review-requests.ts";
@@ -26,8 +26,10 @@ const FOLD_SELECTOR = ".bolt-tree-expand-button";
 interface ViewedFilesOptions {
   client: Pick<ReviewRequests, "getIterationChanges" | "getPullRequestIterationIds">;
   document: Document;
-  /** How long to wait for the tree to draw after a scroll or a click. */
+  /** The safety cap on a wait for the tree to draw. Each wait ends on the tree's change. */
   drawTimeoutMs: number;
+  /** The safety cap on a wait for the tree to show a clicked tick: Azure DevOps may save it first. */
+  tickTimeoutMs: number;
 }
 
 interface ViewedFiles {
@@ -45,6 +47,24 @@ interface ViewedState {
 
 function keyOf({ project, pullRequestId, repository }: PullRequestRef): string {
   return `${project}/${repository}/${String(pullRequestId)}`;
+}
+
+/** True when the tree draws the row of the folder at `path`, open or folded as asked. */
+function isFoldShown(walk: TreeWalk, path: string, isOpen: boolean): boolean {
+  const row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
+  return row?.getAttribute("aria-expanded") === String(isOpen);
+}
+
+/** Opens or folds a folder's row, as its chevron does, and waits until the tree shows it. */
+async function setFolderOpen(
+  walk: TreeWalk,
+  { path, row }: { path: string; row: Element },
+  isOpen: boolean,
+): Promise<void> {
+  if (row.getAttribute("aria-expanded") !== String(isOpen)) {
+    row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
+    await untilTreeShows(walk, () => isFoldShown(walk, path, isOpen), walk.drawTimeoutMs);
+  }
 }
 
 /** Collapses a folder row, as its chevron does. */
@@ -118,22 +138,32 @@ async function unfoldAbove(walk: TreeWalk, path: string): Promise<void> {
     .toSorted((left, right) => left.length - right.length);
   for (const folder of above) {
     // oxlint-disable-next-line eslint/no-await-in-loop -- one walk at a time: each scrolls the same tree
-    await withDrawnRow(walk, folder, async (row) => {
-      if (row.getAttribute("aria-expanded") === "false") {
-        row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
-        await nextTreeDraw(walk);
-      }
-    });
+    await withDrawnRow(walk, folder, async (row) =>
+      setFolderOpen(walk, { path: folder, row }, true),
+    );
   }
 }
 
-/** Ticks or unticks a file in the tree, collapses or opens its card, and collapses a folder it completes. */
+/** True when the tree draws the row of `path` with the tick `isViewed`. */
+function isTickShown(walk: TreeWalk, path: string, isViewed: boolean): boolean {
+  const row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
+  return row !== null && isTicked(row) === isViewed;
+}
+
+/**
+ * Collapses or opens a file's card right away, then ticks or unticks the file in the
+ * tree and collapses a folder it completes. The card goes back when the tree does not
+ * take the tick.
+ */
 function setViewed(state: ViewedState, header: FileHeader, isViewed: boolean): void {
   const { shown } = state;
   if (shown === null) {
     return;
   }
-  const { document } = state.options;
+  const { document, tickTimeoutMs } = state.options;
+  if (header.card !== null) {
+    setCardOpen(header.card, !isViewed);
+  }
   queue(state, async () => {
     const walk = walkOf(state, shown);
     await keepingScroll(walk, async () => {
@@ -141,22 +171,21 @@ function setViewed(state: ViewedState, header: FileHeader, isViewed: boolean): v
       await withDrawnRow(walk, header.path, async (row) => {
         if (isTicked(row) !== isViewed) {
           row.querySelector<HTMLElement>(TICK_SELECTOR)?.click();
-          await nextTreeDraw(walk);
+          await untilTreeShows(walk, () => isTickShown(walk, header.path, isViewed), tickTimeoutMs);
         }
       });
       noteTicks(document, shown);
       for (const folder of foldersToCollapse(document, shown)) {
+        // Waiting on the fold also notes it, so the listing leaves out the rows under it.
         // oxlint-disable-next-line eslint/no-await-in-loop -- one walk at a time: each scrolls the same tree
-        await withDrawnRow(walk, folder, async (row) => {
-          fold(row);
-          await nextTreeDraw(walk);
-          // Notes the fold while the tree draws it, so the listing leaves out the rows under it.
-          treeNow(document, shown.changedPaths);
-        });
+        await withDrawnRow(walk, folder, async (row) =>
+          setFolderOpen(walk, { path: folder, row }, false),
+        );
       }
     });
-    if (header.card !== null && shown.fileTicks.get(header.path) === isViewed) {
-      setCardOpen(header.card, !isViewed);
+    // The tree did not take the tick: the card goes back to how it was.
+    if (header.card !== null && (shown.fileTicks.get(header.path) === true) !== isViewed) {
+      setCardOpen(header.card, isViewed);
     }
     render(state);
   });

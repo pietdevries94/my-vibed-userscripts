@@ -3,8 +3,10 @@ import { createViewedFiles } from "./viewed-files.ts";
 import { pullRequestOf } from "../../core/page.ts";
 import style from "./style.css";
 
-/** How long the script waits for the file tree to draw after it scrolls or clicks it. */
-const DRAW_TIMEOUT_MS = 300;
+/** The safety cap on a wait for the file tree to draw. Each wait ends on the tree's change. */
+const DRAW_TIMEOUT_MS = 2000;
+/** The safety cap on a wait for the tree to show a tick it clicked: Azure DevOps may save it first. */
+const TICK_TIMEOUT_MS = 10_000;
 
 const viewedFiles: Feature = {
   change: { kind: "new", version: "1.21.0" },
@@ -16,7 +18,12 @@ const viewedFiles: Feature = {
     if (isInFrame) {
       return null;
     }
-    const viewed = createViewedFiles({ client, document, drawTimeoutMs: DRAW_TIMEOUT_MS });
+    const viewed = createViewedFiles({
+      client,
+      document,
+      drawTimeoutMs: DRAW_TIMEOUT_MS,
+      tickTimeoutMs: TICK_TIMEOUT_MS,
+    });
     return {
       sync({ page }) {
         viewed.sync(pullRequestOf(page));
