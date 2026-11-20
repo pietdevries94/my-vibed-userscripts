@@ -3,7 +3,7 @@ import { createResolvedThreadChips } from "./resolved-thread-chips.ts";
 import style from "./style.css";
 
 const resolvedThreadChips: Feature = {
-  change: { kind: "updated", version: "1.14.0" },
+  change: { kind: "updated", version: "1.22.0" },
   description:
     "A chip with its status on every thread on a pull request's Overview: green for Resolved, orange for Active and Pending, grey for Won't fix and Closed.",
   id: "resolved-thread-chips",
