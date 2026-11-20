@@ -37,6 +37,10 @@ The repo is public. Real values from a site stay out of code, tests, comments, c
 - `release`: the owner says "release", or a change touches `shared/runtime/` or `shared/styles/`.
 - `modern-web-guidance`: before writing markup, CSS or DOM code.
 
+## Dev server
+
+`npm run dev` takes fixed ports 8786 and 8787, so only one worktree runs it at a time. If another worktree holds them, never kill its server. Ask that session over SendMessage to release them. Run tests and precommit without the dev server, and stop it as soon as a fake-site check is done.
+
 ## Browser support
 
 Scripts run only in the owner's current Chrome and Firefox. A web feature that ships in both needs no fallback, Baseline Newly available included.
