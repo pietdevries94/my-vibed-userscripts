@@ -17,7 +17,7 @@ function capturedThreads(): { document: Document; statuses: Element[] } {
   return { document, statuses };
 }
 
-test("the captured active threads get an Unresolved chip", { skip: fixtures.skip }, () => {
+test("the captured active threads get an Active chip", { skip: fixtures.skip }, () => {
   const { document, statuses } = capturedThreads();
   assert.deepEqual(
     statuses.map((status) => status.textContent),
@@ -26,9 +26,26 @@ test("the captured active threads get an Unresolved chip", { skip: fixtures.skip
   createResolvedThreadChips({ document }).sync();
   assert.deepEqual(
     [...document.querySelectorAll(".fix-ado-thread-chip")].map((chip) => chip.textContent),
-    ["Unresolved", "Unresolved"],
+    ["Active", "Active"],
   );
 });
+
+test(
+  "a captured thread whose status reads another done status gets a grey chip with that text",
+  { skip: fixtures.skip },
+  () => {
+    const { document, statuses } = capturedThreads();
+    const [status] = statuses;
+    assert.ok(status !== undefined);
+    status.textContent = "Won’t fix";
+    createResolvedThreadChips({ document }).sync();
+    const chips = [...document.querySelectorAll(".fix-ado-done-chip")];
+    assert.deepEqual(
+      chips.map((chip) => chip.textContent),
+      ["Won’t fix"],
+    );
+  },
+);
 
 test(
   "a captured thread whose status reads Resolved gets a chip in its first comment's header",

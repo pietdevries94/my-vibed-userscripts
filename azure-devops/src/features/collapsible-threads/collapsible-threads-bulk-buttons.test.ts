@@ -35,19 +35,20 @@ test("after Collapse all threads, an active thread that renders later collapses 
   assert.deepEqual(page.states(), ["collapsed", "open"]);
 });
 
-test("Collapse done threads collapses resolved ones, also with an unread comment, and opens active and pending ones", () => {
+test("Collapse done threads collapses done ones, also with an unread comment, and opens active and pending ones", () => {
   const page = overviewPage(
     thread(11, "Resolved", { isReplyUnread: true }) +
-      thread(12, "Resolved") +
+      thread(12, "Parked") +
       thread(13, "Active") +
-      thread(14, "Pending"),
+      thread(14, "Pending") +
+      thread(15, "Closed", { isReplyUnread: true }),
   );
   page.sync();
   page.clickBulkButton("Collapse all threads");
   page.toggles()[1]?.click();
-  assert.deepEqual(page.states(), ["collapsed", "open", "collapsed", "collapsed"]);
+  assert.deepEqual(page.states(), ["collapsed", "open", "collapsed", "collapsed", "collapsed"]);
   page.clickBulkButton("Collapse done threads");
-  assert.deepEqual(page.states(), ["collapsed", "collapsed", "open", "open"]);
+  assert.deepEqual(page.states(), ["collapsed", "collapsed", "open", "open", "collapsed"]);
 });
 
 test("after Collapse done threads, threads that render later follow it, and Expand all threads opens them all", () => {
@@ -76,6 +77,12 @@ test("each bulk button shows only while it would change a thread", () => {
   assert.deepEqual(page.shownBulkButtons(), ["Collapse all threads", "Collapse done threads"]);
   page.clickBulkButton("Collapse done threads");
   assert.deepEqual(page.shownBulkButtons(), ["Expand all threads", "Collapse all threads"]);
+});
+
+test("an open done thread other than resolved shows Collapse done threads", () => {
+  const page = overviewPage(thread(11, "Parked", { isReplyUnread: true }) + thread(12, "Active"));
+  page.sync();
+  assert.deepEqual(page.shownBulkButtons(), ["Collapse all threads", "Collapse done threads"]);
 });
 
 test("a thread toggle and a thread that renders later update which bulk buttons show", () => {

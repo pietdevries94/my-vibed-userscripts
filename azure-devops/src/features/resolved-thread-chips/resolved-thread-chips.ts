@@ -1,12 +1,7 @@
-import {
-  RESOLVED_STATUS,
-  feedThreadElements,
-  feedThreadOf,
-} from "../../pull-requests/feed-threads.ts";
+import { feedThreadElements, feedThreadOf } from "../../pull-requests/feed-threads.ts";
 import type { FeedThread } from "../../pull-requests/feed-threads.ts";
 
 const CHIP_CLASS = "fix-ado-thread-chip";
-const UNRESOLVED_LABEL = "Unresolved";
 
 interface ChipKind {
   label: string;
@@ -14,17 +9,19 @@ interface ChipKind {
   className: string;
 }
 
-const RESOLVED_CHIP: ChipKind = { className: "fix-ado-resolved-chip", label: RESOLVED_STATUS };
-const UNRESOLVED_CHIP: ChipKind = { className: "fix-ado-unresolved-chip", label: UNRESOLVED_LABEL };
-
+/** A chip with the thread's status as its text, coloured by its group. Null without a status. */
 function chipKindOf(feedThread: FeedThread | null): ChipKind | null {
-  if (feedThread?.isResolved === true) {
-    return RESOLVED_CHIP;
+  if (feedThread === null || feedThread.status === "") {
+    return null;
   }
-  if (feedThread?.isUnresolved === true) {
-    return UNRESOLVED_CHIP;
+  const { isResolved, isUnresolved, status } = feedThread;
+  if (isResolved) {
+    return { className: "fix-ado-resolved-chip", label: status };
   }
-  return null;
+  return {
+    className: isUnresolved ? "fix-ado-unresolved-chip" : "fix-ado-done-chip",
+    label: status,
+  };
 }
 
 /** A chip built like Azure DevOps's own pills, so its styles apply. */
@@ -42,7 +39,11 @@ function syncThread(thread: HTMLElement): void {
   const feedThread = feedThreadOf(thread);
   const kind = chipKindOf(feedThread);
   const chip = thread.querySelector(`.${CHIP_CLASS}`);
-  if (kind !== null && chip?.classList.contains(kind.className) === true) {
+  if (
+    kind !== null &&
+    chip?.classList.contains(kind.className) === true &&
+    chip.textContent === kind.label
+  ) {
     return;
   }
   chip?.remove();
@@ -52,9 +53,10 @@ function syncThread(thread: HTMLElement): void {
 }
 
 /**
- * A Resolved chip on every resolved thread in the activity feed of a pull request's Overview,
- * and an Unresolved chip on every active or pending one, after the time of its first comment.
- * The status comes from the thread's own status dropdown, so the chip follows it at once.
+ * A chip with its status on every thread in the activity feed of a pull request's Overview,
+ * after the time of its first comment: green for Resolved, orange for Active and Pending, grey
+ * for another done status such as Won't fix or Closed. The status comes from the thread's own
+ * status dropdown, so the chip follows it at once.
  */
 function createResolvedThreadChips({ document }: { document: Document }): { sync: () => void } {
   function sync(): void {

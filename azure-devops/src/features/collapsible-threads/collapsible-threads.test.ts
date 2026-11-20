@@ -4,10 +4,23 @@ import assert from "node:assert/strict";
 import { createCollapsibleThreads } from "./collapsible-threads.ts";
 import { test } from "node:test";
 
-test("a resolved thread starts collapsed, any other thread starts open", () => {
-  const page = overviewPage(thread(11, "Resolved") + thread(12, "Active") + thread(13, "Closed"));
+test("a done thread starts collapsed, an active or pending one or one without a status starts open", () => {
+  const page = overviewPage(
+    thread(11, "Resolved") +
+      thread(12, "Active") +
+      thread(13, "Closed") +
+      thread(14, "Pending") +
+      thread(15, "Won’t fix") +
+      thread(16, ""),
+  );
   page.sync();
-  assert.deepEqual(page.states(), ["collapsed", "open", "open"]);
+  assert.deepEqual(page.states(), ["collapsed", "open", "collapsed", "open", "collapsed", "open"]);
+});
+
+test("a done thread other than resolved with an unread comment starts open", () => {
+  const page = overviewPage(thread(11, "Parked", { isReplyUnread: true }));
+  page.sync();
+  assert.deepEqual(page.states(), ["open"]);
 });
 
 test("a resolved thread with an unread comment starts open, and opens when one comes in", () => {

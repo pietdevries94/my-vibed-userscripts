@@ -5,9 +5,9 @@ import style from "./style.css";
 const resolvedThreadChips: Feature = {
   change: { kind: "updated", version: "1.14.0" },
   description:
-    "A Resolved chip on every resolved thread on a pull request's Overview, and an Unresolved chip on every active or pending one.",
+    "A chip with its status on every thread on a pull request's Overview: green for Resolved, orange for Active and Pending, grey for Won't fix and Closed.",
   id: "resolved-thread-chips",
-  name: "Resolved and Unresolved chips on threads",
+  name: "Status chips on threads",
   start({ document, isInFrame }) {
     if (isInFrame) {
       return null;

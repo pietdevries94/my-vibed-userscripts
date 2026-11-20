@@ -19,7 +19,7 @@ type ThreadState = "collapsed" | "open";
 /**
  * A button above the feed that sets every thread at once, also the ones Azure DevOps renders
  * later, until a reload. Expand all opens them all, Collapse all collapses them all, and
- * Collapse done collapses the resolved ones and opens the others, unread or not.
+ * Collapse done collapses the done ones and opens the others, unread or not.
  */
 type BulkAction = "expand-all" | "collapse-all" | "collapse-done";
 
@@ -44,9 +44,9 @@ const BULK_BUTTONS: BulkButton[] = [
 ];
 
 /** The state a bulk action gives a thread. */
-function bulkStateOf(action: BulkAction, { isResolved }: FeedThread): ThreadState {
+function bulkStateOf(action: BulkAction, { isDone }: FeedThread): ThreadState {
   if (action === "collapse-done") {
-    return isResolved ? "collapsed" : "open";
+    return isDone ? "collapsed" : "open";
   }
   return action === "expand-all" ? "open" : "collapsed";
 }
@@ -184,7 +184,7 @@ function unpickedStateOf(feedThread: FeedThread, bulkAction: BulkAction | null):
   if (bulkAction !== null) {
     return bulkStateOf(bulkAction, feedThread);
   }
-  return feedThread.isResolved && !feedThread.hasUnreadComment ? "collapsed" : "open";
+  return feedThread.isDone && !feedThread.hasUnreadComment ? "collapsed" : "open";
 }
 
 /** Every thread of the feed whose first comment Azure DevOps has rendered. */
@@ -195,11 +195,11 @@ const loadedFeedThreads = (document: Document): FeedThread[] =>
 
 /**
  * The threads in the activity feed of a pull request's Overview, each with a toggle before its
- * author that collapses it to the header of its first comment, also a thread on a file (style.css). A resolved thread starts
- * collapsed, unless Azure DevOps marks one of its comments as unread. A thread the owner opened or collapsed stays that way until a reload.
+ * author that collapses it to the header of its first comment, also a thread on a file (style.css). A done thread, such as
+ * a resolved one, starts collapsed, unless Azure DevOps marks one of its comments as unread. A thread the owner opened or collapsed stays that way until a reload.
  * Expand all threads, above the feed, opens every thread, also the ones Azure DevOps renders
  * later, until a reload. Collapse all threads collapses every thread, and Collapse done threads
- * collapses the resolved ones and opens the others, also until a reload. Each shows only while
+ * collapses the done ones and opens the others, also until a reload. Each shows only while
  * it would change a thread.
  */
 function createCollapsibleThreads({ document }: { document: Document }): { sync: () => void } {

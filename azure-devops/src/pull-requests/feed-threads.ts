@@ -8,7 +8,7 @@ const STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-but
 const RESOLVED_STATUS = "Resolved";
 /** The dot Azure DevOps puts in the header of a comment the viewer has not seen yet. */
 const UNREAD_COMMENT_MARKER_SELECTOR = ".repos-unread-comment-marker";
-/** The statuses of a thread that still waits on someone. Won't fix and Closed are done too. */
+/** The statuses of a thread that still waits on someone. Every other status is done, such as Won't fix and Closed. */
 const UNRESOLVED_STATUSES = new Set(["Active", "Pending"]);
 
 /** A thread whose first comment Azure DevOps has rendered. */
@@ -21,8 +21,13 @@ interface FeedThread {
    * time. In a narrow window the time sits under the name, and so do they.
    */
   timeBox: Element;
+  /** The text of its status dropdown, or empty when it has none. */
+  status: string;
   isResolved: boolean;
+  /** Active or Pending. */
   isUnresolved: boolean;
+  /** Any status but Active or Pending: Resolved, Won't fix, Closed. */
+  isDone: boolean;
   /** True when Azure DevOps marks one of its comments as unread. */
   hasUnreadComment: boolean;
 }
@@ -42,11 +47,14 @@ function feedThreadOf(thread: HTMLElement): FeedThread | null {
     return null;
   }
   const status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "";
+  const isUnresolved = UNRESOLVED_STATUSES.has(status);
   return {
     hasUnreadComment: thread.querySelector(UNREAD_COMMENT_MARKER_SELECTOR) !== null,
     header,
+    isDone: status !== "" && !isUnresolved,
     isResolved: status === RESOLVED_STATUS,
-    isUnresolved: UNRESOLVED_STATUSES.has(status),
+    isUnresolved,
+    status,
     thread,
     timeBox,
   };
@@ -58,10 +66,4 @@ const feedThreadElements = (document: Document): HTMLElement[] => [
 ];
 
 export type { FeedThread };
-export {
-  HEADER_SELECTOR,
-  RESOLVED_STATUS,
-  UNREAD_COMMENT_MARKER_SELECTOR,
-  feedThreadElements,
-  feedThreadOf,
-};
+export { HEADER_SELECTOR, UNREAD_COMMENT_MARKER_SELECTOR, feedThreadElements, feedThreadOf };

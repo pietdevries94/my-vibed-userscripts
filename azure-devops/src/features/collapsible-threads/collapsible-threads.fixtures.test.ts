@@ -161,3 +161,18 @@ test(
     }
   },
 );
+
+test(
+  "a captured thread whose status reads another done status is collapsed",
+  { skip: fixtures.skip },
+  () => {
+    const { document } = loadCapturedPullRequest("pr-detail-duplicate-error");
+    const status = document.querySelector(
+      ".repos-discussion-thread .bolt-dropdown-expandable-button-label",
+    );
+    assert.ok(status !== null);
+    status.textContent = "Won’t fix";
+    createCollapsibleThreads({ document }).sync();
+    assert.deepEqual(threadStates(document), ["collapsed", "open", undefined]);
+  },
+);

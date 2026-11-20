@@ -42,23 +42,36 @@ function overviewPage(rows: string): OverviewPage {
   };
 }
 
-test("a resolved thread gets a Resolved chip, an active or pending one an Unresolved chip", () => {
+test("every thread with a status gets a chip with that status as its text", () => {
   const page = overviewPage(
     thread("Resolved") +
       thread("Active") +
       thread("Pending") +
-      thread("Won't fix") +
-      thread("Closed"),
+      thread("Won’t fix") +
+      thread("Parked") +
+      thread(""),
   );
   page.sync();
-  assert.deepEqual(page.chips(), [["Resolved"], ["Unresolved"], ["Unresolved"], [], []]);
+  assert.deepEqual(page.chips(), [
+    ["Resolved"],
+    ["Active"],
+    ["Pending"],
+    ["Won’t fix"],
+    ["Parked"],
+    [],
+  ]);
 });
 
-test("each chip has its own class for its colour", () => {
-  const page = overviewPage(thread("Resolved") + thread("Active"));
+test("a chip's class gives its colour: resolved, active or pending, or another done status", () => {
+  const page = overviewPage(
+    thread("Resolved") + thread("Active") + thread("Pending") + thread("Parked"),
+  );
   page.sync();
-  assert.equal(page.document.querySelectorAll(".fix-ado-resolved-chip").length, 1);
-  assert.equal(page.document.querySelectorAll(".fix-ado-unresolved-chip").length, 1);
+  const classOf = (className: string): number =>
+    page.document.querySelectorAll(`.${className}`).length;
+  assert.equal(classOf("fix-ado-resolved-chip"), 1);
+  assert.equal(classOf("fix-ado-unresolved-chip"), 2);
+  assert.equal(classOf("fix-ado-done-chip"), 1);
 });
 
 test("the chip sits after the time of the first comment", () => {
@@ -83,8 +96,11 @@ test("a thread whose status changes gets the chip of its new status", () => {
   assert.ok(status !== null);
   status.textContent = "Active";
   page.sync();
-  assert.deepEqual(page.chips(), [["Unresolved"]]);
-  status.textContent = "Closed";
+  assert.deepEqual(page.chips(), [["Active"]]);
+  status.textContent = "Parked";
+  page.sync();
+  assert.deepEqual(page.chips(), [["Parked"]]);
+  status.textContent = "";
   page.sync();
   assert.deepEqual(page.chips(), [[]]);
   status.textContent = "Resolved";
