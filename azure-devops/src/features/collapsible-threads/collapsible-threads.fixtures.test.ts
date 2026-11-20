@@ -115,3 +115,49 @@ test(
     assert.ok(inputs.every((input) => /\bthreadId-\d+\b/u.test(input.className)));
   },
 );
+
+const clickButton = (document: Document, label: string): void => {
+  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    (candidate) => candidate.textContent === label,
+  );
+  assert.ok(button !== undefined, `no ${label} button`);
+  assert.equal(button.hidden, false, `${label} is hidden`);
+  button.click();
+};
+
+test(
+  "Collapse all threads collapses the captured active threads, and Collapse done threads opens them again",
+  { skip: fixtures.skipWithout("pr-detail-wide.html") },
+  () => {
+    const { document } = loadCapturedPullRequest("pr-detail-wide");
+    createCollapsibleThreads({ document }).sync();
+    clickButton(document, "Collapse all threads");
+    const loaded = (): (string | undefined)[] =>
+      threadStates(document).filter((state) => state !== undefined);
+    assert.ok(loaded().length >= 2);
+    assert.ok(loaded().every((state) => state === "collapsed"));
+    clickButton(document, "Collapse done threads");
+    assert.ok(loaded().every((state) => state === "open"));
+  },
+);
+
+test(
+  "Collapse done threads collapses the captured resolved threads and keeps the active ones open",
+  { skip: fixtures.skipWithout("pr-detail-reply-focused.html") },
+  () => {
+    const { document } = loadCapturedPullRequest("pr-detail-reply-focused");
+    createCollapsibleThreads({ document }).sync();
+    clickButton(document, "Expand all threads");
+    clickButton(document, "Collapse done threads");
+    const statesByStatus = [
+      ...document.querySelectorAll<HTMLElement>(".activity-feed-list [data-fix-ado-thread]"),
+    ].map((thread) => [
+      thread.querySelector(".bolt-dropdown-expandable-button-label")?.textContent.trim(),
+      thread.dataset.fixAdoThread,
+    ]);
+    assert.ok(statesByStatus.some(([status]) => status === "Resolved"));
+    for (const [status, state] of statesByStatus) {
+      assert.equal(state, status === "Resolved" ? "collapsed" : "open");
+    }
+  },
+);

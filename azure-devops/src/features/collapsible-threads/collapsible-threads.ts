@@ -12,10 +12,44 @@ const FILE_TITLE_SELECTOR = ".comment-file-header-title";
 const AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
 /** The feed's filter, in the bar above the feed. */
 const FILTER_SELECTOR = ".repos-activity-filter-dropdown";
-const EXPAND_ALL_CLASS = "fix-ado-expand-all-threads";
-const EXPAND_ALL_LABEL = "Expand all threads";
+const BULK_BOX_CLASS = "fix-ado-thread-bulk-buttons";
 
 type ThreadState = "collapsed" | "open";
+
+/**
+ * A button above the feed that sets every thread at once, also the ones Azure DevOps renders
+ * later, until a reload. Expand all opens them all, Collapse all collapses them all, and
+ * Collapse done collapses the resolved ones and opens the others, unread or not.
+ */
+type BulkAction = "expand-all" | "collapse-all" | "collapse-done";
+
+interface BulkButton {
+  action: BulkAction;
+  className: string;
+  label: string;
+}
+
+const BULK_BUTTONS: BulkButton[] = [
+  { action: "expand-all", className: "fix-ado-expand-all-threads", label: "Expand all threads" },
+  {
+    action: "collapse-all",
+    className: "fix-ado-collapse-all-threads",
+    label: "Collapse all threads",
+  },
+  {
+    action: "collapse-done",
+    className: "fix-ado-collapse-done-threads",
+    label: "Collapse done threads",
+  },
+];
+
+/** The state a bulk action gives a thread. */
+function bulkStateOf(action: BulkAction, { isResolved }: FeedThread): ThreadState {
+  if (action === "collapse-done") {
+    return isResolved ? "collapsed" : "open";
+  }
+  return action === "expand-all" ? "open" : "collapsed";
+}
 
 /**
  * The id Azure DevOps gave the thread, or null when it is not known yet. Only the reply box's
@@ -73,57 +107,117 @@ function placeToggle(toggle: HTMLButtonElement, box: Element): void {
   }
 }
 
-/**
- * The Expand all threads button, in a box with the margins each filter has. Azure DevOps's
- * button style drops a margin on the button itself.
- */
-function createExpandAllBox(document: Document, onClick: () => void): HTMLElement {
+function createBulkButton(
+  document: Document,
+  { action, className, label }: BulkButton,
+  onClick: (action: BulkAction) => void,
+): HTMLButtonElement {
   const text = Object.assign(document.createElement("span"), {
     className: "bolt-button-text",
-    textContent: EXPAND_ALL_LABEL,
+    textContent: label,
   });
   const button = document.createElement("button");
   button.type = "button";
-  button.className = `${EXPAND_ALL_CLASS} bolt-button enabled bolt-focus-treatment`;
+  button.className = `${className} bolt-button enabled bolt-focus-treatment`;
   button.append(text);
-  button.addEventListener("click", onClick);
-  const box = Object.assign(document.createElement("div"), {
-    className: `${EXPAND_ALL_CLASS}-box margin-bottom-16 inline-flex-row`,
+  button.addEventListener("click", () => {
+    onClick(action);
   });
-  box.append(button);
+  return button;
+}
+
+/**
+ * The bulk buttons, in a box with the margins each filter has. Azure DevOps's button style
+ * drops a margin on the button itself.
+ */
+function createBulkBox(document: Document, onClick: (action: BulkAction) => void): HTMLElement {
+  const box = Object.assign(document.createElement("div"), {
+    className: `${BULK_BOX_CLASS} margin-bottom-16 inline-flex-row`,
+  });
+  box.append(...BULK_BUTTONS.map((bulkButton) => createBulkButton(document, bulkButton, onClick)));
   return box;
 }
 
-/** Adds Expand all threads first in the bar above the feed, when it is not there yet (style.css puts it left). */
-function addExpandAllButton(document: Document, onClick: () => void): void {
+/** The bulk buttons' box, first in the bar above the feed (style.css puts it left). Null while the bar is not there. */
+function findOrAddBulkBox(
+  document: Document,
+  onClick: (action: BulkAction) => void,
+): HTMLElement | null {
   const bar = document.querySelector(FILTER_SELECTOR)?.parentElement;
-  if (bar !== null && bar !== undefined && bar.querySelector(`.${EXPAND_ALL_CLASS}`) === null) {
-    bar.prepend(createExpandAllBox(document, onClick));
+  if (bar === null || bar === undefined) {
+    return null;
+  }
+  const existing = bar.querySelector<HTMLElement>(`.${BULK_BOX_CLASS}`);
+  if (existing !== null) {
+    return existing;
+  }
+  const box = createBulkBox(document, onClick);
+  bar.prepend(box);
+  return box;
+}
+
+/** Sets hidden only when it changes, to keep the page's mutation observer quiet. */
+function setHidden(element: HTMLElement, hidden: boolean): void {
+  if (element.hidden !== hidden) {
+    element.hidden = hidden;
   }
 }
+
+/** Shows each bulk button only while it would change a thread, and the box only while one shows. */
+function showBulkButtons(box: HTMLElement, feedThreads: FeedThread[]): void {
+  let isAnyShown = false;
+  for (const { action, className } of BULK_BUTTONS) {
+    const button = box.querySelector<HTMLElement>(`.${className}`);
+    const wouldChange = feedThreads.some(
+      (feedThread) => feedThread.thread.dataset.fixAdoThread !== bulkStateOf(action, feedThread),
+    );
+    if (button !== null) {
+      setHidden(button, !wouldChange);
+    }
+    isAnyShown ||= wouldChange;
+  }
+  setHidden(box, !isAnyShown);
+}
+
+/** The state of a thread the owner has not picked one for: by the last bulk button, or else by its status. */
+function unpickedStateOf(feedThread: FeedThread, bulkAction: BulkAction | null): ThreadState {
+  if (bulkAction !== null) {
+    return bulkStateOf(bulkAction, feedThread);
+  }
+  return feedThread.isResolved && !feedThread.hasUnreadComment ? "collapsed" : "open";
+}
+
+/** Every thread of the feed whose first comment Azure DevOps has rendered. */
+const loadedFeedThreads = (document: Document): FeedThread[] =>
+  feedThreadElements(document)
+    .map((thread) => feedThreadOf(thread))
+    .filter((feedThread) => feedThread !== null);
 
 /**
  * The threads in the activity feed of a pull request's Overview, each with a toggle before its
  * author that collapses it to the header of its first comment, also a thread on a file (style.css). A resolved thread starts
  * collapsed, unless Azure DevOps marks one of its comments as unread. A thread the owner opened or collapsed stays that way until a reload.
  * Expand all threads, above the feed, opens every thread, also the ones Azure DevOps renders
- * later, until a reload.
+ * later, until a reload. Collapse all threads collapses every thread, and Collapse done threads
+ * collapses the resolved ones and opens the others, also until a reload. Each shows only while
+ * it would change a thread.
  */
 function createCollapsibleThreads({ document }: { document: Document }): { sync: () => void } {
   /** The state the owner picked, by thread id. */
   const pickedStates = new Map<string, ThreadState>();
   /** The id of each thread seen with a plain reply field. */
   const knownIds = new WeakMap<HTMLElement, string>();
-  let isAllExpanded = false;
+  /** The last bulk button the owner clicked, or null before the first. */
+  let bulkAction: BulkAction | null = null;
 
-  function stateOf({ hasUnreadComment, isResolved, thread }: FeedThread): ThreadState {
-    const picked = pickedStates.get(threadIdOf(thread, knownIds) ?? "");
-    return picked ?? (isResolved && !hasUnreadComment && !isAllExpanded ? "collapsed" : "open");
+  function stateOf(feedThread: FeedThread): ThreadState {
+    const picked = pickedStates.get(threadIdOf(feedThread.thread, knownIds) ?? "");
+    return picked ?? unpickedStateOf(feedThread, bulkAction);
   }
 
-  function expandAll(): void {
+  function applyBulk(action: BulkAction): void {
     pickedStates.clear();
-    isAllExpanded = true;
+    bulkAction = action;
     sync();
   }
 
@@ -146,12 +240,13 @@ function createCollapsibleThreads({ document }: { document: Document }): { sync:
   }
 
   function sync(): void {
-    addExpandAllButton(document, expandAll);
-    for (const thread of feedThreadElements(document)) {
-      const feedThread = feedThreadOf(thread);
-      if (feedThread !== null) {
-        syncThread(feedThread);
-      }
+    const box = findOrAddBulkBox(document, applyBulk);
+    const feedThreads = loadedFeedThreads(document);
+    for (const feedThread of feedThreads) {
+      syncThread(feedThread);
+    }
+    if (box !== null) {
+      showBulkButtons(box, feedThreads);
     }
   }
 
