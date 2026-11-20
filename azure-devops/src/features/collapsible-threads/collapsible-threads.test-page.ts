@@ -44,7 +44,7 @@ interface OverviewPage {
   sync: () => void;
   states: () => (string | undefined)[];
   toggles: () => HTMLButtonElement[];
-  expandAllButtons: () => HTMLButtonElement[];
+  allThreadsButtons: () => HTMLButtonElement[];
   clickBulkButton: (label: string) => void;
   shownBulkButtons: () => (string | null)[];
   setStatus: (index: number, status: string) => void;
@@ -59,6 +59,9 @@ function overviewPage(rows: string): OverviewPage {
   const { document } = new JSDOM(`<!doctype html><body>${html}</body>`).window;
   const { sync } = createCollapsibleThreads({ document });
   return {
+    allThreadsButtons: () => [
+      ...document.querySelectorAll<HTMLButtonElement>(".fix-ado-all-threads-button"),
+    ],
     clickBulkButton: (label) => {
       const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
         (candidate) => candidate.textContent === label,
@@ -68,9 +71,6 @@ function overviewPage(rows: string): OverviewPage {
       button.click();
     },
     document,
-    expandAllButtons: () => [
-      ...document.querySelectorAll<HTMLButtonElement>(".fix-ado-expand-all-threads"),
-    ],
     setStatus: (index, status) => {
       const label = document.querySelectorAll(".bolt-dropdown-expandable-button-label")[index];
       assert.ok(label !== undefined);

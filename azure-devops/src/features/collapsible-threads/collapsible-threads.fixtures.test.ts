@@ -68,12 +68,12 @@ test(
 );
 
 test(
-  "the captured Overview gets an Expand all threads button in the bar above its feed",
+  "the captured Overview gets the bulk buttons in the bar above its feed",
   { skip: fixtures.skipWithout("pr-detail.html") },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail");
     createCollapsibleThreads({ document }).sync();
-    const button = document.querySelector(".fix-ado-expand-all-threads");
+    const button = document.querySelector(".fix-ado-all-threads-button");
     const bar = button?.parentElement?.parentElement;
     assert.ok(bar?.nextElementSibling?.classList.contains("activity-feed-list") === true);
   },
@@ -126,7 +126,7 @@ const clickButton = (document: Document, label: string): void => {
 };
 
 test(
-  "Collapse all threads collapses the captured active threads, and Collapse done threads opens them again",
+  "Collapse all threads collapses the captured active threads, and Expand all threads opens them again",
   { skip: fixtures.skipWithout("pr-detail-wide.html") },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail-wide");
@@ -136,18 +136,18 @@ test(
       threadStates(document).filter((state) => state !== undefined);
     assert.ok(loaded().length >= 2);
     assert.ok(loaded().every((state) => state === "collapsed"));
-    clickButton(document, "Collapse done threads");
+    clickButton(document, "Expand all threads");
     assert.ok(loaded().every((state) => state === "open"));
   },
 );
 
 test(
-  "Collapse done threads collapses the captured resolved threads and keeps the active ones open",
+  "Expand done threads opens the captured resolved threads, and Collapse done threads collapses them and keeps the active ones open",
   { skip: fixtures.skipWithout("pr-detail-reply-focused.html") },
   () => {
     const { document } = loadCapturedPullRequest("pr-detail-reply-focused");
     createCollapsibleThreads({ document }).sync();
-    clickButton(document, "Expand all threads");
+    clickButton(document, "Expand done threads");
     clickButton(document, "Collapse done threads");
     const statesByStatus = [
       ...document.querySelectorAll<HTMLElement>(".activity-feed-list [data-fix-ado-thread]"),

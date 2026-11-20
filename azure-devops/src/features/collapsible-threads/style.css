@@ -81,16 +81,15 @@
   min-height: 0 !important;
 }
 
-/* Expand all, Collapse all and Collapse done threads sit on the left of the bar above the
-   feed. The bar puts its filters on the right. */
+/* Collapse all threads and Collapse done threads sit on the left of the bar above the feed.
+   The bar puts its filters on the right. */
 .fix-ado-thread-bulk-buttons {
   order: -1;
   gap: 8px;
   margin-right: auto;
 }
 
-/* A hidden bulk button or box leaves no gap. Azure DevOps's flex classes would show it. */
-.fix-ado-thread-bulk-buttons[hidden],
+/* A hidden bulk button leaves no gap. Azure DevOps's button classes would show it. */
 .fix-ado-thread-bulk-buttons > [hidden] {
   display: none !important;
 }

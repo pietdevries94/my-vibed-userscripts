@@ -29,7 +29,7 @@
         "Pushes folded to one line, with a button that shows their commits",
         "Lines that add reviewers joined to one",
         "A chip with each thread's status",
-        "Threads that collapse, with buttons that expand them all, collapse them all, or collapse the done ones",
+        "Threads that collapse, with buttons that collapse or expand all of them, or only the done ones",
         "Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread",
         "Unread comments that glow, with buttons to the first and next unread",
         "A New chip that glows on pushes and other changes you have not seen"

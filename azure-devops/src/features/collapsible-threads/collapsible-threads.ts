@@ -1,4 +1,12 @@
+import type { GroupStates, ThreadGroup } from "./bulk-buttons.ts";
 import { createFoldToggle, showFoldToggleState } from "../../core/fold-toggle.ts";
+import {
+  doneThreadsOf,
+  findOrAddBulkBox,
+  groupStatesAfter,
+  isEveryCollapsed,
+  showBulkButtons,
+} from "./bulk-buttons.ts";
 import { feedThreadElements, feedThreadOf } from "../../pull-requests/feed-threads.ts";
 import type { FeedThread } from "../../pull-requests/feed-threads.ts";
 
@@ -10,46 +18,8 @@ const FILE_HEADER_SELECTOR = ".comment-file-header";
 const FILE_TITLE_SELECTOR = ".comment-file-header-title";
 /** The column of a comment with its header and text. The author's avatar sits before it. */
 const AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
-/** The feed's filter, in the bar above the feed. */
-const FILTER_SELECTOR = ".repos-activity-filter-dropdown";
-const BULK_BOX_CLASS = "fix-ado-thread-bulk-buttons";
 
 type ThreadState = "collapsed" | "open";
-
-/**
- * A button above the feed that sets every thread at once, also the ones Azure DevOps renders
- * later, until a reload. Expand all opens them all, Collapse all collapses them all, and
- * Collapse done collapses the done ones and opens the others, unread or not.
- */
-type BulkAction = "expand-all" | "collapse-all" | "collapse-done";
-
-interface BulkButton {
-  action: BulkAction;
-  className: string;
-  label: string;
-}
-
-const BULK_BUTTONS: BulkButton[] = [
-  { action: "expand-all", className: "fix-ado-expand-all-threads", label: "Expand all threads" },
-  {
-    action: "collapse-all",
-    className: "fix-ado-collapse-all-threads",
-    label: "Collapse all threads",
-  },
-  {
-    action: "collapse-done",
-    className: "fix-ado-collapse-done-threads",
-    label: "Collapse done threads",
-  },
-];
-
-/** The state a bulk action gives a thread. */
-function bulkStateOf(action: BulkAction, { isDone }: FeedThread): ThreadState {
-  if (action === "collapse-done") {
-    return isDone ? "collapsed" : "open";
-  }
-  return action === "expand-all" ? "open" : "collapsed";
-}
 
 /**
  * The id Azure DevOps gave the thread, or null when it is not known yet. Only the reply box's
@@ -107,84 +77,35 @@ function placeToggle(toggle: HTMLButtonElement, box: Element): void {
   }
 }
 
-function createBulkButton(
-  document: Document,
-  { action, className, label }: BulkButton,
-  onClick: (action: BulkAction) => void,
-): HTMLButtonElement {
-  const text = Object.assign(document.createElement("span"), {
-    className: "bolt-button-text",
-    textContent: label,
-  });
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = `${className} bolt-button enabled bolt-focus-treatment`;
-  button.append(text);
-  button.addEventListener("click", () => {
-    onClick(action);
-  });
-  return button;
+/** The state of a thread the owner has not picked one for: by the last bulk click on its group, or else by its status. */
+function unpickedStateOf(feedThread: FeedThread, groupStates: GroupStates): ThreadState {
+  const groupState = feedThread.isDone ? groupStates.done : groupStates.other;
+  return groupState ?? (feedThread.isDone && !feedThread.hasUnreadComment ? "collapsed" : "open");
 }
 
 /**
- * The bulk buttons, in a box with the margins each filter has. Azure DevOps's button style
- * drops a margin on the button itself.
+ * Drops the owner's picks before a bulk click, read before it changes anything. Expand done
+ * threads drops only the done threads' picks; every other click drops all.
  */
-function createBulkBox(document: Document, onClick: (action: BulkAction) => void): HTMLElement {
-  const box = Object.assign(document.createElement("div"), {
-    className: `${BULK_BOX_CLASS} margin-bottom-16 inline-flex-row`,
-  });
-  box.append(...BULK_BUTTONS.map((bulkButton) => createBulkButton(document, bulkButton, onClick)));
-  return box;
-}
-
-/** The bulk buttons' box, first in the bar above the feed (style.css puts it left). Null while the bar is not there. */
-function findOrAddBulkBox(
-  document: Document,
-  onClick: (action: BulkAction) => void,
-): HTMLElement | null {
-  const bar = document.querySelector(FILTER_SELECTOR)?.parentElement;
-  if (bar === null || bar === undefined) {
-    return null;
+function dropPicks({
+  feedThreads,
+  group,
+  knownIds,
+  pickedStates,
+}: {
+  feedThreads: FeedThread[];
+  knownIds: WeakMap<HTMLElement, string>;
+  pickedStates: Map<string, ThreadState>;
+  group: ThreadGroup;
+}): void {
+  const doneThreads = doneThreadsOf(feedThreads);
+  if (group !== "done" || !isEveryCollapsed(doneThreads)) {
+    pickedStates.clear();
+    return;
   }
-  const existing = bar.querySelector<HTMLElement>(`.${BULK_BOX_CLASS}`);
-  if (existing !== null) {
-    return existing;
+  for (const { thread } of doneThreads) {
+    pickedStates.delete(threadIdOf(thread, knownIds) ?? "");
   }
-  const box = createBulkBox(document, onClick);
-  bar.prepend(box);
-  return box;
-}
-
-/** Sets hidden only when it changes, to keep the page's mutation observer quiet. */
-function setHidden(element: HTMLElement, hidden: boolean): void {
-  if (element.hidden !== hidden) {
-    element.hidden = hidden;
-  }
-}
-
-/** Shows each bulk button only while it would change a thread, and the box only while one shows. */
-function showBulkButtons(box: HTMLElement, feedThreads: FeedThread[]): void {
-  let isAnyShown = false;
-  for (const { action, className } of BULK_BUTTONS) {
-    const button = box.querySelector<HTMLElement>(`.${className}`);
-    const wouldChange = feedThreads.some(
-      (feedThread) => feedThread.thread.dataset.fixAdoThread !== bulkStateOf(action, feedThread),
-    );
-    if (button !== null) {
-      setHidden(button, !wouldChange);
-    }
-    isAnyShown ||= wouldChange;
-  }
-  setHidden(box, !isAnyShown);
-}
-
-/** The state of a thread the owner has not picked one for: by the last bulk button, or else by its status. */
-function unpickedStateOf(feedThread: FeedThread, bulkAction: BulkAction | null): ThreadState {
-  if (bulkAction !== null) {
-    return bulkStateOf(bulkAction, feedThread);
-  }
-  return feedThread.isDone && !feedThread.hasUnreadComment ? "collapsed" : "open";
 }
 
 /** Every thread of the feed whose first comment Azure DevOps has rendered. */
@@ -197,27 +118,27 @@ const loadedFeedThreads = (document: Document): FeedThread[] =>
  * The threads in the activity feed of a pull request's Overview, each with a toggle before its
  * author that collapses it to the header of its first comment, also a thread on a file (style.css). A done thread, such as
  * a resolved one, starts collapsed, unless Azure DevOps marks one of its comments as unread. A thread the owner opened or collapsed stays that way until a reload.
- * Expand all threads, above the feed, opens every thread, also the ones Azure DevOps renders
- * later, until a reload. Collapse all threads collapses every thread, and Collapse done threads
- * collapses the done ones and opens the others, also until a reload. Each shows only while
- * it would change a thread.
+ * Above the feed, Collapse all threads collapses every thread, also the ones Azure DevOps
+ * renders later, until a reload; once all are collapsed it reads Expand all threads. Collapse
+ * done threads collapses the done ones and opens the others; once all done ones are collapsed
+ * it reads Expand done threads, which opens them and leaves the others as they are.
  */
 function createCollapsibleThreads({ document }: { document: Document }): { sync: () => void } {
   /** The state the owner picked, by thread id. */
   const pickedStates = new Map<string, ThreadState>();
   /** The id of each thread seen with a plain reply field. */
   const knownIds = new WeakMap<HTMLElement, string>();
-  /** The last bulk button the owner clicked, or null before the first. */
-  let bulkAction: BulkAction | null = null;
+  let groupStates: GroupStates = { done: null, other: null };
 
   function stateOf(feedThread: FeedThread): ThreadState {
     const picked = pickedStates.get(threadIdOf(feedThread.thread, knownIds) ?? "");
-    return picked ?? unpickedStateOf(feedThread, bulkAction);
+    return picked ?? unpickedStateOf(feedThread, groupStates);
   }
 
-  function applyBulk(action: BulkAction): void {
-    pickedStates.clear();
-    bulkAction = action;
+  function applyBulk(group: ThreadGroup): void {
+    const feedThreads = loadedFeedThreads(document);
+    dropPicks({ feedThreads, group, knownIds, pickedStates });
+    groupStates = groupStatesAfter(group, feedThreads, groupStates);
     sync();
   }
 
@@ -254,3 +175,4 @@ function createCollapsibleThreads({ document }: { document: Document }): { sync:
 }
 
 export { createCollapsibleThreads };
+export type { ThreadState };

@@ -120,8 +120,8 @@ test("the bar above the feed gets one Expand all threads button, as its first it
   const page = overviewPage(thread(11, "Resolved"));
   page.sync();
   page.sync();
-  const [button] = page.expandAllButtons();
-  assert.equal(page.expandAllButtons().length, 1);
+  const [button] = page.allThreadsButtons();
+  assert.equal(page.allThreadsButtons().length, 1);
   assert.equal(button?.textContent, "Expand all threads");
   const bar = page.document.querySelector(".repos-activity-filter-dropdown")?.parentElement;
   assert.ok(bar?.firstElementChild?.contains(button ?? null) === true);
@@ -132,14 +132,14 @@ test("Expand all threads opens every thread, also one the owner collapsed", () =
   page.sync();
   page.toggles()[1]?.click();
   assert.deepEqual(page.states(), ["collapsed", "collapsed"]);
-  page.expandAllButtons()[0]?.click();
+  page.clickBulkButton("Expand all threads");
   assert.deepEqual(page.states(), ["open", "open"]);
 });
 
 test("after Expand all threads, a resolved thread that renders later opens too", () => {
   const page = overviewPage(thread(11, "Resolved"));
   page.sync();
-  page.expandAllButtons()[0]?.click();
+  page.allThreadsButtons()[0]?.click();
   page.document.querySelector("tbody")?.insertAdjacentHTML("beforeend", thread(12, "Resolved"));
   page.sync();
   assert.deepEqual(page.states(), ["open", "open"]);
@@ -148,17 +148,18 @@ test("after Expand all threads, a resolved thread that renders later opens too",
 test("after Expand all threads, the owner can still collapse one thread", () => {
   const page = overviewPage(thread(11, "Resolved") + thread(12, "Active"));
   page.sync();
-  page.expandAllButtons()[0]?.click();
+  page.toggles()[1]?.click();
+  page.clickBulkButton("Expand all threads");
   page.toggles()[0]?.click();
   assert.deepEqual(page.states(), ["collapsed", "open"]);
 });
 
-test("a page without the bar above the feed gets no Expand all threads button", () => {
+test("a page without the bar above the feed gets no bulk buttons", () => {
   const { document } = new JSDOM(
     `<!doctype html><body><table class="activity-feed-list"><tbody>${thread(11, "Resolved")}</tbody></table></body>`,
   ).window;
   createCollapsibleThreads({ document }).sync();
-  assert.equal(document.querySelector(".fix-ado-expand-all-threads"), null);
+  assert.equal(document.querySelector(".fix-ado-all-threads-button"), null);
 });
 
 /** Clicking a reply field swaps its input for a textarea without the thread's id class. */
