@@ -2,7 +2,10 @@
 // fake site's scripts.
 import { BOARD_STYLE, FULL_WINDOW_STYLE, PULL_REQUEST_STYLE, RUN_STYLE } from "./styles.ts";
 import { pageCss, pullRequestPageData } from "./data.ts";
-import { parsePipelineRunLocation, pipelineRunTabOf } from "../src/pipeline/pipeline-run-link.ts";
+import {
+  parsePipelineRunLocation,
+  pipelineRunTabViewOf,
+} from "../src/pipeline/pipeline-run-link.ts";
 import { CREATE_PAGE_SCRIPT } from "./create-page.ts";
 import type { FakeResponse } from "../../shared/dev/fake-site/server.ts";
 import type { Page } from "./data.ts";
@@ -33,7 +36,7 @@ function pageAt(url: URL): Page | null {
     return null;
   }
   const run = parsePipelineRunLocation(url);
-  const tab = pipelineRunTabOf(url);
+  const tab = pipelineRunTabViewOf(url);
   if (run !== null) {
     // The Summary, as "results", is the summary capture; any other tab, the tab capture.
     return run.view === "summary" && tab !== null && tab !== "results"

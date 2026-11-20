@@ -2,7 +2,7 @@
 // evaluations and run timelines the Pipeline tab reads. Dev file only.
 import { AdoRequestError, createAdoClient } from "../core/ado-client.ts";
 import { apiBasePath, parsePullRequestHref } from "../pull-requests/pull-request-link.ts";
-import { parsePipelineRunLocation, pipelineRunTabOf } from "../pipeline/pipeline-run-link.ts";
+import { parsePipelineRunLocation, pipelineRunTabViewOf } from "../pipeline/pipeline-run-link.ts";
 import type { AdoClient } from "../core/ado-client.ts";
 import type { CapturePage } from "../../../shared/dev/capture/capture.ts";
 import type { PipelineRunView } from "../pipeline/pipeline-run-link.ts";
@@ -147,7 +147,7 @@ const PIPELINE_RUN_TAB_PAGE_NAME = "pipeline-run-tab";
 
 /** A pipeline run page, with the run's timeline. */
 function pipelineRunPage(view: PipelineRunView, buildId: number): CapturePage {
-  const isOnTab = view === "summary" && pipelineRunTabOf(location) !== null;
+  const isOnTab = view === "summary" && pipelineRunTabViewOf(location) !== null;
   return {
     async collect(fetch, pseudonyms) {
       const client = clientFor(fetch, pseudonyms);

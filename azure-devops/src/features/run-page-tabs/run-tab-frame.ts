@@ -1,7 +1,10 @@
 // The run page on one of its tabs, inside a pull request's run page tab. style.css hides
 // everything but the tab's content, by the attribute set here. A run page without the
 // tab tells the frame element, once its tab bar has loaded.
-import { parsePipelineRunLocation, pipelineRunTabOf } from "../../pipeline/pipeline-run-link.ts";
+import {
+  parsePipelineRunLocation,
+  pipelineRunTabViewOf,
+} from "../../pipeline/pipeline-run-link.ts";
 import { closestElement } from "../../core/closest-element.ts";
 import { runTabViewsIn } from "./run-tab-store.ts";
 
@@ -65,7 +68,7 @@ function createRunTabFrame(
   document: Document,
   frame: FrameElement | null = frameElementOf(document),
 ): RunTabFrame | null {
-  const view = pipelineRunTabOf(document.location);
+  const view = pipelineRunTabViewOf(document.location);
   if (frame === null || view === null || parsePipelineRunLocation(document.location) === null) {
     return null;
   }

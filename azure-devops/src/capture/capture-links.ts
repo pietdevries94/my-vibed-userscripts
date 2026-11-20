@@ -1,6 +1,6 @@
 // The fake URLs a capture writes for Azure DevOps links. Dev file only.
 import { apiBasePath, parsePullRequestHref } from "../pull-requests/pull-request-link.ts";
-import { parsePipelineRunLocation, pipelineRunTabOf } from "../pipeline/pipeline-run-link.ts";
+import { parsePipelineRunLocation, pipelineRunTabViewOf } from "../pipeline/pipeline-run-link.ts";
 import type { PipelineRunLocation } from "../pipeline/pipeline-run-link.ts";
 import type { Pseudonyms } from "../../../shared/dev/scrub/pseudonyms.ts";
 
@@ -27,21 +27,21 @@ function fakePullRequestLink(url: URL, pseudonyms: Pseudonyms): string | null {
  * contribution id such as "ms.vss-build-web.run-extensions-tab". Another extension's tab
  * names its publisher, so it gets a stand-in.
  */
-const MICROSOFT_RUN_TAB = /^(?:[a-z-]{1,40}|ms\.vss-[\w.-]{1,80})$/u;
+const MICROSOFT_RUN_TAB_VIEW = /^(?:[a-z-]{1,40}|ms\.vss-[\w.-]{1,80})$/u;
 
-function fakeRunTab(tab: string, pseudonyms: Pseudonyms): string {
-  return MICROSOFT_RUN_TAB.test(tab) ? tab : pseudonyms.text(tab, "pipeline run link tab");
+function fakeRunTabView(tab: string, pseudonyms: Pseudonyms): string {
+  return MICROSOFT_RUN_TAB_VIEW.test(tab) ? tab : pseudonyms.text(tab, "pipeline run link tab");
 }
 
 function fakePipelineRunQuery(url: URL, run: PipelineRunLocation, pseudonyms: Pseudonyms): string {
   const query = new URLSearchParams({
     buildId: String(pseudonyms.number(run.buildId, "pipeline run link build id")),
   });
-  const tab = pipelineRunTabOf(url);
+  const tab = pipelineRunTabViewOf(url);
   if (run.view !== "summary") {
     query.set("view", "logs");
   } else if (tab !== null) {
-    query.set("view", fakeRunTab(tab, pseudonyms));
+    query.set("view", fakeRunTabView(tab, pseudonyms));
   }
   if (run.jobId !== null && run.stepId !== null) {
     query.set("j", pseudonyms.guid(run.jobId, "pipeline run link job id"));

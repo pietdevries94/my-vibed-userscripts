@@ -36,7 +36,7 @@ interface ToggleState {
 }
 
 /** The tab the switch is for: the selected tab, of the run's pipeline once that is known. */
-function shownTabOf(tabbar: Element, lookup: PipelineLookup): RunTab | null {
+function selectedRunTabOf(tabbar: Element, lookup: PipelineLookup): RunTab | null {
   const selected = tabbar.querySelector(SELECTED_TAB_SELECTOR);
   const view = selected === null ? null : runTabViewOf(selected);
   if (selected === null || view === null || lookup.kind !== "known") {
@@ -75,7 +75,7 @@ function createToggle(document: Document): HTMLButtonElement {
 
 /** Turns the tab on or off for pull requests, and saves that. */
 function flip(state: ToggleState, tabbar: Element): void {
-  const tab = shownTabOf(tabbar, state.lookup);
+  const tab = selectedRunTabOf(tabbar, state.lookup);
   if (tab === null) {
     return;
   }
@@ -93,15 +93,15 @@ function toggleIn(state: ToggleState, tabbar: Element): HTMLButtonElement {
   const toggle = createToggle(state.options.document);
   toggle.addEventListener("click", () => {
     flip(state, tabbar);
-    showState(state, tabbar, toggle);
+    showToggleState(state, tabbar, toggle);
   });
   tabbar.append(toggle);
   return toggle;
 }
 
 /** Writes only what changed, so the page's own observers stay quiet. */
-function showState(state: ToggleState, tabbar: Element, toggle: HTMLButtonElement): void {
-  const tab = shownTabOf(tabbar, state.lookup);
+function showToggleState(state: ToggleState, tabbar: Element, toggle: HTMLButtonElement): void {
+  const tab = selectedRunTabOf(tabbar, state.lookup);
   const isOn =
     tab !== null && state.options.storage.load().some((other) => isSameRunTab(other, tab));
   if (toggle.getAttribute("aria-checked") !== String(isOn)) {
@@ -147,7 +147,7 @@ function createRunTabToggle(options: RunTabToggleOptions): RunTabToggle {
       return;
     }
     lookUpPipeline(state, sync);
-    showState(state, tabbar, toggleIn(state, tabbar));
+    showToggleState(state, tabbar, toggleIn(state, tabbar));
   };
   return { sync };
 }

@@ -36,7 +36,7 @@ function parsePipelineRunLocation(location: {
  * The tab a run page names in its `view`, such as "codecoverage-tab" or "results" for its
  * Summary, or null without one and on its logs.
  */
-function pipelineRunTabOf(location: { search: string }): string | null {
+function pipelineRunTabViewOf(location: { search: string }): string | null {
   const view = new URLSearchParams(location.search).get("view");
   return view === null || view === "" || view === "logs" ? null : view;
 }
@@ -57,4 +57,4 @@ function pipelineLogPath(
 }
 
 export type { PipelineRunLocation, PipelineRunView };
-export { parsePipelineRunLocation, pipelineLogPath, pipelineRunPath, pipelineRunTabOf };
+export { parsePipelineRunLocation, pipelineLogPath, pipelineRunPath, pipelineRunTabViewOf };

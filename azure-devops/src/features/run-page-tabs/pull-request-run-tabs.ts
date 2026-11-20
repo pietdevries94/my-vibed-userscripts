@@ -54,7 +54,7 @@ function runTabsOf({ data, options }: RunTabsState): PullRequestRunTab[] {
     : pullRequestRunTabsOf(options.loadRunTabs(), data.evaluations, data.builds);
 }
 
-function close(state: RunTabsState): void {
+function closeTab(state: RunTabsState): void {
   const { document } = state.options;
   state.openKey = null;
   const page = document.querySelector(PAGE_SELECTOR);
@@ -75,7 +75,7 @@ function showOpenTab(
   const [runTab, tab] = [shown.runTabs[index], shown.tabs[index]];
   const buildId = runTab?.buildId ?? null;
   if (state.data === null || runTab === undefined || tab === undefined || buildId === null) {
-    close(state);
+    closeTab(state);
     return;
   }
   const { apiBasePath } = state.options;
@@ -99,7 +99,7 @@ function render(state: RunTabsState): void {
   }
 }
 
-function open(state: RunTabsState, tab: HTMLElement): void {
+function openTab(state: RunTabsState, tab: HTMLElement): void {
   const { document } = state.options;
   const selector = `${TABLIST_SELECTOR} [role=tab][aria-selected="true"]`;
   for (const other of document.querySelectorAll(selector)) {
@@ -114,8 +114,8 @@ function open(state: RunTabsState, tab: HTMLElement): void {
  * Another tab closes the open one. Azure DevOps does not select a tab it thinks is
  * selected already, such as Overview, so the script selects it.
  */
-function closeFor(state: RunTabsState, other: Element): void {
-  close(state);
+function closeForOtherTab(state: RunTabsState, other: Element): void {
+  closeTab(state);
   if (!other.hasAttribute(OWN_TAB_ATTRIBUTE)) {
     setSelected(other, true);
   }
@@ -126,18 +126,18 @@ function onClick(state: RunTabsState, event: MouseEvent): void {
   const other = closestElement(event.target, `${TABLIST_SELECTOR} [role=tab]`);
   if (tab === null) {
     if (state.openKey !== null && other !== null) {
-      closeFor(state, other);
+      closeForOtherTab(state, other);
     }
     return;
   }
   event.preventDefault();
   event.stopPropagation();
   if (tab.getAttribute("aria-disabled") !== "true") {
-    open(state, tab);
+    openTab(state, tab);
   }
 }
 
-async function load(state: RunTabsState, data: RunTabsData): Promise<void> {
+async function loadChecksAndRuns(state: RunTabsState, data: RunTabsData): Promise<void> {
   const { options } = state;
   data.loadedAt = options.now();
   const { project, pullRequestId } = data.pullRequest;
@@ -162,7 +162,7 @@ function syncRunTabs(
   canFetch: boolean,
 ): void {
   if (JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest)) {
-    close(state);
+    closeTab(state);
     state.data =
       pullRequest === null
         ? null
@@ -174,7 +174,7 @@ function syncRunTabs(
   }
   const isDue = options.now() - data.loadedAt >= REFRESH_MS;
   if (canFetch && isDue && options.loadRunTabs().length > 0) {
-    void load(state, data);
+    void loadChecksAndRuns(state, data);
   }
   render(state);
 }

@@ -97,7 +97,7 @@ async function settle(): Promise<void> {
   }
 }
 
-async function loaded(tabs?: RunTab[]): Promise<Setup> {
+async function setUpLoaded(tabs?: RunTab[]): Promise<Setup> {
   const setup = setUp(tabs);
   setup.sync();
   await settle();
@@ -126,7 +126,7 @@ const isOpen = (document: Document): boolean =>
   undefined;
 
 test("each turned-on tab of a check's pipeline is a tab after Pipeline; one without a run is disabled", async () => {
-  const { document } = await loaded();
+  const { document } = await setUpLoaded();
   assert.deepEqual(tabNames(document), [
     "Overview*",
     "Files",
@@ -141,7 +141,7 @@ test("each turned-on tab of a check's pipeline is a tab after Pipeline; one with
 });
 
 test("picking a tab shows that tab of the pipeline's latest run, in place of the page", async () => {
-  const { document } = await loaded();
+  const { document } = await setUpLoaded();
   click(runTab(document, "Code Coverage"));
   assert.deepEqual(tabNames(document).slice(0, 4), [
     "Overview",
@@ -157,14 +157,14 @@ test("picking a tab shows that tab of the pipeline's latest run, in place of the
 });
 
 test("a disabled tab does nothing on a click", async () => {
-  const { document } = await loaded();
+  const { document } = await setUpLoaded();
   click(runTab(document, "Deployments"));
   assert.equal(isOpen(document), false);
   assert.deepEqual(tabNames(document)[0], "Overview*");
 });
 
 test("another tab closes it and is selected", async () => {
-  const { document } = await loaded();
+  const { document } = await setUpLoaded();
   click(runTab(document, "Code Coverage"));
   click(document.querySelector("#__bolt-tab-overview"));
   assert.equal(isOpen(document), false);
@@ -178,7 +178,7 @@ test("another tab closes it and is selected", async () => {
 });
 
 test("a run without the tab shows a note in place of the frame", async () => {
-  const { document, sync } = await loaded();
+  const { document, sync } = await setUpLoaded();
   click(runTab(document, "Code Coverage"));
   const frame = document.querySelector<HTMLIFrameElement>(".fix-ado-run-tab-frame");
   assert.ok(frame);
@@ -192,7 +192,7 @@ test("a run without the tab shows a note in place of the frame", async () => {
 });
 
 test("a newer run of the pipeline moves the open tab to it on the next refresh", async () => {
-  const setup = await loaded();
+  const setup = await setUpLoaded();
   click(runTab(setup.document, "Code Coverage"));
   setup.answers.builds = [
     { buildNumber: "20310402.9", definition: { id: 3 }, id: 509, status: "inProgress" },
@@ -205,13 +205,13 @@ test("a newer run of the pipeline moves the open tab to it on the next refresh",
 });
 
 test("without turned-on tabs, nothing is fetched and no tab is added", async () => {
-  const { document, requestCount } = await loaded([]);
+  const { document, requestCount } = await setUpLoaded([]);
   assert.equal(requestCount(), 0);
   assert.equal(document.querySelectorAll(".fix-ado-run-tab").length, 0);
 });
 
 test("a tab turned off goes away", async () => {
-  const setup = await loaded();
+  const setup = await setUpLoaded();
   setup.answers.tabs = [COVERAGE];
   setup.sync();
   assert.deepEqual(tabNames(setup.document).slice(3), ["Code Coverage"]);
