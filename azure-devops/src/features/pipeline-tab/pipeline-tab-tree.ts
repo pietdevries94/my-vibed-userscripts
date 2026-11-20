@@ -223,12 +223,14 @@ function createOpenIcon(document: Document): SVGElement {
   return icon;
 }
 
-/** A link to the run's page in a new browser tab. Azure DevOps's subtle icon button, as a link. */
+/**
+ * A link to the run's page in a new browser tab, styled like Azure DevOps's subtle icon
+ * buttons. Its own class only: the site's button classes pad and colour it.
+ */
 function createOpenRunLink(context: TreeContext, run: PipelineRun): HTMLAnchorElement {
   const { document } = context;
   const link = document.createElement("a");
-  link.className =
-    "bolt-button bolt-link-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-pipeline-open-run";
+  link.className = "fix-ado-pipeline-open-run";
   link.href = context.runPathOf(run.buildId);
   link.target = "_blank";
   link.rel = "noopener";

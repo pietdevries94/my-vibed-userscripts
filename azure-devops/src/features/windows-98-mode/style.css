@@ -1469,7 +1469,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
 
   /* Open run in new tab: a flat toolbar button with a window and an arrow out of it,
      raised under the pointer and sunken while pressed. */
-  .fix-ado-pipeline-open-run.bolt-button.bolt-button {
+  .fix-ado-pipeline-open-run.fix-ado-pipeline-open-run {
     inset-inline-end: 4px;
     bottom: 2px;
     width: 22px;
