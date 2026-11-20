@@ -21,6 +21,7 @@ type Page =
   | "pipeline-summary"
   | "pipeline-steps"
   | "pipeline-log"
+  | "pipeline-run-tab"
   | "work-item";
 
 /** A policy evaluations response as the capture recorded it. */
@@ -73,6 +74,8 @@ const TOKEN = /^text-\d+$/u;
 const readFixture = fixtureReader(SCRIPT_DIRECTORY);
 /** The capture behind each page, where it is not named after the page. */
 const PAGE_FIXTURES: Partial<Record<Page, string>> = {
+  // A run page on its Code Coverage tab.
+  "pipeline-run-tab": "pipeline-run-tab-coverage",
   // The create page once a branch is picked: the first capture with the reviewer field.
   "pr-create": "pr-create-with-branch-selected",
   "pr-detail": "pr-detail-warnings",
@@ -93,6 +96,7 @@ const PAGES: Page[] = [
   "pipeline-summary",
   "pipeline-steps",
   "pipeline-log",
+  "pipeline-run-tab",
   "work-item",
 ];
 const DEFAULT_PULL_REQUEST_CAPTURE = "warnings";

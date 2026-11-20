@@ -50,6 +50,21 @@ test("another tab closes the Pipeline tab and gets its selection back", async ()
   assert.ok(overview?.classList.contains("selected"));
 });
 
+test("the script's own tab that was selected, such as a run page tab, is not selected again on close", async () => {
+  const { document } = setUp();
+  const ownTab = document.createElement("a");
+  ownTab.setAttribute("role", "tab");
+  ownTab.dataset.fixAdoOwnTab = "";
+  ownTab.className = "bolt-tab selected";
+  document.querySelector("#__bolt-tab-overview")?.classList.remove("selected");
+  document.querySelector("[role=tablist]")?.append(ownTab);
+  click(pipelineTab(document));
+  await settle();
+  assert.equal(ownTab.classList.contains("selected"), false);
+  click(document.querySelector("#__bolt-tab-files"));
+  assert.equal(ownTab.classList.contains("selected"), false);
+});
+
 test("a run link on the pull request opens that run in the tab", async () => {
   const { document } = setUp();
   click(document.querySelector(".page-content a.check"));

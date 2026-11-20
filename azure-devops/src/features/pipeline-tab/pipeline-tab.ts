@@ -1,13 +1,13 @@
 // The Pipeline tab on a pull request. It shows the pull request's pipeline runs, their
 // stages and steps, and a step's log, in the pull request itself. Run links on the
 // pull request and in its checks panel open there too.
+import { OWN_TAB_ATTRIBUTE, TAB_CLASS, createTab } from "./pipeline-tab-element.ts";
 import { PANEL_CLASS, createPanel, renderPanel } from "./pipeline-tab-panel.ts";
 import type {
   PipelineTabData,
   PipelineTabLoader,
   PipelineTabSources,
 } from "./pipeline-tab-data.ts";
-import { TAB_CLASS, createTab } from "./pipeline-tab-element.ts";
 import {
   createTabData,
   expireTimeline,
@@ -166,7 +166,10 @@ function selectTab(state: TabState): void {
   const tab = document.querySelector(`.${TAB_CLASS}`);
   for (const other of document.querySelectorAll("[role=tablist] [role=tab].selected")) {
     if (other !== tab) {
-      state.replacedTab = other;
+      // The script's own tabs, such as a run page tab, close themselves; only Azure DevOps's come back.
+      if (!other.hasAttribute(OWN_TAB_ATTRIBUTE)) {
+        state.replacedTab = other;
+      }
       setSelected(other, false);
     }
   }

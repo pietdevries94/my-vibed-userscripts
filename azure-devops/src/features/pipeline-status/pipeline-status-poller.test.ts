@@ -67,6 +67,7 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     addPullRequestReviewer: notUsedByThePoller,
     cancelBuild: notUsedByThePoller,
     getAuthenticatedUserId: notUsedByThePoller,
+    getBuildPipeline: notUsedByThePoller,
     async getPolicyEvaluations({ pullRequestId }) {
       list.fetchedIds.push(pullRequestId);
       return list.respond(pullRequestId);

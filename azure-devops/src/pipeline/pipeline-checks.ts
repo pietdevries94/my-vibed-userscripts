@@ -11,7 +11,7 @@ interface PullRequestBuild {
   result?: string;
   queueTime?: string;
   startTime?: string;
-  definition?: { name?: string };
+  definition?: { id?: number; name?: string };
 }
 
 /** One build check of a pull request, with the run behind it. */

@@ -7,12 +7,13 @@ interface PolicyEvaluation {
   configuration: {
     isBlocking: boolean;
     type: { id: string };
-    settings?: { displayName?: string | null } | null;
+    settings?: { displayName?: string | null; buildDefinitionId?: number } | null;
   };
   context?: {
     buildId?: number | null;
     isExpired?: boolean;
     buildDefinitionName?: string;
+    buildDefinitionId?: number;
     buildStartedUtc?: string;
   } | null;
 }

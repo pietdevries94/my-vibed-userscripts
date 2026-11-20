@@ -1704,6 +1704,88 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     }
   }
 
+  /* Run page tabs in a pull request: the frame sunken as the log's, a missing tab's note in
+     a white list view with the info icon, and a disabled tab greyed with an emboss. */
+  .fix-ado-run-tab-frame,
+  .fix-ado-run-tab-missing {
+    border: 1px solid;
+    border-color: var(--win98-dark) var(--win98-light) var(--win98-light) var(--win98-dark);
+    border-radius: 0;
+    box-shadow:
+      -1px -1px var(--win98-shadow),
+      1px 1px #fff;
+  }
+
+  .fix-ado-run-tab-missing {
+    flex-direction: row;
+    gap: 6px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 6px 8px;
+    background: #fff;
+    color: #000;
+    font-size: 11px;
+
+    &::before {
+      width: 16px;
+      height: 16px;
+      background: var(--win98-icon-info) center / 16px no-repeat;
+      mask: none;
+    }
+  }
+
+  .fix-ado-run-tab-disabled .bolt-tab-text.bolt-tab-text {
+    color: var(--win98-shadow);
+    text-shadow: 1px 1px #fff;
+  }
+
+  /* "Show this tab in pull requests" on a run page: a Win98 checkbox and its label. */
+  .fix-ado-run-tab-toggle {
+    gap: 6px;
+    margin: 0 8px;
+    padding: 0 2px;
+    border-radius: 0;
+    color: #000;
+    font-size: 11px;
+
+    &:disabled {
+      color: var(--win98-shadow);
+      text-shadow: 1px 1px #fff;
+    }
+
+    &:focus-visible {
+      outline: 0;
+
+      .fix-ado-run-tab-toggle-text {
+        outline: 1px dotted #000;
+      }
+    }
+  }
+
+  .fix-ado-run-tab-toggle-pill.fix-ado-run-tab-toggle-pill {
+    width: 13px;
+    height: 13px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
+  }
+
+  .fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
+    background:
+      var(--win98-check) center / 7px 7px no-repeat,
+      #fff;
+  }
+
+  .fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-pill {
+    background-color: var(--win98-face);
+  }
+
+  .fix-ado-run-tab-toggle-knob {
+    display: none;
+  }
+
   /* The log: a sunken frame. */
   .fix-ado-pipeline-frame {
     border: 1px solid;

@@ -1,0 +1,153 @@
+/* Run page tabs in pull requests. pull-request-run-tabs.ts sets the attribute while one is open. */
+.repos-pr-details-page[data-fix-ado-run-tab-open]
+  > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-run-tab-panel) {
+  display: none !important;
+}
+
+/* The panel takes what the header and tabs leave, so the tab's content reaches the bottom. */
+.fix-ado-run-tab-panel {
+  display: grid;
+  flex: 1 0 0;
+  min-height: 400px;
+  padding-top: 16px;
+}
+
+.fix-ado-run-tab-frame,
+.fix-ado-run-tab-missing {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+}
+
+.fix-ado-run-tab-frame[hidden],
+.fix-ado-run-tab-missing[hidden] {
+  display: none;
+}
+
+/* In place of a run page tab the run does not have: a page icon over a line of text. */
+.fix-ado-run-tab-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+
+  &::before {
+    content: "";
+    width: 48px;
+    height: 48px;
+    background-color: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 1h5.5L13 4.5V15H3V1h1zm0 1v12h8V5H9V2H4zm6 .7V4h1.3L10 2.7zM5 7h6v1H5V7zm0 2h6v1H5V9zm0 2h4v1H5v-1z'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    forced-color-adjust: none;
+  }
+}
+
+/* A tab whose pipeline has no run on the pull request yet: greyed, and it does nothing. */
+.fix-ado-run-tab-disabled,
+.fix-ado-run-tab-disabled .bolt-tab-text {
+  color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+  cursor: default;
+}
+
+/* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */
+.fix-ado-run-tab:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* The run page in a run page tab's frame. run-tab-frame.ts marks it; only the tab's content stays. */
+html[data-fix-ado-run-tab-frame] .project-header,
+html[data-fix-ado-run-tab-frame] .navigation-container,
+html[data-fix-ado-run-tab-frame] .region-content-header,
+html[data-fix-ado-run-tab-frame] .region-content-footer,
+html[data-fix-ado-run-tab-frame] .region-footer,
+html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-content) {
+  display: none !important;
+}
+
+/* "Show this tab in pull requests" at the right end of a run page's tab bar: a switch like
+   Azure DevOps's own. Its own classes, as no capture holds the site's switch. */
+.fix-ado-run-tab-toggle {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  margin: 0 20px 0 8px;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+
+  &:disabled {
+    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--communication-background, rgb(0, 120, 212));
+    outline-offset: 1px;
+  }
+}
+
+.fix-ado-run-tab-toggle-pill {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 40px;
+  height: 20px;
+  padding: 0 3px;
+  border: 1px solid var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  border-radius: 10px;
+}
+
+.fix-ado-run-tab-toggle-knob {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  transition: translate 0.1s;
+}
+
+.fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  background: var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-knob {
+  background: #fff;
+  translate: 20px 0;
+}
+
+.fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-pill {
+  border-color: currentColor;
+}
+
+.fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-knob {
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-run-tab-toggle-knob {
+    transition: none;
+  }
+}
+
+/* Forced colors drop backgrounds, so the knob and the on state keep a border. */
+@media (forced-colors: active) {
+  .fix-ado-run-tab-toggle-knob {
+    border: 1px solid CanvasText;
+  }
+
+  .fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
+    border-color: Highlight;
+  }
+}

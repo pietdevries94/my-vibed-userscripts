@@ -2,13 +2,13 @@
 // fake site's scripts.
 import { BOARD_STYLE, FULL_WINDOW_STYLE, PULL_REQUEST_STYLE, RUN_STYLE } from "./styles.ts";
 import { pageCss, pullRequestPageData } from "./data.ts";
+import { parsePipelineRunLocation, pipelineRunTabOf } from "../src/pipeline/pipeline-run-link.ts";
 import { CREATE_PAGE_SCRIPT } from "./create-page.ts";
 import type { FakeResponse } from "../../shared/dev/fake-site/server.ts";
 import type { Page } from "./data.ts";
 import { draftPillScript } from "./state.ts";
 import { fixturePage } from "../../shared/dev/fake-site/fixture-page.ts";
 import { htmlResponse } from "../../shared/dev/fake-site/server.ts";
-import { parsePipelineRunLocation } from "../src/pipeline/pipeline-run-link.ts";
 import { starredReviewersScript } from "./starred-reviewers.ts";
 
 const RUN_PAGES = {
@@ -33,8 +33,12 @@ function pageAt(url: URL): Page | null {
     return null;
   }
   const run = parsePipelineRunLocation(url);
+  const tab = pipelineRunTabOf(url);
   if (run !== null) {
-    return RUN_PAGES[run.view];
+    // The Summary, as "results", is the summary capture; any other tab, the tab capture.
+    return run.view === "summary" && tab !== null && tab !== "results"
+      ? "pipeline-run-tab"
+      : RUN_PAGES[run.view];
   }
   const page = PAGE_PATHS.find(([, matches]) => matches(url.pathname))?.[0] ?? null;
   return page === "pr-detail" && url.searchParams.get("_a") === "files" ? "pr-files" : page;

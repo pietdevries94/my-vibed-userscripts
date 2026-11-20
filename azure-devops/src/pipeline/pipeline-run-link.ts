@@ -33,12 +33,12 @@ function parsePipelineRunLocation(location: {
 }
 
 /**
- * The tab a run page shows, by its `view`, such as "codecoverage-tab", or null on its
- * Summary and its logs.
+ * The tab a run page names in its `view`, such as "codecoverage-tab" or "results" for its
+ * Summary, or null without one and on its logs.
  */
 function pipelineRunTabOf(location: { search: string }): string | null {
   const view = new URLSearchParams(location.search).get("view");
-  return view === null || view === "" || view === "logs" || view === "results" ? null : view;
+  return view === null || view === "" || view === "logs" ? null : view;
 }
 
 /** A run's page, on its summary. */

@@ -62,6 +62,21 @@ function buildsResponse(): FakeResponse {
     : jsonResponse({ count: builds.body.value.length, value: currentBuilds(builds.body.value) });
 }
 
+/**
+ * One run, with its pipeline, as the run page tabs' switch reads it: the pull request's
+ * run with that id, else its first run, as captures of run pages hold no build.
+ */
+function buildResponse(_request: FakeRequest, match: RegExpExecArray): FakeResponse {
+  const runs = (pullRequestDetailData().data.builds?.body?.value ?? []).filter(
+    (run): run is { id?: unknown } => typeof run === "object" && run !== null,
+  );
+  const buildId = Number(match.groups?.buildId ?? "");
+  const run = runs.find((candidate) => candidate.id === buildId) ?? runs[0];
+  return run === undefined
+    ? jsonResponse({ message: `No run ${buildId}` }, HTTP_NOT_FOUND)
+    : jsonResponse({ ...run, id: buildId });
+}
+
 function timelineResponse(_request: FakeRequest, match: RegExpExecArray): FakeResponse {
   const buildId = match.groups?.buildId ?? "";
   const timeline = pullRequestDetailData().data.timelinesByBuildId?.[buildId];
@@ -103,6 +118,7 @@ const API_ROUTES: [RegExp, (request: FakeRequest, match: RegExpExecArray) => Fak
   [/^\/fake-org\/[^/]+\/_apis\/policy\/evaluations$/u, evaluationsResponse],
   [/^\/fake-org\/[^/]+\/_apis\/build\/builds\/(?<buildId>\d+)\/timeline$/u, timelineResponse],
   [/^\/fake-org\/[^/]+\/_apis\/build\/builds$/u, buildsResponse],
+  [/^\/fake-org\/[^/]+\/_apis\/build\/builds\/(?<buildId>\d+)$/u, buildResponse],
   [/^\/fake-org\/[^/]+\/_apis\/git\/repositories\/[^/]+\/pullrequests$/u, pullRequestsResponse],
   [/^\/fake-org\/_apis\/wit\/workitems$/u, workItemsResponse],
   [/^\/fake-org\/_apis\/wit\/workItems\/(?<id>\d+)\/updates$/u, workItemUpdatesResponse],
@@ -136,6 +152,7 @@ const PAGES: Page[] = [
   "pipeline-summary",
   "pipeline-steps",
   "pipeline-log",
+  "pipeline-run-tab",
   "work-item",
 ];
 

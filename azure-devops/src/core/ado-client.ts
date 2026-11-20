@@ -2,13 +2,14 @@ import type { PullRequestListPage, PullRequestRef } from "../pull-requests/pull-
 import { getJson, sendRequest } from "./ado-request.ts";
 import type { AdoClientOptions } from "./ado-request.ts";
 import type { BoardWorkItem } from "../boards/board.ts";
+import type { BuildRequests } from "../pipeline/build-requests.ts";
 import type { Identity } from "../pull-requests/reviewer-requests.ts";
 import type { ListedPullRequest } from "../features/reload-on-changes/pr-list-changes.ts";
 import type { PolicyEvaluation } from "../pipeline/pipeline-status.ts";
-import type { PullRequestBuild } from "../pipeline/pipeline-checks.ts";
 import type { ReviewRequests } from "../pull-requests/review-requests.ts";
 import type { TimelineRecord } from "../pipeline/pipeline-timeline.ts";
 import type { WorkItemUpdate } from "../features/days-in-column/days-in-column.ts";
+import { createBuildRequests } from "../pipeline/build-requests.ts";
 import { createReviewRequests } from "../pull-requests/review-requests.ts";
 import { createReviewerRequests } from "../pull-requests/reviewer-requests.ts";
 
@@ -20,12 +21,6 @@ interface PolicyEvaluationsResponse {
 
 interface PullRequestsResponse {
   pullRequests: ListedPullRequest[];
-  /** Set when Azure DevOps asks the caller to slow down. */
-  retryAfterSeconds: number | null;
-}
-
-interface PullRequestBuildsResponse {
-  builds: PullRequestBuild[];
   /** Set when Azure DevOps asks the caller to slow down. */
   retryAfterSeconds: number | null;
 }
@@ -49,14 +44,9 @@ interface WorkItemUpdatesResponse {
   retryAfterSeconds: number | null;
 }
 
-interface AdoClient extends ReviewRequests {
+interface AdoClient extends ReviewRequests, BuildRequests {
   getPolicyEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluationsResponse>;
   getPullRequests: (listPage: PullRequestListPage) => Promise<PullRequestsResponse>;
-  /** The pipeline runs of a pull request, newest first. */
-  getPullRequestBuilds: (
-    project: string,
-    pullRequestId: number,
-  ) => Promise<PullRequestBuildsResponse>;
   /** The stages, jobs and steps of a pipeline run. */
   getTimeline: (project: string, buildId: number) => Promise<TimelineResponse>;
   getWorkItems: (ids: number[]) => Promise<WorkItemsResponse>;
@@ -91,9 +81,6 @@ const MAX_WORK_ITEMS_PER_REQUEST = 200;
 
 /** The updates API returns at most this many updates per request. */
 const MAX_UPDATES_PER_REQUEST = 200;
-
-/** The runs of one pull request that the Pipeline tab lists. */
-const MAX_PULL_REQUEST_BUILDS = 50;
 
 /** Enough to detect an added or removed pull request in any realistic list. */
 const MAX_LISTED_PULL_REQUESTS = 200;
@@ -216,20 +203,6 @@ async function requeuePolicyEvaluation(
   );
 }
 
-async function getPullRequestBuilds(
-  options: AdoClientOptions,
-  { project, pullRequestId }: { project: string; pullRequestId: number },
-): Promise<PullRequestBuildsResponse> {
-  const branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`);
-  const { body, retryAfterSeconds } = await getJson(
-    options,
-    `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}` +
-      `&queryOrder=queueTimeDescending&$top=${MAX_PULL_REQUEST_BUILDS}&api-version=7.1`,
-  );
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
-  return { builds: (body.value ?? []) as PullRequestBuild[], retryAfterSeconds };
-}
-
 /**
  * Client with the page's session cookie. Every request is a GET, but the re-queue of a
  * build check, the cancel of a run, saving the theme, adding a reviewer, the identity search,
@@ -251,9 +224,6 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
 
     getPolicyEvaluations: async (pullRequest) =>
       getPolicyEvaluations(options, await getProjectId(pullRequest.project), pullRequest),
-
-    getPullRequestBuilds: async (project, pullRequestId) =>
-      getPullRequestBuilds(options, { project, pullRequestId }),
 
     async getPullRequests({ project, repository, status }) {
       const { body, retryAfterSeconds } = await getJson(
@@ -281,6 +251,7 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
       requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
     saveTheme: async (themeId) => saveTheme(options, themeId),
 
+    ...createBuildRequests(options),
     ...createReviewRequests(options),
     ...createReviewerRequests(options),
   };
@@ -289,7 +260,6 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
 export type {
   AdoClient,
   PolicyEvaluationsResponse,
-  PullRequestBuildsResponse,
   PullRequestsResponse,
   TimelineResponse,
   WorkItemUpdatesResponse,
