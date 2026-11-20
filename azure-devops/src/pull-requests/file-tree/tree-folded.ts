@@ -77,4 +77,9 @@ function noteFolded(
   return folded;
 }
 
-export { noteFolded };
+/** Every path folded since the page loaded and not unfolded, as the last `noteFolded` saw. */
+function foldedPaths(document: Document): Set<string> {
+  return foldedByDocument.get(document) ?? new Set<string>();
+}
+
+export { foldedPaths, noteFolded };

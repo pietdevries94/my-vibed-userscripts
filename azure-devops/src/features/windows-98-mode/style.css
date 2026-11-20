@@ -4726,6 +4726,36 @@ html[data-fix-ado-win98="pull-request"] body .repos-summary-header > div:first-c
   }
 }
 
+/* The Viewed toggle: the settings panel's sunken 13px box with a black check, and its label in
+   the window font. */
+html[data-fix-ado-win98="pull-request"] body .fix-ado-viewed-toggle {
+  gap: 4px;
+  font: 11px/14px var(--win98-font);
+  color: #000;
+
+  & input {
+    appearance: none;
+    inline-size: 13px;
+    block-size: 13px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
+
+    &:checked {
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E")
+          center / 7px 7px no-repeat,
+        #fff;
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: 2px;
+    }
+  }
+}
+
 html[data-fix-ado-win98="pull-request"] body .repos-summary-header.bolt-card {
   /* Square corners, and no shadow under the sticky header. */
   border-radius: 0;

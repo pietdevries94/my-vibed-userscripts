@@ -1,0 +1,23 @@
+/* The Viewed toggle in a file's header: Azure DevOps's own checkbox, in its blue. */
+.fix-ado-viewed-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: 12px;
+  cursor: pointer;
+  user-select: none;
+
+  & input {
+    inline-size: 16px;
+    aspect-ratio: 1;
+    margin: 0;
+    accent-color: var(--communication-background, rgb(0, 120, 212));
+    cursor: pointer;
+  }
+}
+
+/* In the bar above a single file, level with the Inline button. */
+.repos-compare-toolbar .fix-ado-viewed-toggle {
+  align-self: center;
+}
