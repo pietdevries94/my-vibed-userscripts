@@ -12,7 +12,9 @@ import {
 } from "../../pipeline/pipeline-issue-list.ts";
 import { pipelineLogPath, pipelineRunPath } from "../../pipeline/pipeline-run-link.ts";
 import type { ElementSpec } from "../../pipeline/pipeline-issue-list.ts";
+import type { IssueBoxCollapse } from "../../pipeline/pipeline-issue-box-collapse.ts";
 import type { PipelineCheck } from "../../pipeline/pipeline-checks.ts";
+import { addCollapseButton } from "../../pipeline/pipeline-issue-box-collapse.ts";
 
 const OVERVIEW_ISSUES_CLASS = "fix-ado-overview-issues";
 
@@ -29,6 +31,8 @@ interface IssuesCardContent {
   apiBasePath: string;
   project: string;
   checks: CheckIssues[];
+  /** The card's collapse button in its heading row. */
+  collapse: IssueBoxCollapse;
 }
 
 /** The log of the issue's step, or its run when it has no step. */
@@ -86,7 +90,7 @@ function createHeading(document: Document, checks: CheckIssues[]): HTMLElement {
     { className: "flex-column flex-grow scroll-hidden", tag: "div" },
   ]);
   const row = createElement(document, {
-    className: "flex-row flex-center rhythm-horizontal-8",
+    className: "flex-row flex-center rhythm-horizontal-8 fix-ado-overview-issues-heading-row",
     tag: "div",
   });
   const kind = worstKindOf(checks.flatMap(({ issues }) => issues));
@@ -101,11 +105,13 @@ function createIssuesCard(document: Document, content: IssuesCardContent): HTMLE
     className: "padding-vertical-16 padding-horizontal-20 rhythm-vertical-16",
     tag: "div",
   });
+  const heading = createHeading(document, checks);
   rows.append(
-    createHeading(document, checks),
+    heading,
     ...checks.map((checkIssues) => createCheckIssueBox(document, content, checkIssues)),
   );
   const block = wrapIn(document, rows, CARD_WRAPPERS);
+  addCollapseButton(block, heading, content.collapse);
   block.setAttribute("aria-label", "Pipeline warnings and errors");
   block.dataset.fixAdoRendered = JSON.stringify(checks);
   return block;

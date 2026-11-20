@@ -21,8 +21,9 @@
   min-height: 48px;
 }
 
-/* A collapsed box keeps its header row. */
-.fix-ado-issue-box[data-collapsed] .fix-ado-issue {
+/* A collapsed box keeps its header row; a collapsed Overview card keeps its heading. */
+.fix-ado-issue-box[data-collapsed] .fix-ado-issue,
+.fix-ado-overview-issues[data-collapsed] .fix-ado-issue-box {
   display: none;
 }
 

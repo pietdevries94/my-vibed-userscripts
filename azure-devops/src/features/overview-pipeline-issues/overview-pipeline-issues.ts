@@ -45,6 +45,8 @@ interface OverviewData {
   checks: PipelineCheck[];
   checksLoadedAt: number;
   timelines: Map<number, LoadedTimeline>;
+  /** The owner collapsed the card. It opens again on another pull request or a reload. */
+  isCollapsed: boolean;
 }
 
 interface OverviewState {
@@ -148,7 +150,18 @@ function createCard(
   data: OverviewData,
   checks: CheckIssues[],
 ): HTMLElement {
-  return createIssuesCard(document, { apiBasePath, checks, project: data.pullRequest.project });
+  const collapse = {
+    isCollapsed: data.isCollapsed,
+    onToggle: (isCollapsed: boolean): void => {
+      data.isCollapsed = isCollapsed;
+    },
+  };
+  return createIssuesCard(document, {
+    apiBasePath,
+    checks,
+    collapse,
+    project: data.pullRequest.project,
+  });
 }
 
 /** Shows what came in, unless the page left that pull request meanwhile. */
@@ -206,6 +219,7 @@ function syncOverview(
         : {
             checks: [],
             checksLoadedAt: Number.NEGATIVE_INFINITY,
+            isCollapsed: false,
             pullRequest,
             timelines: new Map(),
           };

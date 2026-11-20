@@ -1,5 +1,6 @@
-// The collapse button of an issue box: the one on Azure DevOps's cards, with its class
-// names, so its own styles apply. A collapsed box keeps its header row.
+// The collapse button of an issue box, or of the Overview's card of them: the one on
+// Azure DevOps's cards, with its class names, so its own styles apply. A collapsed box
+// keeps its header row.
 
 interface IssueBoxCollapse {
   isCollapsed: boolean;
@@ -10,11 +11,10 @@ interface IssueBoxCollapse {
 const COLLAPSE_ICONS = { collapsed: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
 
 /** Shows the box collapsed or open: its issues hide by style, the button gets its state and chevron. */
-function setCollapsed(box: HTMLElement, isCollapsed: boolean): void {
+function setCollapsed(box: HTMLElement, button: HTMLElement, isCollapsed: boolean): void {
   box.toggleAttribute("data-collapsed", isCollapsed);
-  const button = box.querySelector(".fix-ado-issue-box-collapse");
-  button?.setAttribute("aria-expanded", String(!isCollapsed));
-  const icon = button?.querySelector(".fabric-icon");
+  button.setAttribute("aria-expanded", String(!isCollapsed));
+  const icon = button.querySelector(".fabric-icon");
   icon?.classList.toggle(COLLAPSE_ICONS.collapsed, isCollapsed);
   icon?.classList.toggle(COLLAPSE_ICONS.open, !isCollapsed);
 }
@@ -49,11 +49,11 @@ function addCollapseButton(
   const button = createCollapseButton(box.ownerDocument);
   button.addEventListener("click", () => {
     const isCollapsed = !Object.hasOwn(box.dataset, "collapsed");
-    setCollapsed(box, isCollapsed);
+    setCollapsed(box, button, isCollapsed);
     collapse.onToggle(isCollapsed);
   });
   header.prepend(button);
-  setCollapsed(box, collapse.isCollapsed);
+  setCollapsed(box, button, collapse.isCollapsed);
 }
 
 export type { IssueBoxCollapse };
