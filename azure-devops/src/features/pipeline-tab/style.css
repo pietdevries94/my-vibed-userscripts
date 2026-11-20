@@ -123,12 +123,12 @@
   padding-inline-end: 48px;
 }
 
-/* Open run in new tab: a subtle icon button, its icon's right edge in line with the
-   count badges of the rows below. */
+/* Open run in new tab: a subtle icon button beside the run's name, its icon's right edge
+   in line with the count badges of the rows below. */
 .fix-ado-pipeline-open-run {
   position: absolute;
+  top: 4px;
   inset-inline-end: 8px;
-  bottom: 6px;
   display: grid;
   place-items: center;
   width: 24px;
@@ -147,12 +147,15 @@
   outline-offset: -2px;
 }
 
-/* A line above each run but the first, so the runs stand apart. */
-.fix-ado-pipeline-run-row:not(:first-child) > .fix-ado-pipeline-run {
+/* A line above each run but the first, so the runs stand apart. The run keeps the same
+   padding above and below, as the rows under it. */
+.fix-ado-pipeline-run-row:not(:first-child) {
   margin-top: 8px;
-  padding-top: 12px;
   border-top: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
-  border-radius: 0;
+
+  & > .fix-ado-pipeline-run {
+    border-radius: 0;
+  }
 }
 
 /* "Start new run" or "Cancel current run" above the runs. Azure DevOps's button

@@ -1462,6 +1462,12 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     }
   }
 
+  .fix-ado-pipeline-run-row:not(:first-child) {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
   .fix-ado-pipeline-run-row ~ .fix-ado-pipeline-run-row {
     margin-top: 4px;
     border-top: 1px dotted var(--win98-shadow);
@@ -1470,6 +1476,7 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
   /* Open run in new tab: a flat toolbar button with a window and an arrow out of it,
      raised under the pointer and sunken while pressed. */
   .fix-ado-pipeline-open-run.fix-ado-pipeline-open-run {
+    top: auto;
     inset-inline-end: 4px;
     bottom: 2px;
     width: 22px;
