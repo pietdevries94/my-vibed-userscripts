@@ -227,4 +227,12 @@ const issueBoxOverflow: FailureCheck = {
   name: "issue-box-overflow-failures",
 };
 
-export { LONG_LINE, MANY_LINES, boardWidth, dropDownVariants, issueBoxOverflow, setIssueMessage };
+export {
+  LONG_LINE,
+  MANY_LINES,
+  OVERVIEW_PATH,
+  boardWidth,
+  dropDownVariants,
+  issueBoxOverflow,
+  setIssueMessage,
+};

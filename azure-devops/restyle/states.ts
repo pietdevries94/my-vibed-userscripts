@@ -10,6 +10,7 @@ import {
   issueBoxOverflow,
   setIssueMessage,
 } from "./checks.ts";
+import { threadStates, threadTitleBars } from "./threads.ts";
 import type { Page } from "playwright";
 import { REPO_ROOT } from "../../build/scripts.ts";
 import fs from "node:fs";
@@ -119,6 +120,7 @@ const states: DiffState[] = [
     page: "pr-detail",
     path: `${PR}/1005`,
   },
+  ...threadStates,
   {
     artboard: "MainChecksPassed",
     capture: "win98-checks-passed",
@@ -230,7 +232,7 @@ const config: RestyleConfig = {
     { capture: "win98", name: "run-summary", page: "pipeline-summary", path: RUN },
     { capture: "win98", name: "run-steps", page: "pipeline-steps", path: `${RUN}&view=logs` },
   ],
-  checks: [boardWidth, dropDownVariants, issueBoxOverflow],
+  checks: [boardWidth, dropDownVariants, issueBoxOverflow, threadTitleBars],
   masks: { design: "[data-glyph] { visibility: hidden !important; }", site: SITE_MASK },
   settings: { "windows-98-mode": true },
   states,

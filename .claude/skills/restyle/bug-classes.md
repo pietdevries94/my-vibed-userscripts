@@ -10,6 +10,10 @@ The site reuses a class in another structure, and the rule follows it there. Exa
 
 The site sets sizes inline or in its own CSS: fixed field widths (270px), minimum column widths, cell heights taller than the row, transparent borders that take space, a header margin the design does not have. Measure the computed box (`getBoundingClientRect`, `getComputedStyle`) of every part of a row, not only the row. Anything 0.5px off is a sub-pixel position: find the half pixel and remove it.
 
+## Long values and narrow layouts
+
+Real values run longer than a capture's, and the site switches layout at narrow widths: a comment header puts the time under a long author name, and a script feature sizes avatar initials before the mode shrinks the avatar. A one-line bar then wraps and spills. Invent long values and narrow widths in a failure-count check, such as `thread-title-bar-failures`, and force the layout the design wants (one row, an ellipsis, a fixed size) rather than relying on the capture's.
+
 ## Portals, callouts and drop-downs
 
 Menus, tooltips and drop-downs render in a portal outside the page, so page-scoped rules miss them, and a callout's frame wraps whatever is inside it. A tooltip got the menu's frame; a multi-select list painted every checked row as selected. Style the frame by what it holds (`:has(.tooltip-content)`), and check the portal markup in a capture with it open.
