@@ -96,8 +96,13 @@ function syncCardToggles(document: Document, state: ToggleState): void {
   }
 }
 
+/** True while the right pane shows an open folder's file cards, not a single file. */
+function isFolderView(document: Document): boolean {
+  return document.querySelector(FOLDER_VIEW_SELECTOR) !== null;
+}
+
 function syncBarToggle(document: Document, state: ToggleState): void {
-  if (document.querySelector(FOLDER_VIEW_SELECTOR) !== null) {
+  if (isFolderView(document)) {
     document.querySelector(`${FILE_BAR_SELECTOR} .${TOGGLE_CLASS}`)?.remove();
     return;
   }
@@ -130,5 +135,5 @@ function setCardOpen(card: Element, isOpen: boolean): void {
   }
 }
 
-export { setCardOpen, syncViewedToggles };
+export { isFolderView, setCardOpen, syncViewedToggles };
 export type { FileHeader };

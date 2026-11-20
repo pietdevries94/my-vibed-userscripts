@@ -1,7 +1,8 @@
 // Viewed files, as on GitHub: a Viewed toggle in each file's header in the Files tab
 // ticks the file in the tree on the left, where Azure DevOps keeps which files the
 // owner reviewed. The toggle shows the tree's tick, so both stay the same. A folder
-// whose files are all ticked collapses in the tree, but not when the page loads.
+// whose files are all ticked collapses in the tree, but not when the page loads, and
+// not while a single file is open.
 import {
   TICK_SELECTOR,
   findCompleteFolders,
@@ -10,8 +11,8 @@ import {
   noteTicks,
 } from "./tree-ticks.ts";
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
+import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
 import { keepingScroll, nextTreeDraw, walkTree, withDrawnRow } from "./tree-walk.ts";
-import { setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
 import type { FileHeader } from "./viewed-toggles.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
 import type { ReviewRequests } from "../../pull-requests/review-requests.ts";
@@ -53,10 +54,16 @@ function fold(row: Element): void {
   }
 }
 
+/** The folders that became complete and should collapse: none while a single file is open. */
+function foldersToCollapse(document: Document, shown: ShownPullRequest): string[] {
+  const folders = newlyComplete(shown);
+  return isFolderView(document) ? folders : [];
+}
+
 /** Collapses each folder that became complete, when the tree draws it. */
 function foldNewlyComplete(document: Document, shown: ShownPullRequest): void {
   const tree = treeNow(document, shown.changedPaths);
-  for (const folder of newlyComplete(shown)) {
+  for (const folder of foldersToCollapse(document, shown)) {
     const row = drawnRowOf(folder, tree);
     if (row !== null) {
       fold(row);
@@ -138,7 +145,7 @@ function setViewed(state: ViewedState, header: FileHeader, isViewed: boolean): v
         }
       });
       noteTicks(document, shown);
-      for (const folder of newlyComplete(shown)) {
+      for (const folder of foldersToCollapse(document, shown)) {
         // oxlint-disable-next-line eslint/no-await-in-loop -- one walk at a time: each scrolls the same tree
         await withDrawnRow(walk, folder, async (row) => {
           fold(row);

@@ -7,13 +7,16 @@ import { listedRows } from "../../pull-requests/file-tree/tree-listing.ts";
 const ROW_HEIGHT = 20;
 const ROW_MARKUP = `<td><div class="bolt-checkbox" role="checkbox"></div></td><td class="bolt-tree-cell"><span class="bolt-tree-expand-button"></span><span class="text-ellipsis"><span></span></span></td>`;
 const CARD_MARKUP = `<div class="flex-row"><button class="bolt-card-expand-button" aria-expanded="true"></button><div class="flex-row flex-grow"><div class="flex-column"><div role="heading"><span class="text-ellipsis"></span></div><div class="body-s secondary-text text-ellipsis"></div></div><div class="flex-row flex-grow justify-end"><a class="bolt-link-button">View</a></div></div></div>`;
-const PAGE_MARKUP = `<!doctype html><body><div class="v-scroll-auto"><table class="repos-changes-explorer-tree"><tbody></tbody></table></div><div class="repos-changes-viewer is-folder"></div></body>`;
+const PAGE_MARKUP = `<!doctype html><body><div class="v-scroll-auto"><table class="repos-changes-explorer-tree"><tbody></tbody></table></div><div class="repos-changes-viewer"></div></body>`;
+const BAR_MARKUP = `<div class="secondary-text text-ellipsis"></div><div class="bolt-split-button"></div>`;
 
 interface VirtualTreeOptions {
   changedPaths: string[];
   /** How many rows fit in view. */
   rowsInView: number;
   ticked?: string[];
+  /** The file open on the right; without one, the folder view with a card per file. */
+  openFile?: string;
 }
 
 interface VirtualTree {
@@ -132,6 +135,26 @@ function card(document: Document, path: string): HTMLElement {
   return header;
 }
 
+/** The bar above the single-file view, for the file at `path`. */
+function fileBar(document: Document, path: string): HTMLElement {
+  const bar = document.createElement("div");
+  bar.className = "repos-compare-toolbar";
+  bar.innerHTML = BAR_MARKUP;
+  bar.querySelector(".secondary-text")?.append(path);
+  return bar;
+}
+
+/** Fills the right pane: a card per file, or the bar of the open file. */
+function fillViewer(document: Document, changedPaths: string[], openFile?: string): void {
+  const viewer = document.querySelector(".repos-changes-viewer");
+  if (openFile === undefined) {
+    viewer?.classList.add("is-folder");
+    viewer?.append(...changedPaths.map((path) => card(document, path)));
+  } else {
+    viewer?.before(fileBar(document, openFile));
+  }
+}
+
 /** Makes the scroller scroll as a browser's does: it stops where the rows end, and the tree draws after. */
 function scrollLikeABrowser(scroller: HTMLElement, tree: FakeTree): void {
   const end = (): number => shownRows(tree).length * ROW_HEIGHT;
@@ -150,6 +173,7 @@ function scrollLikeABrowser(scroller: HTMLElement, tree: FakeTree): void {
 
 function createVirtualTree({
   changedPaths,
+  openFile,
   rowsInView,
   ticked = [],
 }: VirtualTreeOptions): VirtualTree {
@@ -159,8 +183,7 @@ function createVirtualTree({
   if (scroller === null || body === null) {
     throw new Error("the page has its tree");
   }
-  const cards = changedPaths.map((path) => card(document, path));
-  document.querySelector(".repos-changes-viewer")?.append(...cards);
+  fillViewer(document, changedPaths, openFile);
   const tree: FakeTree = {
     body,
     changedPaths,

@@ -27,8 +27,9 @@ function clientFor(changedPaths: string[]): ViewedFilesOptions["client"] {
 /** A page with a tree that draws three rows, the viewed files feature started and done with its first scan. */
 async function startedPage(
   ticked: string[] = [],
+  openFile?: string,
 ): Promise<{ tree: VirtualTree; viewed: ViewedFiles }> {
-  const tree = createVirtualTree({ changedPaths: CHANGED_PATHS, rowsInView: 3, ticked });
+  const tree = createVirtualTree({ changedPaths: CHANGED_PATHS, openFile, rowsInView: 3, ticked });
   const viewed = createViewedFiles({
     client: clientFor(CHANGED_PATHS),
     document: tree.document,
@@ -134,4 +135,31 @@ test("ticking a folder in the tree marks its files Viewed, also ones the tree do
   viewed.sync(PULL_REQUEST);
   assert.equal(toggleOf(tree.document, "/api/orders.ts").checked, true);
   assert.equal(toggleOf(tree.document, "/api/totals.ts").checked, true);
+});
+
+function barToggle(document: Document): HTMLInputElement {
+  const toggle = document.querySelector<HTMLInputElement>(
+    ".repos-compare-toolbar .fix-ado-viewed-toggle input",
+  );
+  assert.ok(toggle, "the bar above the open file has a Viewed toggle");
+  return toggle;
+}
+
+test("Viewed in the bar above a single file ticks the folder's last file, and the folder stays open", async () => {
+  const { tree, viewed } = await startedPage(["/api/orders.ts"], "/api/totals.ts");
+  barToggle(tree.document).click();
+  await viewed.idle();
+  assert.equal(tree.isTicked("/api/totals.ts"), true);
+  assert.equal(barToggle(tree.document).checked, true);
+  assert.equal(tree.isFolded("/api"), false);
+});
+
+test("ticking a folder's last file in the tree while a single file is open leaves the folder open", async () => {
+  const { tree, viewed } = await startedPage(["/api/orders.ts"], "/api/totals.ts");
+  tree.clickTick("/api/totals.ts");
+  await tree.settled();
+  viewed.sync(PULL_REQUEST);
+  await tree.settled();
+  assert.equal(tree.isFolded("/api"), false);
+  assert.equal(barToggle(tree.document).checked, true);
 });
