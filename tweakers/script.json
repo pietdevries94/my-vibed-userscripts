@@ -14,7 +14,7 @@
   ],
   "match": ["https://tweakers.net/*"],
   "grant": ["GM_addStyle"],
-  "version": "1.0.2",
+  "version": "1.0.3",
   "mode": "open",
   "runAt": "document-start",
   "signInOrigins": ["https://myprivacy.dpgmedia.nl"],

@@ -52,7 +52,7 @@ Adds missing features to Azure DevOps. A settings panel in the top bar turns eac
 
 ### Fix Tweakers
 
-[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/tweakers.user.js) · version 1.0.2
+[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/tweakers.user.js) · version 1.0.3
 
 Trims the Tweakers homepage.
 

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Tweakers
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.0.2
-// @description  Trims the Tweakers homepage. Hides the lead story, the side columns, the top banner and the category bar.
+// @version      1.0.3
+// @description  Trims the Tweakers homepage. Homepage: Hides the lead story; Hides the side columns; Hides the top banner; Hides the category bar.
 // @match        https://tweakers.net/*
 // @grant        GM_addStyle
 // @run-at       document-start
