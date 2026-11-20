@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.20.0
-// @description  Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs, a button to start or cancel a run and a button that opens a run in a new tab, tabs of a run page, such as Extensions, shown as tabs of the pull request, the warnings and errors of each check's latest run above the pull request description, in a box that collapses, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, a New chip that glows on pushes and other changes you have not seen, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, pull request lists and boards that reload on changes, and a Windows 98 mode, still a work in progress and off by default. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones.
+// @version      1.21.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; Resolved and Unresolved chips on threads; Threads that collapse, with a button that expands them all; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -16,6 +16,15 @@
 // ==/UserScript==
 "use strict";
 (() => {
+  // azure-devops/src/features/category-names.ts
+  var CATEGORY_NAMES = [
+    "Pull request lists",
+    "Pull request",
+    "Pull request Overview",
+    "Boards",
+    "Everywhere"
+  ];
+
   // azure-devops/src/pull-requests/reviewers.ts
   var EMAIL_ADDRESS = /^(?<localPart>[^\s@]+)@[^\s@]+$/u, TRAILING_SIGN_IN_ADDRESS = /\s+<?[^\s<>@]+@[^\s<>@]+>?$/u;
   function personOrTeamName(displayName) {
@@ -5673,6 +5682,36 @@ html[data-fix-ado-win98="pull-request"] body .repos-summary-header > div:first-c
   }
 }
 
+/* The Viewed toggle: the settings panel's sunken 13px box with a black check, and its label in
+   the window font. */
+html[data-fix-ado-win98="pull-request"] body .fix-ado-viewed-toggle {
+  gap: 4px;
+  font: 11px/14px var(--win98-font);
+  color: #000;
+
+  & input {
+    appearance: none;
+    inline-size: 13px;
+    block-size: 13px;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
+
+    &:checked {
+      background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E")
+          center / 7px 7px no-repeat,
+        #fff;
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: 2px;
+    }
+  }
+}
+
 html[data-fix-ado-win98="pull-request"] body .repos-summary-header.bolt-card {
   /* Square corners, and no shadow under the sticky header. */
   border-radius: 0;
@@ -10284,13 +10323,13 @@ html[data-fix-ado-win98]:is(
         }
       });
       visits.deleteOlderThan(MAX_VISIT_AGE_MS, now());
-      let chips = createNewActivityChips({ document: document2, now, visits }), keyOf = ({ project, pullRequestId, repository }) => `${location.host}${basePath2}/${project}/${repository}/${pullRequestId}`;
+      let chips = createNewActivityChips({ document: document2, now, visits }), keyOf2 = ({ project, pullRequestId, repository }) => `${location.host}${basePath2}/${project}/${repository}/${pullRequestId}`;
       return globalThis.addEventListener("pagehide", chips.leave), document2.addEventListener("visibilitychange", () => {
         document2.visibilityState === "hidden" && chips.leave();
       }), {
         sync({ page }) {
           let pullRequest = pullRequestOf(page);
-          chips.sync(pullRequest === null ? null : keyOf(pullRequest));
+          chips.sync(pullRequest === null ? null : keyOf2(pullRequest));
         }
       };
     },
@@ -13155,7 +13194,7 @@ ${content}`
     }
   }
 
-  // azure-devops/src/features/review/tree-listing.ts
+  // azure-devops/src/pull-requests/file-tree/tree-listing.ts
   var listedByChangedPaths = /* @__PURE__ */ new WeakMap();
   function byName(left, right) {
     return left.localeCompare(right, "en", { sensitivity: "base" });
@@ -13238,51 +13277,7 @@ ${content}`
     return { paths: listed.map(({ path }) => path), placeOfDrawn };
   }
 
-  // azure-devops/src/features/review/tree-scroll-anchor.ts
-  var TREE_SELECTOR2 = ".repos-changes-explorer-tree", TREE_ROW_SELECTOR2 = `${TREE_SELECTOR2} tr.bolt-tree-row[aria-rowindex]`, SCROLLER_SELECTOR2 = ".v-scroll-auto", SMALLEST_MOVE = 1, LARGEST_SHIFT = 100, WEAR_PER_SCROLLED_PIXEL = 0.25, shiftByScroller = /* @__PURE__ */ new WeakMap();
-  function shiftTree(scroller, shift, pixels2) {
-    let limited = Math.min(Math.max(pixels2, -LARGEST_SHIFT, -scroller.scrollTop), LARGEST_SHIFT);
-    shift.pixels = Math.round(limited), shift.scrollTop = scroller.scrollTop;
-    let tree = scroller.querySelector(TREE_SELECTOR2), margin = shift.pixels === 0 ? "" : `${shift.pixels}px`;
-    tree !== null && tree.style.marginTop !== margin && (tree.style.marginTop = margin);
-  }
-  function wearOff(scroller, shift) {
-    let wear = Math.abs(scroller.scrollTop - shift.scrollTop) * WEAR_PER_SCROLLED_PIXEL, left = Math.max(Math.abs(shift.pixels) - wear, 0);
-    shiftTree(scroller, shift, Math.sign(shift.pixels) * left);
-  }
-  function shiftOf(scroller) {
-    let known = shiftByScroller.get(scroller);
-    if (known !== void 0)
-      return known;
-    let shift = { pixels: 0, scrollTop: scroller.scrollTop };
-    return shiftByScroller.set(scroller, shift), scroller.addEventListener(
-      "scroll",
-      () => {
-        wearOff(scroller, shift);
-      },
-      { passive: !0 }
-    ), shift;
-  }
-  function firstRowInView(document2) {
-    let scroller = document2.querySelector(TREE_SELECTOR2)?.closest(SCROLLER_SELECTOR2) ?? null;
-    if (scroller === null)
-      return null;
-    let viewTop = scroller.getBoundingClientRect().top, row = [...document2.querySelectorAll(TREE_ROW_SELECTOR2)].find(
-      (candidate) => candidate.getBoundingClientRect().top >= viewTop
-    );
-    return row === void 0 ? null : { row, scroller };
-  }
-  function keepingTreeInPlace(document2, change) {
-    let anchor = firstRowInView(document2), topBefore = anchor?.row.getBoundingClientRect().top ?? 0;
-    change();
-    let moved = (anchor?.row.getBoundingClientRect().top ?? 0) - topBefore;
-    if (anchor !== null && Math.abs(moved) >= SMALLEST_MOVE) {
-      let shift = shiftOf(anchor.scroller);
-      shiftTree(anchor.scroller, shift, shift.pixels - moved);
-    }
-  }
-
-  // azure-devops/src/features/review/tree-folded.ts
+  // azure-devops/src/pull-requests/file-tree/tree-folded.ts
   var FOLDED_ATTRIBUTE = "aria-expanded", foldedByDocument = /* @__PURE__ */ new WeakMap(), treePathsByChangedPaths = /* @__PURE__ */ new WeakMap();
   function treePathsOf(changedPaths) {
     let known = treePathsByChangedPaths.get(changedPaths);
@@ -13314,9 +13309,12 @@ ${content}`
     }
     return folded;
   }
+  function foldedPaths(document2) {
+    return foldedByDocument.get(document2) ?? /* @__PURE__ */ new Set();
+  }
 
-  // azure-devops/src/features/review/tree-pending-rows.ts
-  var TREE_ROW_SELECTOR3 = ".repos-changes-explorer-tree tr.bolt-tree-row", PENDING_ROW_CLASS = "fix-ado-review-tree-row", ID_ATTRIBUTE2 = "data-fix-ado-review-tree-id", THREAD_ITEM_CLASS = "repos-file-explorer-tree-thread-item", NAME_SELECTOR = ".bolt-tree-cell .text-ellipsis", INDENT_SELECTOR = ".bolt-tree-expand-button", INDENT_STEP = 16, INDEX_ATTRIBUTE = "aria-rowindex", DOT_TITLE = "Pending comment", UNSAVED_MARK = "*";
+  // azure-devops/src/pull-requests/file-tree/tree-rows.ts
+  var TREE_ROW_SELECTOR2 = ".repos-changes-explorer-tree tr.bolt-tree-row", THREAD_ITEM_CLASS = "repos-file-explorer-tree-thread-item", NAME_SELECTOR = ".bolt-tree-cell .text-ellipsis", INDEX_ATTRIBUTE = "aria-rowindex";
   function isThreadRow2(row) {
     return row?.querySelector(`.${THREAD_ITEM_CLASS}`) !== null && row !== null;
   }
@@ -13329,7 +13327,7 @@ ${content}`
   }
   function drawnRows(document2) {
     let names = [];
-    return [...document2.querySelectorAll(TREE_ROW_SELECTOR3)].filter((row) => !isThreadRow2(row)).map((row) => {
+    return [...document2.querySelectorAll(TREE_ROW_SELECTOR2)].filter((row) => !isThreadRow2(row)).map((row) => {
       let depth = Math.max(Number(row.getAttribute("aria-level")) - 1, 0);
       for (; names.length < depth; )
         names.push(null);
@@ -13350,6 +13348,67 @@ ${content}`
   function fileRowOf(drawn, filePath, changedPaths) {
     return drawn.find((candidate) => isRowOf(candidate, filePath, changedPaths))?.row ?? null;
   }
+  function drawnRowOf(path, { changedPaths, drawn, listing }) {
+    let place = listing?.paths.indexOf(path) ?? -1;
+    return listing === null || place === -1 ? fileRowOf(drawn, path, changedPaths) : drawn[listing.placeOfDrawn.indexOf(place)]?.row ?? null;
+  }
+  function drawnPaths({ drawn, listing }) {
+    return drawn.map((_row, index) => {
+      let place = listing?.placeOfDrawn[index];
+      return place === void 0 ? null : listing?.paths[place] ?? null;
+    });
+  }
+  function treeNow(document2, changedPaths) {
+    let drawn = drawnRows(document2), folded = noteFolded(document2, drawn, changedPaths), listing = changedPaths === null ? null : findDrawn(changedPaths, drawn, folded);
+    return { changedPaths, drawn, listing };
+  }
+
+  // azure-devops/src/features/review/tree-scroll-anchor.ts
+  var TREE_SELECTOR2 = ".repos-changes-explorer-tree", TREE_ROW_SELECTOR3 = `${TREE_SELECTOR2} tr.bolt-tree-row[aria-rowindex]`, SCROLLER_SELECTOR2 = ".v-scroll-auto", SMALLEST_MOVE = 1, LARGEST_SHIFT = 100, WEAR_PER_SCROLLED_PIXEL = 0.25, shiftByScroller = /* @__PURE__ */ new WeakMap();
+  function shiftTree(scroller, shift, pixels2) {
+    let limited = Math.min(Math.max(pixels2, -LARGEST_SHIFT, -scroller.scrollTop), LARGEST_SHIFT);
+    shift.pixels = Math.round(limited), shift.scrollTop = scroller.scrollTop;
+    let tree = scroller.querySelector(TREE_SELECTOR2), margin = shift.pixels === 0 ? "" : `${shift.pixels}px`;
+    tree !== null && tree.style.marginTop !== margin && (tree.style.marginTop = margin);
+  }
+  function wearOff(scroller, shift) {
+    let wear = Math.abs(scroller.scrollTop - shift.scrollTop) * WEAR_PER_SCROLLED_PIXEL, left = Math.max(Math.abs(shift.pixels) - wear, 0);
+    shiftTree(scroller, shift, Math.sign(shift.pixels) * left);
+  }
+  function shiftOf(scroller) {
+    let known = shiftByScroller.get(scroller);
+    if (known !== void 0)
+      return known;
+    let shift = { pixels: 0, scrollTop: scroller.scrollTop };
+    return shiftByScroller.set(scroller, shift), scroller.addEventListener(
+      "scroll",
+      () => {
+        wearOff(scroller, shift);
+      },
+      { passive: !0 }
+    ), shift;
+  }
+  function firstRowInView(document2) {
+    let scroller = document2.querySelector(TREE_SELECTOR2)?.closest(SCROLLER_SELECTOR2) ?? null;
+    if (scroller === null)
+      return null;
+    let viewTop = scroller.getBoundingClientRect().top, row = [...document2.querySelectorAll(TREE_ROW_SELECTOR3)].find(
+      (candidate) => candidate.getBoundingClientRect().top >= viewTop
+    );
+    return row === void 0 ? null : { row, scroller };
+  }
+  function keepingTreeInPlace(document2, change) {
+    let anchor = firstRowInView(document2), topBefore = anchor?.row.getBoundingClientRect().top ?? 0;
+    change();
+    let moved = (anchor?.row.getBoundingClientRect().top ?? 0) - topBefore;
+    if (anchor !== null && Math.abs(moved) >= SMALLEST_MOVE) {
+      let shift = shiftOf(anchor.scroller);
+      shiftTree(anchor.scroller, shift, shift.pixels - moved);
+    }
+  }
+
+  // azure-devops/src/features/review/tree-pending-rows.ts
+  var PENDING_ROW_CLASS = "fix-ado-review-tree-row", ID_ATTRIBUTE2 = "data-fix-ado-review-tree-id", INDENT_SELECTOR = ".bolt-tree-expand-button", INDENT_STEP = 16, DOT_TITLE = "Pending comment", UNSAVED_MARK = "*";
   function cell(document2, className) {
     return element(document2, "td", { className: `${className} bolt-table-cell bolt-list-cell` });
   }
@@ -13410,19 +13469,11 @@ ${content}`
     let row = [...stale].find((candidate) => candidate.getAttribute(ID_ATTRIBUTE2) === comment.id);
     row !== void 0 && isUpToDate(row, fileRow, comment) ? stale.delete(row) : fileRow !== null && lastRowUnder2(fileRow).after(createPendingRow(fileRow, comment));
   }
-  function drawnFileRow(filePath, { changedPaths, drawn, listing }) {
-    let place = listing?.paths.indexOf(filePath) ?? -1;
-    return listing === null || place === -1 ? fileRowOf(drawn, filePath, changedPaths) : drawn[listing.placeOfDrawn.indexOf(place)]?.row ?? null;
-  }
-  function treeNow(document2, changedPaths) {
-    let drawn = drawnRows(document2), folded = noteFolded(document2, drawn, changedPaths), listing = changedPaths === null ? null : findDrawn(changedPaths, drawn, folded);
-    return { changedPaths, drawn, listing };
-  }
   function syncTreePendingRows(document2, { changedPaths, pending }) {
     let stale = new Set(document2.querySelectorAll(`.${PENDING_ROW_CLASS}`)), tree = treeNow(document2, changedPaths);
     keepingTreeInPlace(document2, () => {
       for (let comment of pending.filter(({ anchor }) => anchor !== null))
-        showRow(stale, drawnFileRow(comment.anchor?.filePath ?? "", tree), comment);
+        showRow(stale, drawnRowOf(comment.anchor?.filePath ?? "", tree), comment);
       for (let row of stale)
         row.remove();
     });
@@ -15692,8 +15743,367 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     styles: [style_default14]
   };
 
+  // azure-devops/src/features/viewed-files/tree-ticks.ts
+  var TICK_SELECTOR = ".bolt-checkbox";
+  function isTicked(row) {
+    return row.querySelector(TICK_SELECTOR)?.getAttribute("aria-checked") === "true";
+  }
+  function filesUnder(shown, folder) {
+    return (shown.changedPaths ?? []).filter((path) => path.startsWith(`${folder}/`));
+  }
+  function noteTick(shown, path, row) {
+    let known = shown.changedPaths?.includes(path) === !0 ? shown.fileTicks : shown.folderTicks, before = known.get(path);
+    return known.set(path, isTicked(row)), before !== void 0 && before !== known.get(path);
+  }
+  function noteDrawnTicks(document2, shown) {
+    let files = new Set(shown.changedPaths), tree = treeNow(document2, shown.changedPaths), changed = { files: [], folders: [] };
+    for (let [index, path] of drawnPaths(tree).entries()) {
+      let row = tree.drawn[index]?.row;
+      path !== null && row !== void 0 && noteTick(shown, path, row) && (files.has(path) ? changed.files : changed.folders).push(path);
+    }
+    return changed;
+  }
+  function noteTicks(document2, shown) {
+    let changed = noteDrawnTicks(document2, shown), clickedFolders = changed.folders.filter(
+      (folder) => !changed.files.some((file) => file.startsWith(`${folder}/`))
+    );
+    for (let folder of clickedFolders) {
+      let tick = shown.folderTicks.get(folder) === !0;
+      for (let file of filesUnder(shown, folder))
+        shown.fileTicks.set(file, tick);
+    }
+  }
+  function findCompleteFolders(shown) {
+    let files = new Set(shown.changedPaths), folders = listedRows(shown.changedPaths ?? []).map(({ path }) => path).filter((path) => !files.has(path));
+    return new Set(
+      folders.filter(
+        (folder) => filesUnder(shown, folder).every((file) => shown.fileTicks.get(file) === !0)
+      )
+    );
+  }
+  function newlyComplete(shown) {
+    let before = shown.completeFolders, now = findCompleteFolders(shown);
+    if (shown.completeFolders = now, before === null)
+      return [];
+    let added = [...now].filter((folder) => !before.has(folder));
+    return added.filter((folder) => !added.some((other) => folder.startsWith(`${other}/`)));
+  }
+
+  // azure-devops/src/features/viewed-files/viewed-toggles.ts
+  var FILE_CARD_SELECTOR2 = ".repos-summary-header", CARD_PATH_SELECTOR = ":scope > div:first-child .secondary-text.text-ellipsis", CARD_ACTIONS_SELECTOR = ":scope > div:first-child .justify-end", CARD_EXPAND_SELECTOR = ".bolt-card-expand-button", FILE_BAR_SELECTOR = ".repos-compare-toolbar", FOLDER_VIEW_SELECTOR = ".repos-changes-viewer.is-folder", BAR_PATH_SELECTOR = ".secondary-text.text-ellipsis", BAR_LAYOUT_SELECTOR = ".bolt-split-button", BAR_COMMANDS_SELECTOR = ":scope > div > .repos-compare-header-commandbar", TOGGLE_CLASS4 = "fix-ado-viewed-toggle", PATH_ATTRIBUTE = "data-fix-ado-viewed-path", LABEL3 = "Viewed";
+  function asTreePath(shown) {
+    return shown.startsWith("/") ? shown : `/${shown}`;
+  }
+  var stateByDocument = /* @__PURE__ */ new WeakMap();
+  function shownPath(container, selector) {
+    let shown = container.querySelector(selector)?.textContent.trim() ?? "";
+    return shown === "" ? "" : asTreePath(shown);
+  }
+  function headerOf(toggle) {
+    let card = toggle.closest(FILE_CARD_SELECTOR2), bar = toggle.closest(FILE_BAR_SELECTOR), path = (card === null ? "" : shownPath(card, CARD_PATH_SELECTOR)) || (bar === null ? "" : shownPath(bar, BAR_PATH_SELECTOR));
+    return { card, path: path || (toggle.getAttribute(PATH_ATTRIBUTE) ?? "") };
+  }
+  function createToggle2(document2) {
+    let label = document2.createElement("label");
+    label.className = `${TOGGLE_CLASS4} body-m`;
+    let input = document2.createElement("input");
+    return input.type = "checkbox", input.addEventListener("change", () => {
+      let state = stateByDocument.get(document2), header = headerOf(label), isViewed = header.path !== label.getAttribute(PATH_ATTRIBUTE) ? state?.isViewed(header.path) !== !0 : input.checked;
+      input.checked = isViewed, label.setAttribute(PATH_ATTRIBUTE, header.path), state?.onToggle(header, isViewed);
+    }), label.append(input, LABEL3), label;
+  }
+  function toggleIn2(container, place, { path, state }) {
+    let toggle = container.querySelector(`:scope .${TOGGLE_CLASS4}`) ?? createToggle2(container.ownerDocument);
+    toggle.isConnected || place(toggle), toggle.setAttribute(PATH_ATTRIBUTE, path);
+    let input = toggle.querySelector("input"), isViewed = state.isViewed(path);
+    input !== null && input.checked !== isViewed && (input.checked = isViewed);
+  }
+  function syncCardToggles(document2, state) {
+    for (let card of document2.querySelectorAll(FILE_CARD_SELECTOR2)) {
+      let path = shownPath(card, CARD_PATH_SELECTOR), actions = card.querySelector(CARD_ACTIONS_SELECTOR);
+      path !== "" && actions !== null && toggleIn2(
+        actions,
+        (toggle) => {
+          actions.prepend(toggle);
+        },
+        { path, state }
+      );
+    }
+  }
+  function isFolderView(document2) {
+    return document2.querySelector(FOLDER_VIEW_SELECTOR) !== null;
+  }
+  function syncBarToggle(document2, state) {
+    if (isFolderView(document2)) {
+      document2.querySelector(`${FILE_BAR_SELECTOR} .${TOGGLE_CLASS4}`)?.remove();
+      return;
+    }
+    let bar = document2.querySelector(FILE_BAR_SELECTOR), path = bar === null ? "" : shownPath(bar, BAR_PATH_SELECTOR), next = bar?.querySelector(BAR_LAYOUT_SELECTOR) ?? bar?.querySelector(BAR_COMMANDS_SELECTOR);
+    bar !== null && next !== null && next !== void 0 && path !== "" && toggleIn2(
+      bar,
+      (toggle) => {
+        next.before(toggle);
+      },
+      { path, state }
+    );
+  }
+  function syncViewedToggles(document2, state) {
+    stateByDocument.set(document2, state), syncCardToggles(document2, state), syncBarToggle(document2, state);
+  }
+  function setCardOpen(card, isOpen) {
+    let expand = card.querySelector(CARD_EXPAND_SELECTOR);
+    expand !== null && expand.getAttribute("aria-expanded") === "true" !== isOpen && expand.click();
+  }
+
+  // azure-devops/src/features/viewed-files/tree-walk.ts
+  var TREE_SELECTOR4 = ".repos-changes-explorer-tree", ROW_SELECTOR4 = "tr.bolt-tree-row", SLACK_PX = 0.5, SCROLLER_SELECTOR3 = ".v-scroll-auto", STEP_OF_VIEW = 0.8;
+  function scrollerOf2(document2) {
+    return document2.querySelector(TREE_SELECTOR4)?.closest(SCROLLER_SELECTOR3) ?? null;
+  }
+  async function nextTreeDraw({ document: document2, drawTimeoutMs }) {
+    let scroller = scrollerOf2(document2), view = document2.defaultView;
+    scroller === null || view === null || await new Promise((resolve) => {
+      let observer = new view.MutationObserver(() => {
+        done();
+      }), timer = view.setTimeout(done, drawTimeoutMs);
+      function done() {
+        observer.disconnect(), view?.clearTimeout(timer), resolve();
+      }
+      observer.observe(scroller, {
+        attributeFilter: ["aria-checked", "aria-expanded"],
+        childList: !0,
+        subtree: !0
+      });
+    });
+  }
+  async function untilTreeShows(walk, isShown, timeoutMs) {
+    let deadline = Date.now() + timeoutMs;
+    for (; !isShown() && Date.now() < deadline; )
+      await nextTreeDraw({ ...walk, drawTimeoutMs: deadline - Date.now() });
+    return isShown();
+  }
+  function isViewDrawn(document2) {
+    let tree = document2.querySelector(TREE_SELECTOR4), rows = [...tree?.querySelectorAll(ROW_SELECTOR4) ?? []], view = scrollerOf2(document2)?.getBoundingClientRect(), whole = tree?.getBoundingClientRect(), first = rows.at(0)?.getBoundingClientRect(), last = rows.at(-1)?.getBoundingClientRect();
+    return view === void 0 || whole === void 0 || first === void 0 || last === void 0 ? !1 : first.top <= Math.max(view.top, whole.top) + SLACK_PX && last.bottom >= Math.min(view.bottom, whole.bottom) - SLACK_PX;
+  }
+  async function keepingScroll(walk, run) {
+    let scroller = scrollerOf2(walk.document);
+    if (scroller === null)
+      return;
+    let top = scroller.scrollTop;
+    try {
+      await run();
+    } finally {
+      await scrollTo(walk, scroller, top), scroller.style.visibility = "";
+    }
+  }
+  async function scrollTo(walk, scroller, top) {
+    scroller.scrollTop !== top && (scroller.scrollTop = top, await untilTreeShows(walk, () => isViewDrawn(walk.document), walk.drawTimeoutMs));
+  }
+  function isAtEnd(scroller) {
+    return scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight;
+  }
+  async function walkFromTop(walk, scroller, visit) {
+    let top = 0, isFound = !1;
+    for (; !isFound && (top === 0 || !isAtEnd(scroller)); )
+      await scrollTo(walk, scroller, top), isFound = visit(), top = scroller.scrollTop + Math.max(Math.floor(scroller.clientHeight * STEP_OF_VIEW), 1);
+    return isFound;
+  }
+  async function walkTree(walk, visit) {
+    let scroller = scrollerOf2(walk.document);
+    return scroller === null || visit() ? scroller !== null : (scroller.style.visibility = "hidden", walkFromTop(walk, scroller, visit));
+  }
+  async function withDrawnRow(walk, path, act) {
+    let found = { row: null };
+    return await walkTree(walk, () => (found.row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths)), found.row !== null)), found.row !== null && await act(found.row), found.row !== null;
+  }
+
+  // azure-devops/src/features/viewed-files/viewed-files.ts
+  var TREE_SELECTOR5 = ".repos-changes-explorer-tree", FOLD_SELECTOR = ".bolt-tree-expand-button";
+  function keyOf({ project, pullRequestId, repository }) {
+    return `${project}/${repository}/${String(pullRequestId)}`;
+  }
+  function isFoldShown(walk, path, isOpen) {
+    return drawnRowOf(path, treeNow(walk.document, walk.changedPaths))?.getAttribute("aria-expanded") === String(isOpen);
+  }
+  async function setFolderOpen(walk, { path, row }, isOpen) {
+    row.getAttribute("aria-expanded") !== String(isOpen) && (row.querySelector(FOLD_SELECTOR)?.click(), await untilTreeShows(walk, () => isFoldShown(walk, path, isOpen), walk.drawTimeoutMs));
+  }
+  function fold(row) {
+    row.getAttribute("aria-expanded") === "true" && row.querySelector(FOLD_SELECTOR)?.click();
+  }
+  function foldersToCollapse(document2, shown) {
+    let folders = newlyComplete(shown);
+    return isFolderView(document2) ? folders : [];
+  }
+  function foldNewlyComplete(document2, shown) {
+    let tree = treeNow(document2, shown.changedPaths);
+    for (let folder of foldersToCollapse(document2, shown)) {
+      let row = drawnRowOf(folder, tree);
+      row !== null && fold(row);
+    }
+  }
+  function walkOf({ options }, shown) {
+    return {
+      changedPaths: shown.changedPaths,
+      document: options.document,
+      drawTimeoutMs: options.drawTimeoutMs
+    };
+  }
+  function queue(state, run) {
+    let work = (state.work ?? Promise.resolve()).then(run).catch(() => null).then(() => {
+      state.work === work && (state.work = null);
+    });
+    state.work = work;
+  }
+  function walkWholeTree(state, shown) {
+    shown.isWalkStarted = !0;
+    let { document: document2 } = state.options;
+    queue(state, async () => {
+      let walk = walkOf(state, shown);
+      await keepingScroll(walk, async () => {
+        await walkTree(walk, () => (noteTicks(document2, shown), !1));
+      }), shown.completeFolders = findCompleteFolders(shown), render5(state);
+    });
+  }
+  async function unfoldAbove(walk, path) {
+    let above = [...foldedPaths(walk.document)].filter((folder) => path.startsWith(`${folder}/`)).toSorted((left, right) => left.length - right.length);
+    for (let folder of above)
+      await withDrawnRow(
+        walk,
+        folder,
+        async (row) => setFolderOpen(walk, { path: folder, row }, !0)
+      );
+  }
+  function isTickShown(walk, path, isViewed) {
+    let row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
+    return row !== null && isTicked(row) === isViewed;
+  }
+  function setViewed(state, header, isViewed) {
+    let { shown } = state;
+    if (shown === null)
+      return;
+    let { document: document2, tickTimeoutMs } = state.options;
+    header.card !== null && setCardOpen(header.card, !isViewed), queue(state, async () => {
+      let walk = walkOf(state, shown);
+      await keepingScroll(walk, async () => {
+        await unfoldAbove(walk, header.path), await withDrawnRow(walk, header.path, async (row) => {
+          isTicked(row) !== isViewed && (row.querySelector(TICK_SELECTOR)?.click(), await untilTreeShows(walk, () => isTickShown(walk, header.path, isViewed), tickTimeoutMs));
+        }), noteTicks(document2, shown);
+        for (let folder of foldersToCollapse(document2, shown))
+          await withDrawnRow(
+            walk,
+            folder,
+            async (row) => setFolderOpen(walk, { path: folder, row }, !1)
+          );
+      }), header.card !== null && shown.fileTicks.get(header.path) === !0 !== isViewed && setCardOpen(header.card, isViewed), render5(state);
+    });
+  }
+  function render5(state) {
+    let { shown } = state;
+    syncViewedToggles(state.options.document, {
+      isViewed: (path) => shown?.fileTicks.get(path) === !0,
+      onToggle: (header, isViewed) => {
+        setViewed(state, header, isViewed);
+      }
+    });
+  }
+  async function loadChangedPaths(state, shown, pullRequest) {
+    let { client } = state.options, ids = await client.getPullRequestIterationIds(pullRequest);
+    if (ids.length > 0) {
+      let changes = await client.getIterationChanges(pullRequest, Math.max(...ids));
+      shown.changedPaths = changes.flatMap(({ item }) => item?.path ?? []);
+    }
+  }
+  function show2(state, pullRequest) {
+    let key = keyOf(pullRequest);
+    if (state.shown?.key === key)
+      return state.shown;
+    let shown = {
+      changedPaths: null,
+      completeFolders: null,
+      fileTicks: /* @__PURE__ */ new Map(),
+      folderTicks: /* @__PURE__ */ new Map(),
+      isWalkStarted: !1,
+      key
+    };
+    return state.shown = shown, queue(state, async () => loadChangedPaths(state, shown, pullRequest)), shown;
+  }
+  function syncTreeTicks(state, shown) {
+    let { document: document2 } = state.options;
+    shown.changedPaths === null || state.work !== null || (noteTicks(document2, shown), shown.isWalkStarted ? foldNewlyComplete(document2, shown) : walkWholeTree(state, shown));
+  }
+  function createViewedFiles(options) {
+    let state = { options, shown: null, work: null };
+    return {
+      idle: async () => {
+        for (; state.work !== null; )
+          await state.work;
+      },
+      sync(pullRequest) {
+        pullRequest === null || options.document.querySelector(TREE_SELECTOR5) === null || (syncTreeTicks(state, show2(state, pullRequest)), render5(state));
+      }
+    };
+  }
+
+  // azure-devops/src/features/viewed-files/style.css
+  var style_default15 = `/* The Viewed toggle in a file's header: Azure DevOps's own checkbox, in its blue. */
+.fix-ado-viewed-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: 12px;
+  cursor: pointer;
+  user-select: none;
+
+  & input {
+    inline-size: 16px;
+    aspect-ratio: 1;
+    margin: 0;
+    accent-color: var(--communication-background, rgb(0, 120, 212));
+    cursor: pointer;
+  }
+}
+
+/* In the bar above a single file, level with the Inline button. */
+.repos-compare-toolbar .fix-ado-viewed-toggle {
+  align-self: center;
+}
+`;
+
+  // azure-devops/src/features/viewed-files/index.ts
+  var DRAW_TIMEOUT_MS = 2e3, TICK_TIMEOUT_MS = 1e4, viewedFiles = {
+    change: { kind: "new", version: "1.21.0" },
+    description: "A Viewed checkbox on each file in the Files tab ticks the file in the tree on the left, as on GitHub, and collapses its diff. A folder whose files are all ticked collapses in the tree.",
+    id: "viewed-files",
+    name: "Viewed files",
+    start({ client, document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let viewed = createViewedFiles({
+        client,
+        document: document2,
+        drawTimeoutMs: DRAW_TIMEOUT_MS,
+        tickTimeoutMs: TICK_TIMEOUT_MS
+      });
+      return {
+        sync({ page }) {
+          viewed.sync(pullRequestOf(page));
+        }
+      };
+    },
+    styles: [style_default15]
+  };
+
   // azure-devops/src/features/pull-request-features.ts
-  var PULL_REQUEST_FEATURES = [pipelineTab, runPageTabs, starredReviewers, review];
+  var PULL_REQUEST_FEATURES = [
+    pipelineTab,
+    runPageTabs,
+    starredReviewers,
+    review,
+    viewedFiles
+  ];
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
   var CARD_SELECTOR2 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS = "fix-ado-days-in-column";
@@ -15806,23 +16216,23 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
-  var HEADER_SELECTOR3 = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS4 = "fix-ado-days-toggle";
+  var HEADER_SELECTOR3 = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS5 = "fix-ado-days-toggle";
   function showColumnState(column, toggle, isHidden) {
     Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
     let pressed = String(!isHidden);
     toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", "Days in column"));
   }
-  function createToggle2(document2, onClick3) {
+  function createToggle3(document2, onClick3) {
     let toggle = document2.createElement("button");
-    return toggle.type = "button", toggle.className = TOGGLE_CLASS4, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
+    return toggle.type = "button", toggle.className = TOGGLE_CLASS5, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
       event.preventDefault(), event.stopPropagation(), onClick3();
     }), toggle;
   }
   function findOrAddToggle2(header, onClick3) {
-    let existing = header.querySelector(`.${TOGGLE_CLASS4}`);
+    let existing = header.querySelector(`.${TOGGLE_CLASS5}`);
     if (existing !== null)
       return existing;
-    let toggle = createToggle2(header.ownerDocument, onClick3);
+    let toggle = createToggle3(header.ownerDocument, onClick3);
     return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
   }
   function createDaysInColumnToggles(options) {
@@ -15847,7 +16257,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/days-in-column/style.css
-  var style_default15 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+  var style_default16 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
 .fix-ado-days-in-column {
   display: flex;
   flex-wrap: wrap;
@@ -15965,7 +16375,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default15]
+    styles: [style_default16]
   };
 
   // azure-devops/src/features/pipeline-status/pipeline-status-poller.ts
@@ -16139,7 +16549,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default16 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+  var style_default17 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
 .bolt-table-cell-content:has(> .fix-ado-published-since) {
   flex-direction: column;
   align-items: flex-start;
@@ -16188,7 +16598,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default16]
+    styles: [style_default17]
   };
 
   // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
@@ -16257,7 +16667,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default17 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default18 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -16304,20 +16714,20 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default17]
+    styles: [style_default18]
   };
 
   // azure-devops/src/features/index.ts
-  var FEATURE_CATEGORIES = [
-    {
-      features: [pipelineStatusOnPullRequests, requiredReviewers, publishedSince],
-      name: "Pull request lists"
-    },
-    { features: PULL_REQUEST_FEATURES, name: "Pull request" },
-    { features: OVERVIEW_FEATURES, name: "Pull request Overview" },
-    { features: [daysInColumn], name: "Boards" },
-    { features: EVERYWHERE_FEATURES, name: "Everywhere" }
-  ], FEATURES = FEATURE_CATEGORIES.flatMap((category) => category.features);
+  var FEATURES_BY_CATEGORY = {
+    Boards: [daysInColumn],
+    Everywhere: EVERYWHERE_FEATURES,
+    "Pull request": PULL_REQUEST_FEATURES,
+    "Pull request Overview": OVERVIEW_FEATURES,
+    "Pull request lists": [pipelineStatusOnPullRequests, requiredReviewers, publishedSince]
+  }, FEATURE_CATEGORIES = CATEGORY_NAMES.map((name) => ({
+    features: FEATURES_BY_CATEGORY[name],
+    name
+  })), FEATURES = FEATURE_CATEGORIES.flatMap((category) => category.features);
 
   // azure-devops/src/core/feature-runner.ts
   function addStyles(features, addStyle) {

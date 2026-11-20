@@ -6,10 +6,61 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 <!-- scripts:start -->
 
-| Script                                                                                                                  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Version |
-| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| [Fix Azure DevOps](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) | Adds missing features to Azure DevOps: pipeline status on pull requests, how long ago each active pull request in a list was published, in red after two weekdays, a Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs, a button to start or cancel a run and a button that opens a run in a new tab, tabs of a run page, such as Extensions, shown as tabs of the pull request, the warnings and errors of each check's latest run above the pull request description, in a box that collapses, a pull request's Overview that runs from old to new with a button to flip it, a button there that scrolls to its bottom, pushes folded to one line there with a button that shows their commits, lines that add reviewers joined to one, threads there that collapse, with a button that expands them all, a Resolved chip on resolved ones, which start collapsed unless a comment is unread, unread comments that glow, with buttons that go to the first and next unread, a New chip that glows on pushes and other changes you have not seen, and an Unresolved chip on active ones, required reviewers first, starred reviewers to add as optional or required reviewer in one click, also on a new pull request, reviews that hold your comments as pending and post them in one go with your vote, avatar initials, Light or Dark to match the system, days in column dots on board cards with a toggle per column, pull request lists and boards that reload on changes, and a Windows 98 mode, still a work in progress and off by default. A settings panel in Azure DevOps's top bar turns each feature on or off and marks new and updated ones. | 1.20.0  |
-| [Fix Tweakers](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/tweakers.user.js)         | Trims the Tweakers homepage. Hides the lead story, the side columns, the top banner and the category bar.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 1.0.2   |
+### Fix Azure DevOps
+
+[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.21.0
+
+Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones.
+
+**Pull request lists**
+
+- Pipeline status on each pull request
+- Required reviewers first
+- How long ago each active pull request was published, in red after two weekdays
+
+**Pull request**
+
+- A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run
+- A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request
+- Starred reviewers to add in one click, also on a new pull request
+- Reviews that post your pending comments in one go, with your vote
+- A Viewed checkbox on each file in the Files tab, as on GitHub
+
+**Pull request Overview**
+
+- Each check's warnings and errors above the description, in a box that collapses
+- Oldest first, with a button to flip the order
+- A button that scrolls to the bottom
+- Pushes folded to one line, with a button that shows their commits
+- Lines that add reviewers joined to one
+- Resolved and Unresolved chips on threads
+- Threads that collapse, with a button that expands them all
+- Unread comments that glow, with buttons to the first and next unread
+- A New chip that glows on pushes and other changes you have not seen
+
+**Boards**
+
+- Days in column dots on cards, with a toggle per column
+
+**Everywhere**
+
+- Avatar initials
+- Light or Dark to match the system
+- Pull request lists and boards that reload on changes
+- A Windows 98 mode, a work in progress and off by default
+
+### Fix Tweakers
+
+[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/tweakers.user.js) · version 1.0.2
+
+Trims the Tweakers homepage.
+
+**Homepage**
+
+- Hides the lead story
+- Hides the side columns
+- Hides the top banner
+- Hides the category bar
 
 <!-- scripts:end -->
 
