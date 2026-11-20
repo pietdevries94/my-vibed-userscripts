@@ -16,13 +16,19 @@ interface PostExemption {
   url: string;
 }
 
+/** A category of a script's features, such as the settings panel's heading for them, and a short point per feature. */
+interface FeatureGroup {
+  category: string;
+  points: string[];
+}
+
 /** The contents of `<script>/script.json`. */
 interface ScriptConfig {
   name: string;
   /** One short line on what the script does. */
   description: string;
-  /** Short points, one per feature: a list in the README, joined into @description. */
-  features?: string[];
+  /** Short points, one per feature, under category names: lists in the README, one line in @description. */
+  features?: FeatureGroup[];
   match: string[];
   grant: string[];
   version: string;
@@ -64,6 +70,21 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isFeatureGroups(value: unknown): value is FeatureGroup[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(
+      (group: unknown) =>
+        isRecord(group) &&
+        typeof group.category === "string" &&
+        group.category !== "" &&
+        isStringArray(group.points) &&
+        group.points.length > 0,
+    )
+  );
+}
+
 function isRunAt(value: unknown): value is RunAt {
   return RUN_AT_VALUES.some((runAt) => runAt === value);
 }
@@ -73,9 +94,8 @@ function problemsOf(config: Record<string, unknown>): string[] {
     [typeof config.name === "string" && config.name !== "", "name is missing"],
     [typeof config.description === "string", "description is missing"],
     [
-      config.features === undefined ||
-        (isStringArray(config.features) && config.features.length > 0),
-      "features must be a list of short points",
+      config.features === undefined || isFeatureGroups(config.features),
+      "features must be groups, each a category name and its short points",
     ],
     [isStringArray(config.match) && config.match.length > 0, "match needs at least one pattern"],
     [isStringArray(config.grant), "grant must be a list"],
@@ -92,13 +112,10 @@ function problemsOf(config: Record<string, unknown>): string[] {
   return checks.filter(([isValid]) => !isValid).map(([, problem]) => problem);
 }
 
-/** The description and the features as one line, for the @description header. */
+/** The description and the features as one line, for the @description header: a line holds no list. */
 function oneLineDescription({ description, features = [] }: ScriptConfig): string {
-  if (features.length === 0) {
-    return description;
-  }
-  const points = features.map((point) => `${point.charAt(0).toLowerCase()}${point.slice(1)}`);
-  return `${description.replace(/\.$/u, "")}: ${points.join("; ")}.`;
+  const groups = features.map(({ category, points }) => `${category}: ${points.join("; ")}.`);
+  return [description, ...groups].join(" ");
 }
 
 /** Parsed JSON, typed as unknown so callers narrow it. */
@@ -155,7 +172,7 @@ function devFilePath(id: string): string {
   return path.join(REPO_ROOT, "dist", "dev", `${id}.user.js`);
 }
 
-export type { PostExemption, RunAt, Script, ScriptConfig, ScriptMode };
+export type { FeatureGroup, PostExemption, RunAt, Script, ScriptConfig, ScriptMode };
 export {
   REPO_ROOT,
   devFilePath,

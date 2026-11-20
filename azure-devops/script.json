@@ -1,29 +1,52 @@
 {
   "name": "Fix Azure DevOps",
-  "description": "Adds missing features to Azure DevOps.",
+  "description": "Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones.",
   "features": [
-    "Pipeline status on pull requests",
-    "How long ago each active pull request in a list was published, in red after two weekdays",
-    "A Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs",
-    "Buttons to start, cancel or open a run",
-    "A run page's tabs, such as Extensions, as tabs of the pull request",
-    "Each check's warnings and errors above the description, in a box that collapses",
-    "An Overview from old to new, with buttons to flip it and to go to its bottom",
-    "Pushes folded to one line, with a button that shows their commits",
-    "Lines that add reviewers joined to one",
-    "Threads that collapse, with Resolved and Unresolved chips and a button that expands them all",
-    "Unread comments that glow, with buttons to the first and next unread",
-    "A New chip on pushes and other changes you have not seen",
-    "Required reviewers first",
-    "Starred reviewers to add in one click, also on a new pull request",
-    "Reviews that post your pending comments in one go with your vote",
-    "A Viewed checkbox on each file in the Files tab, as on GitHub",
-    "Avatar initials",
-    "Light or Dark to match the system",
-    "Days in column dots on board cards, with a toggle per column",
-    "Pull request lists and boards that reload on changes",
-    "A Windows 98 mode, a work in progress and off by default",
-    "A settings panel in the top bar that turns each feature on or off and marks new ones"
+    {
+      "category": "Pull request lists",
+      "points": [
+        "Pipeline status on each pull request",
+        "Required reviewers first",
+        "How long ago each active pull request was published, in red after two weekdays"
+      ]
+    },
+    {
+      "category": "Pull request",
+      "points": [
+        "A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run",
+        "A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request",
+        "Starred reviewers to add in one click, also on a new pull request",
+        "Reviews that post your pending comments in one go, with your vote",
+        "A Viewed checkbox on each file in the Files tab, as on GitHub"
+      ]
+    },
+    {
+      "category": "Pull request Overview",
+      "points": [
+        "Each check's warnings and errors above the description, in a box that collapses",
+        "Oldest first, with a button to flip the order",
+        "A button that scrolls to the bottom",
+        "Pushes folded to one line, with a button that shows their commits",
+        "Lines that add reviewers joined to one",
+        "Resolved and Unresolved chips on threads",
+        "Threads that collapse, with a button that expands them all",
+        "Unread comments that glow, with buttons to the first and next unread",
+        "A New chip that glows on pushes and other changes you have not seen"
+      ]
+    },
+    {
+      "category": "Boards",
+      "points": ["Days in column dots on cards, with a toggle per column"]
+    },
+    {
+      "category": "Everywhere",
+      "points": [
+        "Avatar initials",
+        "Light or Dark to match the system",
+        "Pull request lists and boards that reload on changes",
+        "A Windows 98 mode, a work in progress and off by default"
+      ]
+    }
   ],
   "match": ["https://dev.azure.com/*", "https://*.visualstudio.com/*"],
   "grant": [

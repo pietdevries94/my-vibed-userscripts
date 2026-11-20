@@ -16,7 +16,7 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 ## Install
 
 1. Install [Violentmonkey](https://violentmonkey.github.io/) in your browser. The scripts are tested in Zen, a Firefox-based browser. Other userscript managers are not supported.
-2. Click a script's name in the table above. Violentmonkey shows its install page.
+2. Click Install under a script above. Violentmonkey shows its install page.
 3. Click "Install". Violentmonkey checks for updates on its own.
 
 ## Development
@@ -36,7 +36,7 @@ Then check it yourself:
 2. Install the dev file from `http://localhost:8786/<script>.user.js` and disable the released script.
 3. Check the page and tell Claude what is wrong. Each fix rebuilds the dev file.
 
-Say "release" when it is right. Claude checks the descriptions, bumps the version, rewrites the table above, commits and pushes. Installed copies update on their own. Claude commits on its own, but pushes only when you say "push" or "release".
+Say "release" when it is right. Claude checks the descriptions, bumps the version, rewrites the script list above, commits and pushes. Installed copies update on their own. Claude commits on its own, but pushes only when you say "push" or "release".
 
 Claude works from [`AGENTS.md`](AGENTS.md) and the skills in `.claude/skills/`. The decisions behind the repo are in [`docs/spec/`](docs/spec/README.md).
 

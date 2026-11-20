@@ -51,18 +51,29 @@ test("@description is the description alone for a script without features", () =
   assert.equal(descriptionOf(block), "An invented script.");
 });
 
-test("@description joins a script's features into its one line", () => {
+test("@description joins a script's features into its one line, by category", () => {
   const script = scriptWith({
     description: "Fixes an invented site.",
-    features: ["Hides ads", "Shows the time"],
+    features: [
+      { category: "Lists", points: ["Hides ads", "Shows the time"] },
+      { category: "Everywhere", points: ["Dark mode"] },
+    ],
   });
   assert.equal(
     descriptionOf(metadataBlock(script, "release")),
-    "Fixes an invented site: hides ads; shows the time.",
+    "Fixes an invented site. Lists: Hides ads; Shows the time. Everywhere: Dark mode.",
   );
 });
 
-test("features must be a list of points", () => {
-  const config: Record<string, unknown> = { ...scriptWith({}).config, features: "Hides ads" };
-  assert.deepEqual(problemsOf(config), ["features must be a list of short points"]);
+test("features must be groups of points under a category name", () => {
+  for (const features of [
+    "Hides ads",
+    [["Hides ads"]],
+    [{ category: "", points: ["Hides ads"] }],
+  ]) {
+    const config: Record<string, unknown> = { ...scriptWith({}).config, features };
+    assert.deepEqual(problemsOf(config), [
+      "features must be groups, each a category name and its short points",
+    ]);
+  }
 });

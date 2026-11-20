@@ -4,34 +4,27 @@ import { withScriptList } from "./readme.ts";
 
 const README = "# Repo\n\n<!-- scripts:start -->\nold list\n<!-- scripts:end -->\n\nLicence.\n";
 
-test("the table between the markers is replaced, the rest stays", () => {
+test("each script gets a section between the markers, the rest stays", () => {
   const readme = withScriptList(README, [
-    {
-      description: "Hides ads | banners.",
-      id: "example-site",
-      name: "Fix Example",
-      version: "1.2.0",
-    },
+    { description: "Hides ads.", id: "example-site", name: "Fix Example", version: "1.2.0" },
   ]);
-  const [before, table, after] = readme.split(/<!-- scripts:(?:start|end) -->/u);
+  const [before, list, after] = readme.split(/<!-- scripts:(?:start|end) -->/u);
   assert.equal(before, "# Repo\n\n");
   assert.equal(after, "\n\nLicence.\n");
-  const rows = (table ?? "").trim().split("\n");
-  assert.deepEqual(rows.slice(0, 2), [
-    "| Script | What it does | Version |",
-    "| --- | --- | --- |",
-  ]);
   assert.match(
-    rows[2] ?? "",
-    /^\| \[Fix Example\]\(https:\/\/raw\.githubusercontent\.com\/.+\/main\/dist\/example-site\.user\.js\) \| Hides ads \\\| banners\. \| 1\.2\.0 \|$/u,
+    list ?? "",
+    /^\n\n### Fix Example\n\n\[Install\]\(https:\/\/raw\.githubusercontent\.com\/.+\/main\/dist\/example-site\.user\.js\) · version 1\.2\.0\n\nHides ads\.\n\n$/u,
   );
 });
 
-test("a script's features show as a list in its cell, after its description", () => {
+test("a script's features show as a list under each category name", () => {
   const readme = withScriptList(README, [
     {
       description: "Fixes an invented site.",
-      features: ["Hides ads | banners", "Shows <b> as text"],
+      features: [
+        { category: "Lists", points: ["Hides ads", "Shows the time"] },
+        { category: "Everywhere", points: ["Dark mode"] },
+      ],
       id: "example-site",
       name: "Fix Example",
       version: "1.2.0",
@@ -39,7 +32,7 @@ test("a script's features show as a list in its cell, after its description", ()
   ]);
   assert.match(
     readme,
-    /\| Fixes an invented site\.<ul><li>Hides ads \\\| banners<\/li><li>Shows &lt;b&gt; as text<\/li><\/ul> \| 1\.2\.0 \|/u,
+    /Fixes an invented site\.\n\n\*\*Lists\*\*\n\n- Hides ads\n- Shows the time\n\n\*\*Everywhere\*\*\n\n- Dark mode\n\n<!-- scripts:end -->/u,
   );
 });
 

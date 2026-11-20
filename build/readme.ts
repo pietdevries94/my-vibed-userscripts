@@ -1,6 +1,7 @@
-// The README's script list: one line per released script, between two markers.
+// The README's script list: a section per released script, between two markers.
 // The release command rewrites it, so the list always matches the release files.
 import { REPO_ROOT, findScriptIds, readScript, releaseFilePath } from "./scripts.ts";
+import type { FeatureGroup } from "./scripts.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { releaseInstallUrl } from "./bundle.ts";
@@ -10,7 +11,7 @@ interface ReleasedScript {
   id: string;
   name: string;
   description: string;
-  features?: string[];
+  features?: FeatureGroup[];
   version: string;
 }
 
@@ -18,34 +19,28 @@ const README_FILE = path.join(REPO_ROOT, "README.md");
 const LIST_START = "<!-- scripts:start -->";
 const LIST_END = "<!-- scripts:end -->";
 
-/** A table cell's text: a pipe would end the cell, and the cell may hold HTML. */
-function cellText(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("|", String.raw`\|`);
+/** A script's features: each category's name, then its points as a list. */
+function featureLists(features: FeatureGroup[] = []): string[] {
+  return features.map(
+    ({ category, points }) =>
+      `**${category}**\n\n${points.map((point) => `- ${point}`).join("\n")}`,
+  );
 }
 
-/** The description, then the features as a list: a table cell holds no Markdown list. */
-function whatItDoes(description: string, features: string[] = []): string {
-  const list =
-    features.length === 0
-      ? ""
-      : `<ul>${features.map((point) => `<li>${cellText(point)}</li>`).join("")}</ul>`;
-  return `${cellText(description)}${list}`;
-}
-
-/** A table: the script's name links to its install file, the description says what it does. */
+/** A section per script: its name, its install link and version, what it does. */
 function scriptListMarkdown(scripts: ReleasedScript[]): string {
   if (scripts.length === 0) {
     return "No script is released yet.";
   }
-  const rows = scripts.map(
-    ({ id, name, description, features, version }) =>
-      `| [${cellText(name)}](${releaseInstallUrl(id)}) | ${whatItDoes(description, features)} | ${version} |`,
+  const sections = scripts.map(({ id, name, description, features, version }) =>
+    [
+      `### ${name}`,
+      `[Install](${releaseInstallUrl(id)}) · version ${version}`,
+      description,
+      ...featureLists(features),
+    ].join("\n\n"),
   );
-  return ["| Script | What it does | Version |", "| --- | --- | --- |", ...rows].join("\n");
+  return sections.join("\n\n");
 }
 
 /** `readme` with the text between the markers replaced by the list. */
