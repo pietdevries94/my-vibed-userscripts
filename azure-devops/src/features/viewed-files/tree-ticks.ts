@@ -72,17 +72,26 @@ function noteTicks(document: Document, shown: ShownPullRequest): void {
   }
 }
 
-/** The folder rows whose files are all ticked. */
+/**
+ * The folder rows whose files are all ticked. One pass over the files: an unticked
+ * file leaves each folder above it incomplete. A large pull request syncs often.
+ */
 function findCompleteFolders(shown: ShownPullRequest): Set<string> {
-  const files = new Set(shown.changedPaths);
-  const folders = listedRows(shown.changedPaths ?? [])
-    .map(({ path }) => path)
-    .filter((path) => !files.has(path));
-  return new Set(
-    folders.filter((folder) =>
-      filesUnder(shown, folder).every((file) => shown.fileTicks.get(file) === true),
-    ),
+  const changedPaths = shown.changedPaths ?? [];
+  const files = new Set(changedPaths);
+  const complete = new Set(
+    listedRows(changedPaths)
+      .map(({ path }) => path)
+      .filter((path) => !files.has(path)),
   );
+  for (const file of changedPaths) {
+    if (shown.fileTicks.get(file) !== true) {
+      for (let end = file.lastIndexOf("/"); end > 0; end = file.lastIndexOf("/", end - 1)) {
+        complete.delete(file.slice(0, end));
+      }
+    }
+  }
+  return complete;
 }
 
 /** The outermost folders that became complete since last time. Notes the complete folders. */

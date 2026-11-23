@@ -255,3 +255,26 @@ test("each step waits on the tree's redraw, not a timer: a slow tree that draws 
   assert.equal(tree.scroller.scrollTop, 0);
   assert.ok(Date.now() - started < TIMEOUT_MS, "no step waited out its safety cap");
 });
+
+test("a pull request with thousands of files keeps each sync fast after the first walk", async () => {
+  const changedPaths = Array.from(
+    { length: 4000 },
+    (_path, index) =>
+      `/src/area${String(index % 40)}/part${String(Math.floor(index / 320))}/file${String(index)}.ts`,
+  );
+  const tree = createVirtualTree({ changedPaths, openFile: changedPaths[0], rowsInView: 40 });
+  const viewed = createViewedFiles({
+    client: clientFor(changedPaths),
+    document: tree.document,
+    drawTimeoutMs: TIMEOUT_MS,
+    tickTimeoutMs: TIMEOUT_MS,
+  });
+  viewed.sync(PULL_REQUEST);
+  await viewed.idle();
+  viewed.sync(PULL_REQUEST);
+  await viewed.idle();
+  const started = performance.now();
+  viewed.sync(PULL_REQUEST);
+  // A sync runs on each change to the page: a slow one makes the browser say the page hangs.
+  assert.ok(performance.now() - started < 50, "one sync takes under 50 ms");
+});
