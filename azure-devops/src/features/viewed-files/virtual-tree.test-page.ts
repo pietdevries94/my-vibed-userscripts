@@ -23,6 +23,8 @@ interface VirtualTreeOptions {
   pageRows?: number;
   /** The file open on the right; without one, the folder view with a card per file. */
   openFile?: string;
+  /** How far short of the end the scroll stops, as in a browser at a zoom, where `scrollTop` is fractional. */
+  scrollStopsShortPx?: number;
 }
 
 interface VirtualTree {
@@ -37,6 +39,8 @@ interface VirtualTree {
   showFileInBar: (path: string) => void;
   /** Waits until the tree drew what its last change asks for. */
   settled: () => Promise<void>;
+  /** How often the script set the tree's scroll position. */
+  scrollWrites: () => number;
 }
 
 /** The fake tree's own state. */
@@ -52,6 +56,8 @@ interface FakeTree {
   tickDelayMs: number;
   drawDelayMs: number;
   pageRows: number;
+  scrollStopsShortPx: number;
+  scrollWrites: number;
   /** What the drawn rows show, to leave the DOM alone when nothing changed, as React does. */
   drawnKey: string;
 }
@@ -197,6 +203,9 @@ function fillViewer(document: Document, changedPaths: string[], openFile?: strin
   }
 }
 
+/** More scroll writes than any walk of a test tree needs: the script is stuck. */
+const MAX_SCROLL_WRITES = 1000;
+
 /** Makes the scroller scroll as a browser's does: it stops where the rows end, and the tree draws after. */
 function scrollLikeABrowser(scroller: HTMLElement, tree: FakeTree): void {
   const end = (): number => shownRows(tree).length * ROW_HEIGHT;
@@ -212,11 +221,24 @@ function scrollLikeABrowser(scroller: HTMLElement, tree: FakeTree): void {
     scrollTop: {
       get: () => tree.top,
       set(value: number) {
-        tree.top = Math.max(0, Math.min(value, end() - tree.rowsInView * ROW_HEIGHT));
+        tree.scrollWrites += 1;
+        if (tree.scrollWrites > MAX_SCROLL_WRITES) {
+          throw new Error("the script keeps scrolling the tree");
+        }
+        const lastTop = end() - tree.rowsInView * ROW_HEIGHT - tree.scrollStopsShortPx;
+        tree.top = Math.max(0, Math.min(value, lastTop));
         drawSoon(tree, tree.drawDelayMs);
       },
     },
   });
+}
+
+/** Shows another file in the bar, changing its text in place as React does. */
+function showFileInBar(document: Document, path: string): void {
+  const text = document.querySelector(".repos-compare-toolbar .secondary-text")?.firstChild;
+  if (text !== null && text !== undefined) {
+    text.nodeValue = path;
+  }
 }
 
 function createVirtualTree({
@@ -225,6 +247,7 @@ function createVirtualTree({
   drawDelayMs = 0,
   pageRows = 1,
   rowsInView,
+  scrollStopsShortPx = 0,
   tickDelayMs = 0,
   ticked = [],
 }: VirtualTreeOptions): VirtualTree {
@@ -245,6 +268,8 @@ function createVirtualTree({
     folded: new Set(),
     pageRows,
     rowsInView,
+    scrollStopsShortPx,
+    scrollWrites: 0,
     tickDelayMs,
     tickedFiles: new Set(ticked),
     top: 0,
@@ -258,13 +283,11 @@ function createVirtualTree({
     document,
     isFolded: (path) => tree.folded.has(path),
     isTicked: (path) => isTicked(tree, path),
+    scrollWrites: () => tree.scrollWrites,
     scroller,
     settled: async () => tree.drawn,
     showFileInBar: (path) => {
-      const text = document.querySelector(".repos-compare-toolbar .secondary-text")?.firstChild;
-      if (text !== null && text !== undefined) {
-        text.nodeValue = path;
-      }
+      showFileInBar(document, path);
     },
   };
 }

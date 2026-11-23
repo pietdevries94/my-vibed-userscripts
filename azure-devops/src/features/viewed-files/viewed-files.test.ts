@@ -30,6 +30,7 @@ interface PageOptions {
   tickDelayMs?: number;
   drawDelayMs?: number;
   pageRows?: number;
+  scrollStopsShortPx?: number;
 }
 
 /** The safety cap on each wait. A step that hits it makes a test slow, never green. */
@@ -89,6 +90,13 @@ test("a card shows the tick of a file the tree does not draw, and the tree stays
   assert.equal(toggleOf(tree.document, "/api/orders.ts").checked, false);
   assert.equal(tree.scroller.scrollTop, 0);
   assert.equal(tree.scroller.style.visibility, "");
+});
+
+test("the walk ends and shows the tree again when the scroll stops just short of the end, as at a browser zoom", async () => {
+  const { tree } = await startedPage({ scrollStopsShortPx: 0.5, ticked: ["/web/home.ts"] });
+  assert.ok(tree.scrollWrites() < 20, "the walk stopped scrolling at the end");
+  assert.equal(tree.scroller.style.visibility, "");
+  assert.equal(toggleOf(tree.document, "/web/home.ts").checked, true);
 });
 
 test("Viewed on a card ticks its file in the tree, also when the tree does not draw it, and collapses the card", async () => {

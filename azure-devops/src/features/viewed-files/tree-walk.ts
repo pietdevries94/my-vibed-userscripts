@@ -110,24 +110,30 @@ async function scrollTo(walk: TreeWalk, scroller: HTMLElement, top: number): Pro
   }
 }
 
-/** True when the tree is scrolled to its end. */
+/** True when the tree is scrolled to its end. At a zoom, a browser may stop up to a pixel short of it. */
 function isAtEnd(scroller: HTMLElement): boolean {
-  return scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight;
+  return scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= 1;
 }
 
-/** Scrolls through the whole tree from the top and calls `visit` after each step, until it returns true. */
+/**
+ * Scrolls through the whole tree from the top and calls `visit` after each step, until
+ * it returns true. A step that does not move the tree ends the walk: it is at its end.
+ */
 async function walkFromTop(
   walk: TreeWalk,
   scroller: HTMLElement,
   visit: () => boolean,
 ): Promise<boolean> {
-  let top = 0;
-  let isFound = false;
-  while (!isFound && (top === 0 || !isAtEnd(scroller))) {
+  await scrollTo(walk, scroller, 0);
+  let isFound = visit();
+  let isMoved = true;
+  while (!isFound && isMoved && !isAtEnd(scroller)) {
+    const before = scroller.scrollTop;
+    const step = Math.max(Math.floor(scroller.clientHeight * STEP_OF_VIEW), 1);
     // oxlint-disable-next-line eslint/no-await-in-loop -- each step waits for the tree to draw there
-    await scrollTo(walk, scroller, top);
-    isFound = visit();
-    top = scroller.scrollTop + Math.max(Math.floor(scroller.clientHeight * STEP_OF_VIEW), 1);
+    await scrollTo(walk, scroller, before + step);
+    isMoved = scroller.scrollTop > before;
+    isFound = isMoved && visit();
   }
   return isFound;
 }
