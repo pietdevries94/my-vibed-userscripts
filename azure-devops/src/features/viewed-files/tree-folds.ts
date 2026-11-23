@@ -3,6 +3,7 @@ import { drawnPaths, drawnRowOf, treeNow } from "../../pull-requests/file-tree/t
 import { foldedPaths, noteOwnFold } from "../../pull-requests/file-tree/tree-folded.ts";
 import { untilTreeShows, walkTree } from "./tree-walk.ts";
 import type { TreeWalk } from "./tree-walk.ts";
+import { clickForScript } from "./owner-clicks.ts";
 import { isTicked } from "./tree-ticks.ts";
 import { log } from "../../../../shared/runtime/script-log.ts";
 
@@ -22,7 +23,7 @@ async function setFolderOpen(
   isOpen: boolean,
 ): Promise<void> {
   if (row.getAttribute("aria-expanded") !== String(isOpen)) {
-    row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
+    clickForScript(row.querySelector<HTMLElement>(FOLD_SELECTOR));
     noteOwnFold(walk.document, path, !isOpen);
     // The clicked row shows the fold when the tree keeps it; a row drawn anew is found by its path.
     await untilTreeShows(
@@ -39,7 +40,7 @@ async function setFolderOpen(
 /** Collapses a folder row, as its chevron does. */
 function fold(document: Document, { path, row }: { path: string; row: Element }): void {
   if (row.getAttribute("aria-expanded") === "true") {
-    row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
+    clickForScript(row.querySelector<HTMLElement>(FOLD_SELECTOR));
     noteOwnFold(document, path, true);
   }
 }
@@ -109,7 +110,7 @@ async function clickChevron(walk: TreeWalk, row: Element, isOpen: boolean): Prom
   const tree = treeNow(walk.document, walk.changedPaths);
   const path = drawnPaths(tree)[tree.drawn.findIndex((drawn) => drawn.row === row)];
   const index = row.getAttribute("aria-rowindex") ?? "";
-  row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
+  clickForScript(row.querySelector<HTMLElement>(FOLD_SELECTOR));
   if (path !== null && path !== undefined) {
     noteOwnFold(walk.document, path, !isOpen);
   }
@@ -191,6 +192,18 @@ async function openEveryFolder(walk: TreeWalk): Promise<void> {
   );
 }
 
+/** True when the tree draws an open folder it ticks. */
+function hasOpenViewedFolder(document: Document): boolean {
+  return [...document.querySelectorAll(FOLDER_ROW_SELECTOR)].some((row) => isOpenViewedFolder(row));
+}
+
+/** Folds every open folder the tree ticks among the rows drawn now. False when one did not fold. */
+async function foldDrawnViewed(walk: TreeWalk): Promise<boolean> {
+  const run = viewedFolding();
+  await clickDrawnPicked(walk, run);
+  return run.stuck.size === 0;
+}
+
 /**
  * Walks through the whole tree and calls `note` at each step. With `isFolding`, it also
  * folds each open folder the tree ticks as it meets it. Returns how many it folded.
@@ -205,4 +218,13 @@ async function walkNoting(walk: TreeWalk, note: () => void, isFolding: boolean):
   return run.clicks;
 }
 
-export { fold, foldFolders, foldViewedFolders, openEveryFolder, unfoldAbove, walkNoting };
+export {
+  fold,
+  foldDrawnViewed,
+  foldFolders,
+  foldViewedFolders,
+  hasOpenViewedFolder,
+  openEveryFolder,
+  unfoldAbove,
+  walkNoting,
+};

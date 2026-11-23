@@ -206,3 +206,27 @@ test("every card starts collapsed when every file is viewed, also of files in a 
     [],
   );
 });
+
+/** Clicks the chevron of a drawn folder row, as the owner does. */
+function clickChevronOf(document: Document, name: string): void {
+  const row = [...document.querySelectorAll("tr.bolt-tree-row")].find(
+    (candidate) => candidate.querySelector(".text-ellipsis")?.textContent === name,
+  );
+  assert.ok(row, `the tree draws ${name}`);
+  row.querySelector<HTMLElement>(".bolt-tree-expand-button")?.click();
+}
+
+test("a viewed folder Azure DevOps opens again to show a file folds again, until the owner opens or folds one", async () => {
+  const { tree, viewed } = await startedPage({ ticked: CHANGED_PATHS });
+  tree.reveal("/web/cart/basket.ts");
+  await tree.settled();
+  viewed.sync(PULL_REQUEST);
+  await viewed.idle();
+  await tree.settled();
+  assert.equal(tree.isFolded("/web"), true, "folded again after the reveal");
+  clickChevronOf(tree.document, "web");
+  await tree.settled();
+  viewed.sync(PULL_REQUEST);
+  await viewed.idle();
+  assert.equal(tree.isFolded("/web"), false, "the owner's open stays");
+});

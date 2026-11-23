@@ -5,20 +5,24 @@
 import {
   TICK_SELECTOR,
   findCompleteFolders,
+  isTickShown,
   isTicked,
-  newlyComplete,
   noteTicks,
 } from "./tree-ticks.ts";
 import { askCards, foldViewedCards, setAskedCards } from "./card-folds.ts";
-import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
 import {
-  fold,
   foldFolders,
   foldViewedFolders,
   openEveryFolder,
   unfoldAbove,
   walkNoting,
 } from "./tree-folds.ts";
+import {
+  foldNewlyComplete,
+  foldersToCollapse,
+  keepViewedFolded,
+  stopOnOwnerFolds,
+} from "./kept-folds.ts";
 import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
 import { keepingScroll, setSkeleton, untilTreeShows, withDrawnRow } from "./tree-walk.ts";
 import { removeToolbarButtons, syncToolbarButtons } from "./toolbar-buttons.ts";
@@ -57,23 +61,6 @@ interface ViewedState {
 
 function keyOf({ project, pullRequestId, repository }: PullRequestRef): string {
   return `${project}/${repository}/${String(pullRequestId)}`;
-}
-
-/** The folders that became complete and should collapse: none while a single file is open. */
-function foldersToCollapse(document: Document, shown: ShownPullRequest): string[] {
-  const folders = newlyComplete(shown);
-  return isFolderView(document) ? folders : [];
-}
-
-/** Collapses each folder that became complete, when the tree draws it. */
-function foldNewlyComplete(document: Document, shown: ShownPullRequest): void {
-  const tree = treeNow(document, shown.changedPaths);
-  for (const folder of foldersToCollapse(document, shown)) {
-    const row = drawnRowOf(folder, tree);
-    if (row !== null) {
-      fold(document, { path: folder, row });
-    }
-  }
 }
 
 function walkOf({ options }: ViewedState, shown: ShownPullRequest): TreeWalk {
@@ -140,12 +127,6 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
   });
 }
 
-/** True when the tree draws the row of `path` with the tick `isViewed`. */
-function isTickShown(walk: TreeWalk, path: string, isViewed: boolean): boolean {
-  const row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
-  return row !== null && isTicked(row) === isViewed;
-}
-
 /**
  * Collapses or opens a file's card right away, then ticks or unticks the file in the
  * tree and collapses a folder it completes. The card goes back when the tree does not
@@ -197,6 +178,7 @@ function runToolbarAction(state: ViewedState, action: ToolbarAction): void {
     ? changedPaths
     : changedPaths.filter((path) => shown.fileTicks.get(path) === true);
   log(isExpand ? "Viewed files: Expand all clicked" : "Viewed files: Collapse viewed clicked");
+  shown.keepsViewedFolded = !isExpand;
   askCards(state.options.document, shown, { isOpen: isExpand, paths });
   queue(state, async () => {
     const walk = walkOf(state, shown);
@@ -238,6 +220,7 @@ function show(state: ViewedState, pullRequest: PullRequestRef): ShownPullRequest
     fileTicks: new Map(),
     folderTicks: new Map(),
     isWalkStarted: false,
+    keepsViewedFolded: true,
     key,
   };
   state.shown = shown;
@@ -264,7 +247,12 @@ function syncTreeTicks(state: ViewedState, shown: ShownPullRequest): void {
   }
   noteTicks(document, shown);
   if (shown.isWalkStarted) {
-    foldNewlyComplete(document, shown);
+    // A row just folded still shows open until the tree draws again: a second click would open it.
+    if (!foldNewlyComplete(document, shown)) {
+      keepViewedFolded(shown, walkOf(state, shown), (run) => {
+        queue(state, run);
+      });
+    }
   } else {
     walkWholeTree(state, shown);
   }
@@ -284,6 +272,7 @@ function createViewedFiles(options: ViewedFilesOptions): ViewedFiles {
         removeToolbarButtons(options.document);
         return;
       }
+      stopOnOwnerFolds(options.document, () => state.shown);
       syncTreeTicks(state, show(state, pullRequest));
       render(state);
     },

@@ -1,6 +1,7 @@
 // What the script knows of the ticks in the file tree. The tree draws only the rows
 // near the part in view, so the script notes each tick it sees, and keeps it.
-import { drawnPaths, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
+import { drawnPaths, drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
+import type { TreeWalk } from "./tree-walk.ts";
 import { listedRows } from "../../pull-requests/file-tree/tree-listing.ts";
 
 const TICK_SELECTOR = ".bolt-checkbox";
@@ -21,6 +22,8 @@ interface ShownPullRequest {
   cardsFolded: Set<string>;
   /** The state a toolbar button asked for the cards of files the page has not drawn yet: true for open. */
   cardsAsked: Map<string, boolean>;
+  /** True while the script folds again a viewed folder Azure DevOps opens: until the owner opens or folds one. */
+  keepsViewedFolded: boolean;
 }
 
 function isTicked(row: Element): boolean {
@@ -124,5 +127,19 @@ function newlyComplete(shown: ShownPullRequest): string[] {
   return outermost([...now].filter((folder) => !before.has(folder)));
 }
 
-export { findCompleteFolders, isTicked, newlyComplete, noteTicks, outermost, TICK_SELECTOR };
+/** True when the tree draws the row of `path` with the tick `isViewed`. */
+function isTickShown(walk: TreeWalk, path: string, isViewed: boolean): boolean {
+  const row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
+  return row !== null && isTicked(row) === isViewed;
+}
+
+export {
+  findCompleteFolders,
+  isTickShown,
+  isTicked,
+  newlyComplete,
+  noteTicks,
+  outermost,
+  TICK_SELECTOR,
+};
 export type { ShownPullRequest };

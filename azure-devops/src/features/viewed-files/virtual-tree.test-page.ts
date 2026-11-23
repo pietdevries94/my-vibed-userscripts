@@ -45,6 +45,8 @@ interface VirtualTree {
   scrollWrites: () => number;
   /** Draws a file's card, as Azure DevOps does for one it loads on a scroll: in place of the one there, or last. */
   redrawCard: (path: string, isOpen: boolean) => void;
+  /** Opens the folders above a file, as Azure DevOps does to show the file in view in the diff. */
+  reveal: (path: string) => void;
 }
 
 /** The fake tree's own state. */
@@ -220,6 +222,14 @@ function virtualTreeOf(tree: FakeTree, scroller: HTMLElement): VirtualTree {
     isTicked: (path) => isTicked(tree, path),
     redrawCard: (path, isOpen) => {
       redrawCard(document, path, isOpen);
+    },
+    reveal: (path) => {
+      for (const folder of tree.folded) {
+        if (path.startsWith(`${folder}/`)) {
+          tree.folded.delete(folder);
+        }
+      }
+      drawSoon(tree, tree.drawDelayMs);
     },
     scrollWrites: () => tree.scrollWrites,
     scroller,
