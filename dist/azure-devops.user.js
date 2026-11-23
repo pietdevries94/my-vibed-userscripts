@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.23.0
+// @version      1.23.1
 // @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -13807,7 +13807,7 @@ ${content}`
       );
       idsByPath = new Map(
         changes.flatMap(
-          ({ changeTrackingId, item }) => item?.path === void 0 ? [] : [[item.path, changeTrackingId]]
+          ({ changeTrackingId, item }) => typeof item?.path == "string" ? [[item.path, changeTrackingId]] : []
         )
       ), state.changeTrackingIdsByIteration.set(iteration, idsByPath);
     }
@@ -16247,7 +16247,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   // azure-devops/src/features/viewed-files/changed-paths.ts
   async function loadChangedPaths(client, pullRequest) {
     let ids = await client.getPullRequestIterationIds(pullRequest);
-    return ids.length === 0 ? null : (await client.getIterationChanges(pullRequest, Math.max(...ids))).flatMap(({ item }) => item?.path ?? []);
+    return ids.length === 0 ? null : (await client.getIterationChanges(pullRequest, Math.max(...ids))).flatMap(({ item, originalPath }) => item?.path ?? originalPath ?? []);
   }
 
   // azure-devops/src/features/viewed-files/viewed-files.ts
