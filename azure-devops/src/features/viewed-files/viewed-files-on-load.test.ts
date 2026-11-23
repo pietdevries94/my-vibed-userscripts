@@ -1,6 +1,17 @@
 // What the viewed files feature folds when the Files tab opens.
-import { PULL_REQUEST, isCardOpen, startedPage, toggleOf } from "./viewed-page.test-page.ts";
+import {
+  CHANGED_PATHS,
+  PULL_REQUEST,
+  TIMEOUT_MS,
+  clientFor,
+  isCardOpen,
+  startedPage,
+  toggleOf,
+} from "./viewed-page.test-page.ts";
+import { LOADING_CLASS } from "./tree-walk.ts";
 import assert from "node:assert/strict";
+import { createViewedFiles } from "./viewed-files.ts";
+import { createVirtualTree } from "./virtual-tree.test-page.ts";
 import { logEntries } from "../../../../shared/runtime/script-log.ts";
 import { test } from "node:test";
 
@@ -9,7 +20,7 @@ test("a folder whose files are all ticked when the page loads starts folded, and
   assert.equal(tree.isFolded("/web/cart"), true);
   assert.equal(tree.isFolded("/web"), false);
   assert.equal(tree.scroller.scrollTop, 0);
-  assert.equal(tree.scroller.style.visibility, "");
+  assert.equal(tree.scroller.classList.contains(LOADING_CLASS), false);
 });
 
 test("a folder whose files are all ticked when the page loads stays open while a single file is open", async () => {
@@ -104,4 +115,29 @@ test("folders that share names with others fold on load and on Collapse viewed, 
       assert.match(pass, /"missed":0/u, `seed ${String(seed)}: every folder was found`);
     }
   }
+});
+
+test("the tree shows a loading skeleton while the script reads it hidden, and the tree after", async () => {
+  const tree = createVirtualTree({ changedPaths: CHANGED_PATHS, rowsInView: 3 });
+  const seen: string[] = [];
+  const view = tree.document.defaultView;
+  assert.ok(view);
+  new view.MutationObserver(() => {
+    seen.push(
+      `${String(tree.scroller.classList.contains(LOADING_CLASS))}:${String(tree.scroller.getAttribute("aria-busy"))}`,
+    );
+  }).observe(tree.scroller, { attributeFilter: ["class", "aria-busy"] });
+  const viewed = createViewedFiles({
+    client: clientFor(CHANGED_PATHS),
+    document: tree.document,
+    drawTimeoutMs: TIMEOUT_MS,
+    tickTimeoutMs: TIMEOUT_MS,
+  });
+  viewed.sync(PULL_REQUEST);
+  await viewed.idle();
+  viewed.sync(PULL_REQUEST);
+  await viewed.idle();
+  assert.ok(seen.includes("true:true"), "the skeleton showed during the walk");
+  assert.equal(tree.scroller.classList.contains(LOADING_CLASS), false);
+  assert.equal(tree.scroller.getAttribute("aria-busy"), null);
 });

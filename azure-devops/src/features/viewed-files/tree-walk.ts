@@ -13,6 +13,8 @@ const SLACK_PX = 0.5;
 const SCROLLER_SELECTOR = ".v-scroll-auto";
 /** The part of the view each step scrolls by, so a step keeps the row above it in view. */
 const STEP_OF_VIEW = 0.8;
+/** Hides the tree's rows during a walk and shows a skeleton of rows in their place. */
+const LOADING_CLASS = "fix-ado-viewed-tree-loading";
 
 /** Reads or changes the rows drawn now. True ends the walk. A visit that folds a row waits until the tree shows it. */
 type Visit = () => boolean | Promise<boolean>;
@@ -92,8 +94,7 @@ function isViewDrawn(document: Document): boolean {
 }
 
 /**
- * Runs `walk` with the tree hidden, then scrolls the tree back to where it was and
- * shows it again.
+ * Runs `walk`, then scrolls the tree back to where it was and shows its rows again.
  */
 async function keepingScroll(walk: TreeWalk, run: () => Promise<void>): Promise<void> {
   const scroller = scrollerOf(walk.document);
@@ -106,7 +107,8 @@ async function keepingScroll(walk: TreeWalk, run: () => Promise<void>): Promise<
   } finally {
     // oxlint-disable-next-line typescript/no-use-before-define -- the scroll back is the last step of a walk
     await scrollTo(walk, scroller, top);
-    scroller.style.visibility = "";
+    scroller.classList.remove(LOADING_CLASS);
+    scroller.removeAttribute("aria-busy");
   }
 }
 
@@ -153,7 +155,8 @@ async function walkTree(walk: TreeWalk, visit: Visit): Promise<boolean> {
   if (scroller === null || (await visit())) {
     return scroller !== null;
   }
-  scroller.style.visibility = "hidden";
+  scroller.classList.add(LOADING_CLASS);
+  scroller.setAttribute("aria-busy", "true");
   const started = Date.now();
   const isFound = await walkFromTop(walk, scroller, visit);
   log("Viewed files: walked the tree", {
@@ -184,5 +187,5 @@ async function withDrawnRow(
   return found.row !== null;
 }
 
-export { keepingScroll, untilTreeShows, walkTree, withDrawnRow };
+export { LOADING_CLASS, keepingScroll, untilTreeShows, walkTree, withDrawnRow };
 export type { TreeWalk };

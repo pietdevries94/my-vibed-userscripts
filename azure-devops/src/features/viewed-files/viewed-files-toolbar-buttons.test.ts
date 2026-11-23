@@ -1,5 +1,6 @@
 // The Expand all and Collapse viewed buttons in the Files tab's toolbar.
 import { PULL_REQUEST, isCardOpen, startedPage } from "./viewed-page.test-page.ts";
+import { LOADING_CLASS } from "./tree-walk.ts";
 import type { ViewedFiles } from "./viewed-files.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -49,7 +50,7 @@ test("Expand all opens every card and every folded folder", async () => {
   }
   assert.equal(tree.isFolded("/web/cart"), false);
   assert.equal(tree.isFolded("/docs"), false);
-  assert.equal(tree.scroller.style.visibility, "");
+  assert.equal(tree.scroller.classList.contains(LOADING_CLASS), false);
 });
 
 test("Collapse viewed collapses the viewed cards and folds the outermost folders whose files are all viewed", async () => {

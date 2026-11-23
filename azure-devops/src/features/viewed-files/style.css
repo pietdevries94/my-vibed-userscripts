@@ -26,3 +26,43 @@
 .fix-ado-viewed-toolbar-buttons {
   flex-shrink: 0;
 }
+
+/*
+ * While the script reads the file tree, its rows are hidden and a skeleton of rows
+ * pulses in their place. The bars take the text color, so they suit light and dark.
+ */
+.v-scroll-auto.fix-ado-viewed-tree-loading {
+  --fix-ado-skeleton: color-mix(in srgb, currentcolor 12%, transparent);
+
+  scrollbar-width: none;
+  background-image:
+    linear-gradient(var(--fix-ado-skeleton) 0 12px, transparent 12px),
+    linear-gradient(var(--fix-ado-skeleton) 0 12px, transparent 12px);
+  background-repeat: repeat-y;
+  background-position:
+    16px 10px,
+    40px 42px;
+  background-size:
+    60% 64px,
+    45% 64px;
+  animation: fix-ado-skeleton-pulse 1.2s ease-in-out infinite alternate;
+
+  & > * {
+    visibility: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 4s;
+  }
+
+  @media (forced-colors: active) {
+    forced-color-adjust: none;
+    --fix-ado-skeleton: GrayText;
+  }
+}
+
+@keyframes fix-ado-skeleton-pulse {
+  to {
+    opacity: 0.4;
+  }
+}

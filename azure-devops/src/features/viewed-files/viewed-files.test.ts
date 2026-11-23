@@ -8,6 +8,7 @@ import {
   startedPage,
   toggleOf,
 } from "./viewed-page.test-page.ts";
+import { LOADING_CLASS } from "./tree-walk.ts";
 import assert from "node:assert/strict";
 import { createViewedFiles } from "./viewed-files.ts";
 import { createVirtualTree } from "./virtual-tree.test-page.ts";
@@ -26,13 +27,13 @@ test("a card shows the tick of a file the tree does not draw, and the tree stays
   assert.equal(toggleOf(tree.document, "/web/home.ts").checked, true);
   assert.equal(toggleOf(tree.document, "/api/orders.ts").checked, false);
   assert.equal(tree.scroller.scrollTop, 0);
-  assert.equal(tree.scroller.style.visibility, "");
+  assert.equal(tree.scroller.classList.contains(LOADING_CLASS), false);
 });
 
 test("the walk ends and shows the tree again when the scroll stops just short of the end, as at a browser zoom", async () => {
   const { tree } = await startedPage({ scrollStopsShortPx: 0.5, ticked: ["/web/home.ts"] });
   assert.ok(tree.scrollWrites() < 20, "the walk stopped scrolling at the end");
-  assert.equal(tree.scroller.style.visibility, "");
+  assert.equal(tree.scroller.classList.contains(LOADING_CLASS), false);
   assert.equal(toggleOf(tree.document, "/web/home.ts").checked, true);
 });
 
