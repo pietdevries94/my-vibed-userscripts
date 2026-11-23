@@ -1,14 +1,13 @@
 // A Files tab with a file tree that draws only the rows in view, as Azure DevOps's
 // does, and a card per file. A folder is ticked when all its files are; ticking a
 // folder ticks every file in it. Test code only.
+import { fillViewer, redrawCard, showFileInBar } from "./file-viewer.test-page.ts";
 import { JSDOM } from "jsdom";
 import { listedRows } from "../../pull-requests/file-tree/tree-listing.ts";
 
 const ROW_HEIGHT = 20;
 const ROW_MARKUP = `<td><div class="bolt-checkbox" role="checkbox"></div></td><td class="bolt-tree-cell"><span class="bolt-tree-expand-button"></span><span class="text-ellipsis"><span></span></span></td>`;
-const CARD_MARKUP = `<div class="flex-row"><button class="bolt-card-expand-button" aria-expanded="true"></button><div class="flex-row flex-grow"><div class="flex-column"><div role="heading"><span class="text-ellipsis"></span></div><div class="body-s secondary-text text-ellipsis"></div></div><div class="flex-row flex-grow justify-end"><a class="bolt-link-button">View</a></div></div></div>`;
-const PAGE_MARKUP = `<!doctype html><body><div class="v-scroll-auto"><table class="repos-changes-explorer-tree"><tbody></tbody></table></div><div class="repos-changes-viewer"></div></body>`;
-const BAR_MARKUP = `<div class="secondary-text text-ellipsis"></div><div class="bolt-split-button"></div>`;
+const PAGE_MARKUP = `<!doctype html><body><div class="repos-pr-header"><div class="flex-row rhythm-horizontal-8"><div class="repos-pr-title-row"></div><div class="repos-pr-header-vote-button bolt-split-button"></div></div></div><div class="v-scroll-auto"><table class="repos-changes-explorer-tree"><tbody></tbody></table></div><div class="repos-changes-viewer"></div></body>`;
 
 interface VirtualTreeOptions {
   changedPaths: string[];
@@ -41,6 +40,8 @@ interface VirtualTree {
   settled: () => Promise<void>;
   /** How often the script set the tree's scroll position. */
   scrollWrites: () => number;
+  /** Draws a file's card, as Azure DevOps does for one it loads on a scroll: in place of the one there, or last. */
+  redrawCard: (path: string, isOpen: boolean) => void;
 }
 
 /** The fake tree's own state. */
@@ -170,39 +171,6 @@ function treeRow(tree: FakeTree, { level, name, path }: ListedRow, index: number
   return row;
 }
 
-function card(document: Document, path: string): HTMLElement {
-  const header = document.createElement("div");
-  header.className = "repos-summary-header bolt-card";
-  header.innerHTML = CARD_MARKUP;
-  header.querySelector("[role=heading] .text-ellipsis")?.append(path.split("/").at(-1) ?? "");
-  header.querySelector(".secondary-text")?.append(path);
-  const expand = header.querySelector<HTMLElement>(".bolt-card-expand-button");
-  expand?.addEventListener("click", () => {
-    expand.setAttribute("aria-expanded", String(expand.getAttribute("aria-expanded") !== "true"));
-  });
-  return header;
-}
-
-/** The bar above the single-file view, for the file at `path`. */
-function fileBar(document: Document, path: string): HTMLElement {
-  const bar = document.createElement("div");
-  bar.className = "repos-compare-toolbar";
-  bar.innerHTML = BAR_MARKUP;
-  bar.querySelector(".secondary-text")?.append(path);
-  return bar;
-}
-
-/** Fills the right pane: a card per file, or the bar of the open file. */
-function fillViewer(document: Document, changedPaths: string[], openFile?: string): void {
-  const viewer = document.querySelector(".repos-changes-viewer");
-  if (openFile === undefined) {
-    viewer?.classList.add("is-folder");
-    viewer?.append(...changedPaths.map((path) => card(document, path)));
-  } else {
-    viewer?.before(fileBar(document, openFile));
-  }
-}
-
 /** More scroll writes than any walk of a test tree needs: the script is stuck. */
 const MAX_SCROLL_WRITES = 1000;
 
@@ -233,12 +201,26 @@ function scrollLikeABrowser(scroller: HTMLElement, tree: FakeTree): void {
   });
 }
 
-/** Shows another file in the bar, changing its text in place as React does. */
-function showFileInBar(document: Document, path: string): void {
-  const text = document.querySelector(".repos-compare-toolbar .secondary-text")?.firstChild;
-  if (text !== null && text !== undefined) {
-    text.nodeValue = path;
-  }
+/** What a test sees of the fake tree, and does with it. */
+function virtualTreeOf(tree: FakeTree, scroller: HTMLElement): VirtualTree {
+  const { document } = tree;
+  return {
+    clickTick: (path) => {
+      clickTick(tree, path);
+    },
+    document,
+    isFolded: (path) => tree.folded.has(path),
+    isTicked: (path) => isTicked(tree, path),
+    redrawCard: (path, isOpen) => {
+      redrawCard(document, path, isOpen);
+    },
+    scrollWrites: () => tree.scrollWrites,
+    scroller,
+    settled: async () => tree.drawn,
+    showFileInBar: (path) => {
+      showFileInBar(document, path);
+    },
+  };
 }
 
 function createVirtualTree({
@@ -276,20 +258,7 @@ function createVirtualTree({
   };
   scrollLikeABrowser(scroller, tree);
   draw(tree);
-  return {
-    clickTick: (path) => {
-      clickTick(tree, path);
-    },
-    document,
-    isFolded: (path) => tree.folded.has(path),
-    isTicked: (path) => isTicked(tree, path),
-    scrollWrites: () => tree.scrollWrites,
-    scroller,
-    settled: async () => tree.drawn,
-    showFileInBar: (path) => {
-      showFileInBar(document, path);
-    },
-  };
+  return virtualTreeOf(tree, scroller);
 }
 
 export { createVirtualTree };

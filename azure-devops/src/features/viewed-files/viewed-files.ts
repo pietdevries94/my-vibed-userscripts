@@ -2,7 +2,8 @@
 // ticks the file in the tree on the left, where Azure DevOps keeps which files the
 // owner reviewed. The toggle shows the tree's tick, so both stay the same. A folder
 // whose files are all ticked collapses in the tree, also when the page loads, but not
-// while a single file is open. A viewed file's card starts collapsed.
+// while a single file is open. A viewed file's card starts collapsed. Expand all and
+// Collapse viewed in the pull request's header act on the cards and the tree.
 import {
   TICK_SELECTOR,
   findCompleteFolders,
@@ -11,16 +12,18 @@ import {
   noteTicks,
   outermost,
 } from "./tree-ticks.ts";
+import { askCards, foldViewedCards, setAskedCards } from "./card-folds.ts";
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
-import { fileCards, isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
-import { fold, foldFolders, setFolderOpen } from "./tree-folds.ts";
+import { fold, foldFolders, unfoldAbove, unfoldAll } from "./tree-folds.ts";
+import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
 import { keepingScroll, untilTreeShows, walkTree, withDrawnRow } from "./tree-walk.ts";
+import { removeHeaderButtons, syncHeaderButtons } from "./header-buttons.ts";
 import type { FileHeader } from "./viewed-toggles.ts";
+import type { HeaderAction } from "./header-buttons.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
 import type { ReviewRequests } from "../../pull-requests/review-requests.ts";
 import type { ShownPullRequest } from "./tree-ticks.ts";
 import type { TreeWalk } from "./tree-walk.ts";
-import { foldedPaths } from "../../pull-requests/file-tree/tree-folded.ts";
 
 const TREE_SELECTOR = ".repos-changes-explorer-tree";
 
@@ -113,19 +116,6 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
   });
 }
 
-/** Unfolds the folded folders above `path`, from the outermost in. */
-async function unfoldAbove(walk: TreeWalk, path: string): Promise<void> {
-  const above = [...foldedPaths(walk.document)]
-    .filter((folder) => path.startsWith(`${folder}/`))
-    .toSorted((left, right) => left.length - right.length);
-  for (const folder of above) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- one walk at a time: each scrolls the same tree
-    await withDrawnRow(walk, folder, async (row) =>
-      setFolderOpen(walk, { path: folder, row }, true),
-    );
-  }
-}
-
 /** True when the tree draws the row of `path` with the tick `isViewed`. */
 function isTickShown(walk: TreeWalk, path: string, isViewed: boolean): boolean {
   const row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
@@ -168,24 +158,42 @@ function setViewed(state: ViewedState, header: FileHeader, isViewed: boolean): v
   });
 }
 
-/** Collapses the card of each viewed file once, the first time the script knows its tick. */
-function foldViewedCards(document: Document, shown: ShownPullRequest): void {
-  for (const { card, path } of fileCards(document)) {
-    const tick = shown.fileTicks.get(path);
-    if (tick !== undefined && !shown.cardsFolded.has(path)) {
-      shown.cardsFolded.add(path);
-      if (tick) {
-        setCardOpen(card, false);
-      }
-    }
+/**
+ * Runs a click on a header button: on the cards right away, and on the tree after the
+ * work before it. Collapse viewed also folds while a single file is open.
+ */
+function runHeaderAction(state: ViewedState, action: HeaderAction): void {
+  const { shown } = state;
+  if (shown?.changedPaths === null || shown === null) {
+    return;
   }
+  const { changedPaths } = shown;
+  const isExpand = action === "expand-all";
+  const paths = isExpand
+    ? changedPaths
+    : changedPaths.filter((path) => shown.fileTicks.get(path) === true);
+  askCards(state.options.document, shown, { isOpen: isExpand, paths });
+  queue(state, async () => {
+    const walk = walkOf(state, shown);
+    await keepingScroll(walk, async () => {
+      await (isExpand
+        ? unfoldAll(walk)
+        : foldFolders(walk, outermost([...findCompleteFolders(shown)])));
+    });
+    render(state);
+  });
 }
 
 function render(state: ViewedState): void {
   const { shown } = state;
+  const { document } = state.options;
   if (shown !== null) {
-    foldViewedCards(state.options.document, shown);
+    setAskedCards(document, shown);
+    foldViewedCards(document, shown);
   }
+  syncHeaderButtons(document, (action) => {
+    runHeaderAction(state, action);
+  });
   syncViewedToggles(state.options.document, {
     isViewed: (path) => shown?.fileTicks.get(path) === true,
     onToggle: (header, isViewed) => {
@@ -214,6 +222,7 @@ function show(state: ViewedState, pullRequest: PullRequestRef): ShownPullRequest
     return state.shown;
   }
   const shown: ShownPullRequest = {
+    cardsAsked: new Map(),
     cardsFolded: new Set(),
     changedPaths: null,
     completeFolders: null,
@@ -253,6 +262,7 @@ function createViewedFiles(options: ViewedFilesOptions): ViewedFiles {
     },
     sync(pullRequest) {
       if (pullRequest === null || options.document.querySelector(TREE_SELECTOR) === null) {
+        removeHeaderButtons(options.document);
         return;
       }
       syncTreeTicks(state, show(state, pullRequest));

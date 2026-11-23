@@ -2,6 +2,7 @@
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
 import { untilTreeShows, withDrawnRow } from "./tree-walk.ts";
 import type { TreeWalk } from "./tree-walk.ts";
+import { foldedPaths } from "../../pull-requests/file-tree/tree-folded.ts";
 
 const FOLD_SELECTOR = ".bolt-tree-expand-button";
 
@@ -41,4 +42,27 @@ async function foldFolders(walk: TreeWalk, folders: string[]): Promise<void> {
   }
 }
 
-export { fold, foldFolders, setFolderOpen };
+/** Unfolds these folders, from the outermost in, waiting until the tree shows each. */
+async function unfoldFolders(walk: TreeWalk, folders: string[]): Promise<void> {
+  for (const folder of folders.toSorted((left, right) => left.length - right.length)) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- one walk at a time: each scrolls the same tree
+    await withDrawnRow(walk, folder, async (row) =>
+      setFolderOpen(walk, { path: folder, row }, true),
+    );
+  }
+}
+
+/** Unfolds the folded folders above `path`, from the outermost in. */
+async function unfoldAbove(walk: TreeWalk, path: string): Promise<void> {
+  await unfoldFolders(
+    walk,
+    [...foldedPaths(walk.document)].filter((folder) => path.startsWith(`${folder}/`)),
+  );
+}
+
+/** Unfolds every folded folder. */
+async function unfoldAll(walk: TreeWalk): Promise<void> {
+  await unfoldFolders(walk, [...foldedPaths(walk.document)]);
+}
+
+export { fold, foldFolders, setFolderOpen, unfoldAbove, unfoldAll };

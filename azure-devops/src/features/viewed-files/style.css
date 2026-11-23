@@ -21,3 +21,8 @@
 .repos-compare-toolbar .fix-ado-viewed-toggle {
   align-self: center;
 }
+
+/* Expand all and Collapse viewed, before the vote button in the pull request's header. */
+.fix-ado-viewed-header-buttons {
+  flex-shrink: 0;
+}

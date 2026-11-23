@@ -19,6 +19,8 @@ interface ShownPullRequest {
   isWalkStarted: boolean;
   /** The files whose card got its first fold: collapsed when the file was viewed, left open when not. */
   cardsFolded: Set<string>;
+  /** The state a header button asked for the cards of files the page has not drawn yet: true for open. */
+  cardsAsked: Map<string, boolean>;
 }
 
 function isTicked(row: Element): boolean {
