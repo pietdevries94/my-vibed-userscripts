@@ -36,3 +36,18 @@ test("a viewed card the owner opens again stays open", async () => {
   viewed.sync(PULL_REQUEST);
   assert.equal(isCardOpen(tree.document, "/web/home.ts"), true);
 });
+
+test("folding many viewed folders on load takes one walk through the tree, not one per folder", async () => {
+  const areas = Array.from(
+    { length: 40 },
+    (_area, index) => `/src/area${String(index).padStart(2, "0")}`,
+  );
+  const ticked = areas.flatMap((area) => [`${area}/done/a.ts`, `${area}/done/b.ts`]);
+  const changedPaths = [...ticked, ...areas.map((area) => `${area}/todo.ts`)];
+  const { tree } = await startedPage({ changedPaths, rowsInView: 10, ticked });
+  assert.equal(tree.isFolded("/src/area00/done"), true);
+  assert.equal(tree.isFolded("/src/area39/done"), true);
+  assert.equal(tree.isFolded("/src/area39"), false);
+  // A walk through the 201 rows steps 8 rows at a time: about 25 writes. One walk scans, one folds.
+  assert.ok(tree.scrollWrites() <= 70, `${String(tree.scrollWrites())} scroll writes`);
+});

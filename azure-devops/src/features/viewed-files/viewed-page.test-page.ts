@@ -25,6 +25,8 @@ function clientFor(changedPaths: string[]): ViewedFilesOptions["client"] {
 }
 
 interface PageOptions {
+  changedPaths?: string[];
+  rowsInView?: number;
   ticked?: string[];
   openFile?: string;
   tickDelayMs?: number;
@@ -36,13 +38,14 @@ interface PageOptions {
 /** The safety cap on each wait. A step that hits it makes a test slow, never green. */
 const TIMEOUT_MS = 2000;
 
-/** A page with a tree that draws three rows, the viewed files feature started and done with its first scan. */
+/** A page with a tree that draws three rows unless asked, the viewed files feature started and done with its first scan. */
 async function startedPage(
   options: PageOptions = {},
 ): Promise<{ tree: VirtualTree; viewed: ViewedFiles }> {
-  const tree = createVirtualTree({ changedPaths: CHANGED_PATHS, rowsInView: 3, ...options });
+  const changedPaths = options.changedPaths ?? CHANGED_PATHS;
+  const tree = createVirtualTree({ rowsInView: 3, ...options, changedPaths });
   const viewed = createViewedFiles({
-    client: clientFor(CHANGED_PATHS),
+    client: clientFor(changedPaths),
     document: tree.document,
     drawTimeoutMs: TIMEOUT_MS,
     tickTimeoutMs: TIMEOUT_MS,

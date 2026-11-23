@@ -13,6 +13,9 @@ const SCROLLER_SELECTOR = ".v-scroll-auto";
 /** The part of the view each step scrolls by, so a step keeps the row above it in view. */
 const STEP_OF_VIEW = 0.8;
 
+/** Reads or changes the rows drawn now. True ends the walk. A visit that folds a row waits until the tree shows it. */
+type Visit = () => boolean | Promise<boolean>;
+
 interface TreeWalk {
   document: Document;
   changedPaths: ChangedPaths;
@@ -119,13 +122,9 @@ function isAtEnd(scroller: HTMLElement): boolean {
  * Scrolls through the whole tree from the top and calls `visit` after each step, until
  * it returns true. A step that does not move the tree ends the walk: it is at its end.
  */
-async function walkFromTop(
-  walk: TreeWalk,
-  scroller: HTMLElement,
-  visit: () => boolean,
-): Promise<boolean> {
+async function walkFromTop(walk: TreeWalk, scroller: HTMLElement, visit: Visit): Promise<boolean> {
   await scrollTo(walk, scroller, 0);
-  let isFound = visit();
+  let isFound = await visit();
   let isMoved = true;
   while (!isFound && isMoved && !isAtEnd(scroller)) {
     const before = scroller.scrollTop;
@@ -133,7 +132,8 @@ async function walkFromTop(
     // oxlint-disable-next-line eslint/no-await-in-loop -- each step waits for the tree to draw there
     await scrollTo(walk, scroller, before + step);
     isMoved = scroller.scrollTop > before;
-    isFound = isMoved && visit();
+    // oxlint-disable-next-line eslint/no-await-in-loop -- a visit may change the tree before the next step
+    isFound = isMoved && (await visit());
   }
   return isFound;
 }
@@ -143,9 +143,9 @@ async function walkFromTop(
  * top, hidden, and calls it after each step, until it returns true. Call it inside
  * `keepingScroll`. Returns true when `visit` did.
  */
-async function walkTree(walk: TreeWalk, visit: () => boolean): Promise<boolean> {
+async function walkTree(walk: TreeWalk, visit: Visit): Promise<boolean> {
   const scroller = scrollerOf(walk.document);
-  if (scroller === null || visit()) {
+  if (scroller === null || (await visit())) {
     return scroller !== null;
   }
   scroller.style.visibility = "hidden";
