@@ -8,7 +8,7 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 ### Fix Azure DevOps
 
-[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.22.0
+[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.23.0
 
 Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones.
 
@@ -24,7 +24,7 @@ Adds missing features to Azure DevOps. A settings panel in the top bar turns eac
 - A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request
 - Starred reviewers to add in one click, also on a new pull request
 - Reviews that post your pending comments in one go, with your vote
-- A Viewed checkbox on each file in the Files tab, as on GitHub
+- A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them
 
 **Pull request Overview**
 

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.22.0
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
+// @version      1.23.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -13390,6 +13390,10 @@ ${content}`
     }
     return folded;
   }
+  function noteOwnFold(document2, path, isFolded) {
+    let folded = foldedByDocument.get(document2) ?? /* @__PURE__ */ new Set();
+    foldedByDocument.set(document2, folded), isFolded ? folded.add(path) : folded.delete(path);
+  }
   function foldedPaths(document2) {
     return foldedByDocument.get(document2) ?? /* @__PURE__ */ new Set();
   }
@@ -15837,10 +15841,10 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     return known.set(path, isTicked(row)), before !== void 0 && before !== known.get(path);
   }
   function noteDrawnTicks(document2, shown) {
-    let files = new Set(shown.changedPaths), tree = treeNow(document2, shown.changedPaths), changed = { files: [], folders: [] };
+    let files = new Set(shown.changedPaths), tree = treeNow(document2, shown.changedPaths), changed = { files: [], folders: [], tickedFolders: [] };
     for (let [index, path] of drawnPaths(tree).entries()) {
       let row = tree.drawn[index]?.row;
-      path !== null && row !== void 0 && noteTick(shown, path, row) && (files.has(path) ? changed.files : changed.folders).push(path);
+      path !== null && row !== void 0 && noteTick(shown, path, row) && (files.has(path) ? changed.files : changed.folders).push(path), path !== null && row !== void 0 && !files.has(path) && isTicked(row) && changed.tickedFolders.push(path);
     }
     return changed;
   }
@@ -15853,21 +15857,30 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       for (let file of filesUnder(shown, folder))
         shown.fileTicks.set(file, tick);
     }
+    for (let folder of changed.tickedFolders)
+      for (let file of filesUnder(shown, folder))
+        shown.fileTicks.set(file, !0);
   }
   function findCompleteFolders(shown) {
-    let files = new Set(shown.changedPaths), folders = listedRows(shown.changedPaths ?? []).map(({ path }) => path).filter((path) => !files.has(path));
-    return new Set(
-      folders.filter(
-        (folder) => filesUnder(shown, folder).every((file) => shown.fileTicks.get(file) === !0)
-      )
+    let changedPaths = shown.changedPaths ?? [], files = new Set(changedPaths), complete = new Set(
+      listedRows(changedPaths).map(({ path }) => path).filter((path) => !files.has(path))
     );
+    for (let file of changedPaths)
+      if (shown.fileTicks.get(file) !== !0)
+        for (let end = file.lastIndexOf("/"); end > 0; end = file.lastIndexOf("/", end - 1))
+          complete.delete(file.slice(0, end));
+    return complete;
+  }
+  function outermost(folders) {
+    return folders.filter((folder) => !folders.some((other) => folder.startsWith(`${other}/`)));
   }
   function newlyComplete(shown) {
     let before = shown.completeFolders, now = findCompleteFolders(shown);
-    if (shown.completeFolders = now, before === null)
-      return [];
-    let added = [...now].filter((folder) => !before.has(folder));
-    return added.filter((folder) => !added.some((other) => folder.startsWith(`${other}/`)));
+    return shown.completeFolders = now, before === null ? [] : outermost([...now].filter((folder) => !before.has(folder)));
+  }
+  function isTickShown(walk, path, isViewed) {
+    let row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
+    return row !== null && isTicked(row) === isViewed;
   }
 
   // azure-devops/src/features/viewed-files/viewed-toggles.ts
@@ -15899,10 +15912,13 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let input = toggle.querySelector("input"), isViewed = state.isViewed(path);
     input !== null && input.checked !== isViewed && (input.checked = isViewed);
   }
+  function fileCards(document2) {
+    return [...document2.querySelectorAll(FILE_CARD_SELECTOR2)].map((card) => ({ card, path: shownPath(card, CARD_PATH_SELECTOR) })).filter(({ path }) => path !== "");
+  }
   function syncCardToggles(document2, state) {
-    for (let card of document2.querySelectorAll(FILE_CARD_SELECTOR2)) {
-      let path = shownPath(card, CARD_PATH_SELECTOR), actions = card.querySelector(CARD_ACTIONS_SELECTOR);
-      path !== "" && actions !== null && toggleIn2(
+    for (let { card, path } of fileCards(document2)) {
+      let actions = card.querySelector(CARD_ACTIONS_SELECTOR);
+      actions !== null && toggleIn2(
         actions,
         (toggle) => {
           actions.prepend(toggle);
@@ -15936,8 +15952,27 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     expand !== null && expand.getAttribute("aria-expanded") === "true" !== isOpen && expand.click();
   }
 
+  // azure-devops/src/features/viewed-files/card-folds.ts
+  function foldViewedCards(document2, shown) {
+    for (let { card, path } of fileCards(document2)) {
+      let tick = shown.fileTicks.get(path);
+      tick !== void 0 && !shown.cardsFolded.has(path) && (shown.cardsFolded.add(path), tick && setCardOpen(card, !1));
+    }
+  }
+  function setAskedCards(document2, shown) {
+    for (let { card, path } of fileCards(document2)) {
+      let isOpen = shown.cardsAsked.get(path);
+      isOpen !== void 0 && (shown.cardsAsked.delete(path), setCardOpen(card, isOpen));
+    }
+  }
+  function askCards(document2, shown, ask) {
+    for (let path of ask.paths)
+      shown.cardsAsked.set(path, ask.isOpen), shown.cardsFolded.add(path);
+    setAskedCards(document2, shown);
+  }
+
   // azure-devops/src/features/viewed-files/tree-walk.ts
-  var TREE_SELECTOR4 = ".repos-changes-explorer-tree", ROW_SELECTOR4 = "tr.bolt-tree-row", SLACK_PX = 0.5, SCROLLER_SELECTOR3 = ".v-scroll-auto", STEP_OF_VIEW = 0.8;
+  var TREE_SELECTOR4 = ".repos-changes-explorer-tree", ROW_SELECTOR4 = "tr.bolt-tree-row", SLACK_PX = 0.5, SCROLLER_SELECTOR3 = ".v-scroll-auto", STEP_OF_VIEW = 0.8, LOADING_CLASS = "fix-ado-viewed-tree-loading";
   function scrollerOf2(document2) {
     return document2.querySelector(TREE_SELECTOR4)?.closest(SCROLLER_SELECTOR3) ?? null;
   }
@@ -15961,11 +15996,22 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let deadline = Date.now() + timeoutMs;
     for (; !isShown() && Date.now() < deadline; )
       await nextTreeDraw({ ...walk, drawTimeoutMs: deadline - Date.now() });
-    return isShown();
+    let isDone = isShown();
+    return isDone || log("Viewed files: a wait for the tree hit its cap", { viewedFilesTiming: { timeoutMs } }), isDone;
   }
   function isViewDrawn(document2) {
     let tree = document2.querySelector(TREE_SELECTOR4), rows = [...tree?.querySelectorAll(ROW_SELECTOR4) ?? []], view = scrollerOf2(document2)?.getBoundingClientRect(), whole = tree?.getBoundingClientRect(), first = rows.at(0)?.getBoundingClientRect(), last = rows.at(-1)?.getBoundingClientRect();
     return view === void 0 || whole === void 0 || first === void 0 || last === void 0 ? !1 : first.top <= Math.max(view.top, whole.top) + SLACK_PX && last.bottom >= Math.min(view.bottom, whole.bottom) - SLACK_PX;
+  }
+  function showSkeleton(scroller) {
+    scroller.classList.add(LOADING_CLASS), scroller.setAttribute("aria-busy", "true");
+  }
+  function hideSkeleton(scroller) {
+    scroller.classList.remove(LOADING_CLASS), scroller.removeAttribute("aria-busy");
+  }
+  function setSkeleton(document2, isShown) {
+    let scroller = scrollerOf2(document2);
+    scroller !== null && (isShown ? showSkeleton : hideSkeleton)(scroller);
   }
   async function keepingScroll(walk, run) {
     let scroller = scrollerOf2(walk.document);
@@ -15975,54 +16021,239 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     try {
       await run();
     } finally {
-      await scrollTo(walk, scroller, top), scroller.style.visibility = "";
+      await scrollTo(walk, scroller, top), hideSkeleton(scroller);
     }
   }
   async function scrollTo(walk, scroller, top) {
     scroller.scrollTop !== top && (scroller.scrollTop = top, await untilTreeShows(walk, () => isViewDrawn(walk.document), walk.drawTimeoutMs));
   }
   function isAtEnd(scroller) {
-    return scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight;
+    return scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= 1;
   }
   async function walkFromTop(walk, scroller, visit) {
-    let top = 0, isFound = !1;
-    for (; !isFound && (top === 0 || !isAtEnd(scroller)); )
-      await scrollTo(walk, scroller, top), isFound = visit(), top = scroller.scrollTop + Math.max(Math.floor(scroller.clientHeight * STEP_OF_VIEW), 1);
+    await scrollTo(walk, scroller, 0);
+    let isFound = await visit(), isMoved = !0;
+    for (; !isFound && isMoved && !isAtEnd(scroller); ) {
+      let before = scroller.scrollTop, step = Math.max(Math.floor(scroller.clientHeight * STEP_OF_VIEW), 1);
+      await scrollTo(walk, scroller, before + step), isMoved = scroller.scrollTop > before, isFound = isMoved && await visit();
+    }
     return isFound;
   }
   async function walkTree(walk, visit) {
     let scroller = scrollerOf2(walk.document);
-    return scroller === null || visit() ? scroller !== null : (scroller.style.visibility = "hidden", walkFromTop(walk, scroller, visit));
+    if (scroller === null || await visit())
+      return scroller !== null;
+    showSkeleton(scroller);
+    let started = Date.now(), isFound = await walkFromTop(walk, scroller, visit);
+    return log("Viewed files: walked the tree", {
+      isFound,
+      viewedFilesTiming: {
+        clientHeight: scroller.clientHeight,
+        ms: Date.now() - started,
+        scrollHeight: scroller.scrollHeight
+      }
+    }), isFound;
   }
   async function withDrawnRow(walk, path, act) {
     let found = { row: null };
     return await walkTree(walk, () => (found.row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths)), found.row !== null)), found.row !== null && await act(found.row), found.row !== null;
   }
 
-  // azure-devops/src/features/viewed-files/viewed-files.ts
-  var TREE_SELECTOR5 = ".repos-changes-explorer-tree", FOLD_SELECTOR = ".bolt-tree-expand-button";
-  function keyOf({ project, pullRequestId, repository }) {
-    return `${project}/${repository}/${String(pullRequestId)}`;
+  // azure-devops/src/features/viewed-files/owner-clicks.ts
+  var TREE_SELECTOR5 = ".repos-changes-explorer-tree", TICK_SELECTOR2 = ".bolt-checkbox", FOLD_KEYS = /* @__PURE__ */ new Set(["ArrowLeft", "ArrowRight", "Enter"]), watchedTrees = /* @__PURE__ */ new WeakSet(), isScriptClick = !1;
+  function clickForScript(element4) {
+    isScriptClick = !0;
+    try {
+      element4?.click();
+    } finally {
+      isScriptClick = !1;
+    }
   }
+  function isFoldEvent(view, event) {
+    return event instanceof view.KeyboardEvent ? FOLD_KEYS.has(event.key) : event.target instanceof view.Element && event.target.closest(TICK_SELECTOR2) === null;
+  }
+  function watchOwnerFolds(document2, onOwnerFold) {
+    let tree = document2.querySelector(TREE_SELECTOR5), view = document2.defaultView;
+    if (tree === null || view === null || watchedTrees.has(tree))
+      return;
+    watchedTrees.add(tree);
+    let onEvent = (event) => {
+      !isScriptClick && isFoldEvent(view, event) && onOwnerFold();
+    };
+    tree.addEventListener("click", onEvent, { capture: !0 }), tree.addEventListener("keydown", onEvent, { capture: !0 });
+  }
+
+  // azure-devops/src/features/viewed-files/tree-folds.ts
+  var FOLD_SELECTOR = ".bolt-tree-expand-button", FOLDER_ROW_SELECTOR = ".repos-changes-explorer-tree tr.bolt-tree-row[aria-expanded]";
   function isFoldShown(walk, path, isOpen) {
     return drawnRowOf(path, treeNow(walk.document, walk.changedPaths))?.getAttribute("aria-expanded") === String(isOpen);
   }
   async function setFolderOpen(walk, { path, row }, isOpen) {
-    row.getAttribute("aria-expanded") !== String(isOpen) && (row.querySelector(FOLD_SELECTOR)?.click(), await untilTreeShows(walk, () => isFoldShown(walk, path, isOpen), walk.drawTimeoutMs));
+    row.getAttribute("aria-expanded") !== String(isOpen) && (clickForScript(row.querySelector(FOLD_SELECTOR)), noteOwnFold(walk.document, path, !isOpen), await untilTreeShows(
+      walk,
+      () => row.isConnected ? row.getAttribute("aria-expanded") === String(isOpen) : isFoldShown(walk, path, isOpen),
+      walk.drawTimeoutMs
+    ));
   }
-  function fold(row) {
-    row.getAttribute("aria-expanded") === "true" && row.querySelector(FOLD_SELECTOR)?.click();
+  function fold(document2, { path, row }) {
+    row.getAttribute("aria-expanded") === "true" && (clickForScript(row.querySelector(FOLD_SELECTOR)), noteOwnFold(document2, path, !0));
   }
+  function drawnFolder(walk, folders) {
+    let tree = treeNow(walk.document, walk.changedPaths);
+    for (let path of folders) {
+      let row = drawnRowOf(path, tree);
+      if (row !== null)
+        return { path, row };
+    }
+    return null;
+  }
+  async function setFoldersOpen(walk, folders, isOpen) {
+    let left = new Set(folders);
+    if (left.size === 0)
+      return;
+    let started = Date.now();
+    await walkTree(walk, async () => {
+      for (let found = drawnFolder(walk, left); found !== null; found = drawnFolder(walk, left))
+        left.delete(found.path), await setFolderOpen(walk, found, isOpen);
+      return left.size === 0;
+    }), log("Viewed files: opened or folded folders", {
+      isOpen,
+      viewedFilesTiming: { asked: folders.length, missed: left.size, ms: Date.now() - started }
+    });
+  }
+  async function foldFolders(walk, folders) {
+    await setFoldersOpen(walk, folders, !1);
+  }
+  async function unfoldAbove(walk, path) {
+    await setFoldersOpen(
+      walk,
+      [...foldedPaths(walk.document)].filter((folder) => path.startsWith(`${folder}/`)),
+      !0
+    );
+  }
+  function folderRowAt(document2, index) {
+    return document2.querySelector(`${FOLDER_ROW_SELECTOR}[aria-rowindex="${index}"]`);
+  }
+  async function clickChevron(walk, row, isOpen) {
+    let tree = treeNow(walk.document, walk.changedPaths), path = drawnPaths(tree)[tree.drawn.findIndex((drawn) => drawn.row === row)], index = row.getAttribute("aria-rowindex") ?? "";
+    return clickForScript(row.querySelector(FOLD_SELECTOR)), path != null && noteOwnFold(walk.document, path, !isOpen), untilTreeShows(
+      walk,
+      () => folderRowAt(walk.document, index)?.getAttribute("aria-expanded") === String(isOpen),
+      walk.drawTimeoutMs
+    );
+  }
+  function clicking(isOpen, isPicked) {
+    return { clicks: 0, isOpen, isPicked, stuck: /* @__PURE__ */ new Set() };
+  }
+  async function clickDrawnPicked(walk, run) {
+    let nextRow = () => [...walk.document.querySelectorAll(FOLDER_ROW_SELECTOR)].find(
+      (row) => run.isPicked(row) && !run.stuck.has(row.getAttribute("aria-rowindex") ?? "")
+    ) ?? null;
+    for (let row = nextRow(); row !== null; row = nextRow())
+      run.clicks += 1, await clickChevron(walk, row, run.isOpen) || run.stuck.add(row.getAttribute("aria-rowindex") ?? "");
+  }
+  function logClicks(run, started) {
+    log("Viewed files: clicked every picked folder", {
+      isOpen: run.isOpen,
+      viewedFilesTiming: { clicks: run.clicks, ms: Date.now() - started, stuck: run.stuck.size }
+    });
+  }
+  async function clickEveryPicked(walk, run) {
+    let started = Date.now();
+    await walkTree(walk, async () => (await clickDrawnPicked(walk, run), !1)), logClicks(run, started);
+  }
+  function isOpenViewedFolder(row) {
+    return row.getAttribute("aria-expanded") === "true" && isTicked(row);
+  }
+  function viewedFolding() {
+    return clicking(!1, isOpenViewedFolder);
+  }
+  async function foldViewedFolders(walk) {
+    await clickEveryPicked(walk, viewedFolding());
+  }
+  async function openEveryFolder(walk) {
+    await clickEveryPicked(
+      walk,
+      clicking(!0, (row) => row.getAttribute("aria-expanded") === "false")
+    );
+  }
+  function hasOpenViewedFolder(document2) {
+    return [...document2.querySelectorAll(FOLDER_ROW_SELECTOR)].some((row) => isOpenViewedFolder(row));
+  }
+  async function foldDrawnViewed(walk) {
+    let run = viewedFolding();
+    return await clickDrawnPicked(walk, run), run.stuck.size === 0;
+  }
+  async function walkNoting(walk, note, isFolding) {
+    let run = viewedFolding();
+    return await walkTree(walk, async () => (note(), await (isFolding ? clickDrawnPicked(walk, run) : void 0), !1)), run.clicks;
+  }
+
+  // azure-devops/src/features/viewed-files/kept-folds.ts
   function foldersToCollapse(document2, shown) {
     let folders = newlyComplete(shown);
     return isFolderView(document2) ? folders : [];
   }
   function foldNewlyComplete(document2, shown) {
-    let tree = treeNow(document2, shown.changedPaths);
+    let tree = treeNow(document2, shown.changedPaths), isClicked = !1;
     for (let folder of foldersToCollapse(document2, shown)) {
       let row = drawnRowOf(folder, tree);
-      row !== null && fold(row);
+      row !== null && (fold(document2, { path: folder, row }), isClicked = !0);
     }
+    return isClicked;
+  }
+  function keepViewedFolded(shown, walk, queue2) {
+    let { document: document2 } = walk;
+    shown.keepsViewedFolded && isFolderView(document2) && hasOpenViewedFolder(document2) && queue2(async () => {
+      shown.keepsViewedFolded = await foldDrawnViewed(walk);
+    });
+  }
+  function stopOnOwnerFolds(document2, shownNow) {
+    watchOwnerFolds(document2, () => {
+      let shown = shownNow();
+      shown !== null && (shown.keepsViewedFolded = !1);
+    });
+  }
+
+  // azure-devops/src/features/viewed-files/toolbar-buttons.ts
+  var FILTER_SELECTOR4 = ".repos-compare-filter", BOX_CLASS = "fix-ado-viewed-toolbar-buttons", TOOLBAR_BUTTONS = [
+    { action: "expand-all", label: "Expand all" },
+    { action: "collapse-viewed", label: "Collapse viewed" }
+  ], onClickByDocument = /* @__PURE__ */ new WeakMap();
+  function createButton5(document2, { action, label }) {
+    let text = Object.assign(document2.createElement("span"), {
+      className: "bolt-button-text body-m",
+      textContent: label
+    }), button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = "bolt-button enabled bolt-focus-treatment", button2.append(text), button2.addEventListener("click", () => {
+      onClickByDocument.get(document2)?.(action);
+    }), button2;
+  }
+  function createBox(document2) {
+    let box = Object.assign(document2.createElement("div"), {
+      className: `${BOX_CLASS} inline-flex-row rhythm-horizontal-8`
+    });
+    return box.append(...TOOLBAR_BUTTONS.map((toolbarButton) => createButton5(document2, toolbarButton))), box;
+  }
+  function syncToolbarButtons(document2, onClick3) {
+    onClickByDocument.set(document2, onClick3);
+    let filter = document2.querySelector(FILTER_SELECTOR4);
+    filter !== null && filter.nextElementSibling?.classList.contains(BOX_CLASS) !== !0 && (document2.querySelector(`.${BOX_CLASS}`)?.remove(), filter.after(createBox(document2)), log("Viewed files: toolbar buttons added"));
+  }
+  function removeToolbarButtons(document2) {
+    document2.querySelector(`.${BOX_CLASS}`)?.remove();
+  }
+
+  // azure-devops/src/features/viewed-files/changed-paths.ts
+  async function loadChangedPaths(client, pullRequest) {
+    let ids = await client.getPullRequestIterationIds(pullRequest);
+    return ids.length === 0 ? null : (await client.getIterationChanges(pullRequest, Math.max(...ids))).flatMap(({ item }) => item?.path ?? []);
+  }
+
+  // azure-devops/src/features/viewed-files/viewed-files.ts
+  var TREE_SELECTOR6 = ".repos-changes-explorer-tree";
+  function keyOf({ project, pullRequestId, repository }) {
+    return `${project}/${repository}/${String(pullRequestId)}`;
   }
   function walkOf({ options }, shown) {
     return {
@@ -16032,7 +16263,9 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     };
   }
   function queue(state, run) {
-    let work = (state.work ?? Promise.resolve()).then(run).catch(() => null).then(() => {
+    let work = (state.work ?? Promise.resolve()).then(run).catch((error) => {
+      log("Viewed files: a step failed", { error: String(error) });
+    }).then(() => {
       state.work === work && (state.work = null);
     });
     state.work = work;
@@ -16041,78 +16274,90 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     shown.isWalkStarted = !0;
     let { document: document2 } = state.options;
     queue(state, async () => {
-      let walk = walkOf(state, shown);
+      let started = Date.now(), walk = walkOf(state, shown), isFolding = isFolderView(document2), folds = 0;
       await keepingScroll(walk, async () => {
-        await walkTree(walk, () => (noteTicks(document2, shown), !1));
-      }), shown.completeFolders = findCompleteFolders(shown), render5(state);
+        folds = await walkNoting(
+          walk,
+          () => {
+            noteTicks(document2, shown);
+          },
+          isFolding
+        ), shown.completeFolders = findCompleteFolders(shown), isFolding && (foldViewedCards(document2, shown), await foldViewedFolders(walk));
+      }), log("Viewed files: first walk and folds done", {
+        viewedFilesTiming: {
+          changedFiles: shown.changedPaths?.length,
+          completeFolders: shown.completeFolders?.size,
+          folds,
+          ms: Date.now() - started
+        }
+      }), render5(state);
     });
-  }
-  async function unfoldAbove(walk, path) {
-    let above = [...foldedPaths(walk.document)].filter((folder) => path.startsWith(`${folder}/`)).toSorted((left, right) => left.length - right.length);
-    for (let folder of above)
-      await withDrawnRow(
-        walk,
-        folder,
-        async (row) => setFolderOpen(walk, { path: folder, row }, !0)
-      );
-  }
-  function isTickShown(walk, path, isViewed) {
-    let row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
-    return row !== null && isTicked(row) === isViewed;
   }
   function setViewed(state, header, isViewed) {
     let { shown } = state;
     if (shown === null)
       return;
     let { document: document2, tickTimeoutMs } = state.options;
-    header.card !== null && setCardOpen(header.card, !isViewed), queue(state, async () => {
+    header.card !== null && setCardOpen(header.card, !isViewed), shown.cardsFolded.add(header.path), queue(state, async () => {
       let walk = walkOf(state, shown);
       await keepingScroll(walk, async () => {
         await unfoldAbove(walk, header.path), await withDrawnRow(walk, header.path, async (row) => {
           isTicked(row) !== isViewed && (row.querySelector(TICK_SELECTOR)?.click(), await untilTreeShows(walk, () => isTickShown(walk, header.path, isViewed), tickTimeoutMs));
-        }), noteTicks(document2, shown);
-        for (let folder of foldersToCollapse(document2, shown))
-          await withDrawnRow(
-            walk,
-            folder,
-            async (row) => setFolderOpen(walk, { path: folder, row }, !1)
-          );
+        }), noteTicks(document2, shown), await foldFolders(walk, foldersToCollapse(document2, shown));
       }), header.card !== null && shown.fileTicks.get(header.path) === !0 !== isViewed && setCardOpen(header.card, isViewed), render5(state);
     });
   }
-  function render5(state) {
+  function runToolbarAction(state, action) {
     let { shown } = state;
-    syncViewedToggles(state.options.document, {
+    if (shown?.changedPaths === null || shown === null)
+      return;
+    let { changedPaths } = shown, isExpand = action === "expand-all", paths = isExpand ? changedPaths : changedPaths.filter((path) => shown.fileTicks.get(path) === !0);
+    log(isExpand ? "Viewed files: Expand all clicked" : "Viewed files: Collapse viewed clicked"), shown.keepsViewedFolded = !isExpand, askCards(state.options.document, shown, { isOpen: isExpand, paths }), queue(state, async () => {
+      let walk = walkOf(state, shown);
+      await keepingScroll(walk, async () => {
+        await (isExpand ? openEveryFolder(walk) : foldViewedFolders(walk));
+      }), render5(state);
+    });
+  }
+  function render5(state) {
+    let { shown } = state, { document: document2 } = state.options;
+    shown !== null && (setAskedCards(document2, shown), foldViewedCards(document2, shown)), syncToolbarButtons(document2, (action) => {
+      runToolbarAction(state, action);
+    }), syncViewedToggles(state.options.document, {
       isViewed: (path) => shown?.fileTicks.get(path) === !0,
       onToggle: (header, isViewed) => {
         setViewed(state, header, isViewed);
       }
     });
   }
-  async function loadChangedPaths(state, shown, pullRequest) {
-    let { client } = state.options, ids = await client.getPullRequestIterationIds(pullRequest);
-    if (ids.length > 0) {
-      let changes = await client.getIterationChanges(pullRequest, Math.max(...ids));
-      shown.changedPaths = changes.flatMap(({ item }) => item?.path ?? []);
-    }
-  }
   function show2(state, pullRequest) {
     let key = keyOf(pullRequest);
     if (state.shown?.key === key)
       return state.shown;
     let shown = {
+      cardsAsked: /* @__PURE__ */ new Map(),
+      cardsFolded: /* @__PURE__ */ new Set(),
       changedPaths: null,
       completeFolders: null,
       fileTicks: /* @__PURE__ */ new Map(),
       folderTicks: /* @__PURE__ */ new Map(),
       isWalkStarted: !1,
+      keepsViewedFolded: !0,
       key
     };
-    return state.shown = shown, queue(state, async () => loadChangedPaths(state, shown, pullRequest)), shown;
+    return state.shown = shown, setSkeleton(state.options.document, !0), queue(state, async () => {
+      try {
+        shown.changedPaths = await loadChangedPaths(state.options.client, pullRequest);
+      } finally {
+        shown.changedPaths === null && setSkeleton(state.options.document, !1);
+      }
+    }), shown;
   }
   function syncTreeTicks(state, shown) {
     let { document: document2 } = state.options;
-    shown.changedPaths === null || state.work !== null || (noteTicks(document2, shown), shown.isWalkStarted ? foldNewlyComplete(document2, shown) : walkWholeTree(state, shown));
+    shown.changedPaths === null || state.work !== null || (noteTicks(document2, shown), shown.isWalkStarted ? foldNewlyComplete(document2, shown) || keepViewedFolded(shown, walkOf(state, shown), (run) => {
+      queue(state, run);
+    }) : walkWholeTree(state, shown));
   }
   function createViewedFiles(options) {
     let state = { options, shown: null, work: null };
@@ -16122,7 +16367,11 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
           await state.work;
       },
       sync(pullRequest) {
-        pullRequest === null || options.document.querySelector(TREE_SELECTOR5) === null || (syncTreeTicks(state, show2(state, pullRequest)), render5(state));
+        if (pullRequest === null || options.document.querySelector(TREE_SELECTOR6) === null) {
+          removeToolbarButtons(options.document);
+          return;
+        }
+        stopOnOwnerFolds(options.document, () => state.shown), syncTreeTicks(state, show2(state, pullRequest)), render5(state);
       }
     };
   }
@@ -16151,12 +16400,57 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
 .repos-compare-toolbar .fix-ado-viewed-toggle {
   align-self: center;
 }
+
+/* Expand all and Collapse viewed, right after the Filter button in the Files tab's toolbar. */
+.fix-ado-viewed-toolbar-buttons {
+  flex-shrink: 0;
+}
+
+/*
+ * While the script reads the file tree, its rows are hidden and a skeleton of rows
+ * pulses in their place. The bars take the text color, so they suit light and dark.
+ */
+.v-scroll-auto.fix-ado-viewed-tree-loading {
+  --fix-ado-skeleton: color-mix(in srgb, currentcolor 12%, transparent);
+
+  scrollbar-width: none;
+  background-image:
+    linear-gradient(var(--fix-ado-skeleton) 0 12px, transparent 12px),
+    linear-gradient(var(--fix-ado-skeleton) 0 12px, transparent 12px);
+  background-repeat: repeat-y;
+  background-position:
+    16px 10px,
+    40px 42px;
+  background-size:
+    60% 64px,
+    45% 64px;
+  animation: fix-ado-skeleton-pulse 1.2s ease-in-out infinite alternate;
+
+  & > * {
+    visibility: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 4s;
+  }
+
+  @media (forced-colors: active) {
+    forced-color-adjust: none;
+    --fix-ado-skeleton: GrayText;
+  }
+}
+
+@keyframes fix-ado-skeleton-pulse {
+  to {
+    opacity: 0.4;
+  }
+}
 `;
 
   // azure-devops/src/features/viewed-files/index.ts
   var DRAW_TIMEOUT_MS = 2e3, TICK_TIMEOUT_MS = 1e4, viewedFiles = {
-    change: { kind: "new", version: "1.21.0" },
-    description: "A Viewed checkbox on each file in the Files tab ticks the file in the tree on the left, as on GitHub, and collapses its diff. A folder whose files are all ticked collapses in the tree.",
+    change: { kind: "updated", version: "1.23.0" },
+    description: "A Viewed checkbox on each file in the Files tab ticks the file in the tree on the left, as on GitHub, and collapses its diff. A viewed file's diff starts collapsed. A folder whose files are all ticked collapses in the tree, also when the page opens. While it reads the tree, the tree shows placeholder rows. Expand all and Collapse viewed after the Filter button open every diff and folder, or collapse the viewed ones.",
     id: "viewed-files",
     name: "Viewed files",
     start({ client, document: document2, isInFrame: isInFrame2 }) {
