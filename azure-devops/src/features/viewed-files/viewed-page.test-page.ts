@@ -33,6 +33,7 @@ interface PageOptions {
   drawDelayMs?: number;
   pageRows?: number;
   scrollStopsShortPx?: number;
+  joinsLoneFolders?: boolean;
 }
 
 /** The safety cap on each wait. A step that hits it makes a test slow, never green. */

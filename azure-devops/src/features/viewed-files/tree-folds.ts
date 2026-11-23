@@ -1,11 +1,13 @@
 // Opens and folds folder rows of the file tree, as their chevrons do.
-import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
+import { drawnPaths, drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
 import { foldedPaths, noteOwnFold } from "../../pull-requests/file-tree/tree-folded.ts";
 import { untilTreeShows, walkTree } from "./tree-walk.ts";
 import type { TreeWalk } from "./tree-walk.ts";
+import { isTicked } from "./tree-ticks.ts";
 import { log } from "../../../../shared/runtime/script-log.ts";
 
 const FOLD_SELECTOR = ".bolt-tree-expand-button";
+const FOLDER_ROW_SELECTOR = ".repos-changes-explorer-tree tr.bolt-tree-row[aria-expanded]";
 
 /** True when the tree draws the row of the folder at `path`, open or folded as asked. */
 function isFoldShown(walk: TreeWalk, path: string, isOpen: boolean): boolean {
@@ -93,9 +95,79 @@ async function unfoldAbove(walk: TreeWalk, path: string): Promise<void> {
   );
 }
 
-/** Unfolds every folded folder, in one walk through the tree. */
-async function unfoldAll(walk: TreeWalk): Promise<void> {
-  await setFoldersOpen(walk, [...foldedPaths(walk.document)], true);
+/** The drawn folder row at a place in the tree, by its `aria-rowindex`. */
+function folderRowAt(document: Document, index: string): Element | null {
+  return document.querySelector(`${FOLDER_ROW_SELECTOR}[aria-rowindex="${index}"]`);
 }
 
-export { fold, foldFolders, unfoldAbove, unfoldAll };
+/**
+ * Clicks a folder row's chevron and waits until the tree shows it open or folded. Notes
+ * the fold under the row's path when the script can tell it. False when the tree did not
+ * take the click.
+ */
+async function clickChevron(walk: TreeWalk, row: Element, isOpen: boolean): Promise<boolean> {
+  const tree = treeNow(walk.document, walk.changedPaths);
+  const path = drawnPaths(tree)[tree.drawn.findIndex((drawn) => drawn.row === row)];
+  const index = row.getAttribute("aria-rowindex") ?? "";
+  row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
+  if (path !== null && path !== undefined) {
+    noteOwnFold(walk.document, path, !isOpen);
+  }
+  return untilTreeShows(
+    walk,
+    () => folderRowAt(walk.document, index)?.getAttribute("aria-expanded") === String(isOpen),
+    walk.drawTimeoutMs,
+  );
+}
+
+/**
+ * Walks through the tree from the top and clicks the chevron of every folder row that
+ * `isPicked` picks, as the tree draws it. Reads only what the rows show, not their paths.
+ */
+async function clickEveryPicked(
+  walk: TreeWalk,
+  isOpen: boolean,
+  isPicked: (row: Element) => boolean,
+): Promise<void> {
+  /** The places of rows that did not take a click, so the walk does not click them again. */
+  const stuck = new Set<string>();
+  const nextRow = (): Element | null =>
+    [...walk.document.querySelectorAll(FOLDER_ROW_SELECTOR)].find(
+      (row) => isPicked(row) && !stuck.has(row.getAttribute("aria-rowindex") ?? ""),
+    ) ?? null;
+  const started = Date.now();
+  let clicks = 0;
+  await walkTree(walk, async () => {
+    for (let row = nextRow(); row !== null; row = nextRow()) {
+      clicks += 1;
+      // oxlint-disable-next-line eslint/no-await-in-loop -- each click moves the rows the next one is read from
+      if (!(await clickChevron(walk, row, isOpen))) {
+        stuck.add(row.getAttribute("aria-rowindex") ?? "");
+      }
+    }
+    return false;
+  });
+  log("Viewed files: clicked every picked folder", {
+    isOpen,
+    viewedFilesTiming: { clicks, ms: Date.now() - started, stuck: stuck.size },
+  });
+}
+
+/**
+ * Folds every open folder the tree ticks: its files are all viewed. The walk goes from
+ * the top, so it folds an outer folder before it reaches the ones inside.
+ */
+async function foldViewedFolders(walk: TreeWalk): Promise<void> {
+  await clickEveryPicked(
+    walk,
+    false,
+    (row) => row.getAttribute("aria-expanded") === "true" && isTicked(row),
+  );
+}
+
+/** Opens every folded folder, the ones inside included. */
+async function openEveryFolder(walk: TreeWalk): Promise<void> {
+  await clickEveryPicked(walk, true, (row) => row.getAttribute("aria-expanded") === "false");
+}
+
+export { fold, foldFolders, foldViewedFolders, openEveryFolder, unfoldAbove };

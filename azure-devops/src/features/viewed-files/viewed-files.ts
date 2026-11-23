@@ -10,11 +10,16 @@ import {
   isTicked,
   newlyComplete,
   noteTicks,
-  outermost,
 } from "./tree-ticks.ts";
 import { askCards, foldViewedCards, setAskedCards } from "./card-folds.ts";
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
-import { fold, foldFolders, unfoldAbove, unfoldAll } from "./tree-folds.ts";
+import {
+  fold,
+  foldFolders,
+  foldViewedFolders,
+  openEveryFolder,
+  unfoldAbove,
+} from "./tree-folds.ts";
 import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
 import { keepingScroll, setSkeleton, untilTreeShows, walkTree, withDrawnRow } from "./tree-walk.ts";
 import { removeToolbarButtons, syncToolbarButtons } from "./toolbar-buttons.ts";
@@ -98,7 +103,7 @@ function queue(state: ViewedState, run: () => Promise<void>): void {
 
 /**
  * Walks through the whole tree once, to learn the tick of every file, then folds the
- * outermost folders whose files are all ticked, unless a single file is open.
+ * folders the tree ticks, outermost first, unless a single file is open.
  */
 function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
   shown.isWalkStarted = true;
@@ -113,7 +118,7 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
       });
       shown.completeFolders = findCompleteFolders(shown);
       if (isFolderView(document)) {
-        await foldFolders(walk, outermost([...shown.completeFolders]));
+        await foldViewedFolders(walk);
       }
     });
     log("Viewed files: first walk and folds done", {
@@ -188,9 +193,7 @@ function runToolbarAction(state: ViewedState, action: ToolbarAction): void {
   queue(state, async () => {
     const walk = walkOf(state, shown);
     await keepingScroll(walk, async () => {
-      await (isExpand
-        ? unfoldAll(walk)
-        : foldFolders(walk, outermost([...findCompleteFolders(shown)])));
+      await (isExpand ? openEveryFolder(walk) : foldViewedFolders(walk));
     });
     render(state);
   });

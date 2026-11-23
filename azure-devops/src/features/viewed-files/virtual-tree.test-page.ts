@@ -4,6 +4,7 @@
 import { fillViewer, redrawCard, showFileInBar } from "./file-viewer.test-page.ts";
 import { JSDOM } from "jsdom";
 import { listedRows } from "../../pull-requests/file-tree/tree-listing.ts";
+import { separateFolderRows } from "./separate-folder-rows.test-page.ts";
 
 const ROW_HEIGHT = 20;
 const ROW_MARKUP = `<td><div class="bolt-checkbox" role="checkbox"></div></td><td class="bolt-tree-cell"><span class="bolt-tree-expand-button"></span><span class="text-ellipsis"><span></span></span></td>`;
@@ -24,6 +25,8 @@ interface VirtualTreeOptions {
   openFile?: string;
   /** How far short of the end the scroll stops, as in a browser at a zoom, where `scrollTop` is fractional. */
   scrollStopsShortPx?: number;
+  /** False draws every folder on a row of its own, also one that holds only one other folder. */
+  joinsLoneFolders?: boolean;
 }
 
 interface VirtualTree {
@@ -61,6 +64,7 @@ interface FakeTree {
   scrollWrites: number;
   /** What the drawn rows show, to leave the DOM alone when nothing changed, as React does. */
   drawnKey: string;
+  joinsLoneFolders: boolean;
 }
 
 type ListedRow = ReturnType<typeof listedRows>[number];
@@ -77,7 +81,10 @@ function isTicked(tree: FakeTree, path: string): boolean {
 
 /** The rows the tree lists now: none under a folded folder. */
 function shownRows(tree: FakeTree): ListedRow[] {
-  return listedRows(tree.changedPaths).filter(
+  const listed = tree.joinsLoneFolders
+    ? listedRows(tree.changedPaths)
+    : separateFolderRows(tree.changedPaths);
+  return listed.filter(
     ({ path }) => ![...tree.folded].some((folder) => path.startsWith(`${folder}/`)),
   );
 }
@@ -227,6 +234,7 @@ function createVirtualTree({
   changedPaths,
   openFile,
   drawDelayMs = 0,
+  joinsLoneFolders = true,
   pageRows = 1,
   rowsInView,
   scrollStopsShortPx = 0,
@@ -248,6 +256,7 @@ function createVirtualTree({
     drawn: Promise.resolve(),
     drawnKey: "",
     folded: new Set(),
+    joinsLoneFolders,
     pageRows,
     rowsInView,
     scrollStopsShortPx,

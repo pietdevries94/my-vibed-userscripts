@@ -12,6 +12,7 @@ import { LOADING_CLASS } from "./tree-walk.ts";
 import assert from "node:assert/strict";
 import { createViewedFiles } from "./viewed-files.ts";
 import { createVirtualTree } from "./virtual-tree.test-page.ts";
+import { listedRows } from "../../pull-requests/file-tree/tree-listing.ts";
 import { logEntries } from "../../../../shared/runtime/script-log.ts";
 import { test } from "node:test";
 
@@ -89,15 +90,36 @@ function sharedNamesPullRequest(seed: number): { changedPaths: string[]; ticked:
   return { changedPaths, ticked };
 }
 
+/** The outermost folders whose files are all ticked, and the folders with a file not ticked. */
+function outermostViewed({ changedPaths, ticked }: { changedPaths: string[]; ticked: string[] }): {
+  folded: string[];
+  open: string[];
+} {
+  const files = new Set(changedPaths);
+  const folders = listedRows(changedPaths)
+    .map(({ path }) => path)
+    .filter((path) => !files.has(path));
+  const isViewed = (folder: string): boolean =>
+    changedPaths
+      .filter((path) => path.startsWith(`${folder}/`))
+      .every((path) => ticked.includes(path));
+  const viewed = folders.filter((folder) => isViewed(folder));
+  return {
+    folded: viewed.filter((folder) => !viewed.some((outer) => folder.startsWith(`${outer}/`))),
+    open: folders.filter((folder) => !isViewed(folder)),
+  };
+}
+
 const capsSoFar = (): number =>
   logEntries().filter(({ message }) => message.includes("hit its cap")).length;
 
 test("folders that share names with others fold on load and on Collapse viewed, without a wait running out", async () => {
   for (const seed of [1, 2, 3, 4, 5]) {
     const capsBefore = capsSoFar();
+    const pullRequest = sharedNamesPullRequest(seed);
     // oxlint-disable-next-line eslint/no-await-in-loop -- one page at a time: they share the script log
     const { tree, viewed } = await startedPage({
-      ...sharedNamesPullRequest(seed),
+      ...pullRequest,
       pageRows: 10,
       rowsInView: 28,
     });
@@ -106,14 +128,18 @@ test("folders that share names with others fold on load and on Collapse viewed, 
       ?.click();
     // oxlint-disable-next-line eslint/no-await-in-loop -- one page at a time: they share the script log
     await viewed.idle();
-    const missed = logEntries()
-      .filter(({ message }) => message.includes("opened or folded folders"))
-      .slice(-2)
-      .map(({ data }) => JSON.stringify(data));
     assert.equal(capsSoFar() - capsBefore, 0, `seed ${String(seed)}: no wait ran out its cap`);
-    for (const pass of missed) {
-      assert.match(pass, /"missed":0/u, `seed ${String(seed)}: every folder was found`);
-    }
+    const { folded, open } = outermostViewed(pullRequest);
+    assert.deepEqual(
+      folded.filter((folder) => !tree.isFolded(folder)),
+      [],
+      `seed ${String(seed)}: every viewed folder folded`,
+    );
+    assert.deepEqual(
+      open.filter((folder) => tree.isFolded(folder)),
+      [],
+      `seed ${String(seed)}: no other folder folded`,
+    );
   }
 });
 

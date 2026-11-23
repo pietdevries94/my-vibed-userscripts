@@ -92,3 +92,34 @@ test("Collapse viewed folds a complete folder also while a single file is open",
   await clickToolbarButton(tree.document, "Collapse viewed", viewed);
   assert.equal(tree.isFolded("/web/cart"), true);
 });
+
+/** Folders that each hold only one folder, which a tree may draw on rows of their own. */
+const LONE_FOLDERS = [
+  "/app/core/deep/basket.ts",
+  "/app/core/deep/coupon.ts",
+  "/docs/guide/intro.md",
+  "/docs/readme.md",
+  "/web/home.ts",
+];
+
+test("every viewed folder folds on load and on Collapse viewed, also when the tree draws a lone folder on a row of its own", async () => {
+  const { tree, viewed } = await startedPage({
+    changedPaths: LONE_FOLDERS,
+    joinsLoneFolders: false,
+    ticked: LONE_FOLDERS,
+  });
+  assert.deepEqual(
+    ["/app", "/docs", "/web"].filter((folder) => !tree.isFolded(folder)),
+    [],
+    "every outermost folder folded on load",
+  );
+  await clickToolbarButton(tree.document, "Expand all", viewed);
+  assert.equal(tree.isFolded("/app"), false);
+  assert.equal(tree.isFolded("/app/core/deep"), false);
+  await clickToolbarButton(tree.document, "Collapse viewed", viewed);
+  assert.deepEqual(
+    ["/app", "/docs", "/web"].filter((folder) => !tree.isFolded(folder)),
+    [],
+    "every outermost folder folded on Collapse viewed",
+  );
+});
