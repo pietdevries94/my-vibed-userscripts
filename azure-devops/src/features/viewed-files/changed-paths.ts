@@ -15,7 +15,8 @@ async function loadChangedPaths(
     return null;
   }
   const changes = await client.getIterationChanges(pullRequest, Math.max(...ids));
-  return changes.flatMap(({ item }) => item?.path ?? []);
+  // A deleted file has no item path; the tree lists it under its path before.
+  return changes.flatMap(({ item, originalPath }) => item?.path ?? originalPath ?? []);
 }
 
 export { loadChangedPaths };

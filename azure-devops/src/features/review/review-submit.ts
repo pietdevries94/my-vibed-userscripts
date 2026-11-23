@@ -92,7 +92,7 @@ async function changeTrackingIdOf(
     );
     idsByPath = new Map(
       changes.flatMap(({ changeTrackingId, item }) =>
-        item?.path === undefined ? [] : [[item.path, changeTrackingId]],
+        typeof item?.path === "string" ? [[item.path, changeTrackingId]] : [],
       ),
     );
     state.changeTrackingIdsByIteration.set(iteration, idsByPath);

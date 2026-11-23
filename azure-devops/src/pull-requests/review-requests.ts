@@ -42,7 +42,10 @@ interface NewThread {
 /** A file an iteration changed. */
 interface IterationChange {
   changeTrackingId: number;
-  item?: { path?: string };
+  /** The file now. A deleted file has no path here: Azure DevOps sends null. */
+  item?: { path?: string | null };
+  /** The path before the change, as of a deleted or renamed file. */
+  originalPath?: string;
 }
 
 interface ReviewRequests {
