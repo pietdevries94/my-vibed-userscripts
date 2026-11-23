@@ -64,10 +64,8 @@ async function setFoldersOpen(walk: TreeWalk, folders: string[], isOpen: boolean
     return left.size === 0;
   });
   log("Viewed files: opened or folded folders", {
-    asked: folders.length,
     isOpen,
-    missed: left.size,
-    ms: Date.now() - started,
+    viewedFilesTiming: { asked: folders.length, missed: left.size, ms: Date.now() - started },
   });
 }
 

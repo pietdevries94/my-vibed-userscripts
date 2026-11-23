@@ -191,6 +191,19 @@ test("the capture keeps the activity feed's layout: kinds of rows and pixels", a
   assert.deepEqual(scrubbed, { data });
 });
 
+test("the capture keeps the counts and durations the viewed files feature logs, and no text", async () => {
+  const { captureDefinition } = await import("./capture.ts");
+  const timing = { viewedFilesTiming: { asked: 26, missed: 0, ms: 4210 } };
+  const kept = scrubJson(timing, captureDefinition.rules, createPseudonyms());
+  assert.deepEqual(kept, timing);
+  const named = scrubJson(
+    { viewedFilesTiming: { folder: "Holt" } },
+    captureDefinition.rules,
+    createPseudonyms(),
+  );
+  assert.notDeepEqual(named, { viewedFilesTiming: { folder: "Holt" } });
+});
+
 test("a work item capture describes its avatars without their names", async () => {
   const workItemUrl = `https://dev.azure.com/${ORGANISATION}/${PROJECT}/_workitems/edit/${BUILD_ID}/`;
   const avatar = `<div class="vss-Persona" aria-label="Barrow, Quill"><img alt="${PERSON}"></div>`;

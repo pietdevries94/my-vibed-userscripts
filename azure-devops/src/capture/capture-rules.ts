@@ -60,6 +60,8 @@ const rules: ScrubRules = {
     },
     // The editor probe: names of the page's own code, kinds and counts. Never content.
     { path: /(?:^|\.)editorProbe\./u, value: /^[\w$.:-]{0,80}$/u },
+    // How long the viewed files feature's steps took, and how many folders they met. Only numbers.
+    { path: /(?:^|\.)viewedFilesTiming\./u, value: /^\d{1,7}$/u },
     // The file tree's layout: kinds of rows, row numbers and pixels. Never content.
     { path: /(?:^|\.)treeLayout\./u, value: /^[\w:-]{0,40}$/u },
     // The activity feed's layout: kinds of rows and pixels. Never content.

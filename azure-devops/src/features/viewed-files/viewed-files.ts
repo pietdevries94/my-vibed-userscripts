@@ -117,9 +117,11 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
       }
     });
     log("Viewed files: first walk and folds done", {
-      changedFiles: shown.changedPaths?.length,
-      completeFolders: shown.completeFolders?.size,
-      ms: Date.now() - started,
+      viewedFilesTiming: {
+        changedFiles: shown.changedPaths?.length,
+        completeFolders: shown.completeFolders?.size,
+        ms: Date.now() - started,
+      },
     });
     render(state);
   });
@@ -181,7 +183,7 @@ function runToolbarAction(state: ViewedState, action: ToolbarAction): void {
   const paths = isExpand
     ? changedPaths
     : changedPaths.filter((path) => shown.fileTicks.get(path) === true);
-  log("Viewed files: toolbar button clicked", { action });
+  log(isExpand ? "Viewed files: Expand all clicked" : "Viewed files: Collapse viewed clicked");
   askCards(state.options.document, shown, { isOpen: isExpand, paths });
   queue(state, async () => {
     const walk = walkOf(state, shown);

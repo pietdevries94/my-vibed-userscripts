@@ -66,7 +66,7 @@ async function untilTreeShows(
   }
   const isDone = isShown();
   if (!isDone) {
-    log("Viewed files: a wait for the tree hit its cap", { timeoutMs });
+    log("Viewed files: a wait for the tree hit its cap", { viewedFilesTiming: { timeoutMs } });
   }
   return isDone;
 }
@@ -158,8 +158,11 @@ async function walkTree(walk: TreeWalk, visit: Visit): Promise<boolean> {
   const isFound = await walkFromTop(walk, scroller, visit);
   log("Viewed files: walked the tree", {
     isFound,
-    ms: Date.now() - started,
-    scrollHeight: scroller.scrollHeight,
+    viewedFilesTiming: {
+      clientHeight: scroller.clientHeight,
+      ms: Date.now() - started,
+      scrollHeight: scroller.scrollHeight,
+    },
   });
   return isFound;
 }
