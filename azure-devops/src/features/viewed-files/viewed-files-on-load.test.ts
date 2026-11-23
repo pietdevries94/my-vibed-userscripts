@@ -141,3 +141,30 @@ test("the tree shows a loading skeleton while the script reads it hidden, and th
   assert.equal(tree.scroller.classList.contains(LOADING_CLASS), false);
   assert.equal(tree.scroller.getAttribute("aria-busy"), null);
 });
+
+test("the skeleton shows from the first sync, while the changed files load, so the unfolded tree never shows", () => {
+  const tree = createVirtualTree({ changedPaths: CHANGED_PATHS, rowsInView: 3 });
+  const viewed = createViewedFiles({
+    client: clientFor(CHANGED_PATHS),
+    document: tree.document,
+    drawTimeoutMs: TIMEOUT_MS,
+    tickTimeoutMs: TIMEOUT_MS,
+  });
+  viewed.sync(PULL_REQUEST);
+  assert.equal(tree.scroller.classList.contains(LOADING_CLASS), true);
+  assert.equal(tree.scroller.getAttribute("aria-busy"), "true");
+});
+
+test("the skeleton goes away when the pull request has no changed files to load", async () => {
+  const tree = createVirtualTree({ changedPaths: CHANGED_PATHS, rowsInView: 3 });
+  const viewed = createViewedFiles({
+    client: { ...clientFor(CHANGED_PATHS), getPullRequestIterationIds: async () => [] },
+    document: tree.document,
+    drawTimeoutMs: TIMEOUT_MS,
+    tickTimeoutMs: TIMEOUT_MS,
+  });
+  viewed.sync(PULL_REQUEST);
+  await viewed.idle();
+  assert.equal(tree.scroller.classList.contains(LOADING_CLASS), false);
+  assert.equal(tree.scroller.getAttribute("aria-busy"), null);
+});

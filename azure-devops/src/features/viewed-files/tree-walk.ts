@@ -93,6 +93,26 @@ function isViewDrawn(document: Document): boolean {
   );
 }
 
+/** Hides the tree's rows behind the skeleton. */
+function showSkeleton(scroller: HTMLElement): void {
+  scroller.classList.add(LOADING_CLASS);
+  scroller.setAttribute("aria-busy", "true");
+}
+
+/** Shows the tree's rows again. */
+function hideSkeleton(scroller: HTMLElement): void {
+  scroller.classList.remove(LOADING_CLASS);
+  scroller.removeAttribute("aria-busy");
+}
+
+/** Shows the skeleton over the tree, or hides it, when the page has a tree. */
+function setSkeleton(document: Document, isShown: boolean): void {
+  const scroller = scrollerOf(document);
+  if (scroller !== null) {
+    (isShown ? showSkeleton : hideSkeleton)(scroller);
+  }
+}
+
 /**
  * Runs `walk`, then scrolls the tree back to where it was and shows its rows again.
  */
@@ -107,8 +127,7 @@ async function keepingScroll(walk: TreeWalk, run: () => Promise<void>): Promise<
   } finally {
     // oxlint-disable-next-line typescript/no-use-before-define -- the scroll back is the last step of a walk
     await scrollTo(walk, scroller, top);
-    scroller.classList.remove(LOADING_CLASS);
-    scroller.removeAttribute("aria-busy");
+    hideSkeleton(scroller);
   }
 }
 
@@ -155,8 +174,7 @@ async function walkTree(walk: TreeWalk, visit: Visit): Promise<boolean> {
   if (scroller === null || (await visit())) {
     return scroller !== null;
   }
-  scroller.classList.add(LOADING_CLASS);
-  scroller.setAttribute("aria-busy", "true");
+  showSkeleton(scroller);
   const started = Date.now();
   const isFound = await walkFromTop(walk, scroller, visit);
   log("Viewed files: walked the tree", {
@@ -187,5 +205,5 @@ async function withDrawnRow(
   return found.row !== null;
 }
 
-export { LOADING_CLASS, keepingScroll, untilTreeShows, walkTree, withDrawnRow };
+export { LOADING_CLASS, keepingScroll, setSkeleton, untilTreeShows, walkTree, withDrawnRow };
 export type { TreeWalk };

@@ -16,7 +16,7 @@ import { askCards, foldViewedCards, setAskedCards } from "./card-folds.ts";
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
 import { fold, foldFolders, unfoldAbove, unfoldAll } from "./tree-folds.ts";
 import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
-import { keepingScroll, untilTreeShows, walkTree, withDrawnRow } from "./tree-walk.ts";
+import { keepingScroll, setSkeleton, untilTreeShows, walkTree, withDrawnRow } from "./tree-walk.ts";
 import { removeToolbarButtons, syncToolbarButtons } from "./toolbar-buttons.ts";
 import type { FileHeader } from "./viewed-toggles.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
@@ -244,7 +244,17 @@ function show(state: ViewedState, pullRequest: PullRequestRef): ShownPullRequest
     key,
   };
   state.shown = shown;
-  queue(state, async () => loadChangedPaths(state, shown, pullRequest));
+  // The skeleton hides the unfolded tree until the first walk has read and folded it.
+  setSkeleton(state.options.document, true);
+  queue(state, async () => {
+    try {
+      await loadChangedPaths(state, shown, pullRequest);
+    } finally {
+      if (shown.changedPaths === null) {
+        setSkeleton(state.options.document, false);
+      }
+    }
+  });
   return shown;
 }
 
