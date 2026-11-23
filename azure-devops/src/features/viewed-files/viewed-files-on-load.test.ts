@@ -194,3 +194,15 @@ test("the skeleton goes away when the pull request has no changed files to load"
   assert.equal(tree.scroller.classList.contains(LOADING_CLASS), false);
   assert.equal(tree.scroller.getAttribute("aria-busy"), null);
 });
+
+test("every card starts collapsed when every file is viewed, also of files in a folder folded before the tree drew them", async () => {
+  const { tree } = await startedPage({ rowsInView: 2, ticked: CHANGED_PATHS });
+  assert.deepEqual(
+    CHANGED_PATHS.filter((path) => isCardOpen(tree.document, path)),
+    [],
+  );
+  assert.deepEqual(
+    ["/api", "/docs", "/web"].filter((folder) => !tree.isFolded(folder)),
+    [],
+  );
+});

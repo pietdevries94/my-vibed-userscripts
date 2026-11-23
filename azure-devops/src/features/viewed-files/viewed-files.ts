@@ -1,9 +1,7 @@
-// Viewed files, as on GitHub: a Viewed toggle in each file's header in the Files tab
-// ticks the file in the tree on the left, where Azure DevOps keeps which files the
-// owner reviewed. The toggle shows the tree's tick, so both stay the same. A folder
-// whose files are all ticked collapses in the tree, also when the page loads, but not
-// while a single file is open. A viewed file's card starts collapsed. Expand all and
-// Collapse viewed in the Files tab's toolbar act on the cards and the tree.
+// Viewed files, as on GitHub: a Viewed toggle in each file header of the Files tab ticks
+// the file in the tree, where Azure DevOps keeps what the owner reviewed. A ticked
+// folder collapses, also on page load, but not while a single file is open. A viewed
+// file's card starts collapsed. Expand all and Collapse viewed act on cards and tree.
 import {
   TICK_SELECTOR,
   findCompleteFolders,
@@ -19,22 +17,24 @@ import {
   foldViewedFolders,
   openEveryFolder,
   unfoldAbove,
+  walkNoting,
 } from "./tree-folds.ts";
 import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
-import { keepingScroll, setSkeleton, untilTreeShows, walkTree, withDrawnRow } from "./tree-walk.ts";
+import { keepingScroll, setSkeleton, untilTreeShows, withDrawnRow } from "./tree-walk.ts";
 import { removeToolbarButtons, syncToolbarButtons } from "./toolbar-buttons.ts";
+import type { ChangesClient } from "./changed-paths.ts";
 import type { FileHeader } from "./viewed-toggles.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
-import type { ReviewRequests } from "../../pull-requests/review-requests.ts";
 import type { ShownPullRequest } from "./tree-ticks.ts";
 import type { ToolbarAction } from "./toolbar-buttons.ts";
 import type { TreeWalk } from "./tree-walk.ts";
+import { loadChangedPaths } from "./changed-paths.ts";
 import { log } from "../../../../shared/runtime/script-log.ts";
 
 const TREE_SELECTOR = ".repos-changes-explorer-tree";
 
 interface ViewedFilesOptions {
-  client: Pick<ReviewRequests, "getIterationChanges" | "getPullRequestIterationIds">;
+  client: ChangesClient;
   document: Document;
   /** The safety cap on a wait for the tree to draw. Each wait ends on the tree's change. */
   drawTimeoutMs: number;
@@ -102,8 +102,8 @@ function queue(state: ViewedState, run: () => Promise<void>): void {
 }
 
 /**
- * Walks through the whole tree once, to learn the tick of every file, then folds the
- * folders the tree ticks, outermost first, unless a single file is open.
+ * Walks through the whole tree once, to learn the tick of every file, and folds each
+ * folder the tree ticks as it meets it, unless a single file is open.
  */
 function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
   shown.isWalkStarted = true;
@@ -111,13 +111,20 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
   queue(state, async () => {
     const started = Date.now();
     const walk = walkOf(state, shown);
+    const isFolding = isFolderView(document);
+    let folds = 0;
     await keepingScroll(walk, async () => {
-      await walkTree(walk, () => {
-        noteTicks(document, shown);
-        return false;
-      });
+      folds = await walkNoting(
+        walk,
+        () => {
+          noteTicks(document, shown);
+        },
+        isFolding,
+      );
       shown.completeFolders = findCompleteFolders(shown);
-      if (isFolderView(document)) {
+      if (isFolding) {
+        // Azure DevOps may open the folders above a card that moves as the viewed cards collapse.
+        foldViewedCards(document, shown);
         await foldViewedFolders(walk);
       }
     });
@@ -125,6 +132,7 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
       viewedFilesTiming: {
         changedFiles: shown.changedPaths?.length,
         completeFolders: shown.completeFolders?.size,
+        folds,
         ms: Date.now() - started,
       },
     });
@@ -217,20 +225,6 @@ function render(state: ViewedState): void {
   });
 }
 
-/** Asks which iteration is the newest, and which files it changes. */
-async function loadChangedPaths(
-  state: ViewedState,
-  shown: ShownPullRequest,
-  pullRequest: PullRequestRef,
-): Promise<void> {
-  const { client } = state.options;
-  const ids = await client.getPullRequestIterationIds(pullRequest);
-  if (ids.length > 0) {
-    const changes = await client.getIterationChanges(pullRequest, Math.max(...ids));
-    shown.changedPaths = changes.flatMap(({ item }) => item?.path ?? []);
-  }
-}
-
 function show(state: ViewedState, pullRequest: PullRequestRef): ShownPullRequest {
   const key = keyOf(pullRequest);
   if (state.shown?.key === key) {
@@ -251,7 +245,7 @@ function show(state: ViewedState, pullRequest: PullRequestRef): ShownPullRequest
   setSkeleton(state.options.document, true);
   queue(state, async () => {
     try {
-      await loadChangedPaths(state, shown, pullRequest);
+      shown.changedPaths = await loadChangedPaths(state.options.client, pullRequest);
     } finally {
       if (shown.changedPaths === null) {
         setSkeleton(state.options.document, false);

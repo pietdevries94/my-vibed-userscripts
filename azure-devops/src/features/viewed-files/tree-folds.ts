@@ -120,54 +120,89 @@ async function clickChevron(walk: TreeWalk, row: Element, isOpen: boolean): Prom
   );
 }
 
-/**
- * Walks through the tree from the top and clicks the chevron of every folder row that
- * `isPicked` picks, as the tree draws it. Reads only what the rows show, not their paths.
- */
-async function clickEveryPicked(
-  walk: TreeWalk,
-  isOpen: boolean,
-  isPicked: (row: Element) => boolean,
-): Promise<void> {
-  /** The places of rows that did not take a click, so the walk does not click them again. */
-  const stuck = new Set<string>();
+/** A run of chevron clicks on the folder rows that `isPicked` picks. */
+interface Clicking {
+  isOpen: boolean;
+  isPicked: (row: Element) => boolean;
+  clicks: number;
+  /** The places of rows that did not take a click, so the run does not click them again. */
+  stuck: Set<string>;
+}
+
+function clicking(isOpen: boolean, isPicked: (row: Element) => boolean): Clicking {
+  return { clicks: 0, isOpen, isPicked, stuck: new Set() };
+}
+
+/** Clicks the chevron of every drawn folder row the run picks, from the top. */
+async function clickDrawnPicked(walk: TreeWalk, run: Clicking): Promise<void> {
   const nextRow = (): Element | null =>
     [...walk.document.querySelectorAll(FOLDER_ROW_SELECTOR)].find(
-      (row) => isPicked(row) && !stuck.has(row.getAttribute("aria-rowindex") ?? ""),
+      (row) => run.isPicked(row) && !run.stuck.has(row.getAttribute("aria-rowindex") ?? ""),
     ) ?? null;
-  const started = Date.now();
-  let clicks = 0;
-  await walkTree(walk, async () => {
-    for (let row = nextRow(); row !== null; row = nextRow()) {
-      clicks += 1;
-      // oxlint-disable-next-line eslint/no-await-in-loop -- each click moves the rows the next one is read from
-      if (!(await clickChevron(walk, row, isOpen))) {
-        stuck.add(row.getAttribute("aria-rowindex") ?? "");
-      }
+  for (let row = nextRow(); row !== null; row = nextRow()) {
+    run.clicks += 1;
+    // oxlint-disable-next-line eslint/no-await-in-loop -- each click moves the rows the next one is read from
+    if (!(await clickChevron(walk, row, run.isOpen))) {
+      run.stuck.add(row.getAttribute("aria-rowindex") ?? "");
     }
-    return false;
-  });
+  }
+}
+
+function logClicks(run: Clicking, started: number): void {
   log("Viewed files: clicked every picked folder", {
-    isOpen,
-    viewedFilesTiming: { clicks, ms: Date.now() - started, stuck: stuck.size },
+    isOpen: run.isOpen,
+    viewedFilesTiming: { clicks: run.clicks, ms: Date.now() - started, stuck: run.stuck.size },
   });
 }
 
 /**
- * Folds every open folder the tree ticks: its files are all viewed. The walk goes from
- * the top, so it folds an outer folder before it reaches the ones inside.
+ * Walks through the tree from the top and clicks the chevron of every folder row the
+ * run picks, as the tree draws it. Reads only what the rows show, not their paths.
  */
+async function clickEveryPicked(walk: TreeWalk, run: Clicking): Promise<void> {
+  const started = Date.now();
+  await walkTree(walk, async () => {
+    await clickDrawnPicked(walk, run);
+    return false;
+  });
+  logClicks(run, started);
+}
+
+/** Picks an open folder the tree ticks: its files are all viewed. */
+function isOpenViewedFolder(row: Element): boolean {
+  return row.getAttribute("aria-expanded") === "true" && isTicked(row);
+}
+
+/** A run that folds every open folder the tree ticks. From the top, an outer one folds before the ones inside. */
+function viewedFolding(): Clicking {
+  return clicking(false, isOpenViewedFolder);
+}
+
+/** Folds every open folder the tree ticks, in one walk through the tree. */
 async function foldViewedFolders(walk: TreeWalk): Promise<void> {
-  await clickEveryPicked(
-    walk,
-    false,
-    (row) => row.getAttribute("aria-expanded") === "true" && isTicked(row),
-  );
+  await clickEveryPicked(walk, viewedFolding());
 }
 
 /** Opens every folded folder, the ones inside included. */
 async function openEveryFolder(walk: TreeWalk): Promise<void> {
-  await clickEveryPicked(walk, true, (row) => row.getAttribute("aria-expanded") === "false");
+  await clickEveryPicked(
+    walk,
+    clicking(true, (row) => row.getAttribute("aria-expanded") === "false"),
+  );
 }
 
-export { fold, foldFolders, foldViewedFolders, openEveryFolder, unfoldAbove };
+/**
+ * Walks through the whole tree and calls `note` at each step. With `isFolding`, it also
+ * folds each open folder the tree ticks as it meets it. Returns how many it folded.
+ */
+async function walkNoting(walk: TreeWalk, note: () => void, isFolding: boolean): Promise<number> {
+  const run = viewedFolding();
+  await walkTree(walk, async () => {
+    note();
+    await (isFolding ? clickDrawnPicked(walk, run) : undefined);
+    return false;
+  });
+  return run.clicks;
+}
+
+export { fold, foldFolders, foldViewedFolders, openEveryFolder, unfoldAbove, walkNoting };

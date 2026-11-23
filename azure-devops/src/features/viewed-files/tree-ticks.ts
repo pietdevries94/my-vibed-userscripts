@@ -31,10 +31,11 @@ function filesUnder(shown: ShownPullRequest, folder: string): string[] {
   return (shown.changedPaths ?? []).filter((path) => path.startsWith(`${folder}/`));
 }
 
-/** The paths whose drawn tick changed since the tree last drew them. */
+/** The paths whose drawn tick changed since the tree last drew them, and the drawn folders that are ticked. */
 interface ChangedTicks {
   files: string[];
   folders: string[];
+  tickedFolders: string[];
 }
 
 /** Notes the tick of a drawn row. True when it changed since the tree last drew it. */
@@ -49,11 +50,14 @@ function noteTick(shown: ShownPullRequest, path: string, row: Element): boolean 
 function noteDrawnTicks(document: Document, shown: ShownPullRequest): ChangedTicks {
   const files = new Set(shown.changedPaths);
   const tree = treeNow(document, shown.changedPaths);
-  const changed: ChangedTicks = { files: [], folders: [] };
+  const changed: ChangedTicks = { files: [], folders: [], tickedFolders: [] };
   for (const [index, path] of drawnPaths(tree).entries()) {
     const row = tree.drawn[index]?.row;
     if (path !== null && row !== undefined && noteTick(shown, path, row)) {
       (files.has(path) ? changed.files : changed.folders).push(path);
+    }
+    if (path !== null && row !== undefined && !files.has(path) && isTicked(row)) {
+      changed.tickedFolders.push(path);
     }
   }
   return changed;
@@ -61,7 +65,8 @@ function noteDrawnTicks(document: Document, shown: ShownPullRequest): ChangedTic
 
 /**
  * Notes the ticks the tree draws now. A folder's tick that changed without a tick of
- * a file under it is the owner's click on the folder, which ticks every file in it.
+ * a file under it is the owner's click on the folder, which ticks every file in it. A
+ * ticked folder has every file in it ticked, also the ones a fold hides.
  */
 function noteTicks(document: Document, shown: ShownPullRequest): void {
   const changed = noteDrawnTicks(document, shown);
@@ -72,6 +77,11 @@ function noteTicks(document: Document, shown: ShownPullRequest): void {
     const tick = shown.folderTicks.get(folder) === true;
     for (const file of filesUnder(shown, folder)) {
       shown.fileTicks.set(file, tick);
+    }
+  }
+  for (const folder of changed.tickedFolders) {
+    for (const file of filesUnder(shown, folder)) {
+      shown.fileTicks.set(file, true);
     }
   }
 }
