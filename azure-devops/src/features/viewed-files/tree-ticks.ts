@@ -17,6 +17,8 @@ interface ShownPullRequest {
   /** The folders whose files are all ticked. Null until the first walk through the tree. */
   completeFolders: Set<string> | null;
   isWalkStarted: boolean;
+  /** The files whose card got its first fold: collapsed when the file was viewed, left open when not. */
+  cardsFolded: Set<string>;
 }
 
 function isTicked(row: Element): boolean {
@@ -94,6 +96,11 @@ function findCompleteFolders(shown: ShownPullRequest): Set<string> {
   return complete;
 }
 
+/** The folders that are not inside another of them. */
+function outermost(folders: string[]): string[] {
+  return folders.filter((folder) => !folders.some((other) => folder.startsWith(`${other}/`)));
+}
+
 /** The outermost folders that became complete since last time. Notes the complete folders. */
 function newlyComplete(shown: ShownPullRequest): string[] {
   const before = shown.completeFolders;
@@ -102,9 +109,8 @@ function newlyComplete(shown: ShownPullRequest): string[] {
   if (before === null) {
     return [];
   }
-  const added = [...now].filter((folder) => !before.has(folder));
-  return added.filter((folder) => !added.some((other) => folder.startsWith(`${other}/`)));
+  return outermost([...now].filter((folder) => !before.has(folder)));
 }
 
-export { findCompleteFolders, isTicked, newlyComplete, noteTicks, TICK_SELECTOR };
+export { findCompleteFolders, isTicked, newlyComplete, noteTicks, outermost, TICK_SELECTOR };
 export type { ShownPullRequest };

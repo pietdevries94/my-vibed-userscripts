@@ -9,9 +9,9 @@ const DRAW_TIMEOUT_MS = 2000;
 const TICK_TIMEOUT_MS = 10_000;
 
 const viewedFiles: Feature = {
-  change: { kind: "new", version: "1.21.0" },
+  change: { kind: "updated", version: "1.23.0" },
   description:
-    "A Viewed checkbox on each file in the Files tab ticks the file in the tree on the left, as on GitHub, and collapses its diff. A folder whose files are all ticked collapses in the tree.",
+    "A Viewed checkbox on each file in the Files tab ticks the file in the tree on the left, as on GitHub, and collapses its diff. A viewed file's diff starts collapsed. A folder whose files are all ticked collapses in the tree, also when the page opens.",
   id: "viewed-files",
   name: "Viewed files",
   start({ client, document, isInFrame }) {

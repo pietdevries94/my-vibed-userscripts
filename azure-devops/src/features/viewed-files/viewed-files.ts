@@ -1,17 +1,19 @@
 // Viewed files, as on GitHub: a Viewed toggle in each file's header in the Files tab
 // ticks the file in the tree on the left, where Azure DevOps keeps which files the
 // owner reviewed. The toggle shows the tree's tick, so both stay the same. A folder
-// whose files are all ticked collapses in the tree, but not when the page loads, and
-// not while a single file is open.
+// whose files are all ticked collapses in the tree, also when the page loads, but not
+// while a single file is open. A viewed file's card starts collapsed.
 import {
   TICK_SELECTOR,
   findCompleteFolders,
   isTicked,
   newlyComplete,
   noteTicks,
+  outermost,
 } from "./tree-ticks.ts";
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
-import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
+import { fileCards, isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
+import { fold, foldFolders, setFolderOpen } from "./tree-folds.ts";
 import { keepingScroll, untilTreeShows, walkTree, withDrawnRow } from "./tree-walk.ts";
 import type { FileHeader } from "./viewed-toggles.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
@@ -21,7 +23,6 @@ import type { TreeWalk } from "./tree-walk.ts";
 import { foldedPaths } from "../../pull-requests/file-tree/tree-folded.ts";
 
 const TREE_SELECTOR = ".repos-changes-explorer-tree";
-const FOLD_SELECTOR = ".bolt-tree-expand-button";
 
 interface ViewedFilesOptions {
   client: Pick<ReviewRequests, "getIterationChanges" | "getPullRequestIterationIds">;
@@ -47,31 +48,6 @@ interface ViewedState {
 
 function keyOf({ project, pullRequestId, repository }: PullRequestRef): string {
   return `${project}/${repository}/${String(pullRequestId)}`;
-}
-
-/** True when the tree draws the row of the folder at `path`, open or folded as asked. */
-function isFoldShown(walk: TreeWalk, path: string, isOpen: boolean): boolean {
-  const row = drawnRowOf(path, treeNow(walk.document, walk.changedPaths));
-  return row?.getAttribute("aria-expanded") === String(isOpen);
-}
-
-/** Opens or folds a folder's row, as its chevron does, and waits until the tree shows it. */
-async function setFolderOpen(
-  walk: TreeWalk,
-  { path, row }: { path: string; row: Element },
-  isOpen: boolean,
-): Promise<void> {
-  if (row.getAttribute("aria-expanded") !== String(isOpen)) {
-    row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
-    await untilTreeShows(walk, () => isFoldShown(walk, path, isOpen), walk.drawTimeoutMs);
-  }
-}
-
-/** Collapses a folder row, as its chevron does. */
-function fold(row: Element): void {
-  if (row.getAttribute("aria-expanded") === "true") {
-    row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
-  }
 }
 
 /** The folders that became complete and should collapse: none while a single file is open. */
@@ -114,7 +90,10 @@ function queue(state: ViewedState, run: () => Promise<void>): void {
   state.work = work;
 }
 
-/** Walks through the whole tree once, to learn the tick of every file. */
+/**
+ * Walks through the whole tree once, to learn the tick of every file, then folds the
+ * outermost folders whose files are all ticked, unless a single file is open.
+ */
 function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
   shown.isWalkStarted = true;
   const { document } = state.options;
@@ -125,8 +104,11 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
         noteTicks(document, shown);
         return false;
       });
+      shown.completeFolders = findCompleteFolders(shown);
+      if (isFolderView(document)) {
+        await foldFolders(walk, outermost([...shown.completeFolders]));
+      }
     });
-    shown.completeFolders = findCompleteFolders(shown);
     render(state);
   });
 }
@@ -164,6 +146,7 @@ function setViewed(state: ViewedState, header: FileHeader, isViewed: boolean): v
   if (header.card !== null) {
     setCardOpen(header.card, !isViewed);
   }
+  shown.cardsFolded.add(header.path);
   queue(state, async () => {
     const walk = walkOf(state, shown);
     await keepingScroll(walk, async () => {
@@ -175,13 +158,7 @@ function setViewed(state: ViewedState, header: FileHeader, isViewed: boolean): v
         }
       });
       noteTicks(document, shown);
-      for (const folder of foldersToCollapse(document, shown)) {
-        // Waiting on the fold also notes it, so the listing leaves out the rows under it.
-        // oxlint-disable-next-line eslint/no-await-in-loop -- one walk at a time: each scrolls the same tree
-        await withDrawnRow(walk, folder, async (row) =>
-          setFolderOpen(walk, { path: folder, row }, false),
-        );
-      }
+      await foldFolders(walk, foldersToCollapse(document, shown));
     });
     // The tree did not take the tick: the card goes back to how it was.
     if (header.card !== null && (shown.fileTicks.get(header.path) === true) !== isViewed) {
@@ -191,8 +168,24 @@ function setViewed(state: ViewedState, header: FileHeader, isViewed: boolean): v
   });
 }
 
+/** Collapses the card of each viewed file once, the first time the script knows its tick. */
+function foldViewedCards(document: Document, shown: ShownPullRequest): void {
+  for (const { card, path } of fileCards(document)) {
+    const tick = shown.fileTicks.get(path);
+    if (tick !== undefined && !shown.cardsFolded.has(path)) {
+      shown.cardsFolded.add(path);
+      if (tick) {
+        setCardOpen(card, false);
+      }
+    }
+  }
+}
+
 function render(state: ViewedState): void {
   const { shown } = state;
+  if (shown !== null) {
+    foldViewedCards(state.options.document, shown);
+  }
   syncViewedToggles(state.options.document, {
     isViewed: (path) => shown?.fileTicks.get(path) === true,
     onToggle: (header, isViewed) => {
@@ -221,6 +214,7 @@ function show(state: ViewedState, pullRequest: PullRequestRef): ShownPullRequest
     return state.shown;
   }
   const shown: ShownPullRequest = {
+    cardsFolded: new Set(),
     changedPaths: null,
     completeFolders: null,
     fileTicks: new Map(),

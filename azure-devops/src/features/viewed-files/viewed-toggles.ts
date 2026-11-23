@@ -100,11 +100,17 @@ function toggleIn(
   }
 }
 
+/** The file cards on the page with the path each shows now. */
+function fileCards(document: Document): { card: Element; path: string }[] {
+  return [...document.querySelectorAll(FILE_CARD_SELECTOR)]
+    .map((card) => ({ card, path: shownPath(card, CARD_PATH_SELECTOR) }))
+    .filter(({ path }) => path !== "");
+}
+
 function syncCardToggles(document: Document, state: ToggleState): void {
-  for (const card of document.querySelectorAll(FILE_CARD_SELECTOR)) {
-    const path = shownPath(card, CARD_PATH_SELECTOR);
+  for (const { card, path } of fileCards(document)) {
     const actions = card.querySelector(CARD_ACTIONS_SELECTOR);
-    if (path !== "" && actions !== null) {
+    if (actions !== null) {
       toggleIn(
         actions,
         (toggle) => {
@@ -156,5 +162,5 @@ function setCardOpen(card: Element, isOpen: boolean): void {
   }
 }
 
-export { isFolderView, setCardOpen, syncViewedToggles };
+export { fileCards, isFolderView, setCardOpen, syncViewedToggles };
 export type { FileHeader };
