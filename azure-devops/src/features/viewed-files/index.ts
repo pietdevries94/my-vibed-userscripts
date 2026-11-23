@@ -11,7 +11,7 @@ const TICK_TIMEOUT_MS = 10_000;
 const viewedFiles: Feature = {
   change: { kind: "updated", version: "1.23.0" },
   description:
-    "A Viewed checkbox on each file in the Files tab ticks the file in the tree on the left, as on GitHub, and collapses its diff. A viewed file's diff starts collapsed. A folder whose files are all ticked collapses in the tree, also when the page opens. Expand all and Collapse viewed in the pull request's header open every diff and folder, or collapse the viewed ones.",
+    "A Viewed checkbox on each file in the Files tab ticks the file in the tree on the left, as on GitHub, and collapses its diff. A viewed file's diff starts collapsed. A folder whose files are all ticked collapses in the tree, also when the page opens. Expand all and Collapse viewed after the Filter button open every diff and folder, or collapse the viewed ones.",
   id: "viewed-files",
   name: "Viewed files",
   start({ client, document, isInFrame }) {

@@ -3,6 +3,7 @@
 // drawn, and scrolls it back after.
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
 import type { ChangedPaths } from "../../pull-requests/file-tree/tree-rows.ts";
+import { log } from "../../../../shared/runtime/script-log.ts";
 
 const TREE_SELECTOR = ".repos-changes-explorer-tree";
 const ROW_SELECTOR = "tr.bolt-tree-row";
@@ -63,7 +64,11 @@ async function untilTreeShows(
     // oxlint-disable-next-line eslint/no-await-in-loop -- each wait ends at the tree's next change
     await nextTreeDraw({ ...walk, drawTimeoutMs: deadline - Date.now() });
   }
-  return isShown();
+  const isDone = isShown();
+  if (!isDone) {
+    log("Viewed files: a wait for the tree hit its cap", { timeoutMs });
+  }
+  return isDone;
 }
 
 /**
@@ -149,7 +154,14 @@ async function walkTree(walk: TreeWalk, visit: Visit): Promise<boolean> {
     return scroller !== null;
   }
   scroller.style.visibility = "hidden";
-  return walkFromTop(walk, scroller, visit);
+  const started = Date.now();
+  const isFound = await walkFromTop(walk, scroller, visit);
+  log("Viewed files: walked the tree", {
+    isFound,
+    ms: Date.now() - started,
+    scrollHeight: scroller.scrollHeight,
+  });
+  return isFound;
 }
 
 /** Scrolls the tree until it draws the row of `path`, then runs `act` on it. False when no row has that path. */

@@ -7,7 +7,7 @@ import { listedRows } from "../../pull-requests/file-tree/tree-listing.ts";
 
 const ROW_HEIGHT = 20;
 const ROW_MARKUP = `<td><div class="bolt-checkbox" role="checkbox"></div></td><td class="bolt-tree-cell"><span class="bolt-tree-expand-button"></span><span class="text-ellipsis"><span></span></span></td>`;
-const PAGE_MARKUP = `<!doctype html><body><div class="repos-pr-header"><div class="flex-row rhythm-horizontal-8"><div class="repos-pr-title-row"></div><div class="repos-pr-header-vote-button bolt-split-button"></div></div></div><div class="v-scroll-auto"><table class="repos-changes-explorer-tree"><tbody></tbody></table></div><div class="repos-changes-viewer"></div></body>`;
+const PAGE_MARKUP = `<!doctype html><body><div class="flex-row rhythm-horizontal-8"><div class="bolt-dropdown-expandable"></div><div class="repos-compare-filter bolt-filter"></div></div><div class="v-scroll-auto"><table class="repos-changes-explorer-tree"><tbody></tbody></table></div><div class="repos-changes-viewer"></div></body>`;
 
 interface VirtualTreeOptions {
   changedPaths: string[];

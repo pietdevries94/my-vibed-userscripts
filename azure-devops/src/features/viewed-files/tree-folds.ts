@@ -3,6 +3,7 @@ import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts"
 import { untilTreeShows, walkTree } from "./tree-walk.ts";
 import type { TreeWalk } from "./tree-walk.ts";
 import { foldedPaths } from "../../pull-requests/file-tree/tree-folded.ts";
+import { log } from "../../../../shared/runtime/script-log.ts";
 
 const FOLD_SELECTOR = ".bolt-tree-expand-button";
 
@@ -53,6 +54,7 @@ async function setFoldersOpen(walk: TreeWalk, folders: string[], isOpen: boolean
   if (left.size === 0) {
     return;
   }
+  const started = Date.now();
   await walkTree(walk, async () => {
     for (let found = drawnFolder(walk, left); found !== null; found = drawnFolder(walk, left)) {
       left.delete(found.path);
@@ -60,6 +62,12 @@ async function setFoldersOpen(walk: TreeWalk, folders: string[], isOpen: boolean
       await setFolderOpen(walk, found, isOpen);
     }
     return left.size === 0;
+  });
+  log("Viewed files: opened or folded folders", {
+    asked: folders.length,
+    isOpen,
+    missed: left.size,
+    ms: Date.now() - started,
   });
 }
 

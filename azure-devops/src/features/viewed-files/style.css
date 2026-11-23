@@ -22,7 +22,7 @@
   align-self: center;
 }
 
-/* Expand all and Collapse viewed, before the vote button in the pull request's header. */
-.fix-ado-viewed-header-buttons {
+/* Expand all and Collapse viewed, right after the Filter button in the Files tab's toolbar. */
+.fix-ado-viewed-toolbar-buttons {
   flex-shrink: 0;
 }

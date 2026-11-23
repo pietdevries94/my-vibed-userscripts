@@ -3,7 +3,7 @@
 // owner reviewed. The toggle shows the tree's tick, so both stay the same. A folder
 // whose files are all ticked collapses in the tree, also when the page loads, but not
 // while a single file is open. A viewed file's card starts collapsed. Expand all and
-// Collapse viewed in the pull request's header act on the cards and the tree.
+// Collapse viewed in the Files tab's toolbar act on the cards and the tree.
 import {
   TICK_SELECTOR,
   findCompleteFolders,
@@ -17,13 +17,14 @@ import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts"
 import { fold, foldFolders, unfoldAbove, unfoldAll } from "./tree-folds.ts";
 import { isFolderView, setCardOpen, syncViewedToggles } from "./viewed-toggles.ts";
 import { keepingScroll, untilTreeShows, walkTree, withDrawnRow } from "./tree-walk.ts";
-import { removeHeaderButtons, syncHeaderButtons } from "./header-buttons.ts";
+import { removeToolbarButtons, syncToolbarButtons } from "./toolbar-buttons.ts";
 import type { FileHeader } from "./viewed-toggles.ts";
-import type { HeaderAction } from "./header-buttons.ts";
 import type { PullRequestRef } from "../../pull-requests/pull-request-link.ts";
 import type { ReviewRequests } from "../../pull-requests/review-requests.ts";
 import type { ShownPullRequest } from "./tree-ticks.ts";
+import type { ToolbarAction } from "./toolbar-buttons.ts";
 import type { TreeWalk } from "./tree-walk.ts";
+import { log } from "../../../../shared/runtime/script-log.ts";
 
 const TREE_SELECTOR = ".repos-changes-explorer-tree";
 
@@ -84,7 +85,9 @@ function queue(state: ViewedState, run: () => Promise<void>): void {
   const work: Promise<void> = before
     .then(run)
     // A failed step leaves the tree as it is; the next sync tries again.
-    .catch(() => null)
+    .catch((error: unknown) => {
+      log("Viewed files: a step failed", { error: String(error) });
+    })
     .then(() => {
       if (state.work === work) {
         state.work = null;
@@ -101,6 +104,7 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
   shown.isWalkStarted = true;
   const { document } = state.options;
   queue(state, async () => {
+    const started = Date.now();
     const walk = walkOf(state, shown);
     await keepingScroll(walk, async () => {
       await walkTree(walk, () => {
@@ -111,6 +115,11 @@ function walkWholeTree(state: ViewedState, shown: ShownPullRequest): void {
       if (isFolderView(document)) {
         await foldFolders(walk, outermost([...shown.completeFolders]));
       }
+    });
+    log("Viewed files: first walk and folds done", {
+      changedFiles: shown.changedPaths?.length,
+      completeFolders: shown.completeFolders?.size,
+      ms: Date.now() - started,
     });
     render(state);
   });
@@ -159,10 +168,10 @@ function setViewed(state: ViewedState, header: FileHeader, isViewed: boolean): v
 }
 
 /**
- * Runs a click on a header button: on the cards right away, and on the tree after the
+ * Runs a click on a toolbar button: on the cards right away, and on the tree after the
  * work before it. Collapse viewed also folds while a single file is open.
  */
-function runHeaderAction(state: ViewedState, action: HeaderAction): void {
+function runToolbarAction(state: ViewedState, action: ToolbarAction): void {
   const { shown } = state;
   if (shown?.changedPaths === null || shown === null) {
     return;
@@ -172,6 +181,7 @@ function runHeaderAction(state: ViewedState, action: HeaderAction): void {
   const paths = isExpand
     ? changedPaths
     : changedPaths.filter((path) => shown.fileTicks.get(path) === true);
+  log("Viewed files: toolbar button clicked", { action });
   askCards(state.options.document, shown, { isOpen: isExpand, paths });
   queue(state, async () => {
     const walk = walkOf(state, shown);
@@ -191,8 +201,8 @@ function render(state: ViewedState): void {
     setAskedCards(document, shown);
     foldViewedCards(document, shown);
   }
-  syncHeaderButtons(document, (action) => {
-    runHeaderAction(state, action);
+  syncToolbarButtons(document, (action) => {
+    runToolbarAction(state, action);
   });
   syncViewedToggles(state.options.document, {
     isViewed: (path) => shown?.fileTicks.get(path) === true,
@@ -262,7 +272,7 @@ function createViewedFiles(options: ViewedFilesOptions): ViewedFiles {
     },
     sync(pullRequest) {
       if (pullRequest === null || options.document.querySelector(TREE_SELECTOR) === null) {
-        removeHeaderButtons(options.document);
+        removeToolbarButtons(options.document);
         return;
       }
       syncTreeTicks(state, show(state, pullRequest));

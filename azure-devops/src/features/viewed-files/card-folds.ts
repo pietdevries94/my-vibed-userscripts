@@ -16,7 +16,7 @@ function foldViewedCards(document: Document, shown: ShownPullRequest): void {
   }
 }
 
-/** Gives each drawn card the state a header button asked for it, once. */
+/** Gives each drawn card the state a toolbar button asked for it, once. */
 function setAskedCards(document: Document, shown: ShownPullRequest): void {
   for (const { card, path } of fileCards(document)) {
     const isOpen = shown.cardsAsked.get(path);
