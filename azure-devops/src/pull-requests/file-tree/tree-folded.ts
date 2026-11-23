@@ -77,9 +77,23 @@ function noteFolded(
   return folded;
 }
 
+/**
+ * Notes a fold or unfold the script made itself, by the path it knows. The drawn rows
+ * may not tell it: a folder whose folders above are not drawn can share its name.
+ */
+function noteOwnFold(document: Document, path: string, isFolded: boolean): void {
+  const folded = foldedByDocument.get(document) ?? new Set<string>();
+  foldedByDocument.set(document, folded);
+  if (isFolded) {
+    folded.add(path);
+  } else {
+    folded.delete(path);
+  }
+}
+
 /** Every path folded since the page loaded and not unfolded, as the last `noteFolded` saw. */
 function foldedPaths(document: Document): Set<string> {
   return foldedByDocument.get(document) ?? new Set<string>();
 }
 
-export { foldedPaths, noteFolded };
+export { foldedPaths, noteFolded, noteOwnFold };

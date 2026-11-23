@@ -1,8 +1,8 @@
 // Opens and folds folder rows of the file tree, as their chevrons do.
 import { drawnRowOf, treeNow } from "../../pull-requests/file-tree/tree-rows.ts";
+import { foldedPaths, noteOwnFold } from "../../pull-requests/file-tree/tree-folded.ts";
 import { untilTreeShows, walkTree } from "./tree-walk.ts";
 import type { TreeWalk } from "./tree-walk.ts";
-import { foldedPaths } from "../../pull-requests/file-tree/tree-folded.ts";
 import { log } from "../../../../shared/runtime/script-log.ts";
 
 const FOLD_SELECTOR = ".bolt-tree-expand-button";
@@ -21,14 +21,24 @@ async function setFolderOpen(
 ): Promise<void> {
   if (row.getAttribute("aria-expanded") !== String(isOpen)) {
     row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
-    await untilTreeShows(walk, () => isFoldShown(walk, path, isOpen), walk.drawTimeoutMs);
+    noteOwnFold(walk.document, path, !isOpen);
+    // The clicked row shows the fold when the tree keeps it; a row drawn anew is found by its path.
+    await untilTreeShows(
+      walk,
+      () =>
+        row.isConnected
+          ? row.getAttribute("aria-expanded") === String(isOpen)
+          : isFoldShown(walk, path, isOpen),
+      walk.drawTimeoutMs,
+    );
   }
 }
 
 /** Collapses a folder row, as its chevron does. */
-function fold(row: Element): void {
+function fold(document: Document, { path, row }: { path: string; row: Element }): void {
   if (row.getAttribute("aria-expanded") === "true") {
     row.querySelector<HTMLElement>(FOLD_SELECTOR)?.click();
+    noteOwnFold(document, path, true);
   }
 }
 

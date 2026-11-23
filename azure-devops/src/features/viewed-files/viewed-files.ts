@@ -66,7 +66,7 @@ function foldNewlyComplete(document: Document, shown: ShownPullRequest): void {
   for (const folder of foldersToCollapse(document, shown)) {
     const row = drawnRowOf(folder, tree);
     if (row !== null) {
-      fold(row);
+      fold(document, { path: folder, row });
     }
   }
 }

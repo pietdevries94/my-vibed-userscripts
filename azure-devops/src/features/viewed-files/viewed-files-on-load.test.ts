@@ -1,6 +1,7 @@
 // What the viewed files feature folds when the Files tab opens.
 import { PULL_REQUEST, isCardOpen, startedPage, toggleOf } from "./viewed-page.test-page.ts";
 import assert from "node:assert/strict";
+import { logEntries } from "../../../../shared/runtime/script-log.ts";
 import { test } from "node:test";
 
 test("a folder whose files are all ticked when the page loads starts folded, and only the outermost one", async () => {
@@ -50,4 +51,57 @@ test("folding many viewed folders on load takes one walk through the tree, not o
   assert.equal(tree.isFolded("/src/area39"), false);
   // A walk through the 201 rows steps 8 rows at a time: about 25 writes. One walk scans, one folds.
   assert.ok(tree.scrollWrites() <= 70, `${String(tree.scrollWrites())} scroll writes`);
+});
+
+/** A pull request of 166 files whose folders and files share names, as in a real repository. Seeded, so the same each run. */
+function sharedNamesPullRequest(seed: number): { changedPaths: string[]; ticked: string[] } {
+  let state = seed;
+  const next = (): number => {
+    state = (state * 1_103_515_245 + 12_345) % 2_147_483_648;
+    return state / 2_147_483_648;
+  };
+  const pick = (names: string[]): string => names[Math.floor(next() * names.length)] ?? "";
+  const folders = ["src", "lib", "components", "hooks", "routes", "utils", "app", "services"];
+  const files = ["index.ts", "utils.ts", "types.ts", "main.py", "service.py", "readme.md"];
+  const paths = new Set<string>();
+  while (paths.size < 166) {
+    const depth = 1 + Math.floor(next() * 5);
+    paths.add(`/${[...Array.from({ length: depth }, () => pick(folders)), pick(files)].join("/")}`);
+  }
+  const changedPaths = [...paths];
+  const viewedFolders = changedPaths
+    .map((path) => path.slice(0, path.lastIndexOf("/")))
+    .filter(() => next() < 0.15);
+  const ticked = changedPaths.filter(
+    (path) => next() < 0.2 || viewedFolders.some((folder) => path.startsWith(`${folder}/`)),
+  );
+  return { changedPaths, ticked };
+}
+
+const capsSoFar = (): number =>
+  logEntries().filter(({ message }) => message.includes("hit its cap")).length;
+
+test("folders that share names with others fold on load and on Collapse viewed, without a wait running out", async () => {
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const capsBefore = capsSoFar();
+    // oxlint-disable-next-line eslint/no-await-in-loop -- one page at a time: they share the script log
+    const { tree, viewed } = await startedPage({
+      ...sharedNamesPullRequest(seed),
+      pageRows: 10,
+      rowsInView: 28,
+    });
+    [...tree.document.querySelectorAll("button")]
+      .find((button) => button.textContent === "Collapse viewed")
+      ?.click();
+    // oxlint-disable-next-line eslint/no-await-in-loop -- one page at a time: they share the script log
+    await viewed.idle();
+    const missed = logEntries()
+      .filter(({ message }) => message.includes("opened or folded folders"))
+      .slice(-2)
+      .map(({ data }) => JSON.stringify(data));
+    assert.equal(capsSoFar() - capsBefore, 0, `seed ${String(seed)}: no wait ran out its cap`);
+    for (const pass of missed) {
+      assert.match(pass, /"missed":0/u, `seed ${String(seed)}: every folder was found`);
+    }
+  }
 });
