@@ -1,17 +1,17 @@
 import type { PullRequestListPage, PullRequestRef } from "../pull-requests/pull-request-link.ts";
 import { getJson, sendRequest } from "./ado-request.ts";
 import type { AdoClientOptions } from "./ado-request.ts";
-import type { BoardWorkItem } from "../boards/board.ts";
 import type { BuildRequests } from "../pipeline/build-requests.ts";
 import type { Identity } from "../pull-requests/reviewer-requests.ts";
 import type { ListedPullRequest } from "../features/reload-on-changes/pr-list-changes.ts";
 import type { PolicyEvaluation } from "../pipeline/pipeline-status.ts";
 import type { ReviewRequests } from "../pull-requests/review-requests.ts";
 import type { TimelineRecord } from "../pipeline/pipeline-timeline.ts";
-import type { WorkItemUpdate } from "../features/days-in-column/days-in-column.ts";
+import type { WorkItemRequests } from "./work-item-requests.ts";
 import { createBuildRequests } from "../pipeline/build-requests.ts";
 import { createReviewRequests } from "../pull-requests/review-requests.ts";
 import { createReviewerRequests } from "../pull-requests/reviewer-requests.ts";
+import { createWorkItemRequests } from "./work-item-requests.ts";
 
 interface PolicyEvaluationsResponse {
   evaluations: PolicyEvaluation[];
@@ -31,27 +31,11 @@ interface TimelineResponse {
   retryAfterSeconds: number | null;
 }
 
-interface WorkItemsResponse {
-  workItems: BoardWorkItem[];
-  /** Set when Azure DevOps asks the caller to slow down. */
-  retryAfterSeconds: number | null;
-}
-
-interface WorkItemUpdatesResponse {
-  /** Oldest first. */
-  updates: WorkItemUpdate[];
-  /** Set when Azure DevOps asks the caller to slow down. */
-  retryAfterSeconds: number | null;
-}
-
-interface AdoClient extends ReviewRequests, BuildRequests {
+interface AdoClient extends ReviewRequests, BuildRequests, WorkItemRequests {
   getPolicyEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluationsResponse>;
   getPullRequests: (listPage: PullRequestListPage) => Promise<PullRequestsResponse>;
   /** The stages, jobs and steps of a pipeline run. */
   getTimeline: (project: string, buildId: number) => Promise<TimelineResponse>;
-  getWorkItems: (ids: number[]) => Promise<WorkItemsResponse>;
-  /** Every change to one work item, oldest first. */
-  getWorkItemUpdates: (id: number) => Promise<WorkItemUpdatesResponse>;
   /** The id of the signed-in user, or null when Azure DevOps does not tell. */
   getAuthenticatedUserId: () => Promise<string | null>;
   /** Cancels a queued or running run. */
@@ -68,19 +52,6 @@ interface AdoClient extends ReviewRequests, BuildRequests {
   /** People and groups whose name or address matches the query. */
   searchIdentities: (query: string) => Promise<Identity[]>;
 }
-
-/** A work item from the work items API. With errorPolicy=Omit, null for one that was deleted or is not readable. */
-type WorkItemBody = {
-  id: number;
-  rev: number;
-  fields?: { "System.ChangedBy"?: { id?: string } };
-} | null;
-
-/** The work items API accepts at most this many ids per request. */
-const MAX_WORK_ITEMS_PER_REQUEST = 200;
-
-/** The updates API returns at most this many updates per request. */
-const MAX_UPDATES_PER_REQUEST = 200;
 
 /** Enough to detect an added or removed pull request in any realistic list. */
 const MAX_LISTED_PULL_REQUESTS = 200;
@@ -101,60 +72,6 @@ function createProjectIdCache(options: AdoClientOptions): (project: string) => P
     }
     return request;
   };
-}
-
-function toBoardWorkItems(values: unknown[] | undefined): BoardWorkItem[] {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
-  const workItems = values as WorkItemBody[];
-  return workItems.flatMap((workItem) =>
-    workItem === null
-      ? []
-      : [
-          {
-            changedById: workItem.fields?.["System.ChangedBy"]?.id ?? null,
-            id: workItem.id,
-            rev: workItem.rev,
-          },
-        ],
-  );
-}
-
-async function getWorkItems(options: AdoClientOptions, ids: number[]): Promise<WorkItemsResponse> {
-  const workItems: BoardWorkItem[] = [];
-  let retryAfterSeconds: number | null = null;
-  for (let start = 0; start < ids.length; start += MAX_WORK_ITEMS_PER_REQUEST) {
-    const idsInRequest = ids.slice(start, start + MAX_WORK_ITEMS_PER_REQUEST);
-    // oxlint-disable-next-line eslint/no-await-in-loop -- TODO(lint): batches go one at a time; parallel batches would change the request pattern
-    const response = await getJson(
-      options,
-      `/_apis/wit/workitems?ids=${idsInRequest.join(",")}&fields=System.Rev,System.ChangedBy&errorPolicy=Omit&api-version=7.1`,
-    );
-    retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
-    workItems.push(...toBoardWorkItems(response.body.value));
-  }
-  return { retryAfterSeconds, workItems };
-}
-
-async function getWorkItemUpdates(
-  options: AdoClientOptions,
-  id: number,
-): Promise<WorkItemUpdatesResponse> {
-  const updates: WorkItemUpdate[] = [];
-  let retryAfterSeconds: number | null = null;
-  for (let skip = 0; ; skip += MAX_UPDATES_PER_REQUEST) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- each page tells whether there is a next one
-    const response = await getJson(
-      options,
-      `/_apis/wit/workItems/${id}/updates?$top=${MAX_UPDATES_PER_REQUEST}&$skip=${skip}&api-version=7.1`,
-    );
-    retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Azure DevOps responses are trusted and not checked
-    const page = (response.body.value ?? []) as WorkItemUpdate[];
-    updates.push(...page);
-    if (page.length < MAX_UPDATES_PER_REQUEST) {
-      return { retryAfterSeconds, updates };
-    }
-  }
 }
 
 async function getPolicyEvaluations(
@@ -244,26 +161,18 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
       return { records: (body.records ?? []) as TimelineRecord[], retryAfterSeconds };
     },
 
-    getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
-    getWorkItems: async (ids) => getWorkItems(options, ids),
-
     requeuePolicyEvaluation: async (project, evaluationId) =>
       requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
     saveTheme: async (themeId) => saveTheme(options, themeId),
 
     ...createBuildRequests(options),
     ...createReviewRequests(options),
+    ...createWorkItemRequests(options),
     ...createReviewerRequests(options),
   };
 }
 
-export type {
-  AdoClient,
-  PolicyEvaluationsResponse,
-  PullRequestsResponse,
-  TimelineResponse,
-  WorkItemUpdatesResponse,
-  WorkItemsResponse,
-};
+export type { AdoClient, PolicyEvaluationsResponse, PullRequestsResponse, TimelineResponse };
+export type { WorkItemUpdatesResponse, WorkItemsResponse } from "./work-item-requests.ts";
 export { AdoRequestError } from "./ado-request.ts";
 export { createAdoClient };

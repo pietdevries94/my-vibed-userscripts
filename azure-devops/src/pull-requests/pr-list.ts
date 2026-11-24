@@ -104,6 +104,31 @@ function showPublishedSince(row: HTMLElement, shown: PublishedSince | null): voi
   }
 }
 
+const LINE_UNDER_TITLE_SELECTOR = `${TITLE_LINE_SELECTOR}:nth-child(2) .secondary-text`;
+const LINKED_WORK_ITEM_CLASS = "fix-ado-linked-work-item";
+
+function addLinkedWorkItemLabel(row: HTMLElement, text: string): void {
+  const label = row.ownerDocument.createElement("span");
+  label.className = LINKED_WORK_ITEM_CLASS;
+  label.textContent = text;
+  row.querySelector(LINE_UNDER_TITLE_SELECTOR)?.append(label);
+}
+
+/**
+ * Shows the linked work item at the end of the line under the title, such as
+ * "#123 Fix the login form". `null` removes it. Only touches the DOM on a change.
+ */
+function showLinkedWorkItem(row: HTMLElement, text: string | null): void {
+  const shown = row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`);
+  if (text === null) {
+    shown?.remove();
+  } else if (shown === null) {
+    addLinkedWorkItemLabel(row, text);
+  } else if (shown.textContent !== text) {
+    shown.textContent = text;
+  }
+}
+
 const REVIEWER_SELECTOR = ".pr-reviewer";
 
 /**
@@ -124,6 +149,7 @@ export {
   findPullRequestRows,
   isDraftRow,
   markRequiredReviewers,
+  showLinkedWorkItem,
   showPipelineStatus,
   showPublishedSince,
 };

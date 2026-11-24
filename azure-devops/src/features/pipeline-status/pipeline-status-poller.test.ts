@@ -10,6 +10,7 @@ import { BUILD_POLICY_TYPE_ID } from "../../pipeline/pipeline-status.ts";
 import type { PipelineStatusPoller } from "./pipeline-status-poller.ts";
 import type { PolicyEvaluation } from "../../pipeline/pipeline-status.ts";
 import type { ShownStatus } from "../../pipeline/pipeline-status-icon.ts";
+import type { WorkItemRequests } from "../../core/work-item-requests.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -46,6 +47,13 @@ const UNUSED_REVIEW_REQUESTS = {
   setPullRequestVote: notUsedByThePoller,
 };
 
+const UNUSED_WORK_ITEM_REQUESTS: WorkItemRequests = {
+  getPullRequestWorkItemIds: notUsedByThePoller,
+  getWorkItemTitle: notUsedByThePoller,
+  getWorkItemUpdates: notUsedByThePoller,
+  getWorkItems: notUsedByThePoller,
+};
+
 function pollerOnFakeList(pullRequestIds: number[]): {
   list: FakeList;
   poller: PipelineStatusPoller;
@@ -64,6 +72,7 @@ function pollerOnFakeList(pullRequestIds: number[]): {
   };
   const client: AdoClient = {
     ...UNUSED_REVIEW_REQUESTS,
+    ...UNUSED_WORK_ITEM_REQUESTS,
     addPullRequestReviewer: notUsedByThePoller,
     cancelBuild: notUsedByThePoller,
     getAuthenticatedUserId: notUsedByThePoller,
@@ -76,8 +85,6 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     getPullRequestReviewers: notUsedByThePoller,
     getPullRequests: notUsedByThePoller,
     getTimeline: notUsedByThePoller,
-    getWorkItemUpdates: notUsedByThePoller,
-    getWorkItems: notUsedByThePoller,
     requeuePolicyEvaluation: notUsedByThePoller,
     saveTheme: notUsedByThePoller,
     searchIdentities: notUsedByThePoller,

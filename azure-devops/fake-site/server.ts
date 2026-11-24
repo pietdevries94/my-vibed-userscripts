@@ -1,6 +1,6 @@
 // The fake Azure DevOps, on the shared fake-site base. `npm run dev azure-devops` starts it.
 // Pages: the board, the repository pull request list, the pull request inbox, a pull
-// request, a work item and a pipeline run's views, from the fixtures. API: the GET requests the script sends, answered from the fixtures and
+// request, a work item and a pipeline run's views, from the fixtures. Linked work items are invented. API: the GET requests the script sends, answered from the fixtures and
 // the state the actions change. Open http://localhost:8787/__dev for links.
 import type { FakeRequest, FakeResponse } from "../../shared/dev/fake-site/server.ts";
 import { THEME_PATH, themeAction, themeResponse } from "./theme.ts";
@@ -13,6 +13,11 @@ import {
   pullRequestListPath,
   pullRequestPageData,
 } from "./data.ts";
+import {
+  isWorkItemTitleRequest,
+  linkedWorkItemsResponse,
+  workItemTitlesResponse,
+} from "./linked-work-items.ts";
 import { jsonResponse, startFakeSite } from "../../shared/dev/fake-site/server.ts";
 import { pageAt, pageResponse } from "./page-response.ts";
 import { workItemUpdatesResponse, workItemsResponse } from "./board-api.ts";
@@ -120,7 +125,17 @@ const API_ROUTES: [RegExp, (request: FakeRequest, match: RegExpExecArray) => Fak
   [/^\/fake-org\/[^/]+\/_apis\/build\/builds$/u, buildsResponse],
   [/^\/fake-org\/[^/]+\/_apis\/build\/builds\/(?<buildId>\d+)$/u, buildResponse],
   [/^\/fake-org\/[^/]+\/_apis\/git\/repositories\/[^/]+\/pullrequests$/u, pullRequestsResponse],
-  [/^\/fake-org\/_apis\/wit\/workitems$/u, workItemsResponse],
+  [
+    /^\/fake-org\/[^/]+\/_apis\/git\/repositories\/[^/]+\/pullRequests\/(?<id>\d+)\/workitems$/u,
+    linkedWorkItemsResponse,
+  ],
+  [
+    /^\/fake-org\/_apis\/wit\/workitems$/u,
+    (request) =>
+      isWorkItemTitleRequest(request)
+        ? workItemTitlesResponse(request)
+        : workItemsResponse(request),
+  ],
   [/^\/fake-org\/_apis\/wit\/workItems\/(?<id>\d+)\/updates$/u, workItemUpdatesResponse],
   [
     /^\/fake-org\/_apis\/connectionData$/u,

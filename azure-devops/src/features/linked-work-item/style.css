@@ -1,0 +1,5 @@
+/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
+.fix-ado-linked-work-item::before {
+  content: "·";
+  margin-inline: 0.5em;
+}
