@@ -5,6 +5,7 @@ import { createRunTabFrame } from "./run-tab-frame.ts";
 import { createRunTabToggle } from "./run-tab-toggle.ts";
 import { pullRequestOf } from "../../core/page.ts";
 import style from "./style.css";
+import switchStyle from "../../core/switch.css";
 
 /**
  * The run page tabs the owner turned on, per pipeline. A setting the owner turns off on the
@@ -56,7 +57,7 @@ const runPageTabs: Feature = {
       },
     };
   },
-  styles: [style],
+  styles: [switchStyle, style],
 };
 
 export { runPageTabs };

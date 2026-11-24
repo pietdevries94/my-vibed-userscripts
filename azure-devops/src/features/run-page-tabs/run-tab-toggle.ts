@@ -2,6 +2,7 @@
 // tab of this run's pipeline. The run page does not name its pipeline, so the switch
 // reads it once from the run, and stays disabled until it knows.
 import type { RunTab, RunTabStorage } from "./run-tab-store.ts";
+import { createSwitch, showSwitchOn } from "../../core/switch.ts";
 import { isSameRunTab, runTabViewOf } from "./run-tab-store.ts";
 import type { BuildPipeline } from "../../pipeline/build-requests.ts";
 import { parsePipelineRunLocation } from "../../pipeline/pipeline-run-link.ts";
@@ -47,29 +48,9 @@ function selectedRunTabOf(tabbar: Element, lookup: PipelineLookup): RunTab | nul
   return { label, pipelineId: id, pipelineName: name, view };
 }
 
-function createPill(document: Document): HTMLElement {
-  const pill = Object.assign(document.createElement("span"), {
-    className: "fix-ado-run-tab-toggle-pill",
-  });
-  pill.setAttribute("aria-hidden", "true");
-  pill.append(
-    Object.assign(document.createElement("span"), { className: "fix-ado-run-tab-toggle-knob" }),
-  );
-  return pill;
-}
-
 function createToggle(document: Document): HTMLButtonElement {
-  const toggle = Object.assign(document.createElement("button"), {
-    className: TOGGLE_CLASS,
-    type: "button",
-  });
-  toggle.setAttribute("role", "switch");
-  toggle.setAttribute("aria-checked", "false");
-  const text = Object.assign(document.createElement("span"), {
-    className: "fix-ado-run-tab-toggle-text",
-    textContent: LABEL,
-  });
-  toggle.append(createPill(document), text);
+  const toggle = createSwitch(document, LABEL);
+  toggle.classList.add(TOGGLE_CLASS);
   return toggle;
 }
 
@@ -104,9 +85,7 @@ function showToggleState(state: ToggleState, tabbar: Element, toggle: HTMLButton
   const tab = selectedRunTabOf(tabbar, state.lookup);
   const isOn =
     tab !== null && state.options.storage.load().some((other) => isSameRunTab(other, tab));
-  if (toggle.getAttribute("aria-checked") !== String(isOn)) {
-    toggle.setAttribute("aria-checked", String(isOn));
-  }
+  showSwitchOn(toggle, isOn);
   if (toggle.disabled !== (tab === null)) {
     toggle.disabled = tab === null;
   }

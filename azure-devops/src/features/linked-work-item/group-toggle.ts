@@ -1,4 +1,9 @@
-const TOGGLE_BAR_CLASS = "fix-ado-group-toggle";
+import { createSwitch, showSwitchOn } from "../../core/switch.ts";
+
+const TOGGLE_CLASS = "fix-ado-group-toggle";
+const BAR_CLASS = "fix-ado-group-toggle-bar";
+const LABEL = "Group by work item";
+const TABBAR_SELECTOR = ".bolt-tabbar:has(> .bolt-tabbar-tabs)";
 const PAGE_CONTENT_SELECTOR = ".page-content";
 
 interface GroupToggleState {
@@ -6,57 +11,76 @@ interface GroupToggleState {
   onToggle: () => void;
 }
 
-/** The latest onToggle per button, so a click always calls the one from the last sync. */
-const onToggleByButton = new WeakMap<HTMLButtonElement, () => void>();
+/** The latest onToggle per switch, so a click always calls the one from the last sync. */
+const onToggleBySwitch = new WeakMap<HTMLButtonElement, () => void>();
 
-function createToggleBar(document: Document): HTMLElement {
-  const bar = document.createElement("div");
-  bar.className = TOGGLE_BAR_CLASS;
-  const button = document.createElement("button");
-  button.type = "button";
-  // Azure DevOps's own button look, so the toggle blends in.
-  button.className = "bolt-button enabled subtle";
-  button.textContent = "Group by work item";
-  button.addEventListener("click", () => {
-    onToggleByButton.get(button)?.();
+function createToggle(document: Document): HTMLButtonElement {
+  const toggle = createSwitch(document, LABEL);
+  toggle.classList.add(TOGGLE_CLASS);
+  toggle.addEventListener("click", () => {
+    onToggleBySwitch.get(toggle)?.();
   });
-  bar.append(button);
-  return bar;
+  return toggle;
 }
 
-/** The toggle bar as the first child of the page content, added when missing. */
-function placeToggleBar(content: Element, shown: HTMLElement | null): HTMLElement {
-  const bar = shown ?? createToggleBar(content.ownerDocument);
+/** In a repository list's tab bar, before its buttons. False without a tab bar. */
+function placeInTabbar(document: Document, toggle: HTMLButtonElement): boolean {
+  const tabbar = document.querySelector(TABBAR_SELECTOR);
+  if (tabbar === null) {
+    return false;
+  }
+  const buttons = tabbar.querySelector(":scope > .bolt-header-commandbar");
+  if (buttons === null) {
+    if (toggle.parentElement !== tabbar) {
+      tabbar.append(toggle);
+    }
+  } else if (toggle.nextElementSibling !== buttons) {
+    buttons.before(toggle);
+  }
+  return true;
+}
+
+/** The bar above the lists, as the first child of the page content, added when missing. */
+function barAboveLists(content: Element): Element {
+  const bar =
+    content.querySelector(`:scope > .${BAR_CLASS}`) ??
+    Object.assign(content.ownerDocument.createElement("div"), { className: BAR_CLASS });
   if (content.firstElementChild !== bar) {
     content.prepend(bar);
   }
   return bar;
 }
 
-function showPressed(button: HTMLButtonElement, isPressed: boolean): void {
-  const pressed = String(isPressed);
-  if (button.getAttribute("aria-pressed") !== pressed) {
-    button.setAttribute("aria-pressed", pressed);
+/** In a bar of its own above the lists, as the inbox has no tab bar. */
+function placeAboveLists(document: Document, toggle: HTMLButtonElement): void {
+  const content = document.querySelector(PAGE_CONTENT_SELECTOR);
+  if (content === null) {
+    toggle.remove();
+    return;
+  }
+  const bar = barAboveLists(content);
+  if (toggle.parentElement !== bar) {
+    bar.append(toggle);
   }
 }
 
 /**
- * A "Group by work item" toggle above the pull request lists. `null` removes it.
- * aria-pressed says whether the lists are grouped. Only touches the DOM on a change.
+ * The "Group by work item" switch: in a repository list's tab bar, or above the inbox's
+ * lists. `null` removes it. Only touches the DOM on a change.
  */
 function showGroupToggle(document: Document, state: GroupToggleState | null): void {
-  const shown = document.querySelector<HTMLElement>(`.${TOGGLE_BAR_CLASS}`);
-  const content = document.querySelector(PAGE_CONTENT_SELECTOR);
-  if (state === null || content === null) {
+  const shown = document.querySelector<HTMLButtonElement>(`.${TOGGLE_CLASS}`);
+  if (state === null) {
     shown?.remove();
+    document.querySelector(`.${BAR_CLASS}`)?.remove();
     return;
   }
-  const button = placeToggleBar(content, shown).querySelector("button");
-  if (button === null) {
-    return;
+  const toggle = shown ?? createToggle(document);
+  if (!placeInTabbar(document, toggle)) {
+    placeAboveLists(document, toggle);
   }
-  onToggleByButton.set(button, state.onToggle);
-  showPressed(button, state.isGrouped);
+  onToggleBySwitch.set(toggle, state.onToggle);
+  showSwitchOn(toggle, state.isGrouped);
 }
 
 export { showGroupToggle };

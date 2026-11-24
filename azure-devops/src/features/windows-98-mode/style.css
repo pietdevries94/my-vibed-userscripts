@@ -1739,10 +1739,13 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     text-shadow: 1px 1px #fff;
   }
 
-  /* "Show this tab in pull requests" on a run page: a Win98 checkbox and its label. */
+  /* A switch (core/switch.css): a Win98 checkbox and its label. */
   .fix-ado-run-tab-toggle {
-    gap: 6px;
     margin: 0 8px;
+  }
+
+  .fix-ado-switch {
+    gap: 6px;
     padding: 0 2px;
     border-radius: 0;
     color: #000;
@@ -1756,13 +1759,13 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     &:focus-visible {
       outline: 0;
 
-      .fix-ado-run-tab-toggle-text {
+      .fix-ado-switch-text {
         outline: 1px dotted #000;
       }
     }
   }
 
-  .fix-ado-run-tab-toggle-pill.fix-ado-run-tab-toggle-pill {
+  .fix-ado-switch-pill.fix-ado-switch-pill {
     width: 13px;
     height: 13px;
     padding: 0;
@@ -1772,17 +1775,17 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     box-shadow: var(--win98-sunken);
   }
 
-  .fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
+  .fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
     background:
       var(--win98-check) center / 7px 7px no-repeat,
       #fff;
   }
 
-  .fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-pill {
+  .fix-ado-switch:disabled .fix-ado-switch-pill {
     background-color: var(--win98-face);
   }
 
-  .fix-ado-run-tab-toggle-knob {
+  .fix-ado-switch-knob {
     display: none;
   }
 

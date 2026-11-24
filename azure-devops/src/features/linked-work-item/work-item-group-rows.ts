@@ -1,5 +1,4 @@
 import type { WorkItemGroup } from "./work-item-groups.ts";
-import { showTooltip } from "../../pull-requests/pr-list.ts";
 
 const GROUP_ROW_CLASS = "fix-ado-work-item-group";
 const PULL_REQUEST_ROW_SELECTOR = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
@@ -50,32 +49,43 @@ function groupRowFor(list: HTMLElement, key: string): HTMLTableRowElement {
 const workItemHref = (basePath: string, workItemId: number | null): string | null =>
   workItemId === null ? null : `${basePath}/_workitems/edit/${workItemId}`;
 
-function createGroupTitle(document: Document, href: string | null, label: string): HTMLElement {
-  const element = document.createElement(href === null ? "span" : "a");
-  if (href !== null) {
-    element.setAttribute("href", href);
+/** "#123" as a link to the work item, then its title; or plain text for the other groups. */
+function createGroupTitle(
+  document: Document,
+  href: string | null,
+  { label, title }: WorkItemGroup<HTMLElement>,
+): (Node | string)[] {
+  if (href === null) {
+    return [Object.assign(document.createElement("span"), { textContent: label })];
   }
-  element.textContent = label;
-  return element;
+  const link = Object.assign(document.createElement("a"), { textContent: label });
+  link.setAttribute("href", href);
+  link.target = "_blank";
+  link.rel = "noopener";
+  if (title === null) {
+    return [link];
+  }
+  const titleText = Object.assign(document.createElement("span"), {
+    className: "fix-ado-work-item-group-title",
+    textContent: title,
+  });
+  return [link, " ", titleText];
 }
 
-/** The group's title: a link to its work item, or plain text. Only touches the DOM on a change. */
+/** The group's title row. Only touches the DOM on a change. */
 function showGroupTitle(
   row: HTMLTableRowElement,
   basePath: string,
-  { label, title, workItemId }: WorkItemGroup<HTMLElement>,
+  group: WorkItemGroup<HTMLElement>,
 ): void {
   const [cell] = row.cells;
-  if (cell === undefined) {
+  const href = workItemHref(basePath, group.workItemId);
+  const shown = JSON.stringify([href, group.label, group.title]);
+  if (cell === undefined || row.dataset.fixAdoShownTitle === shown) {
     return;
   }
-  const href = workItemHref(basePath, workItemId);
-  let shown = cell.querySelector<HTMLElement>(":scope > *");
-  if (shown === null || shown.getAttribute("href") !== href || shown.textContent !== label) {
-    shown = createGroupTitle(row.ownerDocument, href, label);
-    cell.replaceChildren(shown);
-  }
-  showTooltip(shown, title);
+  cell.replaceChildren(...createGroupTitle(row.ownerDocument, href, group));
+  row.dataset.fixAdoShownTitle = shown;
 }
 
 const rowIndex = (row: Element): number => Number(row.getAttribute("aria-rowindex"));

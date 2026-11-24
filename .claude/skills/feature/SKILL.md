@@ -15,6 +15,10 @@ When the owner had a design made for the change, every visible style change goes
 
 A restyle of the site's own pages follows `restyle`.
 
+## Reuse
+
+Before building a control, such as a switch or a toggle button, rebase on `main` and look for one the script already has. A worktree branch can be behind `main`. Reuse it; move it to `<script>/src/core/` when a second feature needs it.
+
 ## Loop
 
 0. **Guides**: when the change adds or changes markup, CSS or DOM code, load `modern-web-guidance`. Search and retrieve a guide for each UI pattern it builds, such as a dialog, a toggle button, a tree or a loading state. Done when each pattern has a retrieved guide, or a rephrased search that found none. The code follows those guides. Where the site's own markup or classes must be matched to blend in, the site wins; say so in the hand-off. A captured CSS file holds only the rules the captured page used. So a site class on an element the script adds shows unstyled on the fake site, and styled on the real one. Use a site class only when the fixture CSS has its rules; otherwise style the element with the script's own class.

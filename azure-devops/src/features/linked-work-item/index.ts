@@ -10,6 +10,7 @@ import { linkedWorkItemLabel } from "./linked-work-item.ts";
 import { showGroupToggle } from "./group-toggle.ts";
 import { showWorkItemGroups } from "./work-item-group-rows.ts";
 import style from "./style.css";
+import switchStyle from "../../core/switch.css";
 
 const IS_GROUPED_KEY = "linked-work-item-grouped";
 const LIST_SELECTOR = "table.repos-pr-list > tbody";
@@ -30,17 +31,22 @@ function groupsOf(
   return groupByWorkItem(linkedRows);
 }
 
-function showLinkedWorkItemLabels(rows: PullRequestRow[], fetcher: LinkedWorkItemFetcher): void {
+/** Each row's work item id, or nothing in a grouped list, where the group's title has it. */
+function showLinkedWorkItemLabels(
+  rows: PullRequestRow[],
+  fetcher: LinkedWorkItemFetcher,
+  isGrouped: boolean,
+): void {
   for (const { row, pullRequest } of rows) {
-    const linked = fetcher.linkedWorkItems(pullRequest.pullRequestId);
+    const linked = isGrouped ? null : fetcher.linkedWorkItems(pullRequest.pullRequestId);
     showLinkedWorkItem(row, linked === null ? null : linkedWorkItemLabel(linked));
   }
 }
 
 const linkedWorkItem: Feature = {
-  change: { kind: "new", version: "1.20.0" },
+  change: { kind: "new", version: "1.24.0" },
   description:
-    "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. A toggle above the lists groups them by work item.",
+    "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. A switch groups the lists by work item, each under its work item's id and title.",
   id: "linked-work-item",
   name: "Linked work item",
   start({ basePath, client, document, now }) {
@@ -54,10 +60,11 @@ const linkedWorkItem: Feature = {
     let isList = false;
 
     function showAll(): void {
-      showLinkedWorkItemLabels(findRows(document), fetcher);
       for (const list of document.querySelectorAll<HTMLElement>(LIST_SELECTOR)) {
-        const groups = isList && isGrouped ? groupsOf(findRows(list), fetcher) : null;
+        const rows = findRows(list);
+        const groups = isList && isGrouped ? groupsOf(rows, fetcher) : null;
         showWorkItemGroups(list, basePath, groups);
+        showLinkedWorkItemLabels(rows, fetcher, groups !== null);
       }
       showGroupToggle(document, isList ? { isGrouped, onToggle: toggleGroups } : null);
     }
@@ -78,7 +85,7 @@ const linkedWorkItem: Feature = {
       },
     };
   },
-  styles: [style],
+  styles: [switchStyle, style],
 };
 
 export { linkedWorkItem };

@@ -70,84 +70,8 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   display: none !important;
 }
 
-/* "Show this tab in pull requests" at the right end of a run page's tab bar: a switch like
-   Azure DevOps's own. Its own classes, as no capture holds the site's switch. */
+/* "Show this tab in pull requests" at the right end of a run page's tab bar. core/switch.css
+   styles the switch. */
 .fix-ado-run-tab-toggle {
-  display: flex;
-  flex: none;
-  gap: 8px;
-  align-items: center;
   margin: 0 20px 0 8px;
-  padding: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-
-  &:disabled {
-    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
-    cursor: default;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--communication-background, rgb(0, 120, 212));
-    outline-offset: 1px;
-  }
-}
-
-.fix-ado-run-tab-toggle-pill {
-  display: flex;
-  flex: none;
-  align-items: center;
-  width: 40px;
-  height: 20px;
-  padding: 0 3px;
-  border: 1px solid var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  border-radius: 10px;
-}
-
-.fix-ado-run-tab-toggle-knob {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  transition: translate 0.1s;
-}
-
-.fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
-  border-color: var(--communication-background, rgb(0, 120, 212));
-  background: var(--communication-background, rgb(0, 120, 212));
-}
-
-.fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-knob {
-  background: #fff;
-  translate: 20px 0;
-}
-
-.fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-pill {
-  border-color: currentColor;
-}
-
-.fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-knob {
-  background: currentColor;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fix-ado-run-tab-toggle-knob {
-    transition: none;
-  }
-}
-
-/* Forced colors drop backgrounds, so the knob and the on state keep a border. */
-@media (forced-colors: active) {
-  .fix-ado-run-tab-toggle-knob {
-    border: 1px solid CanvasText;
-  }
-
-  .fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
-    border-color: Highlight;
-  }
 }

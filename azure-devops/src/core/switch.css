@@ -1,0 +1,80 @@
+/* A switch like Azure DevOps's own. switch.ts builds it. Its own classes, as no capture
+   holds the site's switch. Where it sits is up to the feature that adds it. */
+.fix-ado-switch {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+
+  &:disabled {
+    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--communication-background, rgb(0, 120, 212));
+    outline-offset: 1px;
+  }
+}
+
+.fix-ado-switch-pill {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 40px;
+  height: 20px;
+  padding: 0 3px;
+  border: 1px solid var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  border-radius: 10px;
+}
+
+.fix-ado-switch-knob {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  transition: translate 0.1s;
+}
+
+.fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  background: var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-switch[aria-checked="true"] .fix-ado-switch-knob {
+  background: #fff;
+  translate: 20px 0;
+}
+
+.fix-ado-switch:disabled .fix-ado-switch-pill {
+  border-color: currentColor;
+}
+
+.fix-ado-switch:disabled .fix-ado-switch-knob {
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-switch-knob {
+    transition: none;
+  }
+}
+
+/* Forced colors drop backgrounds, so the knob and the on state keep a border. */
+@media (forced-colors: active) {
+  .fix-ado-switch-knob {
+    border: 1px solid CanvasText;
+  }
+
+  .fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
+    border-color: Highlight;
+  }
+}

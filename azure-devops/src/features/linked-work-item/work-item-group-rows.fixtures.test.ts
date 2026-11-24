@@ -66,7 +66,7 @@ for (const page of ["pr-inbox-win98", "pr-list-win98-active"]) {
       },
     ]);
     assert.deepEqual(shownOrder(list).slice(0, 5), [
-      "group #9",
+      "group #9 Basket",
       ids[0],
       ids[2],
       "group No work item",
@@ -74,7 +74,8 @@ for (const page of ["pr-inbox-win98", "pr-list-win98-active"]) {
     ]);
     const link = list.querySelector<HTMLAnchorElement>(".fix-ado-work-item-group a");
     assert.equal(link?.getAttribute("href"), "/fake-org/_workitems/edit/9");
-    assert.equal(link?.title, "Basket");
+    assert.equal(link?.textContent, "#9");
+    assert.equal(link?.target, "_blank");
     assert.equal(
       list.querySelector(".fix-ado-work-item-group td")?.getAttribute("colspan"),
       String(list.closest("table")?.querySelectorAll("col").length),
