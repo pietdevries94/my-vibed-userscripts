@@ -176,5 +176,6 @@ export {
   markRequiredReviewers,
   showLinkedWorkItem,
   showPipelineStatus,
+  showTooltip,
   showPublishedSince,
 };
