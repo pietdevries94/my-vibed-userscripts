@@ -7,7 +7,8 @@
       "points": [
         "Pipeline status on each pull request",
         "Required reviewers first",
-        "How long ago each active pull request was published, in red after two weekdays"
+        "How long ago each active pull request was published, in red after two weekdays",
+        "The linked work item's id on each pull request, with a switch that groups the lists by work item"
       ]
     },
     {
