@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.23.1
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
+// @version      1.24.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -535,18 +535,8 @@
     };
   }
 
-  // azure-devops/src/core/ado-client.ts
-  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200, MAX_LISTED_PULL_REQUESTS = 200, THEME_SETTING_KEY = "WebPlatform/Theme";
-  function createProjectIdCache(options) {
-    let projectIdRequests = /* @__PURE__ */ new Map();
-    return async (project) => {
-      let request = projectIdRequests.get(project);
-      return request || (request = getJson(
-        options,
-        `/_apis/projects/${encodeURIComponent(project)}?api-version=7.1`
-      ).then(({ body }) => String(body.id)), request.catch(() => projectIdRequests.delete(project)), projectIdRequests.set(project, request)), request;
-    };
-  }
+  // azure-devops/src/core/work-item-requests.ts
+  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200;
   function toBoardWorkItems(values) {
     return values.flatMap(
       (workItem) => workItem === null ? [] : [
@@ -581,6 +571,41 @@
       if (updates.push(...page), page.length < MAX_UPDATES_PER_REQUEST)
         return { retryAfterSeconds, updates };
     }
+  }
+  async function getPullRequestWorkItemIds(options, { project, repository, pullRequestId }) {
+    let { body } = await getJson(
+      options,
+      `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/workitems?api-version=7.1`
+    );
+    return (body.value ?? []).map(({ id }) => Number(id));
+  }
+  async function getWorkItemTitle(options, id) {
+    let { body } = await getJson(
+      options,
+      `/_apis/wit/workitems?ids=${id}&fields=System.Title&errorPolicy=Omit&api-version=7.1`
+    ), [workItem] = body.value ?? [];
+    return workItem?.fields?.["System.Title"] ?? null;
+  }
+  function createWorkItemRequests(options) {
+    return {
+      getPullRequestWorkItemIds: async (pullRequest) => getPullRequestWorkItemIds(options, pullRequest),
+      getWorkItemTitle: async (id) => getWorkItemTitle(options, id),
+      getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
+      getWorkItems: async (ids) => getWorkItems(options, ids)
+    };
+  }
+
+  // azure-devops/src/core/ado-client.ts
+  var MAX_LISTED_PULL_REQUESTS = 200, THEME_SETTING_KEY = "WebPlatform/Theme";
+  function createProjectIdCache(options) {
+    let projectIdRequests = /* @__PURE__ */ new Map();
+    return async (project) => {
+      let request = projectIdRequests.get(project);
+      return request || (request = getJson(
+        options,
+        `/_apis/projects/${encodeURIComponent(project)}?api-version=7.1`
+      ).then(({ body }) => String(body.id)), request.catch(() => projectIdRequests.delete(project)), projectIdRequests.set(project, request)), request;
+    };
   }
   async function getPolicyEvaluations(options, projectId, { pullRequestId }) {
     let artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`, { body, retryAfterSeconds } = await getJson(
@@ -631,12 +656,11 @@
         );
         return { records: body.records ?? [], retryAfterSeconds };
       },
-      getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
-      getWorkItems: async (ids) => getWorkItems(options, ids),
       requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
       saveTheme: async (themeId) => saveTheme(options, themeId),
       ...createBuildRequests(options),
       ...createReviewRequests(options),
+      ...createWorkItemRequests(options),
       ...createReviewerRequests(options)
     };
   }
@@ -827,6 +851,25 @@
     }
     let line2 = publishedSinceLine(row);
     line2 && (line2.textContent !== shown.text && (line2.textContent = shown.text), line2.classList.contains(TOO_LONG_AGO_CLASS) !== shown.isTooLongAgo && line2.classList.toggle(TOO_LONG_AGO_CLASS, shown.isTooLongAgo));
+  }
+  var LINE_UNDER_TITLE_SELECTOR = `${TITLE_LINE_SELECTOR}:nth-child(2) .secondary-text`, LINKED_WORK_ITEM_CLASS = "fix-ado-linked-work-item";
+  function linkedWorkItemElement(row) {
+    let shown = row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`), lineUnderTitle = row.querySelector(LINE_UNDER_TITLE_SELECTOR);
+    if (shown !== null || lineUnderTitle === null)
+      return shown;
+    let label = row.ownerDocument.createElement("span");
+    return label.className = LINKED_WORK_ITEM_CLASS, lineUnderTitle.append(label), label;
+  }
+  function showTooltip(element4, tooltip) {
+    tooltip === null ? element4.removeAttribute("title") : element4.getAttribute("title") !== tooltip && element4.setAttribute("title", tooltip);
+  }
+  function showLinkedWorkItem(row, shown) {
+    if (shown === null) {
+      row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`)?.remove();
+      return;
+    }
+    let label = linkedWorkItemElement(row);
+    label !== null && (label.textContent !== shown.text && (label.textContent = shown.text), showTooltip(label, shown.tooltip));
   }
   var REVIEWER_SELECTOR = ".pr-reviewer";
   function markRequiredReviewers(row, reviewers) {
@@ -2695,10 +2738,13 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     text-shadow: 1px 1px #fff;
   }
 
-  /* "Show this tab in pull requests" on a run page: a Win98 checkbox and its label. */
+  /* A switch (core/switch.css): a Win98 checkbox and its label. */
   .fix-ado-run-tab-toggle {
-    gap: 6px;
     margin: 0 8px;
+  }
+
+  .fix-ado-switch {
+    gap: 6px;
     padding: 0 2px;
     border-radius: 0;
     color: #000;
@@ -2712,13 +2758,13 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     &:focus-visible {
       outline: 0;
 
-      .fix-ado-run-tab-toggle-text {
+      .fix-ado-switch-text {
         outline: 1px dotted #000;
       }
     }
   }
 
-  .fix-ado-run-tab-toggle-pill.fix-ado-run-tab-toggle-pill {
+  .fix-ado-switch-pill.fix-ado-switch-pill {
     width: 13px;
     height: 13px;
     padding: 0;
@@ -2728,17 +2774,17 @@ html[data-fix-ado-win98]:not([data-fix-ado-win98=""]) body {
     box-shadow: var(--win98-sunken);
   }
 
-  .fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
+  .fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
     background:
       var(--win98-check) center / 7px 7px no-repeat,
       #fff;
   }
 
-  .fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-pill {
+  .fix-ado-switch:disabled .fix-ado-switch-pill {
     background-color: var(--win98-face);
   }
 
-  .fix-ado-run-tab-toggle-knob {
+  .fix-ado-switch-knob {
     display: none;
   }
 
@@ -14595,6 +14641,30 @@ ${content}`
     };
   }
 
+  // azure-devops/src/core/switch.ts
+  var SWITCH_CLASS = "fix-ado-switch";
+  function createPill(document2) {
+    let pill = Object.assign(document2.createElement("span"), {
+      className: `${SWITCH_CLASS}-pill`
+    });
+    return pill.setAttribute("aria-hidden", "true"), pill.append(Object.assign(document2.createElement("span"), { className: `${SWITCH_CLASS}-knob` })), pill;
+  }
+  function createSwitch(document2, label) {
+    let toggle = Object.assign(document2.createElement("button"), {
+      className: SWITCH_CLASS,
+      type: "button"
+    });
+    toggle.setAttribute("role", "switch"), toggle.setAttribute("aria-checked", "false");
+    let text = Object.assign(document2.createElement("span"), {
+      className: `${SWITCH_CLASS}-text`,
+      textContent: label
+    });
+    return toggle.append(createPill(document2), text), toggle;
+  }
+  function showSwitchOn(toggle, isOn2) {
+    toggle.getAttribute("aria-checked") !== String(isOn2) && toggle.setAttribute("aria-checked", String(isOn2));
+  }
+
   // azure-devops/src/features/run-page-tabs/run-tab-toggle.ts
   var TABBAR_SELECTOR3 = ".run-details-page > .bolt-tabbar", SELECTED_TAB_SELECTOR = '[role=tablist] [role=tab][aria-selected="true"]', TOGGLE_CLASS3 = "fix-ado-run-tab-toggle", LABEL2 = "Show this tab in pull requests", FAILED_TITLE = "Could not read this run's pipeline. Reload to try again.";
   function selectedRunTabOf(tabbar, lookup) {
@@ -14604,25 +14674,9 @@ ${content}`
     let label = selected.querySelector(".bolt-tab-text")?.textContent.trim() ?? view, { id, name } = lookup.pipeline;
     return { label, pipelineId: id, pipelineName: name, view };
   }
-  function createPill(document2) {
-    let pill = Object.assign(document2.createElement("span"), {
-      className: "fix-ado-run-tab-toggle-pill"
-    });
-    return pill.setAttribute("aria-hidden", "true"), pill.append(
-      Object.assign(document2.createElement("span"), { className: "fix-ado-run-tab-toggle-knob" })
-    ), pill;
-  }
   function createToggle(document2) {
-    let toggle = Object.assign(document2.createElement("button"), {
-      className: TOGGLE_CLASS3,
-      type: "button"
-    });
-    toggle.setAttribute("role", "switch"), toggle.setAttribute("aria-checked", "false");
-    let text = Object.assign(document2.createElement("span"), {
-      className: "fix-ado-run-tab-toggle-text",
-      textContent: LABEL2
-    });
-    return toggle.append(createPill(document2), text), toggle;
+    let toggle = createSwitch(document2, LABEL2);
+    return toggle.classList.add(TOGGLE_CLASS3), toggle;
   }
   function flip(state, tabbar) {
     let tab = selectedRunTabOf(tabbar, state.lookup);
@@ -14642,7 +14696,7 @@ ${content}`
   }
   function showToggleState(state, tabbar, toggle) {
     let tab = selectedRunTabOf(tabbar, state.lookup), isOn2 = tab !== null && state.options.storage.load().some((other) => isSameRunTab(other, tab));
-    toggle.getAttribute("aria-checked") !== String(isOn2) && toggle.setAttribute("aria-checked", String(isOn2)), toggle.disabled !== (tab === null) && (toggle.disabled = tab === null);
+    showSwitchOn(toggle, isOn2), toggle.disabled !== (tab === null) && (toggle.disabled = tab === null);
     let title = state.lookup.kind === "failed" ? FAILED_TITLE : "";
     toggle.title !== title && (toggle.title = title);
   }
@@ -14740,14 +14794,21 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   display: none !important;
 }
 
-/* "Show this tab in pull requests" at the right end of a run page's tab bar: a switch like
-   Azure DevOps's own. Its own classes, as no capture holds the site's switch. */
+/* "Show this tab in pull requests" at the right end of a run page's tab bar. core/switch.css
+   styles the switch. */
 .fix-ado-run-tab-toggle {
+  margin: 0 20px 0 8px;
+}
+`;
+
+  // azure-devops/src/core/switch.css
+  var switch_default = `/* A switch like Azure DevOps's own. switch.ts builds it. Its own classes, as no capture
+   holds the site's switch. Where it sits is up to the feature that adds it. */
+.fix-ado-switch {
   display: flex;
   flex: none;
   gap: 8px;
   align-items: center;
-  margin: 0 20px 0 8px;
   padding: 4px;
   border: 0;
   border-radius: 4px;
@@ -14768,7 +14829,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 }
 
-.fix-ado-run-tab-toggle-pill {
+.fix-ado-switch-pill {
   display: flex;
   flex: none;
   align-items: center;
@@ -14779,7 +14840,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   border-radius: 10px;
 }
 
-.fix-ado-run-tab-toggle-knob {
+.fix-ado-switch-knob {
   width: 12px;
   height: 12px;
   border-radius: 50%;
@@ -14787,37 +14848,37 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   transition: translate 0.1s;
 }
 
-.fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
+.fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
   border-color: var(--communication-background, rgb(0, 120, 212));
   background: var(--communication-background, rgb(0, 120, 212));
 }
 
-.fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-knob {
+.fix-ado-switch[aria-checked="true"] .fix-ado-switch-knob {
   background: #fff;
   translate: 20px 0;
 }
 
-.fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-pill {
+.fix-ado-switch:disabled .fix-ado-switch-pill {
   border-color: currentColor;
 }
 
-.fix-ado-run-tab-toggle:disabled .fix-ado-run-tab-toggle-knob {
+.fix-ado-switch:disabled .fix-ado-switch-knob {
   background: currentColor;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fix-ado-run-tab-toggle-knob {
+  .fix-ado-switch-knob {
     transition: none;
   }
 }
 
 /* Forced colors drop backgrounds, so the knob and the on state keep a border. */
 @media (forced-colors: active) {
-  .fix-ado-run-tab-toggle-knob {
+  .fix-ado-switch-knob {
     border: 1px solid CanvasText;
   }
 
-  .fix-ado-run-tab-toggle[aria-checked="true"] .fix-ado-run-tab-toggle-pill {
+  .fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
     border-color: Highlight;
   }
 }
@@ -14863,7 +14924,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default13]
+    styles: [switch_default, style_default13]
   };
 
   // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
@@ -16822,6 +16883,261 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     };
   }
 
+  // azure-devops/src/features/linked-work-item/linked-work-item-fetcher.ts
+  var LINKED_WORK_ITEMS_REFRESH_INTERVAL_MS = 3e5;
+  async function fetchLinkedWorkItems(client, pullRequest) {
+    let ids = await client.getPullRequestWorkItemIds(pullRequest), [id] = ids, title = ids.length === 1 && id !== void 0 ? await client.getWorkItemTitle(id) : null;
+    return { ids, title };
+  }
+  function createLinkedWorkItemFetcher(options) {
+    let fetched = /* @__PURE__ */ new Map(), isFetching = !1;
+    function duePullRequests2() {
+      let due = /* @__PURE__ */ new Map();
+      for (let pullRequest of options.findPullRequests())
+        (fetched.get(pullRequest.pullRequestId)?.nextFetchAt ?? 0) <= options.now() && due.set(pullRequest.pullRequestId, pullRequest);
+      return [...due.values()];
+    }
+    async function fetchOne(pullRequest) {
+      let { pullRequestId } = pullRequest;
+      try {
+        let linkedWorkItems = await fetchLinkedWorkItems(options.client, pullRequest);
+        fetched.set(pullRequestId, {
+          linkedWorkItems,
+          nextFetchAt: options.now() + LINKED_WORK_ITEMS_REFRESH_INTERVAL_MS
+        });
+      } catch {
+        fetched.set(pullRequestId, {
+          linkedWorkItems: fetched.get(pullRequestId)?.linkedWorkItems ?? null,
+          nextFetchAt: options.now() + FAILED_REQUEST_RETRY_MS
+        });
+      }
+    }
+    return {
+      linkedWorkItems: (pullRequestId) => fetched.get(pullRequestId)?.linkedWorkItems ?? null,
+      async sync() {
+        if (!isFetching) {
+          isFetching = !0;
+          try {
+            for (let pullRequest of duePullRequests2())
+              await fetchOne(pullRequest);
+          } finally {
+            isFetching = !1;
+          }
+        }
+      }
+    };
+  }
+
+  // azure-devops/src/features/linked-work-item/work-item-groups.ts
+  var MULTIPLE_KEY = "multiple", NONE_KEY = "none";
+  function groupOf({ ids, title }) {
+    let [id] = ids;
+    return id === void 0 ? { key: NONE_KEY, label: "No work item", title: null, workItemId: null } : ids.length > 1 ? { key: MULTIPLE_KEY, label: "Multiple work items", title: null, workItemId: null } : { key: String(id), label: `#${id}`, title, workItemId: id };
+  }
+  function groupByWorkItem(rows) {
+    let groups = /* @__PURE__ */ new Map();
+    for (let { row, linked } of rows) {
+      let group2 = groupOf(linked), shown = groups.get(group2.key) ?? { ...group2, rows: [] };
+      shown.rows.push(row), groups.set(group2.key, shown);
+    }
+    let isLast = (key) => key === MULTIPLE_KEY || key === NONE_KEY;
+    return [
+      ...[...groups.values()].filter(({ key }) => !isLast(key)),
+      ...[MULTIPLE_KEY, NONE_KEY].flatMap((key) => groups.get(key) ?? [])
+    ];
+  }
+
+  // azure-devops/src/features/linked-work-item/linked-work-item.ts
+  function linkedWorkItemLabel({ ids, title }) {
+    let [id] = ids;
+    return id === void 0 ? null : ids.length > 1 ? { text: "Multiple work items", tooltip: ids.map((each) => `#${each}`).join(", ") } : { text: `#${id}`, tooltip: title };
+  }
+
+  // azure-devops/src/features/linked-work-item/group-toggle.ts
+  var TOGGLE_CLASS6 = "fix-ado-group-toggle", BAR_CLASS2 = "fix-ado-group-toggle-bar", LABEL4 = "Group by work item", TABBAR_SELECTOR4 = ".bolt-tabbar:has(> .bolt-tabbar-tabs)", PAGE_CONTENT_SELECTOR = ".page-content", onToggleBySwitch = /* @__PURE__ */ new WeakMap();
+  function createToggle4(document2) {
+    let toggle = createSwitch(document2, LABEL4);
+    return toggle.classList.add(TOGGLE_CLASS6), toggle.addEventListener("click", () => {
+      onToggleBySwitch.get(toggle)?.();
+    }), toggle;
+  }
+  function placeInTabbar(document2, toggle) {
+    let tabbar = document2.querySelector(TABBAR_SELECTOR4);
+    if (tabbar === null)
+      return !1;
+    let buttons = tabbar.querySelector(":scope > .bolt-header-commandbar");
+    return buttons === null ? toggle.parentElement !== tabbar && tabbar.append(toggle) : toggle.nextElementSibling !== buttons && buttons.before(toggle), !0;
+  }
+  function barAboveLists(content) {
+    let bar = content.querySelector(`:scope > .${BAR_CLASS2}`) ?? Object.assign(content.ownerDocument.createElement("div"), { className: BAR_CLASS2 });
+    return content.firstElementChild !== bar && content.prepend(bar), bar;
+  }
+  function placeAboveLists(document2, toggle) {
+    let content = document2.querySelector(PAGE_CONTENT_SELECTOR);
+    if (content === null) {
+      toggle.remove();
+      return;
+    }
+    let bar = barAboveLists(content);
+    toggle.parentElement !== bar && bar.append(toggle);
+  }
+  function showGroupToggle(document2, state) {
+    let shown = document2.querySelector(`.${TOGGLE_CLASS6}`);
+    if (state === null) {
+      shown?.remove(), document2.querySelector(`.${BAR_CLASS2}`)?.remove();
+      return;
+    }
+    let toggle = shown ?? createToggle4(document2);
+    placeInTabbar(document2, toggle) || placeAboveLists(document2, toggle), onToggleBySwitch.set(toggle, state.onToggle), showSwitchOn(toggle, state.isGrouped);
+  }
+
+  // azure-devops/src/features/linked-work-item/work-item-group-rows.ts
+  var GROUP_ROW_CLASS = "fix-ado-work-item-group", PULL_REQUEST_ROW_SELECTOR2 = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
+  function placeBefore(list, node, before) {
+    node.parentNode === list ? list.moveBefore(node, before) : before === null ? list.append(node) : before.before(node);
+  }
+  function placeInOrder(list, ordered, shown) {
+    if (ordered.length === shown.length && ordered.every((node, index) => node === shown[index]))
+      return;
+    let after = shown.at(-1)?.nextSibling ?? null;
+    for (let node of ordered)
+      placeBefore(list, node, after);
+  }
+  function createGroupRow(list, key) {
+    let { ownerDocument } = list, row = ownerDocument.createElement("tr");
+    row.className = GROUP_ROW_CLASS, row.dataset.fixAdoWorkItemGroup = key;
+    let cell2 = ownerDocument.createElement("td");
+    return cell2.colSpan = list.closest("table")?.querySelectorAll("col").length ?? 1, row.append(cell2), row;
+  }
+  function groupRowFor(list, key) {
+    return [
+      ...list.querySelectorAll(`:scope > .${GROUP_ROW_CLASS}`)
+    ].find((row) => row.dataset.fixAdoWorkItemGroup === key) ?? createGroupRow(list, key);
+  }
+  var workItemHref = (basePath2, workItemId) => workItemId === null ? null : `${basePath2}/_workitems/edit/${workItemId}`;
+  function createGroupTitle(document2, href, { label, title }) {
+    if (href === null)
+      return [Object.assign(document2.createElement("span"), { textContent: label })];
+    let link = Object.assign(document2.createElement("a"), { textContent: label });
+    if (link.setAttribute("href", href), link.target = "_blank", link.rel = "noopener", title === null)
+      return [link];
+    let titleText = Object.assign(document2.createElement("span"), {
+      className: "fix-ado-work-item-group-title",
+      textContent: title
+    });
+    return [link, " ", titleText];
+  }
+  function showGroupTitle(row, basePath2, group2) {
+    let [cell2] = row.cells, href = workItemHref(basePath2, group2.workItemId), shown = JSON.stringify([href, group2.label, group2.title]);
+    cell2 === void 0 || row.dataset.fixAdoShownTitle === shown || (cell2.replaceChildren(...createGroupTitle(row.ownerDocument, href, group2)), row.dataset.fixAdoShownTitle = shown);
+  }
+  var rowIndex = (row) => Number(row.getAttribute("aria-rowindex"));
+  function orderedNodes(list, basePath2, groups) {
+    return groups === null ? [...list.querySelectorAll(PULL_REQUEST_ROW_SELECTOR2)].toSorted(
+      (first, second) => rowIndex(first) - rowIndex(second)
+    ) : groups.flatMap((group2) => {
+      let groupRow = groupRowFor(list, group2.key);
+      return showGroupTitle(groupRow, basePath2, group2), [groupRow, ...group2.rows];
+    });
+  }
+  function showWorkItemGroups(list, basePath2, groups) {
+    let shownGroupRows = [...list.querySelectorAll(`:scope > .${GROUP_ROW_CLASS}`)];
+    if (groups === null && shownGroupRows.length === 0)
+      return;
+    let managed = /* @__PURE__ */ new Set([...shownGroupRows, ...list.querySelectorAll(PULL_REQUEST_ROW_SELECTOR2)]), shown = [...list.children].filter((child) => managed.has(child)), ordered = orderedNodes(list, basePath2, groups), kept = new Set(ordered);
+    for (let groupRow of shownGroupRows.filter((row) => !kept.has(row)))
+      groupRow.remove();
+    placeInOrder(
+      list,
+      ordered,
+      shown.filter((node) => node.isConnected)
+    );
+  }
+
+  // azure-devops/src/features/linked-work-item/style.css
+  var style_default17 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
+.fix-ado-linked-work-item::before {
+  content: "·";
+  margin-inline: 0.5em;
+}
+
+/* The "Group by work item" switch. core/switch.css styles it; group-toggle.ts places it. */
+.bolt-tabbar > .fix-ado-group-toggle {
+  margin: 0 8px;
+}
+
+/* The inbox has no tab bar, so the switch gets a bar of its own above the lists. */
+.fix-ado-group-toggle-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* A group's title row in a pull request list: its work item's id as a link, then its title.
+   work-item-group-rows.ts adds it. */
+.fix-ado-work-item-group > td {
+  padding: 12px 16px 4px;
+  font-weight: 600;
+}
+
+.fix-ado-work-item-group a {
+  color: var(--communication-foreground, rgb(0, 90, 158));
+}
+
+/* The work item's title after its id: grey and regular, so the group row does not shout. */
+.fix-ado-work-item-group-title {
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-weight: normal;
+}
+`;
+
+  // azure-devops/src/features/linked-work-item/index.ts
+  var IS_GROUPED_KEY = "linked-work-item-grouped", LIST_SELECTOR = "table.repos-pr-list > tbody";
+  function groupsOf2(rows, fetcher) {
+    let linkedRows = [];
+    for (let { row, pullRequest } of rows) {
+      let linked = fetcher.linkedWorkItems(pullRequest.pullRequestId);
+      if (linked === null)
+        return null;
+      linkedRows.push({ linked, row });
+    }
+    return groupByWorkItem(linkedRows);
+  }
+  function showLinkedWorkItemLabels(rows, fetcher, isGrouped) {
+    for (let { row, pullRequest } of rows) {
+      let linked = isGrouped ? null : fetcher.linkedWorkItems(pullRequest.pullRequestId);
+      showLinkedWorkItem(row, linked === null ? null : linkedWorkItemLabel(linked));
+    }
+  }
+  var linkedWorkItem = {
+    change: { kind: "new", version: "1.24.0" },
+    description: "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. A switch groups the lists by work item, each under its work item's id and title.",
+    id: "linked-work-item",
+    name: "Linked work item",
+    start({ basePath: basePath2, client, document: document2, now }) {
+      let findRows = (root) => findPullRequestRows(root, basePath2), fetcher = createLinkedWorkItemFetcher({
+        client,
+        findPullRequests: () => findRows(document2).map(({ pullRequest }) => pullRequest),
+        now
+      }), isGrouped = GM_getValue(IS_GROUPED_KEY, !1), isList = !1;
+      function showAll() {
+        for (let list of document2.querySelectorAll(LIST_SELECTOR)) {
+          let rows = findRows(list), groups = isList && isGrouped ? groupsOf2(rows, fetcher) : null;
+          showWorkItemGroups(list, basePath2, groups), showLinkedWorkItemLabels(rows, fetcher, groups !== null);
+        }
+        showGroupToggle(document2, isList ? { isGrouped, onToggle: toggleGroups } : null);
+      }
+      function toggleGroups() {
+        isGrouped = !isGrouped, GM_setValue(IS_GROUPED_KEY, isGrouped), showAll();
+      }
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          isList = page.kind === "pull-request-list" || page.kind === "pull-request-inbox", showAll(), isList && isTabActive2 && fetcher.sync().then(showAll);
+        }
+      };
+    },
+    styles: [switch_default, style_default17]
+  };
+
   // azure-devops/src/features/pipeline-status/index.ts
   var pipelineStatusOnPullRequests = {
     change: { kind: "new", version: "1.7.2" },
@@ -16924,7 +17240,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default17 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+  var style_default18 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
 .bolt-table-cell-content:has(> .fix-ado-published-since) {
   flex-direction: column;
   align-items: flex-start;
@@ -16973,7 +17289,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default17]
+    styles: [style_default18]
   };
 
   // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
@@ -17042,7 +17358,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default18 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default19 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -17089,7 +17405,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default18]
+    styles: [style_default19]
   };
 
   // azure-devops/src/features/index.ts
@@ -17098,7 +17414,12 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     Everywhere: EVERYWHERE_FEATURES,
     "Pull request": PULL_REQUEST_FEATURES,
     "Pull request Overview": OVERVIEW_FEATURES,
-    "Pull request lists": [pipelineStatusOnPullRequests, requiredReviewers, publishedSince]
+    "Pull request lists": [
+      pipelineStatusOnPullRequests,
+      requiredReviewers,
+      publishedSince,
+      linkedWorkItem
+    ]
   }, FEATURE_CATEGORIES = CATEGORY_NAMES.map((name) => ({
     features: FEATURES_BY_CATEGORY[name],
     name
