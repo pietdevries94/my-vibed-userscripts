@@ -2,13 +2,13 @@ import { findPullRequestRows, showLinkedWorkItem } from "../../pull-requests/pr-
 import type { Feature } from "../../core/feature.ts";
 import type { PullRequestRow } from "../../pull-requests/pr-list.ts";
 import { createLinkedWorkItemFetcher } from "./linked-work-item-fetcher.ts";
-import { linkedWorkItemText } from "./linked-work-item.ts";
+import { linkedWorkItemLabel } from "./linked-work-item.ts";
 import style from "./style.css";
 
 const linkedWorkItem: Feature = {
   change: { kind: "new", version: "1.20.0" },
   description:
-    "The work item linked to each pull request in a list, under its title. Multiple work items when there are more.",
+    "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more.",
   id: "linked-work-item",
   name: "Linked work item",
   start({ basePath, client, document, now }) {
@@ -22,7 +22,7 @@ const linkedWorkItem: Feature = {
     function showAll(): void {
       for (const { row, pullRequest } of findRows()) {
         const linked = fetcher.linkedWorkItems(pullRequest.pullRequestId);
-        showLinkedWorkItem(row, linked === null ? null : linkedWorkItemText(linked));
+        showLinkedWorkItem(row, linked === null ? null : linkedWorkItemLabel(linked));
       }
     }
 

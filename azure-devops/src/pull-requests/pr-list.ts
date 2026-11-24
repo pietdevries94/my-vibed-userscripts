@@ -107,26 +107,51 @@ function showPublishedSince(row: HTMLElement, shown: PublishedSince | null): voi
 const LINE_UNDER_TITLE_SELECTOR = `${TITLE_LINE_SELECTOR}:nth-child(2) .secondary-text`;
 const LINKED_WORK_ITEM_CLASS = "fix-ado-linked-work-item";
 
-function addLinkedWorkItemLabel(row: HTMLElement, text: string): void {
+/** What a row shows for its linked work items: an id or "Multiple work items", and a hover text. */
+interface LinkedWorkItemLabel {
+  text: string;
+  tooltip: string | null;
+}
+
+/** The label at the end of the line under the title, added when missing. Null without that line. */
+function linkedWorkItemElement(row: HTMLElement): HTMLElement | null {
+  const shown = row.querySelector<HTMLElement>(`.${LINKED_WORK_ITEM_CLASS}`);
+  const lineUnderTitle = row.querySelector(LINE_UNDER_TITLE_SELECTOR);
+  if (shown !== null || lineUnderTitle === null) {
+    return shown;
+  }
   const label = row.ownerDocument.createElement("span");
   label.className = LINKED_WORK_ITEM_CLASS;
-  label.textContent = text;
-  row.querySelector(LINE_UNDER_TITLE_SELECTOR)?.append(label);
+  lineUnderTitle.append(label);
+  return label;
+}
+
+/** Sets the element's hover text, or removes it for null. Only touches the DOM on a change. */
+function showTooltip(element: HTMLElement, tooltip: string | null): void {
+  if (tooltip === null) {
+    element.removeAttribute("title");
+  } else if (element.getAttribute("title") !== tooltip) {
+    element.setAttribute("title", tooltip);
+  }
 }
 
 /**
- * Shows the linked work item at the end of the line under the title, such as
- * "#123 Fix the login form". `null` removes it. Only touches the DOM on a change.
+ * Shows the linked work item at the end of the line under the title, such as "#123"
+ * with its title on hover. `null` removes it. Only touches the DOM on a change.
  */
-function showLinkedWorkItem(row: HTMLElement, text: string | null): void {
-  const shown = row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`);
-  if (text === null) {
-    shown?.remove();
-  } else if (shown === null) {
-    addLinkedWorkItemLabel(row, text);
-  } else if (shown.textContent !== text) {
-    shown.textContent = text;
+function showLinkedWorkItem(row: HTMLElement, shown: LinkedWorkItemLabel | null): void {
+  if (shown === null) {
+    row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`)?.remove();
+    return;
   }
+  const label = linkedWorkItemElement(row);
+  if (label === null) {
+    return;
+  }
+  if (label.textContent !== shown.text) {
+    label.textContent = shown.text;
+  }
+  showTooltip(label, shown.tooltip);
 }
 
 const REVIEWER_SELECTOR = ".pr-reviewer";
@@ -144,7 +169,7 @@ function markRequiredReviewers(row: HTMLElement, reviewers: Reviewer[]): void {
   }
 }
 
-export type { PublishedSince, PullRequestRow };
+export type { LinkedWorkItemLabel, PublishedSince, PullRequestRow };
 export {
   findPullRequestRows,
   isDraftRow,

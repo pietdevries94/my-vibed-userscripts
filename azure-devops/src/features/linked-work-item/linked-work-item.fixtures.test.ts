@@ -32,30 +32,38 @@ for (const page of ["pr-list", "pr-inbox"]) {
       const row = firstCapturedRow(page);
       const [, secondLine] = row.querySelectorAll(".bolt-table-two-line-cell-item");
       const textBefore = secondLine?.textContent ?? "";
-      showLinkedWorkItem(row, "#123 Fix the login form");
+      showLinkedWorkItem(row, { text: "#123", tooltip: "Fix the login form" });
 
       const [label] = shownLabels(row);
-      assert.equal(label?.textContent, "#123 Fix the login form");
+      assert.equal(label?.textContent, "#123");
+      assert.equal(label?.getAttribute("title"), "Fix the login form");
       assert.equal(label?.closest(".bolt-table-two-line-cell-item"), secondLine);
       assert.equal(label?.parentElement?.lastElementChild, label);
-      assert.equal(secondLine?.textContent, `${textBefore}#123 Fix the login form`);
+      assert.equal(secondLine?.textContent, `${textBefore}#123`);
     },
   );
 }
 
 test("showing the work item again adds no second label", { skip: fixtures.skip }, () => {
   const row = firstCapturedRow("pr-list");
-  showLinkedWorkItem(row, "#123 Fix the login form");
-  showLinkedWorkItem(row, "Multiple work items");
+  showLinkedWorkItem(row, { text: "#123", tooltip: "Fix the login form" });
+  showLinkedWorkItem(row, { text: "Multiple work items", tooltip: "#123, #456" });
   assert.deepEqual(
-    shownLabels(row).map((label) => label.textContent),
-    ["Multiple work items"],
+    shownLabels(row).map((label) => [label.textContent, label.getAttribute("title")]),
+    [["Multiple work items", "#123, #456"]],
   );
+});
+
+test("a work item without a title loses the hover", { skip: fixtures.skip }, () => {
+  const row = firstCapturedRow("pr-list");
+  showLinkedWorkItem(row, { text: "#123", tooltip: "Fix the login form" });
+  showLinkedWorkItem(row, { text: "#123", tooltip: null });
+  assert.equal(shownLabels(row)[0]?.hasAttribute("title"), false);
 });
 
 test("without a linked work item, the label goes", { skip: fixtures.skip }, () => {
   const row = firstCapturedRow("pr-list");
-  showLinkedWorkItem(row, "#123 Fix the login form");
+  showLinkedWorkItem(row, { text: "#123", tooltip: null });
   showLinkedWorkItem(row, null);
   assert.deepEqual(shownLabels(row), []);
 });
