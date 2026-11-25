@@ -112,6 +112,33 @@ function isWithin(part: Box, bar: Box): boolean {
   );
 }
 
+const COMMENT_BUTTON_HEIGHT = 18;
+const COMMENT_BUTTON_MIN_WIDTH = 22;
+const COMMENT_BUTTON_GAP = 4;
+
+/** What is wrong with one comment's buttons: each as tall as the status drop-down, 22px wide at
+ * least, and 4px apart. */
+function commentButtonFailures(label: string, buttons: Box[]): string[] {
+  return buttons.flatMap((button, index) => {
+    const failures: string[] = [];
+    if (Math.abs(button.height - COMMENT_BUTTON_HEIGHT) > SLACK) {
+      failures.push(`${label}: button ${index + 1} is ${button.height}px tall, not 18px`);
+    }
+    if (button.width < COMMENT_BUTTON_MIN_WIDTH - SLACK) {
+      failures.push(`${label}: button ${index + 1} is ${button.width}px wide, under 22px`);
+    }
+    const previous = buttons.at(index - 1);
+    if (
+      index > 0 &&
+      previous !== undefined &&
+      Math.abs(button.left - previous.right - COMMENT_BUTTON_GAP) > SLACK
+    ) {
+      failures.push(`${label}: buttons ${index} and ${index + 1} are not 4px apart`);
+    }
+    return failures;
+  });
+}
+
 /** What is wrong with one title bar. */
 function titleBarFailures({ bar, coinWidth, label, parts, textTop }: TitleBar): string[] {
   if (bar === null) {
@@ -166,6 +193,7 @@ async function captureFailures(
           .filter((part) => part.box.width > 0 && !isWithin(part.box, header))
           .map((part) => `${label}: ${part.name} sticks out of the comment header`),
       ),
+      ...headers.flatMap(({ buttons, label }) => commentButtonFailures(label, buttons)),
     ];
     const name = `${view.capture} ${view.width}${view.long ? " long names" : ""} ${state}`;
     return found.map((failure) => `${name}: ${failure}`);

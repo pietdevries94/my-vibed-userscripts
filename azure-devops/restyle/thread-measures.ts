@@ -76,10 +76,12 @@ interface CommentHeader {
   label: string;
   header: Box;
   parts: { name: string; box: Box }[];
+  /** The buttons that show, left to right. */
+  buttons: Box[];
 }
 
-/** The header of every comment in an open thread but a title bar: the name, time and chip.
- * Runs in the browser. */
+/** The header of every comment in an open thread but a title bar: the name, time, chip and
+ * buttons. Runs in the browser. */
 function measureCommentHeaders(): CommentHeader[] {
   const threads = document.querySelectorAll(".activity-feed-list [data-fix-ado-thread='open']");
   return [...threads].flatMap((thread, threadIndex) => {
@@ -95,8 +97,21 @@ function measureCommentHeaders(): CommentHeader[] {
         const { bottom, height, left, right, top, width } = element.getBoundingClientRect();
         return { bottom, height, left, right, top, width };
       });
+      const buttons = [...header.querySelectorAll(":scope > .justify-end .bolt-button")]
+        .map((button) => button.getBoundingClientRect())
+        .filter((box) => box.width > 0)
+        .map(({ bottom, height, left, right, top, width }) => ({
+          bottom,
+          height,
+          left,
+          right,
+          top,
+          width,
+        }))
+        .toSorted((first, second) => first.left - second.left);
       return [
         {
+          buttons,
           header: headerBox,
           label: `thread ${threadIndex + 1} comment ${viewerIndex + 1}`,
           parts: parts.map((part, partIndex) => ({

@@ -6279,6 +6279,24 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list .repos-discussi
   }
 }
 
+/* A comment's buttons on the window face, as in the MainUnread artboard: as tall as the status
+   drop-down, 22px wide at least and 4px apart. Title bars keep their caption buttons. */
+html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
+  .comment-file-header + [data-fix-ado-thread="open"] > .repos-comment-viewer,
+  [data-fix-ado-thread="open"]:not(.comment-file-header + *)
+    > .repos-comment-viewer:not(:first-child) {
+    .repos-discussion-comment-header > .justify-end {
+      gap: 4px;
+    }
+
+    .repos-discussion-comment-header .bolt-button.bolt-button {
+      min-width: 22px;
+      height: 18px;
+      padding: 0 4px;
+    }
+  }
+}
+
 /* Code in a comment on the Overview: a sunken white well in Courier New, as in the Files tab,
    with its copy button beside it on the window face. */
 html[data-fix-ado-win98="pull-request"] body .activity-feed-list .copy-btn-container {
