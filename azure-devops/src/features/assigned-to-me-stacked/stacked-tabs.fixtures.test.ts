@@ -85,6 +85,28 @@ for (const page of ["pr-list-assigned-active", "pr-inbox-assigned-active-inbox"]
   });
 }
 
+/** Each reviewer's vote icon in the card's rows, as the site draws it. */
+function voteIcons(card: Element): string[] {
+  return [...card.querySelectorAll(".pr-reviewer")].map(
+    (reviewer) => reviewer.querySelector(".repos-pr-reviewer-vote")?.className ?? "none",
+  );
+}
+
+test(
+  "built Waiting for author rows show the votes as the site does",
+  { skip: fixtures.skip },
+  () => {
+    const siteVotes = voteIcons(assignedCard(capturedPage("pr-list-assigned-waiting").document));
+    const { assigned, document } = capturedPage("pr-list-assigned-active");
+
+    showStackedTabs(document, assigned, CONTEXT);
+
+    const built = document.querySelector(".fix-ado-assigned-card");
+    assert.ok(built);
+    assert.deepEqual(voteIcons(built), siteVotes);
+  },
+);
+
 for (const page of ["pr-list-assigned-waiting", "pr-inbox-assigned-waiting-inbox"]) {
   test(`${page}: Active shows above Waiting for author`, { skip: fixtures.skip }, () => {
     const { assigned, document } = capturedPage(page);

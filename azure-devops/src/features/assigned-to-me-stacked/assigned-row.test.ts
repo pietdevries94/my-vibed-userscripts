@@ -31,3 +31,42 @@ test("the line under the title names the pull request's author and id, in split 
   );
   assert.equal(row?.querySelector(".body-l")?.textContent, "New title");
 });
+
+/** A site row with two reviewers, the first of whom approved. */
+function siteRowWithReviewers(): HTMLElement {
+  const row = siteRow();
+  const coin = `<div><div class="bolt-coin"><img src=""></div></div>`;
+  const approved = `<span class="fluent-icons-enabled"><span aria-hidden="true" class="repos-pr-reviewer-vote absolute approved flex-noshrink fabric-icon ms-Icon--CompletedSolid"></span></span>`;
+  row.insertAdjacentHTML(
+    "beforeend",
+    `<div class="rhythm-horizontal-8">
+      <div class="pr-reviewer relative">${coin}${approved}</div>
+      <div class="pr-reviewer relative">${coin}</div>
+    </div>`,
+  );
+  return row;
+}
+
+test("each reviewer shows their own vote, as the site's icon", () => {
+  const row = buildAssignedRow(
+    siteRowWithReviewers(),
+    {
+      pullRequestId: 34,
+      reviewers: [
+        { displayName: "Vale, Juniper", vote: -5 },
+        { displayName: "Holt, Mira", vote: 0 },
+        { displayName: "Reed, Tamsin", vote: -10 },
+      ],
+    },
+    { basePath: "/my-org", now: 0, reviewerId: "kestrel" },
+  );
+
+  const votes = [...(row?.querySelectorAll(".pr-reviewer") ?? [])].map(
+    (reviewer) => reviewer.querySelector(".repos-pr-reviewer-vote")?.className ?? "",
+  );
+  assert.deepEqual(votes, [
+    "repos-pr-reviewer-vote absolute waiting flex-noshrink fabric-icon ms-Icon--AwayStatus",
+    "",
+    "repos-pr-reviewer-vote absolute rejected flex-noshrink fabric-icon ms-Icon--StatusErrorFull",
+  ]);
+});

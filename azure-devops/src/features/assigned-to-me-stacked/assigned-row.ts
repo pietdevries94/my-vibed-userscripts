@@ -1,6 +1,7 @@
 // A pull request row the script builds, as a copy of one of Azure DevOps's own rows in the
 // same card, so it keeps the site's markup and wording ("requested … into", "Created").
 import type { AssignedPullRequest, Person } from "./assigned-tabs.ts";
+import type { Reviewer } from "../../pull-requests/reviewers.ts";
 import { avatarName } from "../../pull-requests/avatars.ts";
 import { relativeTime } from "./relative-time.ts";
 
@@ -17,6 +18,19 @@ const BRANCH_SELECTOR = ".monospaced-xs";
 /** The inbox names the repository before the branch. */
 const REPOSITORY_SELECTOR = ":scope > .padding-horizontal-4:not(.monospaced-xs)";
 const REVIEWER_SELECTOR = ".pr-reviewer";
+/** The icon on a reviewer's avatar, in its wrapper. */
+const VOTE_ICON_SELECTOR = ".fluent-icons-enabled:has(> .repos-pr-reviewer-vote)";
+const APPROVED_VOTE = 10;
+const APPROVED_WITH_SUGGESTIONS_VOTE = 5;
+const WAITING_FOR_AUTHOR_VOTE = -5;
+const REJECTED_VOTE = -10;
+/** The site's class and icon for each vote. Approved with suggestions shows as approved. */
+const VOTE_ICONS = new Map([
+  [APPROVED_VOTE, ["approved", "ms-Icon--CompletedSolid"]],
+  [APPROVED_WITH_SUGGESTIONS_VOTE, ["approved", "ms-Icon--CompletedSolid"]],
+  [WAITING_FOR_AUTHOR_VOTE, ["waiting", "ms-Icon--AwayStatus"]],
+  [REJECTED_VOTE, ["rejected", "ms-Icon--StatusErrorFull"]],
+]);
 const COMMENTS_CELL_SELECTOR = '[aria-colindex="4"] .bolt-table-cell-content';
 const ROW_MENU_SELECTOR = ".bolt-table-cell-content-reveal";
 /** What other features add to a row. They add it again to the built row. */
@@ -141,6 +155,38 @@ function showMoreCount(avatars: Element, rest: number): Element | null {
   return morePill;
 }
 
+/** The site's icon for the reviewer's vote, or null without a vote. */
+function createVoteIcon(document: Document, vote: number | undefined): HTMLElement | null {
+  const [state, iconName] = VOTE_ICONS.get(vote ?? 0) ?? [];
+  if (state === undefined || iconName === undefined) {
+    return null;
+  }
+  const wrapper = Object.assign(document.createElement("span"), {
+    className: "fluent-icons-enabled",
+  });
+  const icon = Object.assign(document.createElement("span"), {
+    className: `repos-pr-reviewer-vote absolute ${state} flex-noshrink fabric-icon ${iconName}`,
+  });
+  icon.setAttribute("aria-hidden", "true");
+  wrapper.append(icon);
+  return wrapper;
+}
+
+/** A copy of the site's reviewer avatar, showing this reviewer and their vote. */
+function createReviewerAvatar(template: Element, reviewer: Reviewer & Person): Element | null {
+  const avatar = copyOf(template);
+  if (avatar === null) {
+    return null;
+  }
+  showAvatar(avatar.querySelector(".bolt-coin"), reviewer);
+  avatar.querySelector(VOTE_ICON_SELECTOR)?.remove();
+  const voteIcon = createVoteIcon(avatar.ownerDocument, reviewer.vote);
+  if (voteIcon) {
+    avatar.append(voteIcon);
+  }
+  return avatar;
+}
+
 /** The first reviewers' avatars, then "+2" for the rest when the site's row has such a pill. */
 function showReviewers(row: HTMLElement, pullRequest: AssignedPullRequest): void {
   const shown = [...row.querySelectorAll(REVIEWER_SELECTOR)];
@@ -151,8 +197,7 @@ function showReviewers(row: HTMLElement, pullRequest: AssignedPullRequest): void
   }
   const reviewers = pullRequest.reviewers ?? [];
   const avatars = reviewers.slice(0, MAX_SHOWN_REVIEWERS).flatMap((reviewer) => {
-    const avatar = copyOf(first);
-    showAvatar(avatar?.querySelector(".bolt-coin") ?? null, reviewer);
+    const avatar = createReviewerAvatar(first, reviewer);
     return avatar === null ? [] : [avatar];
   });
   const morePill = showMoreCount(parent, reviewers.length - avatars.length);

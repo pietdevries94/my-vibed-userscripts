@@ -35,7 +35,11 @@ function shownKey(tab: CardTab, pullRequests: AssignedPullRequest[], now: number
       pullRequest.mergeStatus,
       pullRequest.targetRefName,
       pullRequest.createdBy?.displayName,
-      pullRequest.reviewers?.map(({ displayName, isRequired }) => [displayName, isRequired]),
+      pullRequest.reviewers?.map(({ displayName, isRequired, vote }) => [
+        displayName,
+        isRequired,
+        vote,
+      ]),
       relativeTime(Date.parse(pullRequest.creationDate ?? ""), now),
     ]),
   ]);
