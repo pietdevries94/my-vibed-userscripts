@@ -38,7 +38,6 @@
     --fix-ado-avatar-size: 20px !important;
     width: 20px;
     height: 20px;
-    font-size: 9px;
   }
 
   /* The title, then the line under it to its right, which takes the space left. */
@@ -56,10 +55,6 @@
   & .bolt-table-two-line-cell-item:nth-child(2) {
     flex: 1 1 0;
     min-width: 0;
-  }
-
-  & .bolt-table-two-line-cell-item .body-l {
-    font-size: 13px;
   }
 
   /* The pipeline status before the title. */
@@ -95,7 +90,6 @@
   /* The time: the publish time alone when it shows, as it says more than the update time. */
   & [aria-colindex="5"] .bolt-table-cell-content {
     justify-content: flex-end;
-    font-size: 12px;
   }
 
   & .bolt-table-cell-content:has(> .fix-ado-published-since) {
