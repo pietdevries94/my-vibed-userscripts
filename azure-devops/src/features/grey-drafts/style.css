@@ -1,16 +1,24 @@
 /* A draft pull request's row, in the lists and the inbox: a slight grey from the theme's
-   text colour, so it works in Light and Dark. The site's selected row keeps its colour. */
+   text colour, so it works in Light and Dark, and text a step lighter than the site's. The
+   site's selected row keeps its colours. */
 a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected) {
+  --text-secondary-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.45);
+
   background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.05);
+  color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.7);
 
   &:hover {
     background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.08);
   }
 }
 
-/* Windows 98 mode: halfway between the white field and the light face grey. A selected or
-   focused row stays navy. */
+/* Windows 98 mode: halfway between the white field and the light face grey, with dark grey
+   text. A selected or focused row stays navy. */
 html[data-fix-ado-win98] a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected, .focused) {
+  --text-secondary-color: var(--win98-shadow);
+
+  color: #404040;
+
   &,
   &:hover {
     background-color: color-mix(in oklab, var(--win98-light), var(--win98-field-face));
