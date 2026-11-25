@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.25.1
+// @version      1.25.2
 // @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -7293,6 +7293,24 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list .repos-discussi
   .bolt-dropdown-expandable > .bolt-button.bolt-button {
     height: 18px;
     padding: 0 2px 0 6px;
+  }
+}
+
+/* A comment's buttons on the window face, as in the MainUnread artboard: as tall as the status
+   drop-down, 22px wide at least and 4px apart. Title bars keep their caption buttons. */
+html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
+  .comment-file-header + [data-fix-ado-thread="open"] > .repos-comment-viewer,
+  [data-fix-ado-thread="open"]:not(.comment-file-header + *)
+    > .repos-comment-viewer:not(:first-child) {
+    .repos-discussion-comment-header > .justify-end {
+      gap: 4px;
+    }
+
+    .repos-discussion-comment-header .bolt-button.bolt-button {
+      min-width: 22px;
+      height: 18px;
+      padding: 0 4px;
+    }
   }
 }
 
