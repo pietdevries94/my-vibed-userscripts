@@ -2615,6 +2615,46 @@ html[data-fix-ado-win98]:is(
     display: block;
     width: 100%;
   }
+
+  /* Group by work item: centred in the tab bar, clear of the tab panel's frame. */
+  .bolt-tabbar > .fix-ado-group-toggle {
+    align-self: center;
+  }
+
+  /* A work item's group: its id as a link and its title, then a line to the list's edge. */
+  .fix-ado-work-item-group {
+    display: block;
+
+    & > td {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 24px;
+      padding: 0 12px;
+      white-space: nowrap;
+      color: #000;
+      font-weight: 700;
+
+      &::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        margin-left: 2px;
+        background: var(--win98-shadow);
+      }
+    }
+
+    a {
+      color: #0000ee;
+    }
+  }
+
+  .fix-ado-work-item-group-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #404040;
+    font-weight: 400;
+  }
 }
 
 html[data-fix-ado-win98] {
@@ -4235,12 +4275,15 @@ html[data-fix-ado-win98="pull-request"] body {
     display: block;
 
     colgroup,
-    .bolt-list-row-spacer,
     td.bolt-table-cell-compact {
       display: none;
     }
 
-    & > tbody {
+    /* The tree draws only the rows in view. Its spacer rows hold the height of the others,
+       so the pane scrolls to the last file. */
+    & > tbody,
+    .bolt-list-row-spacer,
+    .bolt-list-cell-spacer {
       display: block;
     }
 
@@ -5547,6 +5590,22 @@ html[data-fix-ado-win98="pull-request"]
   .repos-changes-explorer-tree
   .bolt-table-cell-content-reveal {
   visibility: visible;
+}
+
+/* While Viewed files reads the tree, face-grey bars stand in for its rows, two to every 40px,
+   on the white well. The rows' checkboxes hide with the rows. */
+html[data-fix-ado-win98="pull-request"]
+  body
+  .repos-changes-explorer-splitter
+  .v-scroll-auto.fix-ado-viewed-tree-loading {
+  background:
+    linear-gradient(var(--win98-face) 0 8px, transparent 8px) 24px 8px / 60% 40px repeat-y,
+    linear-gradient(var(--win98-face) 0 8px, transparent 8px) 40px 28px / 45% 40px repeat-y,
+    #fff;
+
+  .bolt-table-cell-content-reveal {
+    visibility: hidden;
+  }
 }
 
 /* The pull request list draws no lines between rows. The site's 1px cell border would shift
@@ -7694,8 +7753,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
 
     colgroup,
     .bolt-table-header-border,
-    .bolt-table-cell-compact,
-    .bolt-list-row-spacer {
+    .bolt-table-cell-compact {
       display: none;
     }
 

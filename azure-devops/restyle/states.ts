@@ -15,6 +15,7 @@ import type { Page } from "playwright";
 import { REPO_ROOT } from "../../build/scripts.ts";
 import fs from "node:fs";
 import path from "node:path";
+import { treeScroll } from "./files.ts";
 
 const PR = "/fake-org/text-15/_git/text-16/pullrequest";
 const LIST = "/fake-org/text-2/_git/text-16/pullrequests";
@@ -76,12 +77,31 @@ function issueMessage(message: string): (page: Page) => Promise<void> {
   };
 }
 
+/** The Files tree as it shows once the Viewed files feature has read it. The fake site never
+ * ends that read, so the state drops the loading class itself. */
+async function showLoadedTree(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const tree of document.querySelectorAll(".fix-ado-viewed-tree-loading")) {
+      tree.classList.remove("fix-ado-viewed-tree-loading");
+    }
+  });
+  await page.waitForTimeout(300);
+}
+
 const states: DiffState[] = [
   { artboard: "PullRequests", capture: "win98", name: "list", page: "pr-list", path: LIST },
   {
     artboard: "PullRequestsActive",
     capture: "win98-active",
     name: "list-active",
+    page: "pr-list",
+    path: LIST,
+  },
+  {
+    artboard: "PullRequestsGrouped",
+    capture: "win98",
+    init: 'GM_setValue("linked-work-item-grouped", true);',
+    name: "list-grouped",
     page: "pr-list",
     path: LIST,
   },
@@ -150,6 +170,23 @@ const states: DiffState[] = [
     name: "commits",
     page: "pr-detail",
     path: `${PR}/1005`,
+  },
+  {
+    act: showLoadedTree,
+    artboard: "FilesViewed",
+    capture: "win98",
+    name: "files-viewed",
+    page: "pr-files",
+    path: `${PR}/1005?_a=files`,
+  },
+  {
+    artboard: "FilesTreeLoading",
+    capture: "win98",
+    // The bars pulse; the screenshot takes them at full strength, as the artboard draws them.
+    mask: ".fix-ado-viewed-tree-loading { animation: none !important; }",
+    name: "files-tree-loading",
+    page: "pr-files",
+    path: `${PR}/1005?_a=files`,
   },
   {
     artboard: "Board",
@@ -232,7 +269,7 @@ const config: RestyleConfig = {
     { capture: "win98", name: "run-summary", page: "pipeline-summary", path: RUN },
     { capture: "win98", name: "run-steps", page: "pipeline-steps", path: `${RUN}&view=logs` },
   ],
-  checks: [boardWidth, dropDownVariants, issueBoxOverflow, threadTitleBars],
+  checks: [boardWidth, dropDownVariants, issueBoxOverflow, threadTitleBars, treeScroll],
   masks: { design: "[data-glyph] { visibility: hidden !important; }", site: SITE_MASK },
   settings: { "windows-98-mode": true },
   states,

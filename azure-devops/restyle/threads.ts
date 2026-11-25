@@ -85,6 +85,13 @@ async function showLongNameThread(page: Page): Promise<void> {
   await page.evaluate(closeWithReply, GENERAL_THREAD);
   await page.evaluate(giveAuthorsLongNames, LONG_NAME);
   await page.waitForTimeout(400);
+  // The script collapses a Closed thread; the artboard draws it open.
+  await page.evaluate((selector) => {
+    document
+      .querySelector(`${selector}[data-fix-ado-thread="collapsed"] .fix-ado-thread-toggle`)
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }, GENERAL_THREAD);
+  await page.waitForTimeout(400);
   await page.evaluate(scrollToGeneralThread, { selector: GENERAL_THREAD, top: GENERAL_THREAD_TOP });
   await page.waitForTimeout(400);
 }
