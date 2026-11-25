@@ -2646,7 +2646,6 @@ html[data-fix-ado-win98]:is(
 
     a {
       color: #0000ee;
-      font-weight: 700;
     }
   }
 
@@ -2654,7 +2653,6 @@ html[data-fix-ado-win98]:is(
     overflow: hidden;
     text-overflow: ellipsis;
     color: #404040;
-    font-weight: 400;
   }
 }
 

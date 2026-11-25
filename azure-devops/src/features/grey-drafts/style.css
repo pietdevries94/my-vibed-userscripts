@@ -41,3 +41,12 @@ html[data-fix-ado-win98] .fix-ado-work-item-group[data-fix-ado-drafts-only] {
     color: var(--win98-shadow);
   }
 }
+
+/* A group of only drafts shows its work item's link lighter too. */
+.fix-ado-work-item-group[data-fix-ado-drafts-only] a {
+  color: color-mix(in oklab, var(--communication-foreground, rgb(0, 90, 158)) 70%, transparent);
+}
+
+html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only] > td > a {
+  color: color-mix(in oklab, #0000ee 70%, transparent);
+}

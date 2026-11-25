@@ -29,14 +29,11 @@
   border-top-color: transparent;
 }
 
-/* Only the work item's id is bold: "Multiple work items" and "No work item" are not. */
 .fix-ado-work-item-group a {
   color: var(--communication-foreground, rgb(0, 90, 158));
-  font-weight: 600;
 }
 
-/* The work item's title after its id: grey and regular, so the group row does not shout. */
+/* The work item's title after its id: grey, so the group row does not shout. */
 .fix-ado-work-item-group-title {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  font-weight: normal;
 }
