@@ -2631,7 +2631,7 @@ html[data-fix-ado-win98]:is(
       gap: 6px;
       height: 24px;
       padding: 0 12px;
-      border-top: 1px solid var(--win98-shadow);
+      border-top: 0;
       white-space: nowrap;
       color: #000;
 
