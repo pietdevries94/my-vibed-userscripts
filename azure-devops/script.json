@@ -10,7 +10,7 @@
         "How long ago each active pull request was published, in red after two weekdays",
         "The linked work item's id on each pull request, with a switch that groups the lists by work item",
         "The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all",
-        "Draft pull requests on a slightly grey background"
+        "Draft pull requests, and groups of only drafts, on a slightly grey background with lighter text"
       ]
     },
     {

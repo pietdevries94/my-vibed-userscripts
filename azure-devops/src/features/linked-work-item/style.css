@@ -19,6 +19,8 @@
    work-item-group-rows.ts adds it. */
 .fix-ado-work-item-group > td {
   padding: 12px 16px 4px;
+  /* A line above each group, stronger than the lines between rows, to divide the groups. */
+  border-top: 1px solid rgba(var(--palette-neutral-100, 0, 0, 0), 0.2);
   font-weight: 600;
 }
 

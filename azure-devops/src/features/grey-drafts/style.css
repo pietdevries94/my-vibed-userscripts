@@ -1,7 +1,9 @@
 /* A draft pull request's row, in the lists and the inbox: a slight grey from the theme's
    text colour, so it works in Light and Dark, and text a step lighter than the site's. The
-   site's selected row keeps its colours. */
-a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected) {
+   site's selected row keeps its colours. With Group by work item on, a group of only drafts
+   gets the same colours; work-item-group-rows.ts marks it. */
+a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected),
+.fix-ado-work-item-group[data-fix-ado-drafts-only] {
   --text-secondary-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.45);
 
   background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.05);
@@ -14,7 +16,11 @@ a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected) {
 
 /* Windows 98 mode: halfway between the white field and the light face grey, with dark grey
    text. A selected or focused row stays navy. */
-html[data-fix-ado-win98] a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected, .focused) {
+html[data-fix-ado-win98]
+  :is(
+    a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected, .focused),
+    .fix-ado-work-item-group[data-fix-ado-drafts-only]
+  ) {
   --text-secondary-color: var(--win98-shadow);
 
   color: #404040;
@@ -22,5 +28,16 @@ html[data-fix-ado-win98] a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.se
   &,
   &:hover {
     background-color: color-mix(in oklab, var(--win98-light), var(--win98-field-face));
+  }
+}
+
+/* Windows 98 mode sets a group's text colours on its cell and title. */
+html[data-fix-ado-win98] .fix-ado-work-item-group[data-fix-ado-drafts-only] {
+  & > td {
+    color: #404040;
+  }
+
+  .fix-ado-work-item-group-title {
+    color: var(--win98-shadow);
   }
 }
