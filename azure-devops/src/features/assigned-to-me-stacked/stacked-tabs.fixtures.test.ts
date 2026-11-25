@@ -7,7 +7,11 @@ import { showStackedTabs } from "./stacked-tabs.ts";
 import { test } from "node:test";
 
 const fixtures = scriptFixtures(import.meta.dirname);
-const CONTEXT = { basePath: "/fake-org", now: Date.parse("2000-01-02T00:00:00Z") };
+const CONTEXT = {
+  basePath: "/fake-org",
+  folding: { foldedTabIds: new Set<string>(), onToggle: (): void => undefined },
+  now: Date.parse("2000-01-02T00:00:00Z"),
+};
 
 function capturedPage(page: string): { document: Document; assigned: AssignedToMe } {
   const { document } = new JSDOM("<!doctype html><body></body>").window;
@@ -145,4 +149,17 @@ test("a built row in the inbox names its own repository", { skip: fixtures.skip 
     );
     assert.equal(repository?.textContent, pullRequest?.repository?.name);
   }
+});
+
+test("while Azure DevOps's card is folded, the built cards stay", { skip: fixtures.skip }, () => {
+  const { assigned, document } = capturedPage("pr-list-assigned-active");
+  showStackedTabs(document, assigned, CONTEXT);
+  const built = document.querySelector(".fix-ado-assigned-card");
+  assert.ok(built);
+
+  assignedCard(document).querySelector(".bolt-card-content")?.remove();
+  showStackedTabs(document, assigned, CONTEXT);
+
+  assert.equal(document.querySelector(".fix-ado-assigned-card"), built);
+  assert.ok(assignedCard(document).classList.contains("fix-ado-assigned-stacked"));
 });

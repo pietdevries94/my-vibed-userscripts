@@ -10,12 +10,14 @@ import {
   showTabName,
 } from "./assigned-card.ts";
 import type { AssignedPullRequest } from "./assigned-tabs.ts";
+import type { CardFolding } from "./card-folding.ts";
 import type { RowContext } from "./assigned-row.ts";
 import { pullRequestsOnTab } from "./assigned-tabs.ts";
 import { relativeTime } from "./relative-time.ts";
+import { showCardFolding } from "./card-folding.ts";
 
 /** Where the cards show, and when. */
-type ShownContext = Omit<RowContext, "reviewerId">;
+type ShownContext = Omit<RowContext, "reviewerId"> & { folding: CardFolding };
 
 /** What a built card shows. It is built again only when this changes. */
 function shownKey(tab: CardTab, pullRequests: AssignedPullRequest[], now: number): string {
@@ -70,6 +72,9 @@ function builtCard(
       { key, pullRequests, tab },
       { ...context, reviewerId: assigned.reviewerId },
     );
+  if (card) {
+    showCardFolding(card, tab.id, context.folding);
+  }
   return card ? [card] : [];
 }
 
@@ -129,7 +134,11 @@ function showStackedTabs(
 ): void {
   const found = findAssignedCard(document);
   if (found === null || assigned === null) {
-    removeStacking(document, []);
+    // A folded card has no list: its built cards and hidden tabs stay as they are.
+    const isFolded = assigned !== null && document.querySelector(`.${STACKED_CLASS}`) !== null;
+    if (!isFolded) {
+      removeStacking(document, []);
+    }
     return;
   }
   const ordered = found.tabs.flatMap((tab) =>

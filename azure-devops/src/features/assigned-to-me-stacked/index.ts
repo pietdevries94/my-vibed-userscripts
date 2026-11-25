@@ -1,10 +1,13 @@
 import type { AssignedToMe } from "./assigned-card.ts";
+import type { CardFolding } from "./card-folding.ts";
 import { FAILED_REQUEST_RETRY_MS } from "../pipeline-status/pipeline-status-poller.ts";
 import type { Feature } from "../../core/feature.ts";
 import type { Page } from "../../core/page.ts";
 import { showStackedTabs } from "./stacked-tabs.ts";
 import style from "./style.css";
 
+/** The tab ids of the built cards the owner folded. */
+const FOLDED_TABS_KEY = "assigned-to-me-folded-tabs";
 /** Votes change while the owner reviews, so the built lists refresh often. */
 const ASSIGNED_REFRESH_INTERVAL_MS = 60_000;
 
@@ -19,6 +22,21 @@ function repositoryOf(page: Page): Repository | undefined {
   return page.kind === "pull-request-inbox" ? null : undefined;
 }
 
+/** The built cards the owner folded, kept across page loads. `onChange` shows the change. */
+function createCardFolding(onChange: () => void): CardFolding {
+  const foldedTabIds = new Set(GM_getValue<string[]>(FOLDED_TABS_KEY, []));
+  return {
+    foldedTabIds,
+    onToggle(tabId) {
+      if (!foldedTabIds.delete(tabId)) {
+        foldedTabIds.add(tabId);
+      }
+      GM_setValue(FOLDED_TABS_KEY, [...foldedTabIds]);
+      onChange();
+    },
+  };
+}
+
 const assignedToMeStacked: Feature = {
   change: { kind: "new", version: "1.25.0" },
   description:
@@ -29,6 +47,10 @@ const assignedToMeStacked: Feature = {
     let assigned: { scope: string; value: AssignedToMe } | null = null;
     let nextFetchAt = 0;
     let isFetching = false;
+    let shownScope: string | null = null;
+    const folding = createCardFolding(() => {
+      show(shownScope);
+    });
 
     async function fetchAssigned(repository: Repository, scope: string): Promise<void> {
       isFetching = true;
@@ -47,8 +69,9 @@ const assignedToMeStacked: Feature = {
     }
 
     function show(scope: string | null): void {
+      shownScope = scope;
       const shown = scope !== null && assigned?.scope === scope ? assigned.value : null;
-      showStackedTabs(document, shown, { basePath, now: now() });
+      showStackedTabs(document, shown, { basePath, folding, now: now() });
     }
 
     return {

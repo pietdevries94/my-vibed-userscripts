@@ -13,7 +13,7 @@
   margin-inline-start: 0.3em;
 }
 
-/* A built card has no list to fold. */
-.fix-ado-assigned-card .repos-pr-section-expand-button {
-  visibility: hidden;
+/* A built card the owner folded with its fold button. card-folding.ts marks it. */
+.fix-ado-assigned-folded .bolt-card-content {
+  display: none;
 }
