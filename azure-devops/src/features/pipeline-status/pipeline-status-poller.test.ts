@@ -84,6 +84,7 @@ function pollerOnFakeList(pullRequestIds: number[]): {
     getPullRequestBuilds: notUsedByThePoller,
     getPullRequestReviewers: notUsedByThePoller,
     getPullRequests: notUsedByThePoller,
+    getPullRequestsAssignedTo: notUsedByThePoller,
     getTimeline: notUsedByThePoller,
     requeuePolicyEvaluation: notUsedByThePoller,
     saveTheme: notUsedByThePoller,

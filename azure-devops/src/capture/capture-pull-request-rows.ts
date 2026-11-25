@@ -1,10 +1,11 @@
 // The pull request list and inbox capture: the rows' policy evaluations, the
-// project ids they needed and the status colours. Dev file only.
+// project ids they needed, the pull requests assigned to me and the status colours. Dev file only.
 import type { CapturePage, GetOnlyFetch } from "../../../shared/dev/capture/capture.ts";
 import type { AdoClient } from "../core/ado-client.ts";
 import type { Pseudonyms } from "../../../shared/dev/scrub/pseudonyms.ts";
 import type { PullRequestListPage } from "../pull-requests/pull-request-link.ts";
 import { apiBasePath } from "../pull-requests/pull-request-link.ts";
+import { collectAssignedToMe } from "./capture-assigned-to-me.ts";
 import { createAdoClient } from "../core/ado-client.ts";
 import { evaluationsOf } from "./capture-pipeline.ts";
 import { findPullRequestRows } from "../pull-requests/pr-list.ts";
@@ -81,6 +82,7 @@ async function collectPullRequestRows(
   });
   const listed = listPage === null ? null : await client.getPullRequests(listPage);
   const evaluationsByPullRequestId = await collectEvaluations(client, basePath, pseudonyms);
+  const assignedToMe = await collectAssignedToMe(client, listPage);
   const projects = Object.fromEntries(
     [...projectIds].map(([project, id]) => [
       pseudonyms.text(project, "project"),
@@ -95,8 +97,8 @@ async function collectPullRequestRows(
   return {
     data:
       listed === null
-        ? { evaluationsByPullRequestId }
-        : { evaluationsByPullRequestId, pullRequests: listed.pullRequests },
+        ? { assignedToMe, evaluationsByPullRequestId }
+        : { assignedToMe, evaluationsByPullRequestId, pullRequests: listed.pullRequests },
     meta,
   };
 }

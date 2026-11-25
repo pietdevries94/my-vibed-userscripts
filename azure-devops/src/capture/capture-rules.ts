@@ -162,6 +162,10 @@ const rules: ScrubRules = {
     // The Files tab's diff layouts.
     "Side-by-side",
     "Inline",
+    // The "Assigned to me" card and its tabs. "Active" is kept above.
+    "Assigned to me",
+    "Waiting for author",
+    "Reviewed",
   ],
   mapUrl: fakeLink,
 };

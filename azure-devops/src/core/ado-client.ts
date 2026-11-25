@@ -1,6 +1,7 @@
 import type { PullRequestListPage, PullRequestRef } from "../pull-requests/pull-request-link.ts";
 import { getJson, sendRequest } from "./ado-request.ts";
 import type { AdoClientOptions } from "./ado-request.ts";
+import type { AssignedPullRequestRequests } from "../pull-requests/assigned-pull-request-requests.ts";
 import type { BuildRequests } from "../pipeline/build-requests.ts";
 import type { Identity } from "../pull-requests/reviewer-requests.ts";
 import type { ListedPullRequest } from "../features/reload-on-changes/pr-list-changes.ts";
@@ -8,6 +9,7 @@ import type { PolicyEvaluation } from "../pipeline/pipeline-status.ts";
 import type { ReviewRequests } from "../pull-requests/review-requests.ts";
 import type { TimelineRecord } from "../pipeline/pipeline-timeline.ts";
 import type { WorkItemRequests } from "./work-item-requests.ts";
+import { createAssignedPullRequestRequests } from "../pull-requests/assigned-pull-request-requests.ts";
 import { createBuildRequests } from "../pipeline/build-requests.ts";
 import { createReviewRequests } from "../pull-requests/review-requests.ts";
 import { createReviewerRequests } from "../pull-requests/reviewer-requests.ts";
@@ -31,7 +33,8 @@ interface TimelineResponse {
   retryAfterSeconds: number | null;
 }
 
-interface AdoClient extends ReviewRequests, BuildRequests, WorkItemRequests {
+interface AdoClient
+  extends ReviewRequests, BuildRequests, WorkItemRequests, AssignedPullRequestRequests {
   getPolicyEvaluations: (pullRequest: PullRequestRef) => Promise<PolicyEvaluationsResponse>;
   getPullRequests: (listPage: PullRequestListPage) => Promise<PullRequestsResponse>;
   /** The stages, jobs and steps of a pipeline run. */
@@ -165,6 +168,7 @@ function createAdoClient(options: AdoClientOptions): AdoClient {
       requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
     saveTheme: async (themeId) => saveTheme(options, themeId),
 
+    ...createAssignedPullRequestRequests(options),
     ...createBuildRequests(options),
     ...createReviewRequests(options),
     ...createWorkItemRequests(options),
