@@ -32,13 +32,17 @@ function assignedCard(document: Document): HTMLElement {
   return card;
 }
 
-/** The card's lists in order: each title, then the ids of the pull requests under it. */
-function shownLists(card: HTMLElement): string[] {
-  return [...card.querySelectorAll(".fix-ado-assigned-title, a.bolt-table-row")].map((node) =>
-    node.classList.contains("fix-ado-assigned-title")
-      ? `title ${node.firstChild?.textContent}`
-      : (node.getAttribute("href")?.split("/").at(-1) ?? ""),
-  );
+/** The Assigned to me cards in order: each card's tab, then the ids of its pull requests. */
+function shownLists(document: Document): string[] {
+  const cards = document.querySelectorAll("#__bolt-tab-activeMine, .fix-ado-assigned-card");
+  return [...cards].flatMap((found) => {
+    const card = found.closest(".repos-pr-section-card") ?? found;
+    const tab = card.querySelector('[role="tab"][aria-selected="true"] .bolt-tab-text');
+    const rows = [...card.querySelectorAll("a.bolt-table-row")].map(
+      (row) => row.getAttribute("href")?.split("/").at(-1) ?? "",
+    );
+    return Array.of(`card ${tab?.textContent}`, ...rows);
+  });
 }
 
 /** The ids of my pull requests with this vote, newest first. */
@@ -58,34 +62,34 @@ for (const page of ["pr-list-assigned-active", "pr-inbox-assigned-active-inbox"]
   test(`${page}: Waiting for author shows under Active`, { skip: fixtures.skip }, () => {
     const { assigned, document } = capturedPage(page);
     const card = assignedCard(document);
-    const adoRows = shownLists(card);
+    const adoRows = shownLists(document).slice(1);
 
     showStackedTabs(document, assigned, CONTEXT);
 
     const waiting = idsWithMyVote(assigned, -5);
     assert.ok(waiting.length > 0, "the capture has a pull request waiting for its author");
-    assert.deepEqual(shownLists(card), [
-      "title Active",
+    assert.deepEqual(shownLists(document), [
+      "card Active",
       ...adoRows,
-      "title Waiting for author",
+      "card Waiting for author",
       ...waiting,
     ]);
     assert.ok(card.classList.contains("fix-ado-assigned-stacked"));
+    assert.equal(document.querySelectorAll("[id='__bolt-tab-activeMine']").length, 1);
   });
 }
 
 for (const page of ["pr-list-assigned-waiting", "pr-inbox-assigned-waiting-inbox"]) {
   test(`${page}: Active shows above Waiting for author`, { skip: fixtures.skip }, () => {
     const { assigned, document } = capturedPage(page);
-    const card = assignedCard(document);
-    const adoRows = shownLists(card);
+    const adoRows = shownLists(document).slice(1);
 
     showStackedTabs(document, assigned, CONTEXT);
 
-    assert.deepEqual(shownLists(card), [
-      "title Active",
+    assert.deepEqual(shownLists(document), [
+      "card Active",
       ...idsWithMyVote(assigned, 0),
-      "title Waiting for author",
+      "card Waiting for author",
       ...adoRows,
     ]);
   });
@@ -100,7 +104,7 @@ test("a built row links to its pull request and names it", { skip: fixtures.skip
     ({ pullRequestId }) => String(pullRequestId) === id,
   );
   const row = document.querySelector<HTMLElement>(
-    `.fix-ado-assigned-list a[href$="/pullrequest/${id}"]`,
+    `.fix-ado-assigned-card a[href$="/pullrequest/${id}"]`,
   );
   assert.ok(row !== null && pullRequest !== undefined);
   assert.equal(row.querySelector(".body-l")?.textContent, pullRequest.title);
@@ -113,16 +117,15 @@ test(
   { skip: fixtures.skip },
   () => {
     const { assigned, document } = capturedPage("pr-list-assigned-active");
-    const card = assignedCard(document);
-    const before = card.innerHTML;
+    const before = document.body.innerHTML;
     showStackedTabs(document, assigned, CONTEXT);
-    const list = card.querySelector(".fix-ado-assigned-list");
+    const list = document.querySelector(".fix-ado-assigned-card");
 
     showStackedTabs(document, assigned, CONTEXT);
-    assert.equal(card.querySelector(".fix-ado-assigned-list"), list);
+    assert.equal(document.querySelector(".fix-ado-assigned-card"), list);
 
     showStackedTabs(document, null, CONTEXT);
-    assert.equal(card.innerHTML, before);
+    assert.equal(document.body.innerHTML, before);
   },
 );
 
@@ -130,7 +133,7 @@ test("a built row in the inbox names its own repository", { skip: fixtures.skip 
   const { assigned, document } = capturedPage("pr-inbox-assigned-active-inbox");
   showStackedTabs(document, assigned, CONTEXT);
 
-  const rows = [...document.querySelectorAll(".fix-ado-assigned-list a.bolt-table-row")];
+  const rows = [...document.querySelectorAll(".fix-ado-assigned-card a.bolt-table-row")];
   assert.ok(rows.length > 0);
   for (const row of rows) {
     const id = Number(row.getAttribute("href")?.split("/").at(-1));

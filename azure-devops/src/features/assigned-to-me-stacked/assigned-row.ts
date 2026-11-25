@@ -60,23 +60,27 @@ function replaceLast(text: string, search: string, replacement: string): string 
     : text.slice(0, index) + replacement + text.slice(index + search.length);
 }
 
-/** "Mira requested #12 into" keeps the site's words around the author and the id. */
+/**
+ * "Mira requested #12 into" keeps the site's words around the author and the id. React can
+ * render them as several text nodes, so each one is filled in.
+ */
 function showSubtitleWords(
   subtitle: Element,
   template: HTMLElement,
   pullRequest: AssignedPullRequest,
 ): void {
-  const words = subtitle.firstChild;
   const templateAuthor = avatarName(template.querySelector(AUTHOR_AVATAR_SELECTOR) ?? subtitle);
-  const templateId = template.getAttribute("href")?.split("/").at(-1) ?? "";
-  if (words?.nodeType !== subtitle.TEXT_NODE || templateAuthor === "") {
-    return;
+  const templatePath = new URL(template.getAttribute("href") ?? "", "https://relative.invalid");
+  const templateId = templatePath.pathname.split("/").at(-1) ?? "";
+  const words = [...subtitle.childNodes].filter((node) => node.nodeType === subtitle.TEXT_NODE);
+  for (const word of words) {
+    const text = word.textContent ?? "";
+    const withAuthor =
+      templateAuthor === ""
+        ? text
+        : text.replace(templateAuthor, pullRequest.createdBy?.displayName ?? "");
+    word.textContent = replaceLast(withAuthor, templateId, String(pullRequest.pullRequestId));
   }
-  const withAuthor = (words.textContent ?? "").replace(
-    templateAuthor,
-    pullRequest.createdBy?.displayName ?? "",
-  );
-  words.textContent = replaceLast(withAuthor, templateId, String(pullRequest.pullRequestId));
 }
 
 /** The line under the title: author, id, the inbox's repository, and the target branch. */

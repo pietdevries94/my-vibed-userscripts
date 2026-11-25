@@ -1,25 +1,19 @@
-// Shows the "Assigned to me" card's tabs under each other, and puts the card back as it was.
-import type { AssignedCard, AssignedToMe, CardTab } from "./assigned-card.ts";
-import {
-  LIST_CLASS,
-  STACKED_CLASS,
-  TITLE_CLASS,
-  createList,
-  createTitle,
-  findAssignedCard,
-} from "./assigned-card.ts";
+// Shows each tab of the "Assigned to me" card as a card of its own, under each other, and
+// puts the page back as it was.
+import type { AssignedCard, AssignedToMe, CardTab, TabList } from "./assigned-card.ts";
+import { BUILT_CARD_CLASS, STACKED_CLASS, createCard, findAssignedCard } from "./assigned-card.ts";
 import type { AssignedPullRequest } from "./assigned-tabs.ts";
 import type { RowContext } from "./assigned-row.ts";
 import { pullRequestsOnTab } from "./assigned-tabs.ts";
 import { relativeTime } from "./relative-time.ts";
 
-/** Where the lists show, and when. */
+/** Where the cards show, and when. */
 type ShownContext = Omit<RowContext, "reviewerId">;
 
-/** What a list shows. It is built again only when this changes. */
+/** What a built card shows. It is built again only when this changes. */
 function shownKey(tab: CardTab, pullRequests: AssignedPullRequest[], now: number): string {
   return JSON.stringify([
-    tab.label,
+    tab.id,
     pullRequests.map((pullRequest) => [
       pullRequest.pullRequestId,
       pullRequest.title,
@@ -33,27 +27,26 @@ function shownKey(tab: CardTab, pullRequests: AssignedPullRequest[], now: number
   ]);
 }
 
-function shownNode(card: HTMLElement, selector: string, key: string): HTMLElement | null {
-  return (
-    [...card.querySelectorAll<HTMLElement>(selector)].find(
-      (node) => node.dataset.fixAdoShown === key,
-    ) ?? null
+function shownCard(document: Document, key: string): HTMLElement | undefined {
+  return [...document.querySelectorAll<HTMLElement>(`.${BUILT_CARD_CLASS}`)].find(
+    (card) => card.dataset.fixAdoShown === key,
   );
 }
 
-/** The title above Azure DevOps's own list, with the tab's own count. */
-function selectedTitle(found: AssignedCard, tab: CardTab): HTMLElement {
-  const key = JSON.stringify([tab.id, tab.label, tab.badge?.textContent]);
-  const shown = shownNode(found.card, `:not(.${LIST_CLASS}) > .${TITLE_CLASS}`, key);
-  if (shown) {
-    return shown;
+/** A new card for the tab, keyed with what it shows. */
+function createKeyedCard(
+  found: AssignedCard,
+  { key, ...tabList }: TabList & { key: string },
+  context: RowContext,
+): HTMLElement | null {
+  const card = createCard(found, tabList, context);
+  if (card) {
+    card.dataset.fixAdoShown = key;
   }
-  const title = createTitle(found.card.ownerDocument, tab, null);
-  title.dataset.fixAdoShown = key;
-  return title;
+  return card;
 }
 
-function builtList(
+function builtCard(
   found: AssignedCard,
   tab: CardTab,
   { assigned, context }: { assigned: AssignedToMe; context: ShownContext },
@@ -62,56 +55,53 @@ function builtList(
   if (pullRequests.length === 0) {
     return [];
   }
-  const key = JSON.stringify([tab.id, shownKey(tab, pullRequests, context.now)]);
-  const shown = shownNode(found.card, `.${LIST_CLASS}`, key);
-  if (shown) {
-    return [shown];
-  }
-  const list = createList(
-    found,
-    { pullRequests, tab },
-    { ...context, reviewerId: assigned.reviewerId },
-  );
-  list.dataset.fixAdoShown = key;
-  return [list];
+  const key = shownKey(tab, pullRequests, context.now);
+  const card =
+    shownCard(found.card.ownerDocument, key) ??
+    createKeyedCard(
+      found,
+      { key, pullRequests, tab },
+      { ...context, reviewerId: assigned.reviewerId },
+    );
+  return card ? [card] : [];
 }
 
-/** Puts the nodes in order around Azure DevOps's list, which stays where it is. */
-function placeAroundTable(table: HTMLElement, ordered: HTMLElement[]): void {
+/** Puts the cards in order around Azure DevOps's card, which stays where it is. */
+function placeAround(adoCard: HTMLElement, ordered: HTMLElement[]): void {
   const isInOrder = ordered.every(
     (node, index) => index === 0 || ordered[index - 1]?.nextElementSibling === node,
   );
   if (isInOrder) {
     return;
   }
-  const tableIndex = ordered.indexOf(table);
-  for (const node of ordered.slice(0, tableIndex)) {
-    table.before(node);
+  const adoIndex = ordered.indexOf(adoCard);
+  for (const node of ordered.slice(0, adoIndex)) {
+    adoCard.before(node);
   }
-  let previous = table;
-  for (const node of ordered.slice(tableIndex + 1)) {
+  let previous = adoCard;
+  for (const node of ordered.slice(adoIndex + 1)) {
     previous.after(node);
     previous = node;
   }
 }
 
-/** Takes out the script's titles and lists that are not in `kept`, and the card's mark. */
-function removeStacking(root: ParentNode, kept: HTMLElement[]): void {
-  for (const node of root.querySelectorAll<HTMLElement>(`.${LIST_CLASS}, .${TITLE_CLASS}`)) {
-    if (!kept.includes(node) && !kept.some((keptNode) => keptNode.contains(node))) {
-      node.remove();
+/** Takes out the built cards that are not in `kept`, and with none kept, the card's mark. */
+function removeStacking(document: Document, kept: HTMLElement[]): void {
+  for (const card of document.querySelectorAll<HTMLElement>(`.${BUILT_CARD_CLASS}`)) {
+    if (!kept.includes(card)) {
+      card.remove();
     }
   }
   if (kept.length === 0) {
-    for (const card of root.querySelectorAll(`.${STACKED_CLASS}`)) {
+    for (const card of document.querySelectorAll(`.${STACKED_CLASS}`)) {
       card.classList.remove(STACKED_CLASS);
     }
   }
 }
 
 /**
- * Shows every tab of the "Assigned to me" card under each other, or with null puts the card
- * back. Only touches the DOM on a change.
+ * Shows every tab of the "Assigned to me" card as a card of its own, or with null puts the
+ * page back. Only touches the DOM on a change.
  */
 function showStackedTabs(
   document: Document,
@@ -124,12 +114,10 @@ function showStackedTabs(
     return;
   }
   const ordered = found.tabs.flatMap((tab) =>
-    tab.isSelected
-      ? [selectedTitle(found, tab), found.table]
-      : builtList(found, tab, { assigned, context }),
+    tab.isSelected ? [found.card] : builtCard(found, tab, { assigned, context }),
   );
-  removeStacking(found.card, ordered);
-  placeAroundTable(found.table, ordered);
+  removeStacking(document, ordered);
+  placeAround(found.card, ordered);
   if (!found.card.classList.contains(STACKED_CLASS)) {
     found.card.classList.add(STACKED_CLASS);
   }
