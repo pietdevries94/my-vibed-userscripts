@@ -7,13 +7,15 @@ import type { WorkItemGroup } from "./work-item-groups.ts";
 import { createLinkedWorkItemFetcher } from "./linked-work-item-fetcher.ts";
 import { groupByWorkItem } from "./work-item-groups.ts";
 import { linkedWorkItemLabel } from "./linked-work-item.ts";
-import { showGroupToggle } from "./group-toggle.ts";
+import listSwitchStyle from "../../core/list-switch.css";
+import { showListSwitch } from "../../core/list-switch.ts";
 import { showWorkItemGroups } from "./work-item-group-rows.ts";
 import style from "./style.css";
 import switchStyle from "../../core/switch.css";
 
 const IS_GROUPED_KEY = "linked-work-item-grouped";
 const LIST_SELECTOR = "table.repos-pr-list > tbody";
+const GROUP_SWITCH = { className: "fix-ado-group-toggle", label: "Group by work item" };
 
 /** A list's groups, or null while one of its pull requests has no fetched work items yet. */
 function groupsOf(
@@ -66,7 +68,11 @@ const linkedWorkItem: Feature = {
         showWorkItemGroups(list, basePath, groups);
         showLinkedWorkItemLabels(rows, fetcher, groups !== null);
       }
-      showGroupToggle(document, isList ? { isGrouped, onToggle: toggleGroups } : null);
+      showListSwitch(
+        document,
+        GROUP_SWITCH,
+        isList ? { isOn: isGrouped, onToggle: toggleGroups } : null,
+      );
     }
 
     function toggleGroups(): void {
@@ -85,7 +91,7 @@ const linkedWorkItem: Feature = {
       },
     };
   },
-  styles: [switchStyle, style],
+  styles: [switchStyle, listSwitchStyle, style],
 };
 
 export { linkedWorkItem };

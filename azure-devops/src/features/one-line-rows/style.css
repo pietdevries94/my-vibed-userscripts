@@ -1,0 +1,109 @@
+/* Each pull request on one line, as design B. one-line-rows.ts marks <html> on a list page while
+   the One line switch is on. Windows 98 mode lays the rows out itself, so it is left alone. */
+:root[data-fix-ado-one-line]:not([data-fix-ado-win98]) .repos-pr-list {
+  /* The columns after the spacer: author, title, reviewers, comments, time. */
+  & > colgroup > col:nth-child(2) {
+    width: 32px !important;
+  }
+
+  & > colgroup > col:nth-child(4) {
+    width: 92px !important;
+  }
+
+  & > colgroup > col:nth-child(5) {
+    width: 44px !important;
+  }
+
+  & > colgroup > col:nth-child(6) {
+    width: 148px !important;
+  }
+
+  & .bolt-list-cell {
+    height: 32px;
+  }
+
+  /* Azure DevOps pads each cell 9px 12px. */
+  & .bolt-table-cell-content {
+    padding-block: 0;
+    padding-inline: 6px;
+  }
+
+  /* The author, and each reviewer: 20px avatars. The initials scale with the size. */
+  & :is([aria-colindex="1"], .pr-reviewer) :is(.bolt-coin, .bolt-coin-content) {
+    --fix-ado-avatar-size: 20px !important;
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+  }
+
+  /* The title, then the line under it to its right, which takes the space left. */
+  & .bolt-table-two-line-cell > .bolt-table-cell-content {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  & .bolt-table-two-line-cell-item:first-child {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  & .bolt-table-two-line-cell-item:nth-child(2) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  & .bolt-table-two-line-cell-item .body-l {
+    font-size: 13px;
+  }
+
+  /* The pipeline status before the title. */
+  & .fix-ado-pipeline-status {
+    order: -1;
+    width: 14px;
+    height: 14px;
+    margin: 0 8px 0 0;
+  }
+
+  /* Reviewers overlap, each with a ring in the row's colour. Required ones glow less. */
+  & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) > .pr-reviewer {
+    margin: 0 -4px 0 0 !important;
+  }
+
+  & .pr-reviewer .bolt-coin {
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px var(--background-color, #fff);
+  }
+
+  & .pr-reviewer[data-fix-ado-required] .bolt-coin {
+    box-shadow:
+      0 0 0 1.5px var(--background-color, #fff),
+      0 0 0 3px var(--communication-background, rgb(0, 120, 212));
+  }
+
+  /* The time: the publish time alone when it shows, as it says more than the update time. */
+  & [aria-colindex="5"] .bolt-table-cell-content {
+    justify-content: flex-end;
+    font-size: 12px;
+  }
+
+  & .bolt-table-cell-content:has(> .fix-ado-published-since) {
+    flex-direction: row;
+    align-items: center;
+
+    & > :not(.fix-ado-published-since) {
+      display: none;
+    }
+  }
+}
+
+/* Forced colors drop box shadows, so a required reviewer keeps an outline. */
+@media (forced-colors: active) {
+  :root[data-fix-ado-one-line]:not([data-fix-ado-win98])
+    .repos-pr-list
+    .pr-reviewer[data-fix-ado-required]
+    .bolt-coin {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+}

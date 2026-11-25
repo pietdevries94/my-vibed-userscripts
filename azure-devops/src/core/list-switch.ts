@@ -1,22 +1,28 @@
-import { createSwitch, showSwitchOn } from "../../core/switch.ts";
+// A switch on the pull request lists, such as "Group by work item": in a repository list's
+// tab bar, or in a bar of its own above the inbox's lists. switch.css styles it.
+import { createSwitch, showSwitchOn } from "./switch.ts";
 
-const TOGGLE_CLASS = "fix-ado-group-toggle";
-const BAR_CLASS = "fix-ado-group-toggle-bar";
-const LABEL = "Group by work item";
+const BAR_CLASS = "fix-ado-list-switch-bar";
 const TABBAR_SELECTOR = ".bolt-tabbar:has(> .bolt-tabbar-tabs)";
 const PAGE_CONTENT_SELECTOR = ".page-content";
 
-interface GroupToggleState {
-  isGrouped: boolean;
+/** Which switch: its own class, so each feature finds its switch again, and its label. */
+interface ListSwitch {
+  className: string;
+  label: string;
+}
+
+interface ListSwitchState {
+  isOn: boolean;
   onToggle: () => void;
 }
 
 /** The latest onToggle per switch, so a click always calls the one from the last sync. */
 const onToggleBySwitch = new WeakMap<HTMLButtonElement, () => void>();
 
-function createToggle(document: Document): HTMLButtonElement {
-  const toggle = createSwitch(document, LABEL);
-  toggle.classList.add(TOGGLE_CLASS);
+function createListSwitch(document: Document, { className, label }: ListSwitch): HTMLButtonElement {
+  const toggle = createSwitch(document, label);
+  toggle.classList.add(className);
   toggle.addEventListener("click", () => {
     onToggleBySwitch.get(toggle)?.();
   });
@@ -29,12 +35,13 @@ function placeInTabbar(document: Document, toggle: HTMLButtonElement): boolean {
   if (tabbar === null) {
     return false;
   }
+  if (toggle.parentElement === tabbar) {
+    return true;
+  }
   const buttons = tabbar.querySelector(":scope > .bolt-header-commandbar");
   if (buttons === null) {
-    if (toggle.parentElement !== tabbar) {
-      tabbar.append(toggle);
-    }
-  } else if (toggle.nextElementSibling !== buttons) {
+    tabbar.append(toggle);
+  } else {
     buttons.before(toggle);
   }
   return true;
@@ -64,23 +71,34 @@ function placeAboveLists(document: Document, toggle: HTMLButtonElement): void {
   }
 }
 
-/**
- * The "Group by work item" switch: in a repository list's tab bar, or above the inbox's
- * lists. `null` removes it. Only touches the DOM on a change.
- */
-function showGroupToggle(document: Document, state: GroupToggleState | null): void {
-  const shown = document.querySelector<HTMLButtonElement>(`.${TOGGLE_CLASS}`);
+/** Removes the switch, and the bar above the lists once no switch is left in it. */
+function removeListSwitch(document: Document, { className }: ListSwitch): void {
+  document.querySelector(`.${className}`)?.remove();
+  const bar = document.querySelector(`.${BAR_CLASS}`);
+  if (bar !== null && bar.childElementCount === 0) {
+    bar.remove();
+  }
+}
+
+/** Shows the switch on the lists, on or off. `null` removes it. Only touches the DOM on a change. */
+function showListSwitch(
+  document: Document,
+  listSwitch: ListSwitch,
+  state: ListSwitchState | null,
+): void {
   if (state === null) {
-    shown?.remove();
-    document.querySelector(`.${BAR_CLASS}`)?.remove();
+    removeListSwitch(document, listSwitch);
     return;
   }
-  const toggle = shown ?? createToggle(document);
+  const toggle =
+    document.querySelector<HTMLButtonElement>(`.${listSwitch.className}`) ??
+    createListSwitch(document, listSwitch);
   if (!placeInTabbar(document, toggle)) {
     placeAboveLists(document, toggle);
   }
   onToggleBySwitch.set(toggle, state.onToggle);
-  showSwitchOn(toggle, state.isGrouped);
+  showSwitchOn(toggle, state.isOn);
 }
 
-export { showGroupToggle };
+export type { ListSwitch, ListSwitchState };
+export { showListSwitch };

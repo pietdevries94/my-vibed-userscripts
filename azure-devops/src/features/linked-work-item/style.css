@@ -4,17 +4,6 @@
   margin-inline: 0.5em;
 }
 
-/* The "Group by work item" switch. core/switch.css styles it; group-toggle.ts places it. */
-.bolt-tabbar > .fix-ado-group-toggle {
-  margin: 0 8px;
-}
-
-/* The inbox has no tab bar, so the switch gets a bar of its own above the lists. */
-.fix-ado-group-toggle-bar {
-  display: flex;
-  justify-content: flex-end;
-}
-
 /* A group's title row in a pull request list: its work item's id as a link, then its title.
    work-item-group-rows.ts adds it. */
 .fix-ado-work-item-group > td {

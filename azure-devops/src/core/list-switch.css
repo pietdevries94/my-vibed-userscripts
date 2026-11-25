@@ -1,0 +1,10 @@
+/* A switch on the pull request lists. switch.css styles the switch; list-switch.ts places it. */
+.bolt-tabbar > .fix-ado-switch {
+  margin: 0 8px;
+}
+
+/* The inbox has no tab bar, so its switches get a bar of their own above the lists. */
+.fix-ado-list-switch-bar {
+  display: flex;
+  justify-content: flex-end;
+}
