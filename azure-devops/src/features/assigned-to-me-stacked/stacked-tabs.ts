@@ -8,6 +8,8 @@ import {
   createCard,
   findAssignedCard,
   showTabName,
+  shownTabName,
+  tabNameOf,
 } from "./assigned-card.ts";
 import type { AssignedPullRequest } from "./assigned-tabs.ts";
 import type { CardFolding } from "./card-folding.ts";
@@ -105,9 +107,10 @@ function removeStacking(document: Document, kept: HTMLElement[]): void {
     }
   }
   if (kept.length === 0) {
-    for (const card of document.querySelectorAll(`.${STACKED_CLASS}`)) {
+    for (const card of document.querySelectorAll<HTMLElement>(`.${STACKED_CLASS}`)) {
       card.querySelector(`.${TAB_NAME_CLASS}`)?.remove();
       card.classList.remove(STACKED_CLASS);
+      delete card.dataset.fixAdoTabName;
     }
   }
 }
@@ -116,11 +119,25 @@ function removeStacking(document: Document, kept: HTMLElement[]): void {
 function markAsStacked({ card, tabs }: AssignedCard): void {
   const selected = tabs.find(({ isSelected }) => isSelected);
   if (selected) {
-    showTabName(card, selected.element);
+    showTabName(card, tabNameOf(selected.element));
   }
   if (!card.classList.contains(STACKED_CLASS)) {
     card.classList.add(STACKED_CLASS);
   }
+}
+
+/**
+ * A folded card has no list or tabs: its built cards stay as they are, and its title keeps
+ * the name of its tab. Without a card the page goes back as it was.
+ */
+function showFoldedCard(document: Document, assigned: AssignedToMe | null): void {
+  const folded = document.querySelector<HTMLElement>(`.${STACKED_CLASS}`);
+  const tabName = folded ? shownTabName(folded) : null;
+  if (assigned === null || folded === null || tabName === null) {
+    removeStacking(document, []);
+    return;
+  }
+  showTabName(folded, tabName);
 }
 
 /**
@@ -134,11 +151,7 @@ function showStackedTabs(
 ): void {
   const found = findAssignedCard(document);
   if (found === null || assigned === null) {
-    // A folded card has no list: its built cards and hidden tabs stay as they are.
-    const isFolded = assigned !== null && document.querySelector(`.${STACKED_CLASS}`) !== null;
-    if (!isFolded) {
-      removeStacking(document, []);
-    }
+    showFoldedCard(document, assigned);
     return;
   }
   const ordered = found.tabs.flatMap((tab) =>

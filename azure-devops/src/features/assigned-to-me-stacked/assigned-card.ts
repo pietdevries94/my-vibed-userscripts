@@ -65,27 +65,57 @@ function createTable(adoTable: HTMLElement): HTMLElement | null {
   return container;
 }
 
-const tabLabel = (tab: Element): string => tab.querySelector(".bolt-tab-text")?.textContent ?? "";
+/** A tab's name and count, as the card's title shows them. */
+interface TabName {
+  label: string;
+  count: string;
+}
 
-function createTabName(card: HTMLElement, tab: Element): HTMLElement {
+function tabNameOf(tab: Element): TabName {
+  return {
+    count: tab.querySelector(".bolt-tab-badge")?.textContent ?? "",
+    label: tab.querySelector(".bolt-tab-text")?.textContent ?? "",
+  };
+}
+
+/** The count pill Azure DevOps puts after a card's title. */
+function createCountPill(document: Document, count: string): HTMLElement {
+  const pill = Object.assign(document.createElement("div"), {
+    className: "margin-left-8 bolt-pill flex-row flex-center standard regular",
+  });
+  const content = Object.assign(document.createElement("div"), {
+    className: "bolt-pill-content text-ellipsis",
+    textContent: count,
+  });
+  content.setAttribute("role", "presentation");
+  pill.append(content);
+  return pill;
+}
+
+function createTabName(card: HTMLElement, { label, count }: TabName, key: string): HTMLElement {
   const name = Object.assign(card.ownerDocument.createElement("span"), {
     className: TAB_NAME_CLASS,
   });
-  const badge = tab.querySelector(".bolt-tab-badge");
-  const count = badge ? copyOf(badge) : null;
-  name.append(`· ${tabLabel(tab)}`, ...(count ? [count] : []));
+  name.dataset.fixAdoShown = key;
+  name.append(`· ${label}`, ...(count === "" ? [] : [createCountPill(card.ownerDocument, count)]));
   return name;
 }
 
-/** "Assigned to me · Waiting for author", with the tab's count. Only touches the DOM on a change. */
-function showTabName(card: HTMLElement, tab: Element): void {
-  const key = JSON.stringify([tabLabel(tab), tab.querySelector(".bolt-tab-badge")?.textContent]);
+/**
+ * "Assigned to me · Waiting for author", with the tab's count. The card keeps it, for when
+ * Azure DevOps draws the title again without tabs, as it does for a folded card. Only
+ * touches the DOM on a change.
+ */
+function showTabName(card: HTMLElement, tabName: TabName): void {
+  const key = JSON.stringify(tabName);
+  if (card.dataset.fixAdoTabName !== key) {
+    card.dataset.fixAdoTabName = key;
+  }
   const shown = card.querySelector<HTMLElement>(`.${TAB_NAME_CLASS}`);
   if (shown?.dataset.fixAdoShown === key) {
     return;
   }
-  const name = createTabName(card, tab);
-  name.dataset.fixAdoShown = key;
+  const name = createTabName(card, tabName, key);
   if (shown) {
     shown.replaceWith(name);
   } else {
@@ -93,12 +123,19 @@ function showTabName(card: HTMLElement, tab: Element): void {
   }
 }
 
+/** The tab name the card showed last, or null when it showed none. */
+function shownTabName(card: HTMLElement): TabName | null {
+  const key = card.dataset.fixAdoTabName;
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- showTabName wrote it
+  return key === undefined ? null : (JSON.parse(key) as TabName);
+}
+
 /** Names this tab after the card's title, with `count`, and leaves only it in the hidden tab bar. */
 function showOnlyTab(card: HTMLElement, tabId: string, count: number): void {
   for (const tab of card.querySelectorAll(TAB_SELECTOR)) {
     if (tab.id === tabId) {
       tab.querySelector(".bolt-tab-badge .bolt-pill-content")?.replaceChildren(String(count));
-      showTabName(card, tab);
+      showTabName(card, tabNameOf(tab));
     } else {
       tab.remove();
     }
@@ -154,4 +191,6 @@ export {
   createCard,
   findAssignedCard,
   showTabName,
+  shownTabName,
+  tabNameOf,
 };

@@ -157,9 +157,17 @@ test("while Azure DevOps's card is folded, the built cards stay", { skip: fixtur
   const built = document.querySelector(".fix-ado-assigned-card");
   assert.ok(built);
 
-  assignedCard(document).querySelector(".bolt-card-content")?.remove();
+  // Folded, Azure DevOps draws the card without its list and tabs, and its title again.
+  const card = assignedCard(document);
+  card.querySelector(".bolt-card-content")?.remove();
+  card.querySelector(".fix-ado-assigned-tab-name")?.remove();
+  card.querySelector(".repos-pr-section-tabs")?.remove();
   showStackedTabs(document, assigned, CONTEXT);
 
   assert.equal(document.querySelector(".fix-ado-assigned-card"), built);
-  assert.ok(assignedCard(document).classList.contains("fix-ado-assigned-stacked"));
+  assert.ok(card.classList.contains("fix-ado-assigned-stacked"));
+  assert.equal(
+    card.querySelector(".fix-ado-assigned-tab-name")?.firstChild?.textContent,
+    "· Active",
+  );
 });
