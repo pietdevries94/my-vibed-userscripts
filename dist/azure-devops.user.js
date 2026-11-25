@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.25.2
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
+// @version      1.26.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; Draft pull requests, and groups of only drafts, on a slightly grey background with lighter text. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -3648,9 +3648,9 @@ html[data-fix-ado-win98]:is(
       gap: 6px;
       height: 24px;
       padding: 0 12px;
+      border-top: 0;
       white-space: nowrap;
       color: #000;
-      font-weight: 700;
 
       &::after {
         content: "";
@@ -3670,7 +3670,6 @@ html[data-fix-ado-win98]:is(
     overflow: hidden;
     text-overflow: ellipsis;
     color: #404040;
-    font-weight: 400;
   }
 }
 
@@ -17170,6 +17169,71 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     styles: [style_default16]
   };
 
+  // azure-devops/src/features/grey-drafts/style.css
+  var style_default17 = `/* A draft pull request's row, in the lists and the inbox: a slight grey from the theme's
+   text colour, so it works in Light and Dark, and text a step lighter than the site's. The
+   site's selected row keeps its colours. With Group by work item on, a group of only drafts
+   gets the same colours; work-item-group-rows.ts marks it. */
+a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected),
+.fix-ado-work-item-group[data-fix-ado-drafts-only] {
+  --text-secondary-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.45);
+
+  background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.03);
+  color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.7);
+
+  &:hover {
+    background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.05);
+  }
+}
+
+/* Windows 98 mode: the white field with a touch of the light face grey, with dark grey
+   text. A selected or focused row stays navy. */
+html[data-fix-ado-win98]
+  :is(
+    a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected, .focused),
+    .fix-ado-work-item-group[data-fix-ado-drafts-only]
+  ) {
+  --text-secondary-color: var(--win98-shadow);
+
+  color: #404040;
+
+  &,
+  &:hover {
+    background-color: color-mix(in oklab, var(--win98-light) 30%, var(--win98-field-face));
+  }
+}
+
+/* Windows 98 mode sets a group's text colours on its cell and title. */
+html[data-fix-ado-win98] .fix-ado-work-item-group[data-fix-ado-drafts-only] {
+  & > td {
+    color: #404040;
+  }
+
+  .fix-ado-work-item-group-title {
+    color: var(--win98-shadow);
+  }
+}
+
+/* A group of only drafts shows its work item's link lighter too. */
+.fix-ado-work-item-group[data-fix-ado-drafts-only] a {
+  color: color-mix(in oklab, var(--communication-foreground, rgb(0, 90, 158)) 70%, transparent);
+}
+
+html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only] > td > a {
+  color: color-mix(in oklab, #0000ee 70%, transparent);
+}
+`;
+
+  // azure-devops/src/features/grey-drafts/index.ts
+  var greyDrafts = {
+    change: { kind: "new", version: "1.26.0" },
+    description: "Draft pull requests, and groups of only drafts, on a slightly grey background with lighter text.",
+    id: "grey-drafts",
+    name: "Grey drafts",
+    start: () => null,
+    styles: [style_default17]
+  };
+
   // azure-devops/src/features/linked-work-item/linked-work-item-fetcher.ts
   var LINKED_WORK_ITEMS_REFRESH_INTERVAL_MS = 3e5;
   async function fetchLinkedWorkItems(client, pullRequest) {
@@ -17279,7 +17343,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/linked-work-item/work-item-group-rows.ts
-  var GROUP_ROW_CLASS = "fix-ado-work-item-group", PULL_REQUEST_ROW_SELECTOR2 = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
+  var GROUP_ROW_CLASS = "fix-ado-work-item-group", DRAFTS_ONLY_ATTRIBUTE = "data-fix-ado-drafts-only", PULL_REQUEST_ROW_SELECTOR2 = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
   function placeBefore(list, node, before) {
     node.parentNode === list ? list.moveBefore(node, before) : before === null ? list.append(node) : before.before(node);
   }
@@ -17318,13 +17382,17 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let [cell2] = row.cells, href = workItemHref(basePath2, group2.workItemId), shown = JSON.stringify([href, group2.label, group2.title]);
     cell2 === void 0 || row.dataset.fixAdoShownTitle === shown || (cell2.replaceChildren(...createGroupTitle(row.ownerDocument, href, group2)), row.dataset.fixAdoShownTitle = shown);
   }
+  function markDraftsOnly(row, group2) {
+    let isDraftsOnly = group2.rows.length > 0 && group2.rows.every((pullRequestRow) => isDraftRow(pullRequestRow));
+    row.hasAttribute(DRAFTS_ONLY_ATTRIBUTE) !== isDraftsOnly && row.toggleAttribute(DRAFTS_ONLY_ATTRIBUTE, isDraftsOnly);
+  }
   var rowIndex = (row) => Number(row.getAttribute("aria-rowindex"));
   function orderedNodes(list, basePath2, groups) {
     return groups === null ? [...list.querySelectorAll(PULL_REQUEST_ROW_SELECTOR2)].toSorted(
       (first, second) => rowIndex(first) - rowIndex(second)
     ) : groups.flatMap((group2) => {
       let groupRow = groupRowFor(list, group2.key);
-      return showGroupTitle(groupRow, basePath2, group2), [groupRow, ...group2.rows];
+      return showGroupTitle(groupRow, basePath2, group2), markDraftsOnly(groupRow, group2), [groupRow, ...group2.rows];
     });
   }
   function showWorkItemGroups(list, basePath2, groups) {
@@ -17342,7 +17410,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/linked-work-item/style.css
-  var style_default17 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
+  var style_default18 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
 .fix-ado-linked-work-item::before {
   content: "·";
   margin-inline: 0.5em;
@@ -17362,18 +17430,24 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
 /* A group's title row in a pull request list: its work item's id as a link, then its title.
    work-item-group-rows.ts adds it. */
 .fix-ado-work-item-group > td {
-  padding: 12px 16px 4px;
-  font-weight: 600;
+  padding: 8px 16px;
+  /* A line above each group, stronger than the lines between rows, to divide the groups. */
+  border-top: 1px solid rgba(var(--palette-neutral-100, 0, 0, 0), 0.2);
+}
+
+/* No line between a group's title and its first pull request. Transparent, so the row keeps
+   its height. */
+.fix-ado-work-item-group + a.bolt-table-row > .bolt-table-cell {
+  border-top-color: transparent;
 }
 
 .fix-ado-work-item-group a {
   color: var(--communication-foreground, rgb(0, 90, 158));
 }
 
-/* The work item's title after its id: grey and regular, so the group row does not shout. */
+/* The work item's title after its id: grey, so the group row does not shout. */
 .fix-ado-work-item-group-title {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  font-weight: normal;
 }
 `;
 
@@ -17422,7 +17496,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [switch_default, style_default17]
+    styles: [switch_default, style_default18]
   };
 
   // azure-devops/src/features/pipeline-status/index.ts
@@ -17527,7 +17601,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default18 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+  var style_default19 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
 .bolt-table-cell-content:has(> .fix-ado-published-since) {
   flex-direction: column;
   align-items: flex-start;
@@ -17576,7 +17650,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default18]
+    styles: [style_default19]
   };
 
   // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
@@ -17645,7 +17719,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default19 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default20 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -17692,7 +17766,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default19]
+    styles: [style_default20]
   };
 
   // azure-devops/src/features/pull-request-list-features.ts
@@ -17701,7 +17775,8 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     requiredReviewers,
     publishedSince,
     linkedWorkItem,
-    assignedToMeStacked
+    assignedToMeStacked,
+    greyDrafts
   ];
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
@@ -17856,7 +17931,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/days-in-column/style.css
-  var style_default20 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+  var style_default21 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
 .fix-ado-days-in-column {
   display: flex;
   flex-wrap: wrap;
@@ -17974,7 +18049,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default20]
+    styles: [style_default21]
   };
 
   // azure-devops/src/features/index.ts
