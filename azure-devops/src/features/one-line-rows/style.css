@@ -28,6 +28,11 @@
     padding-inline: 6px;
   }
 
+  /* The row's More button: 24px, as its 34px would make the row taller. */
+  & .bolt-table-cell-side-action .bolt-button {
+    padding: 4px;
+  }
+
   /* The author, and each reviewer: 20px avatars. The initials scale with the size. */
   & :is([aria-colindex="1"], .pr-reviewer) :is(.bolt-coin, .bolt-coin-content) {
     --fix-ado-avatar-size: 20px !important;
@@ -68,6 +73,12 @@
   /* Reviewers overlap, each with a ring in the row's colour. Required ones glow less. */
   & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) > .pr-reviewer {
     margin: 0 -4px 0 0 !important;
+  }
+
+  /* A row, so the vote icon's empty wrapper sits beside the avatar instead of on a line
+     under it. The icon itself is placed on the reviewer as before. */
+  & .pr-reviewer {
+    display: flex;
   }
 
   & .pr-reviewer .bolt-coin {
