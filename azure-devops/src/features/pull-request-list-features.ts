@@ -1,5 +1,6 @@
 import type { Feature } from "../core/feature.ts";
 import { assignedToMeStacked } from "./assigned-to-me-stacked/index.ts";
+import { greyDrafts } from "./grey-drafts/index.ts";
 import { linkedWorkItem } from "./linked-work-item/index.ts";
 import { pipelineStatusOnPullRequests } from "./pipeline-status/index.ts";
 import { publishedSince } from "./published-since/index.ts";
@@ -12,6 +13,7 @@ const PULL_REQUEST_LIST_FEATURES: Feature[] = [
   publishedSince,
   linkedWorkItem,
   assignedToMeStacked,
+  greyDrafts,
 ];
 
 export { PULL_REQUEST_LIST_FEATURES };
