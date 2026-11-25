@@ -21,11 +21,18 @@
   padding: 8px 16px;
   /* A line above each group, stronger than the lines between rows, to divide the groups. */
   border-top: 1px solid rgba(var(--palette-neutral-100, 0, 0, 0), 0.2);
-  font-weight: 600;
 }
 
+/* No line between a group's title and its first pull request. Transparent, so the row keeps
+   its height. */
+.fix-ado-work-item-group + a.bolt-table-row > .bolt-table-cell {
+  border-top-color: transparent;
+}
+
+/* Only the work item's id is bold: "Multiple work items" and "No work item" are not. */
 .fix-ado-work-item-group a {
   color: var(--communication-foreground, rgb(0, 90, 158));
+  font-weight: 600;
 }
 
 /* The work item's title after its id: grey and regular, so the group row does not shout. */

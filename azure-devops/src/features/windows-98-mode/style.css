@@ -2634,7 +2634,6 @@ html[data-fix-ado-win98]:is(
       border-top: 1px solid var(--win98-shadow);
       white-space: nowrap;
       color: #000;
-      font-weight: 700;
 
       &::after {
         content: "";
@@ -2647,6 +2646,7 @@ html[data-fix-ado-win98]:is(
 
     a {
       color: #0000ee;
+      font-weight: 700;
     }
   }
 
