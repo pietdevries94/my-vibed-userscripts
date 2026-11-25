@@ -27,3 +27,12 @@
 .fix-ado-assigned-folded .bolt-card-content {
   display: none;
 }
+
+/* While the script unfolds Azure DevOps's folded card for a moment, its list and tabs stay
+   out of sight. The list keeps its width, so Azure DevOps lays out its columns. */
+.fix-ado-assigned-peeking .bolt-card-content,
+.fix-ado-assigned-peeking .repos-pr-section-tabs {
+  visibility: hidden;
+  max-height: 0;
+  overflow: hidden;
+}

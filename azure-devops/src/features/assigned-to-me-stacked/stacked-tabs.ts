@@ -18,6 +18,9 @@ import { pullRequestsOnTab } from "./assigned-tabs.ts";
 import { relativeTime } from "./relative-time.ts";
 import { showCardFolding } from "./card-folding.ts";
 
+/** Whether the card shows its tabs as cards, is folded with them kept, or shows none. */
+type StackStatus = "stacked" | "folded" | "none";
+
 /** Where the cards show, and when. */
 type ShownContext = Omit<RowContext, "reviewerId"> & { folding: CardFolding };
 
@@ -130,14 +133,15 @@ function markAsStacked({ card, tabs }: AssignedCard): void {
  * A folded card has no list or tabs: its built cards stay as they are, and its title keeps
  * the name of its tab. Without a card the page goes back as it was.
  */
-function showFoldedCard(document: Document, assigned: AssignedToMe | null): void {
+function showFoldedCard(document: Document, assigned: AssignedToMe | null): StackStatus {
   const folded = document.querySelector<HTMLElement>(`.${STACKED_CLASS}`);
   const tabName = folded ? shownTabName(folded) : null;
   if (assigned === null || folded === null || tabName === null) {
     removeStacking(document, []);
-    return;
+    return "none";
   }
   showTabName(folded, tabName);
+  return "folded";
 }
 
 /**
@@ -148,11 +152,10 @@ function showStackedTabs(
   document: Document,
   assigned: AssignedToMe | null,
   context: ShownContext,
-): void {
+): StackStatus {
   const found = findAssignedCard(document);
   if (found === null || assigned === null) {
-    showFoldedCard(document, assigned);
-    return;
+    return showFoldedCard(document, assigned);
   }
   const ordered = found.tabs.flatMap((tab) =>
     tab.isSelected ? [found.card] : builtCard(found, tab, { assigned, context }),
@@ -160,6 +163,8 @@ function showStackedTabs(
   removeStacking(document, ordered);
   placeAround(found.card, ordered);
   markAsStacked(found);
+  return "stacked";
 }
 
+export type { StackStatus };
 export { showStackedTabs };

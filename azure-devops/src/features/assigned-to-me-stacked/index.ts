@@ -1,13 +1,17 @@
 import type { AssignedToMe } from "./assigned-card.ts";
 import type { CardFolding } from "./card-folding.ts";
+import type { CardTitleStore } from "./card-peek.ts";
 import { FAILED_REQUEST_RETRY_MS } from "../pipeline-status/pipeline-status-poller.ts";
 import type { Feature } from "../../core/feature.ts";
 import type { Page } from "../../core/page.ts";
+import { createCardPeek } from "./card-peek.ts";
 import { showStackedTabs } from "./stacked-tabs.ts";
 import style from "./style.css";
 
 /** The tab ids of the built cards the owner folded. */
 const FOLDED_TABS_KEY = "assigned-to-me-folded-tabs";
+/** The card's title, to know it while it is folded and shows no tabs. */
+const CARD_TITLE_KEY = "assigned-to-me-card-title";
 /** Votes change while the owner reviews, so the built lists refresh often. */
 const ASSIGNED_REFRESH_INTERVAL_MS = 60_000;
 
@@ -20,6 +24,27 @@ function repositoryOf(page: Page): Repository | undefined {
     return { project, repository };
   }
   return page.kind === "pull-request-inbox" ? null : undefined;
+}
+
+/** The card's title, kept between page loads. */
+const CARD_TITLES: CardTitleStore = {
+  get: () => GM_getValue<string>(CARD_TITLE_KEY, ""),
+  set: (title) => {
+    GM_setValue(CARD_TITLE_KEY, title);
+  },
+};
+
+/** What the built cards show, without the times, which may go stale while the card is folded. */
+function shownKeyOf({ pullRequests }: AssignedToMe): string {
+  return JSON.stringify(
+    pullRequests.map((pullRequest) => [
+      pullRequest.pullRequestId,
+      pullRequest.title,
+      pullRequest.isDraft,
+      pullRequest.mergeStatus,
+      pullRequest.reviewers?.map(({ id, vote, isRequired }) => [id, vote, isRequired]),
+    ]),
+  );
 }
 
 /** The built cards the owner folded, kept across page loads. `onChange` shows the change. */
@@ -51,6 +76,7 @@ const assignedToMeStacked: Feature = {
     const folding = createCardFolding(() => {
       show(shownScope);
     });
+    const peek = createCardPeek(now, CARD_TITLES);
 
     async function fetchAssigned(repository: Repository, scope: string): Promise<void> {
       isFetching = true;
@@ -71,7 +97,8 @@ const assignedToMeStacked: Feature = {
     function show(scope: string | null): void {
       shownScope = scope;
       const shown = scope !== null && assigned?.scope === scope ? assigned.value : null;
-      showStackedTabs(document, shown, { basePath, folding, now: now() });
+      const status = showStackedTabs(document, shown, { basePath, folding, now: now() });
+      peek.sync(document, status, shown === null ? null : shownKeyOf(shown));
     }
 
     return {

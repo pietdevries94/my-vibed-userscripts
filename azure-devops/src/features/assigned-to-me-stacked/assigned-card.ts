@@ -13,6 +13,8 @@ const ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]';
 const STACKED_CLASS = "fix-ado-assigned-stacked";
 /** A card the script builds for one of the other tabs. */
 const BUILT_CARD_CLASS = "fix-ado-assigned-card";
+/** Azure DevOps's folded card while the script unfolds it for a moment. card-peek.ts adds it. */
+const PEEKING_CLASS = "fix-ado-assigned-peeking";
 const CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis";
 /** The tab's name and count after the card's title, as the tabs are hidden. */
 const TAB_NAME_CLASS = "fix-ado-assigned-tab-name";
@@ -162,7 +164,7 @@ function createRows(
 
 /** Marks a copy of the card as the script's, without the ids that Azure DevOps's card has. Last, as the tabs go by id. */
 function markAsBuilt(card: HTMLElement): void {
-  card.classList.remove(STACKED_CLASS);
+  card.classList.remove(STACKED_CLASS, PEEKING_CLASS);
   card.classList.add(BUILT_CARD_CLASS);
   for (const element of card.querySelectorAll("[id]")) {
     element.removeAttribute("id");
@@ -190,6 +192,9 @@ function createCard(
 export type { AssignedCard, AssignedToMe, CardTab, TabList };
 export {
   BUILT_CARD_CLASS,
+  CARD_SELECTOR,
+  CARD_TITLE_SELECTOR,
+  PEEKING_CLASS,
   STACKED_CLASS,
   TAB_NAME_CLASS,
   createCard,
