@@ -97,6 +97,11 @@
       0 0 0 3px var(--communication-background, rgb(0, 120, 212));
   }
 
+  /* Group by work item's group titles: 12px, as the line under a title. */
+  & .fix-ado-work-item-group > td {
+    font-size: 12px;
+  }
+
   /* The time: the publish time alone when it shows, as it says more than the update time. */
   & [aria-colindex="5"] .bolt-table-cell-content {
     justify-content: flex-end;
