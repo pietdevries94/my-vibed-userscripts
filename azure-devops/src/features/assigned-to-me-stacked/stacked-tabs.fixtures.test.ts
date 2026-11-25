@@ -171,3 +171,18 @@ test("while Azure DevOps's card is folded, the built cards stay", { skip: fixtur
     "· Active",
   );
 });
+
+test(
+  "a card built while Azure DevOps's list is still invisible shows",
+  { skip: fixtures.skip },
+  () => {
+    const { assigned, document } = capturedPage("pr-list-assigned-active");
+    assignedCard(document).querySelector(".bolt-table-container")?.classList.add("invisible");
+
+    showStackedTabs(document, assigned, CONTEXT);
+
+    const built = document.querySelector(".fix-ado-assigned-card .bolt-table-container");
+    assert.ok(built);
+    assert.ok(!built.classList.contains("invisible"));
+  },
+);

@@ -55,9 +55,13 @@ function findAssignedCard(document: Document): AssignedCard | null {
   return { card, table, tabs };
 }
 
-/** An empty table like Azure DevOps's own, with the same columns and widths. */
+/**
+ * An empty table like Azure DevOps's own, with the same columns and widths. Visible: Azure
+ * DevOps marks its list invisible for a moment while it lays it out, as after unfolding.
+ */
 function createTable(adoTable: HTMLElement): HTMLElement | null {
   const container = copyOf(adoTable);
+  container?.classList.remove("invisible");
   const table = container?.querySelector("table");
   table?.removeAttribute("aria-label");
   table?.removeAttribute("aria-rowcount");
