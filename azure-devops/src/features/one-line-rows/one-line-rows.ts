@@ -11,4 +11,9 @@ function showOneLineRows(document: Document, isOneLine: boolean): void {
   }
 }
 
-export { showOneLineRows };
+/** True while Windows 98 mode is on: it marks <html> when it starts, and lays the rows out itself. */
+function isWindows98Mode(document: Document): boolean {
+  return Object.hasOwn(document.documentElement.dataset, "fixAdoWin98");
+}
+
+export { isWindows98Mode, showOneLineRows };

@@ -1,6 +1,6 @@
+import { isWindows98Mode, showOneLineRows } from "./one-line-rows.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
-import { showOneLineRows } from "./one-line-rows.ts";
 import { test } from "node:test";
 
 /** The test reads the records with takeRecords instead. */
@@ -21,4 +21,11 @@ test("writes nothing when the page already shows the right rows", () => {
   observer.observe(window.document.documentElement, { attributes: true });
   showOneLineRows(window.document, true);
   assert.deepEqual(observer.takeRecords(), []);
+});
+
+test("Windows 98 mode is on while it marks the page, also with an empty mark", () => {
+  const { document } = new JSDOM("<!doctype html><body></body>").window;
+  assert.equal(isWindows98Mode(document), false);
+  document.documentElement.dataset.fixAdoWin98 = "";
+  assert.equal(isWindows98Mode(document), true);
 });
