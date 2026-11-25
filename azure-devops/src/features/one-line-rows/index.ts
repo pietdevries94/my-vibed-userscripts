@@ -10,7 +10,7 @@ const IS_ONE_LINE_KEY = "one-line-rows-on";
 const ONE_LINE_SWITCH = { className: "fix-ado-one-line-switch", label: "One line" };
 
 const oneLineRows: Feature = {
-  change: { kind: "new", version: "1.26.0" },
+  change: { kind: "new", version: "1.27.0" },
   description:
     "Each pull request in a list on one line, so more of them fit on the screen. A One line switch on the lists flips between one line and Azure DevOps's two. Not in Windows 98 mode.",
   id: "one-line-rows",
