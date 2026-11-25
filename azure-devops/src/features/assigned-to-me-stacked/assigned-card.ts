@@ -117,16 +117,15 @@ function showTabName(card: HTMLElement, tabName: TabName): void {
   if (card.dataset.fixAdoTabName !== key) {
     card.dataset.fixAdoTabName = key;
   }
+  const title = card.querySelector(CARD_TITLE_SELECTOR);
   const shown = card.querySelector<HTMLElement>(`.${TAB_NAME_CLASS}`);
-  if (shown?.dataset.fixAdoShown === key) {
+  const isInPlace = title?.nextElementSibling === shown;
+  if (shown?.dataset.fixAdoShown === key && isInPlace) {
     return;
   }
-  const name = createTabName(card, tabName, key);
-  if (shown) {
-    shown.replaceWith(name);
-  } else {
-    card.querySelector(CARD_TITLE_SELECTOR)?.after(name);
-  }
+  shown?.remove();
+  // Azure DevOps can draw its title again after the name, as after unfolding.
+  title?.after(shown?.dataset.fixAdoShown === key ? shown : createTabName(card, tabName, key));
 }
 
 /** The tab name the card showed last, or null when it showed none. */

@@ -60,6 +60,7 @@ function createKeyedCard(
   const card = createCard(found, tabList, context);
   if (card) {
     card.dataset.fixAdoShown = key;
+    card.dataset.fixAdoTabId = tabList.tab.id;
   }
   return card;
 }
@@ -134,10 +135,14 @@ function markAsStacked({ card, tabs }: AssignedCard): void {
 }
 
 /**
- * A folded card has no list or tabs: its built cards stay as they are, and its title keeps
- * the name of its tab. Without a card the page goes back as it was.
+ * A folded card has no list or tabs: its built cards stay, and still fold on their own, and
+ * its title keeps the name of its tab. Without a card the page goes back as it was.
  */
-function showFoldedCard(document: Document, assigned: AssignedToMe | null): StackStatus {
+function showFoldedCard(
+  document: Document,
+  assigned: AssignedToMe | null,
+  folding: CardFolding,
+): StackStatus {
   const folded = document.querySelector<HTMLElement>(`.${STACKED_CLASS}`);
   const tabName = folded ? shownTabName(folded) : null;
   if (assigned === null || folded === null || tabName === null) {
@@ -145,6 +150,9 @@ function showFoldedCard(document: Document, assigned: AssignedToMe | null): Stac
     return "none";
   }
   showTabName(folded, tabName);
+  for (const card of document.querySelectorAll<HTMLElement>(`.${BUILT_CARD_CLASS}`)) {
+    showCardFolding(card, card.dataset.fixAdoTabId ?? "", folding);
+  }
   return "folded";
 }
 
@@ -159,7 +167,7 @@ function showStackedTabs(
 ): StackStatus {
   const found = findAssignedCard(document);
   if (found === null || assigned === null) {
-    return showFoldedCard(document, assigned);
+    return showFoldedCard(document, assigned, context.folding);
   }
   const ordered = found.tabs.flatMap((tab) =>
     tab.isSelected ? [found.card] : builtCard(found, tab, { assigned, context }),

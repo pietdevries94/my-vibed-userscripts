@@ -208,3 +208,46 @@ test(
     assert.ok(!built.classList.contains("invisible"));
   },
 );
+
+test(
+  "while Azure DevOps's card is folded, a built card still folds",
+  { skip: fixtures.skip },
+  () => {
+    const { assigned, document } = capturedPage("pr-list-assigned-active");
+    const foldedTabIds = new Set<string>();
+    const context = { ...CONTEXT, folding: { foldedTabIds, onToggle: (): void => undefined } };
+    showStackedTabs(document, assigned, context);
+    const built = document.querySelector(".fix-ado-assigned-card");
+    assert.ok(built);
+    const card = assignedCard(document);
+    card.querySelector(".bolt-card-content")?.remove();
+    card.querySelector(".repos-pr-section-tabs")?.remove();
+    showStackedTabs(document, assigned, context);
+
+    foldedTabIds.add("__bolt-tab-waitingForAuthor");
+    showStackedTabs(document, assigned, context);
+    assert.ok(built.classList.contains("fix-ado-assigned-folded"));
+
+    foldedTabIds.clear();
+    showStackedTabs(document, assigned, context);
+    assert.ok(!built.classList.contains("fix-ado-assigned-folded"));
+  },
+);
+
+test(
+  "the tab's name follows the title again after Azure DevOps redraws the title",
+  { skip: fixtures.skip },
+  () => {
+    const { assigned, document } = capturedPage("pr-inbox-assigned-active-inbox");
+    showStackedTabs(document, assigned, CONTEXT);
+    const card = assignedCard(document);
+    const title = card.querySelector(".repos-pr-section-header-title > .text-ellipsis");
+    assert.ok(title);
+
+    // After unfolding, Azure DevOps puts its title back after the script's name.
+    title.parentElement?.append(title);
+    showStackedTabs(document, assigned, CONTEXT);
+
+    assert.equal(title.nextElementSibling?.className, "fix-ado-assigned-tab-name");
+  },
+);
