@@ -1,0 +1,14 @@
+/* The "Assigned to me" card with its tabs under each other. stacked-tabs.ts marks the card,
+   and gives each list a title, so the tab bar has no job left. */
+.fix-ado-assigned-stacked .repos-pr-section-tabs {
+  display: none;
+}
+
+/* A list's title: its tab's name and count. */
+.fix-ado-assigned-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px 4px;
+  font-weight: 600;
+}

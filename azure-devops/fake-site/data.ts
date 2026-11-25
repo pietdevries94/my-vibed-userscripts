@@ -34,6 +34,8 @@ interface PullRequestPageData {
   data: {
     evaluationsByPullRequestId: Record<string, CapturedEvaluations>;
     pullRequests?: ListedPullRequest[];
+    /** The pull requests assigned to me, with my votes. Captures before it have none. */
+    assignedToMe?: { authenticatedUserId?: string | null; pullRequests?: unknown[] };
   };
   meta: { projects: Record<string, string>; statusColors: Record<string, string> };
 }

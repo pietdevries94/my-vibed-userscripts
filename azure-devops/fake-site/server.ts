@@ -5,6 +5,7 @@
 import type { FakeRequest, FakeResponse } from "../../shared/dev/fake-site/server.ts";
 import { THEME_PATH, themeAction, themeResponse } from "./theme.ts";
 import { actions, currentBuilds, currentEvaluations, currentPullRequest } from "./state.ts";
+import { assignedToMeResponse, isAssignedToMeRequest, listUserId } from "./assigned-to-me.ts";
 import {
   boardData,
   pageHtml,
@@ -108,6 +109,9 @@ function evaluationsResponse(request: FakeRequest): FakeResponse {
 }
 
 function pullRequestsResponse(request: FakeRequest): FakeResponse {
+  if (isAssignedToMeRequest(request)) {
+    return assignedToMeResponse(pullRequestPageOf(request));
+  }
   const isActive = request.url.searchParams.get("searchCriteria.status") === "active";
   const listed = pullRequestPageData("pr-list").data.pullRequests ?? [];
   const value = isActive ? listed.map((pullRequest) => currentPullRequest(pullRequest)) : [];
@@ -125,6 +129,7 @@ const API_ROUTES: [RegExp, (request: FakeRequest, match: RegExpExecArray) => Fak
   [/^\/fake-org\/[^/]+\/_apis\/build\/builds$/u, buildsResponse],
   [/^\/fake-org\/[^/]+\/_apis\/build\/builds\/(?<buildId>\d+)$/u, buildResponse],
   [/^\/fake-org\/[^/]+\/_apis\/git\/repositories\/[^/]+\/pullrequests$/u, pullRequestsResponse],
+  [/^\/fake-org\/_apis\/git\/pullrequests$/u, pullRequestsResponse],
   [
     /^\/fake-org\/[^/]+\/_apis\/git\/repositories\/[^/]+\/pullRequests\/(?<id>\d+)\/workitems$/u,
     linkedWorkItemsResponse,
@@ -139,7 +144,8 @@ const API_ROUTES: [RegExp, (request: FakeRequest, match: RegExpExecArray) => Fak
   [/^\/fake-org\/_apis\/wit\/workItems\/(?<id>\d+)\/updates$/u, workItemUpdatesResponse],
   [
     /^\/fake-org\/_apis\/connectionData$/u,
-    () => jsonResponse({ authenticatedUser: { id: boardData().data.myUserId } }),
+    (request) =>
+      jsonResponse({ authenticatedUser: { id: listUserId(request) ?? boardData().data.myUserId } }),
   ],
 ];
 
