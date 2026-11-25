@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.24.0
+// @version      1.24.1
 // @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -3614,6 +3614,46 @@ html[data-fix-ado-win98]:is(
     display: block;
     width: 100%;
   }
+
+  /* Group by work item: centred in the tab bar, clear of the tab panel's frame. */
+  .bolt-tabbar > .fix-ado-group-toggle {
+    align-self: center;
+  }
+
+  /* A work item's group: its id as a link and its title, then a line to the list's edge. */
+  .fix-ado-work-item-group {
+    display: block;
+
+    & > td {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 24px;
+      padding: 0 12px;
+      white-space: nowrap;
+      color: #000;
+      font-weight: 700;
+
+      &::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        margin-left: 2px;
+        background: var(--win98-shadow);
+      }
+    }
+
+    a {
+      color: #0000ee;
+    }
+  }
+
+  .fix-ado-work-item-group-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #404040;
+    font-weight: 400;
+  }
 }
 
 html[data-fix-ado-win98] {
@@ -5234,12 +5274,15 @@ html[data-fix-ado-win98="pull-request"] body {
     display: block;
 
     colgroup,
-    .bolt-list-row-spacer,
     td.bolt-table-cell-compact {
       display: none;
     }
 
-    & > tbody {
+    /* The tree draws only the rows in view. Its spacer rows hold the height of the others,
+       so the pane scrolls to the last file. */
+    & > tbody,
+    .bolt-list-row-spacer,
+    .bolt-list-cell-spacer {
       display: block;
     }
 
@@ -6546,6 +6589,22 @@ html[data-fix-ado-win98="pull-request"]
   .repos-changes-explorer-tree
   .bolt-table-cell-content-reveal {
   visibility: visible;
+}
+
+/* While Viewed files reads the tree, face-grey bars stand in for its rows, two to every 40px,
+   on the white well. The rows' checkboxes hide with the rows. */
+html[data-fix-ado-win98="pull-request"]
+  body
+  .repos-changes-explorer-splitter
+  .v-scroll-auto.fix-ado-viewed-tree-loading {
+  background:
+    linear-gradient(var(--win98-face) 0 8px, transparent 8px) 24px 8px / 60% 40px repeat-y,
+    linear-gradient(var(--win98-face) 0 8px, transparent 8px) 40px 28px / 45% 40px repeat-y,
+    #fff;
+
+  .bolt-table-cell-content-reveal {
+    visibility: hidden;
+  }
 }
 
 /* The pull request list draws no lines between rows. The site's 1px cell border would shift
@@ -8693,8 +8752,7 @@ html[data-fix-ado-win98="pipeline-run"] body .run-logs-view {
 
     colgroup,
     .bolt-table-header-border,
-    .bolt-table-cell-compact,
-    .bolt-list-row-spacer {
+    .bolt-table-cell-compact {
       display: none;
     }
 
