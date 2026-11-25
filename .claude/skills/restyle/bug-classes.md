@@ -12,7 +12,7 @@ The site sets sizes inline or in its own CSS: fixed field widths (270px), minimu
 
 ## Long values and narrow layouts
 
-Real values run longer than a capture's, and the site switches layout at narrow widths: a comment header puts the time under a long author name, and a script feature sizes avatar initials before the mode shrinks the avatar. A one-line bar then wraps and spills. Invent long values and narrow widths in a failure-count check, such as `thread-title-bar-failures`, and force the layout the design wants (one row, an ellipsis, a fixed size) rather than relying on the capture's.
+Real values run longer than a capture's, and the site switches layout at narrow widths: a comment header puts the time under a long author name, and a script feature sizes avatar initials before the mode shrinks the avatar. A one-line bar then wraps and spills. Invent long values and narrow widths in a failure-count check, such as `thread-header-failures`, and force the layout the design wants (one row, an ellipsis, a fixed size) rather than relying on the capture's. Force it on every copy of the part: the one-line fix covered the title bars, and the headers of a file thread's comments still stacked a long name over the time and cut it off.
 
 ## Long lists draw only the rows in view
 

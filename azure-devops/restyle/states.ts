@@ -10,7 +10,7 @@ import {
   issueBoxOverflow,
   setIssueMessage,
 } from "./checks.ts";
-import { threadStates, threadTitleBars } from "./threads.ts";
+import { threadHeaders, threadStates } from "./threads.ts";
 import type { Page } from "playwright";
 import { REPO_ROOT } from "../../build/scripts.ts";
 import fs from "node:fs";
@@ -269,7 +269,7 @@ const config: RestyleConfig = {
     { capture: "win98", name: "run-summary", page: "pipeline-summary", path: RUN },
     { capture: "win98", name: "run-steps", page: "pipeline-steps", path: `${RUN}&view=logs` },
   ],
-  checks: [boardWidth, dropDownVariants, issueBoxOverflow, threadTitleBars, treeScroll],
+  checks: [boardWidth, dropDownVariants, issueBoxOverflow, threadHeaders, treeScroll],
   masks: { design: "[data-glyph] { visibility: hidden !important; }", site: SITE_MASK },
   settings: { "windows-98-mode": true },
   states,

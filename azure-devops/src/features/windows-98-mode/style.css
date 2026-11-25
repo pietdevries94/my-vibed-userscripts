@@ -6674,23 +6674,34 @@ html[data-fix-ado-win98="pull-request"] body .activity-feed-list {
       }
 
       .repos-discussion-comment-header > .scroll-hidden {
-        min-width: 0;
-        flex-direction: row;
-        flex-wrap: nowrap;
-        align-items: center;
         gap: 4px;
+      }
+    }
+  }
 
-        .padding-right-8 {
-          min-width: 0;
-          margin: 0;
-          padding: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
+  /* Every comment's header is one line, where Azure DevOps puts the time under a long name:
+     the name ends in an ellipsis, the time and chip stay whole. */
+  [data-fix-ado-thread] {
+    .repos-comment-editor-fit:has(> .repos-discussion-comment-header) {
+      min-width: 0;
+    }
 
-        & > div:last-child {
-          flex-shrink: 0;
-        }
+    .repos-discussion-comment-header > .scroll-hidden {
+      min-width: 0;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+
+      .padding-right-8 {
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      & > div:last-child {
+        flex-shrink: 0;
       }
     }
   }

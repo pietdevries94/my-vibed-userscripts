@@ -1,6 +1,9 @@
-// Windows 98 mode's thread states and the title bar check: a thread's title bar is one line,
-// with its coin and text inside it, also for a long author name. Dev file only.
+// Windows 98 mode's thread states and the thread header check: a thread's title bar is one line,
+// with its coin and text inside it, and every comment header holds its name and time, also for a
+// long author name. Dev file only.
+import type { Box, TitleBar } from "./thread-measures.ts";
 import type { DiffState, FailureCheck } from "../../shared/dev/restyle/restyle-config.ts";
+import { measureCommentHeaders, measureTitleBars } from "./thread-measures.ts";
 import { OVERVIEW_PATH } from "./checks.ts";
 import type { Page } from "playwright";
 import { inSequence } from "../../shared/dev/restyle/in-sequence.ts";
@@ -96,76 +99,6 @@ async function showLongNameThread(page: Page): Promise<void> {
   await page.waitForTimeout(400);
 }
 
-interface Box {
-  top: number;
-  bottom: number;
-  left: number;
-  right: number;
-  width: number;
-  height: number;
-}
-
-/** One thread's title bar, measured in the browser. */
-interface TitleBar {
-  label: string;
-  bar: Box | null;
-  parts: { name: string; box: Box }[];
-  /** The widest of the coin and its content; 0 for a file thread's bar, which has no coin. */
-  coinWidth: number;
-  /** The top of the first comment's text below the bar; null when collapsed. */
-  textTop: number | null;
-}
-
-/** Each thread's title bar on the page: the bar, its parts, coin and the text below. Runs in the browser. */
-function measureTitleBars(): TitleBar[] {
-  return [
-    ...document.querySelectorAll<HTMLElement>(".activity-feed-list [data-fix-ado-thread]"),
-  ].map((thread, index) => {
-    const isOpen = thread.dataset.fixAdoThread === "open";
-    const fileHeader = isOpen
-      ? thread.previousElementSibling?.querySelector(
-          ":scope.comment-file-header .comment-file-header-title",
-        )
-      : null;
-    const firstRow = thread.querySelector(
-      ":scope > .repos-comment-viewer:first-child > .repos-discussion-comment > .flex-column > .flex-row",
-    );
-    // Collapsed, the first comment's whole row is the bar; open, its header spans the window.
-    const commentBar = isOpen
-      ? firstRow?.querySelector(".repos-discussion-comment-header")
-      : firstRow;
-    const bar = fileHeader ?? commentBar ?? null;
-    const coins = fileHeader
-      ? []
-      : [
-          ...(firstRow?.querySelectorAll(
-            ":scope > div > .bolt-coin, :scope > div > .bolt-coin > *",
-          ) ?? []),
-        ];
-    const parts = [
-      ...(bar?.querySelectorAll(
-        ".fix-ado-thread-toggle, .padding-right-8, .comment-file-header-link, time, .fix-ado-thread-chip",
-      ) ?? []),
-      ...coins,
-    ];
-    const text = isOpen ? thread.querySelector(".markdown-content") : null;
-    const [barBox, ...partBoxes] = [bar ?? thread, ...parts].map((element) => {
-      const { bottom, height, left, right, top, width } = element.getBoundingClientRect();
-      return { bottom, height, left, right, top, width };
-    });
-    return {
-      bar: bar ? barBox : null,
-      coinWidth: Math.max(0, ...coins.map((coin) => coin.getBoundingClientRect().width)),
-      label: `thread ${index + 1} (${fileHeader ? "file" : "comment"}, ${thread.dataset.fixAdoThread})`,
-      parts: parts.map((part, partIndex) => ({
-        box: partBoxes[partIndex],
-        name: part.className || part.tagName,
-      })),
-      textTop: text ? text.getBoundingClientRect().top : null,
-    };
-  });
-}
-
 const SLACK = 0.5;
 const TITLE_BAR_HEIGHT = 18;
 const COIN_SIZE = 16;
@@ -225,7 +158,15 @@ async function captureFailures(
       await page.waitForTimeout(600);
     }
     const titleBars = await page.evaluate(measureTitleBars);
-    const found = titleBars.flatMap((titleBar) => titleBarFailures(titleBar));
+    const headers = await page.evaluate(measureCommentHeaders);
+    const found = [
+      ...titleBars.flatMap((titleBar) => titleBarFailures(titleBar)),
+      ...headers.flatMap(({ header, label, parts }) =>
+        parts
+          .filter((part) => part.box.width > 0 && !isWithin(part.box, header))
+          .map((part) => `${label}: ${part.name} sticks out of the comment header`),
+      ),
+    ];
     const name = `${view.capture} ${view.width}${view.long ? " long names" : ""} ${state}`;
     return found.map((failure) => `${name}: ${failure}`);
   });
@@ -237,13 +178,14 @@ const VIEWS = ["wide", "reply-focused"].flatMap((capture) =>
   [1280, 900].flatMap((width) => [false, true].map((long) => ({ capture, long, width }))),
 );
 
-/** Every thread state's title bar: one 18px line, its coin and text inside it, nothing over it. */
-const threadTitleBars: FailureCheck = {
+/** Every thread state's title bar: one 18px line, its coin and text inside it, nothing over it.
+ * Every other comment's header holds its name, time and chip. */
+const threadHeaders: FailureCheck = {
   async failures(page, origin) {
     const perView = await inSequence(VIEWS, async (view) => captureFailures(page, origin, view));
     return perView.flat();
   },
-  name: "thread-title-bar-failures",
+  name: "thread-header-failures",
 };
 
 /** The title bar, the toolbar and the comment down to its table header, which the artboards draw. */
@@ -270,4 +212,4 @@ const threadStates: DiffState[] = [
   },
 ];
 
-export { threadStates, threadTitleBars };
+export { threadStates, threadHeaders };
