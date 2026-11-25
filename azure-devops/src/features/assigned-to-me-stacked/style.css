@@ -1,7 +1,16 @@
-/* The "Assigned to me" card, one card per tab. stacked-tabs.ts marks Azure DevOps's card,
-   which keeps only its selected tab; each built card shows only its own. */
-.fix-ado-assigned-stacked .repos-pr-section-tabs [role="tab"]:not([aria-selected="true"]) {
+/* The "Assigned to me" card, one card per tab. stacked-tabs.ts marks Azure DevOps's card and
+   builds the others; each card's title names its tab, so the tab bars have no job left. */
+.fix-ado-assigned-stacked .repos-pr-section-tabs,
+.fix-ado-assigned-card .repos-pr-section-tabs {
   display: none;
+}
+
+/* "· Waiting for author" and its count, after the card's title. */
+.fix-ado-assigned-tab-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: 0.3em;
 }
 
 /* A built card has no list to fold. */

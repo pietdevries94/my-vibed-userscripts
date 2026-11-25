@@ -1,7 +1,14 @@
 // Shows each tab of the "Assigned to me" card as a card of its own, under each other, and
 // puts the page back as it was.
 import type { AssignedCard, AssignedToMe, CardTab, TabList } from "./assigned-card.ts";
-import { BUILT_CARD_CLASS, STACKED_CLASS, createCard, findAssignedCard } from "./assigned-card.ts";
+import {
+  BUILT_CARD_CLASS,
+  STACKED_CLASS,
+  TAB_NAME_CLASS,
+  createCard,
+  findAssignedCard,
+  showTabName,
+} from "./assigned-card.ts";
 import type { AssignedPullRequest } from "./assigned-tabs.ts";
 import type { RowContext } from "./assigned-row.ts";
 import { pullRequestsOnTab } from "./assigned-tabs.ts";
@@ -94,8 +101,20 @@ function removeStacking(document: Document, kept: HTMLElement[]): void {
   }
   if (kept.length === 0) {
     for (const card of document.querySelectorAll(`.${STACKED_CLASS}`)) {
+      card.querySelector(`.${TAB_NAME_CLASS}`)?.remove();
       card.classList.remove(STACKED_CLASS);
     }
+  }
+}
+
+/** Marks Azure DevOps's card, which hides its tabs, and names its selected tab after its title. */
+function markAsStacked({ card, tabs }: AssignedCard): void {
+  const selected = tabs.find(({ isSelected }) => isSelected);
+  if (selected) {
+    showTabName(card, selected.element);
+  }
+  if (!card.classList.contains(STACKED_CLASS)) {
+    card.classList.add(STACKED_CLASS);
   }
 }
 
@@ -118,9 +137,7 @@ function showStackedTabs(
   );
   removeStacking(document, ordered);
   placeAround(found.card, ordered);
-  if (!found.card.classList.contains(STACKED_CLASS)) {
-    found.card.classList.add(STACKED_CLASS);
-  }
+  markAsStacked(found);
 }
 
 export { showStackedTabs };

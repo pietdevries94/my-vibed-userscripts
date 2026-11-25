@@ -37,7 +37,9 @@ function shownLists(document: Document): string[] {
   const cards = document.querySelectorAll("#__bolt-tab-activeMine, .fix-ado-assigned-card");
   return [...cards].flatMap((found) => {
     const card = found.closest(".repos-pr-section-card") ?? found;
-    const tab = card.querySelector('[role="tab"][aria-selected="true"] .bolt-tab-text');
+    const tab =
+      card.querySelector(".fix-ado-assigned-tab-name")?.firstChild ??
+      card.querySelector('[role="tab"][aria-selected="true"] .bolt-tab-text');
     const rows = [...card.querySelectorAll("a.bolt-table-row")].map(
       (row) => row.getAttribute("href")?.split("/").at(-1) ?? "",
     );
@@ -69,9 +71,9 @@ for (const page of ["pr-list-assigned-active", "pr-inbox-assigned-active-inbox"]
     const waiting = idsWithMyVote(assigned, -5);
     assert.ok(waiting.length > 0, "the capture has a pull request waiting for its author");
     assert.deepEqual(shownLists(document), [
-      "card Active",
+      "card · Active",
       ...adoRows,
-      "card Waiting for author",
+      "card · Waiting for author",
       ...waiting,
     ]);
     assert.ok(card.classList.contains("fix-ado-assigned-stacked"));
@@ -87,9 +89,9 @@ for (const page of ["pr-list-assigned-waiting", "pr-inbox-assigned-waiting-inbox
     showStackedTabs(document, assigned, CONTEXT);
 
     assert.deepEqual(shownLists(document), [
-      "card Active",
+      "card · Active",
       ...idsWithMyVote(assigned, 0),
-      "card Waiting for author",
+      "card · Waiting for author",
       ...adoRows,
     ]);
   });

@@ -22,7 +22,7 @@ function repositoryOf(page: Page): Repository | undefined {
 const assignedToMeStacked: Feature = {
   change: { kind: "new", version: "1.25.0" },
   description:
-    "The tabs of the Assigned to me card as cards of their own, under each other, so you scroll through them all.",
+    "The tabs of the Assigned to me card as cards of their own, under each other, each titled with its tab, so you scroll through them all.",
   id: "assigned-to-me-stacked",
   name: "Assigned to me tabs under each other",
   start({ basePath, client, document, now }) {

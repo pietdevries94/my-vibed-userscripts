@@ -1,5 +1,5 @@
 // The "Assigned to me" card, one card per tab: the selected tab's card is Azure DevOps's own,
-// the script builds the others as copies of it, each showing only its own tab.
+// the script builds the others as copies of it. Each card's title names its tab.
 import { buildAssignedRow, copyOf } from "./assigned-row.ts";
 import { ACTIVE_TAB_ID } from "./assigned-tabs.ts";
 import type { AssignedPullRequest } from "./assigned-tabs.ts";
@@ -13,6 +13,9 @@ const ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]';
 const STACKED_CLASS = "fix-ado-assigned-stacked";
 /** A card the script builds for one of the other tabs. */
 const BUILT_CARD_CLASS = "fix-ado-assigned-card";
+const CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis";
+/** The tab's name and count after the card's title, as the tabs are hidden. */
+const TAB_NAME_CLASS = "fix-ado-assigned-tab-name";
 
 interface AssignedToMe {
   reviewerId: string;
@@ -22,6 +25,7 @@ interface AssignedToMe {
 interface CardTab {
   id: string;
   isSelected: boolean;
+  element: Element;
 }
 
 /** Azure DevOps's card, its tabs, and its list of the selected tab. */
@@ -44,6 +48,7 @@ function findAssignedCard(document: Document): AssignedCard | null {
     return null;
   }
   const tabs = [...card.querySelectorAll(TAB_SELECTOR)].map((tab) => ({
+    element: tab,
     id: tab.id,
     isSelected: tab.getAttribute("aria-selected") === "true",
   }));
@@ -60,13 +65,40 @@ function createTable(adoTable: HTMLElement): HTMLElement | null {
   return container;
 }
 
-/** Leaves only this tab in the card's tab bar, selected, with `count` in its pill. */
+const tabLabel = (tab: Element): string => tab.querySelector(".bolt-tab-text")?.textContent ?? "";
+
+function createTabName(card: HTMLElement, tab: Element): HTMLElement {
+  const name = Object.assign(card.ownerDocument.createElement("span"), {
+    className: TAB_NAME_CLASS,
+  });
+  const badge = tab.querySelector(".bolt-tab-badge");
+  const count = badge ? copyOf(badge) : null;
+  name.append(`· ${tabLabel(tab)}`, ...(count ? [count] : []));
+  return name;
+}
+
+/** "Assigned to me · Waiting for author", with the tab's count. Only touches the DOM on a change. */
+function showTabName(card: HTMLElement, tab: Element): void {
+  const key = JSON.stringify([tabLabel(tab), tab.querySelector(".bolt-tab-badge")?.textContent]);
+  const shown = card.querySelector<HTMLElement>(`.${TAB_NAME_CLASS}`);
+  if (shown?.dataset.fixAdoShown === key) {
+    return;
+  }
+  const name = createTabName(card, tab);
+  name.dataset.fixAdoShown = key;
+  if (shown) {
+    shown.replaceWith(name);
+  } else {
+    card.querySelector(CARD_TITLE_SELECTOR)?.after(name);
+  }
+}
+
+/** Names this tab after the card's title, with `count`, and leaves only it in the hidden tab bar. */
 function showOnlyTab(card: HTMLElement, tabId: string, count: number): void {
   for (const tab of card.querySelectorAll(TAB_SELECTOR)) {
     if (tab.id === tabId) {
-      tab.setAttribute("aria-selected", "true");
-      tab.classList.add("selected");
       tab.querySelector(".bolt-tab-badge .bolt-pill-content")?.replaceChildren(String(count));
+      showTabName(card, tab);
     } else {
       tab.remove();
     }
@@ -115,4 +147,11 @@ function createCard(
 }
 
 export type { AssignedCard, AssignedToMe, CardTab, TabList };
-export { BUILT_CARD_CLASS, STACKED_CLASS, createCard, findAssignedCard };
+export {
+  BUILT_CARD_CLASS,
+  STACKED_CLASS,
+  TAB_NAME_CLASS,
+  createCard,
+  findAssignedCard,
+  showTabName,
+};
