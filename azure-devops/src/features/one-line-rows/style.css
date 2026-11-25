@@ -57,6 +57,16 @@
     min-width: 0;
   }
 
+  /* A step under Azure DevOps's sizes: titles 14px for its 15px, comments and time 13px for
+     its 14px. The line under the title keeps its 12px. */
+  & .bolt-table-two-line-cell-item .body-l {
+    font-size: 14px;
+  }
+
+  & :is([aria-colindex="4"], [aria-colindex="5"]) .bolt-table-cell-content {
+    font-size: 13px;
+  }
+
   /* The pipeline status before the title. */
   & .fix-ado-pipeline-status {
     order: -1;
