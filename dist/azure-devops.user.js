@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.24.1
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
+// @version      1.25.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -346,6 +346,23 @@
     };
   }
 
+  // azure-devops/src/pull-requests/assigned-pull-request-requests.ts
+  var MAX_ASSIGNED_PULL_REQUESTS = 200;
+  function pullRequestsPath(repository) {
+    return repository === null ? "/_apis/git/pullrequests" : `/${encodeURIComponent(repository.project)}/_apis/git/repositories/${encodeURIComponent(repository.repository)}/pullrequests`;
+  }
+  function createAssignedPullRequestRequests(options) {
+    return {
+      async getPullRequestsAssignedTo(reviewerId, repository) {
+        let { body, retryAfterSeconds } = await getJson(
+          options,
+          `${pullRequestsPath(repository)}?searchCriteria.reviewerId=${encodeURIComponent(reviewerId)}&searchCriteria.status=active&$top=${MAX_ASSIGNED_PULL_REQUESTS}&api-version=7.1`
+        );
+        return { pullRequests: body.value, retryAfterSeconds };
+      }
+    };
+  }
+
   // azure-devops/src/pipeline/build-requests.ts
   var MAX_PULL_REQUEST_BUILDS = 50;
   async function getPullRequestBuilds(options, { project, pullRequestId }) {
@@ -658,6 +675,7 @@
       },
       requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
       saveTheme: async (themeId) => saveTheme(options, themeId),
+      ...createAssignedPullRequestRequests(options),
       ...createBuildRequests(options),
       ...createReviewRequests(options),
       ...createWorkItemRequests(options),
@@ -10407,12 +10425,12 @@ html[data-fix-ado-win98]:is(
     now,
     visits
   }) {
-    let shownKey = null, lastVisit = null;
+    let shownKey2 = null, lastVisit = null;
     function leave() {
-      shownKey !== null && visits.save(shownKey, now());
+      shownKey2 !== null && visits.save(shownKey2, now());
     }
     function sync4(pullRequestKey) {
-      if (pullRequestKey !== shownKey && (leave(), shownKey = pullRequestKey, lastVisit = pullRequestKey === null ? null : visits.lastVisit(pullRequestKey)), pullRequestKey !== null)
+      if (pullRequestKey !== shownKey2 && (leave(), shownKey2 = pullRequestKey, lastVisit = pullRequestKey === null ? null : visits.lastVisit(pullRequestKey)), pullRequestKey !== null)
         for (let row of document2.querySelectorAll(ROW_SELECTOR2))
           syncRow(row, lastVisit);
     }
@@ -16599,279 +16617,6 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     viewedFiles
   ];
 
-  // azure-devops/src/features/days-in-column/days-in-column.ts
-  var CARD_SELECTOR2 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS = "fix-ado-days-in-column";
-  function columnEnteredAt(updates) {
-    for (let update2 of updates.toReversed()) {
-      let columnChange = update2.fields?.["System.BoardColumn"];
-      if (columnChange !== void 0 && columnChange.newValue !== columnChange.oldValue) {
-        let changedDate = update2.fields?.["System.ChangedDate"]?.newValue;
-        return typeof changedDate == "string" ? changedDate : null;
-      }
-    }
-    return null;
-  }
-  function daysSince(enteredAt, now) {
-    return Math.max(0, Math.floor((now - Date.parse(enteredAt)) / 864e5));
-  }
-  function dotAge(day) {
-    return day <= 7 ? "fresh" : day <= 14 ? "aging" : "old";
-  }
-  var LOADING_DOT_COUNT = 3;
-  function dotsFor(document2, days) {
-    return (days === null ? Array.from({ length: LOADING_DOT_COUNT }, () => "loading") : Array.from({ length: Math.min(days, 30) }, (_entry, index) => dotAge(index + 1))).map((age) => {
-      let dot = document2.createElement("span");
-      return dot.dataset.age = age, dot;
-    });
-  }
-  function captionFor(days) {
-    return days === null ? "" : days === 0 ? "Less than a day in this column" : `${days} ${days === 1 ? "day" : "days"} in this column`;
-  }
-  function createDotBar(document2, days) {
-    let bar = document2.createElement("div");
-    return bar.className = BAR_CLASS, bar.dataset.days = String(days), bar.title = captionFor(days), days === null ? bar.setAttribute("aria-hidden", "true") : (bar.setAttribute("aria-label", bar.title), bar.setAttribute("role", "img")), bar.append(...dotsFor(document2, days)), bar;
-  }
-  function showDaysInColumn(card, days) {
-    let existing = card.querySelector(`.${BAR_CLASS}`);
-    existing?.dataset.days !== String(days) && (existing?.remove(), (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days)));
-  }
-  function findCards(document2) {
-    let cards = /* @__PURE__ */ new Map();
-    for (let card of document2.querySelectorAll(CARD_SELECTOR2)) {
-      let id = Number(card.dataset.itemid);
-      Number.isInteger(id) && id > 0 && cards.set(id, [...cards.get(id) ?? [], card]);
-    }
-    return cards;
-  }
-  function columnIdOf(card) {
-    return card.closest(COLUMN_SELECTOR)?.dataset.column ?? null;
-  }
-  function noteMoves(tracker, cards) {
-    for (let [id, [element4]] of cards) {
-      let columnId = columnIdOf(element4), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
-      lastColumnId !== void 0 && lastColumnId !== columnId && entry !== void 0 && (entry.enteredAt = new Date(tracker.now()).toISOString()), tracker.columnIds.set(id, columnId);
-    }
-  }
-  function showBars(tracker, cards) {
-    noteMoves(tracker, cards);
-    for (let [id, elements] of cards) {
-      let entry = tracker.entries.get(id), enteredAt = entry?.enteredAt ?? null, days = null;
-      entry !== void 0 && (days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now()));
-      for (let element4 of elements)
-        showDaysInColumn(element4, days);
-    }
-  }
-  function pauseIfAsked(tracker, retryAfterSeconds) {
-    return retryAfterSeconds === null ? !1 : (tracker.pausedUntil = tracker.now() + retryAfterSeconds * 1e3, !0);
-  }
-  async function fetchChangedCards(tracker, ids) {
-    let { workItems, retryAfterSeconds } = await tracker.client.getWorkItems(ids);
-    if (pauseIfAsked(tracker, retryAfterSeconds))
-      return;
-    let changed = workItems.filter(({ id, rev }) => tracker.entries.get(id)?.rev !== rev);
-    for (let { id, rev } of changed) {
-      let response = await tracker.client.getWorkItemUpdates(id);
-      if (tracker.entries.set(id, { enteredAt: columnEnteredAt(response.updates), rev }), pauseIfAsked(tracker, response.retryAfterSeconds))
-        return;
-    }
-  }
-  function isCheckDue2(tracker, ids) {
-    let now = tracker.now(), isDue = ids.some((id) => !tracker.entries.has(id)) || now - tracker.lastCheckAt >= 6e4;
-    return !tracker.isChecking && ids.length > 0 && isDue && now >= tracker.pausedUntil;
-  }
-  async function check(tracker, ids) {
-    tracker.isChecking = !0, tracker.lastCheckAt = tracker.now();
-    try {
-      await fetchChangedCards(tracker, ids);
-    } catch {
-      tracker.pausedUntil = tracker.now() + 6e4;
-    } finally {
-      tracker.isChecking = !1;
-    }
-  }
-  function createDaysInColumn(options) {
-    let tracker = {
-      client: options.client,
-      columnIds: /* @__PURE__ */ new Map(),
-      entries: /* @__PURE__ */ new Map(),
-      isChecking: !1,
-      lastCheckAt: Number.NEGATIVE_INFINITY,
-      now: options.now,
-      pausedUntil: Number.NEGATIVE_INFINITY
-    };
-    return {
-      async sync() {
-        let cards = findCards(options.document);
-        showBars(tracker, cards);
-        let ids = [...cards.keys()];
-        isCheckDue2(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
-      }
-    };
-  }
-
-  // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
-  var HEADER_SELECTOR3 = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS5 = "fix-ado-days-toggle";
-  function showColumnState(column, toggle, isHidden) {
-    Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
-    let pressed = String(!isHidden);
-    toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", "Days in column"));
-  }
-  function createToggle3(document2, onClick3) {
-    let toggle = document2.createElement("button");
-    return toggle.type = "button", toggle.className = TOGGLE_CLASS5, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
-      event.preventDefault(), event.stopPropagation(), onClick3();
-    }), toggle;
-  }
-  function findOrAddToggle2(header, onClick3) {
-    let existing = header.querySelector(`.${TOGGLE_CLASS5}`);
-    if (existing !== null)
-      return existing;
-    let toggle = createToggle3(header.ownerDocument, onClick3);
-    return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
-  }
-  function createDaysInColumnToggles(options) {
-    let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
-    function flip2(columnId) {
-      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync4();
-    }
-    function sync4() {
-      let headers = [...document2.querySelectorAll(HEADER_SELECTOR3)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
-      if (headers.length === columns.length)
-        for (let [index, header] of headers.entries()) {
-          let column = columns[index], columnId = column?.dataset.column;
-          if (column !== void 0 && columnId !== void 0) {
-            let toggle = findOrAddToggle2(header, () => {
-              flip2(columnId);
-            });
-            showColumnState(column, toggle, hiddenColumnIds.has(columnId));
-          }
-        }
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/days-in-column/style.css
-  var style_default16 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
-.fix-ado-days-in-column {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  /* One row of dots, also when empty, so a card keeps its height. */
-  min-height: 5px;
-  margin-top: 6px;
-}
-
-.fix-ado-days-in-column > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  /* Azure DevOps keeps its palette as bare "r, g, b" values, so it follows the theme. */
-  background: rgb(var(--palette-neutral-20, 200, 200, 200));
-}
-
-.fix-ado-days-in-column > span[data-age="aging"] {
-  background: var(--component-status-warning, rgb(214, 119, 48));
-}
-
-.fix-ado-days-in-column > span[data-age="old"] {
-  background: var(--component-status-error, rgb(205, 74, 69));
-}
-
-/* Skeleton while the day count loads: three grey dots that pulse one after another. */
-.fix-ado-days-in-column > span[data-age="loading"] {
-  animation: fix-ado-pulse 1.2s ease-in-out infinite;
-}
-.fix-ado-days-in-column > span[data-age="loading"]:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.fix-ado-days-in-column > span[data-age="loading"]:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes fix-ado-pulse {
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fix-ado-days-in-column > span[data-age="loading"] {
-    animation: none;
-    opacity: 0.6;
-  }
-}
-
-.kanban-board-column[data-fix-ado-days-hidden] .fix-ado-days-in-column {
-  display: none;
-}
-
-/* The days-in-column toggle in a column header. It shows while the header is hovered, or
-   while something in it has keyboard focus. A click also focuses the toggle; that focus must
-   not keep it showing once the pointer leaves. */
-.fix-ado-days-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 6px;
-  padding: 3px 4px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  opacity: 0;
-}
-
-.kanban-board-column-header:is(:hover, :has(:focus-visible)) .fix-ado-days-toggle {
-  opacity: 1;
-}
-
-.fix-ado-days-toggle:hover {
-  background: rgba(var(--palette-black-alpha-6, 0, 0, 0, 0.06));
-}
-
-.fix-ado-days-toggle > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--component-status-warning, rgb(214, 119, 48));
-}
-
-/* Off: hollow dots. */
-.fix-ado-days-toggle[aria-pressed="false"] > span {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
-}
-`;
-
-  // azure-devops/src/features/days-in-column/index.ts
-  var HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns", daysInColumn = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "A dot per day a card has been in its board column, with a toggle per column.",
-    id: "days-in-column",
-    name: "Days in column",
-    start({ client, document: document2, now }) {
-      let days = createDaysInColumn({ client, document: document2, now }), toggles = createDaysInColumnToggles({
-        document: document2,
-        storage: {
-          load: () => GM_getValue(HIDDEN_COLUMNS_KEY, []),
-          save: (columnIds) => {
-            GM_setValue(HIDDEN_COLUMNS_KEY, columnIds);
-          }
-        }
-      });
-      return {
-        sync({ page, isTabActive: isTabActive2 }) {
-          page.kind === "board" && (toggles.sync(), isTabActive2 && days.sync());
-        }
-      };
-    },
-    styles: [style_default16]
-  };
-
   // azure-devops/src/features/pipeline-status/pipeline-status-poller.ts
   var IN_PROGRESS_POLL_INTERVAL_MS = 2e4, SETTLED_POLL_INTERVAL_MS = 18e4, FAILED_REQUEST_RETRY_MS = 6e4, MS_PER_SECOND2 = 1e3;
   function showStatuses(state) {
@@ -16940,6 +16685,461 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       }
     };
   }
+
+  // azure-devops/src/features/assigned-to-me-stacked/relative-time.ts
+  var SECONDS_PER_UNIT = [
+    ["year", 31536e3],
+    ["month", 2592e3],
+    ["week", 604800],
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60]
+  ], MS_PER_SECOND3 = 1e3;
+  function relativeTime(then, now, locale) {
+    let seconds = (now - then) / MS_PER_SECOND3, format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    for (let [unit, unitSeconds] of SECONDS_PER_UNIT)
+      if (seconds >= unitSeconds)
+        return format.format(-Math.floor(seconds / unitSeconds), unit);
+    return format.format(0, "second");
+  }
+
+  // azure-devops/src/features/assigned-to-me-stacked/assigned-row.ts
+  var AUTHOR_AVATAR_SELECTOR = '[aria-colindex="1"] .bolt-coin', TITLE_SELECTOR2 = ".bolt-table-two-line-cell-item .body-l", TITLE_PILL_SELECTOR = ".bolt-table-two-line-cell-item .bolt-pill", DRAFT_PILL_SELECTOR2 = ".repos-pr-list-draft-pill", CONFLICTS_PILL_SELECTOR = ".repos-pr-list-conflicts-pill", REQUIRED_PILL_SELECTOR = ".repos-pr-list-required-pill", CONFLICTS_MERGE_STATUS = "conflicts", SUBTITLE_SELECTOR = ".bolt-table-two-line-cell-item .secondary-text > span", BRANCH_SELECTOR = ".monospaced-xs", REPOSITORY_SELECTOR = ":scope > .padding-horizontal-4:not(.monospaced-xs)", REVIEWER_SELECTOR2 = ".pr-reviewer", VOTE_ICON_SELECTOR = ".fluent-icons-enabled:has(> .repos-pr-reviewer-vote)", APPROVED_VOTE = 10, APPROVED_WITH_SUGGESTIONS_VOTE = 5, WAITING_FOR_AUTHOR_VOTE = -5, REJECTED_VOTE = -10, VOTE_ICONS = /* @__PURE__ */ new Map([
+    [APPROVED_VOTE, ["approved", "ms-Icon--CompletedSolid"]],
+    [APPROVED_WITH_SUGGESTIONS_VOTE, ["approved", "ms-Icon--CompletedSolid"]],
+    [WAITING_FOR_AUTHOR_VOTE, ["waiting", "ms-Icon--AwayStatus"]],
+    [REJECTED_VOTE, ["rejected", "ms-Icon--StatusErrorFull"]]
+  ]), COMMENTS_CELL_SELECTOR = '[aria-colindex="4"] .bolt-table-cell-content', ROW_MENU_SELECTOR = ".bolt-table-cell-content-reveal", SCRIPT_MARK_SELECTOR = '[class*="fix-ado-"]', BRANCH_PREFIX = /^refs\/heads\//u, MAX_SHOWN_REVIEWERS = 3, avatarHref = (person) => (
+    // oxlint-disable-next-line eslint/no-underscore-dangle -- the REST API's name for an identity's links
+    person?._links?.avatar?.href ?? person?.imageUrl ?? ""
+  );
+  function showAvatar(avatar, person) {
+    avatar?.setAttribute("aria-label", person?.displayName ?? ""), avatar?.querySelector("img")?.setAttribute("src", avatarHref(person));
+  }
+  function copyOf(element4) {
+    let holder = element4.ownerDocument.createElement("div");
+    return holder.append(element4.cloneNode(!0)), holder.querySelector(":scope > *");
+  }
+  function pullRequestHref(basePath2, pullRequest) {
+    let project = encodeURIComponent(pullRequest.repository?.project?.name ?? ""), repository = encodeURIComponent(pullRequest.repository?.name ?? "");
+    return `${basePath2}/${project}/_git/${repository}/pullrequest/${pullRequest.pullRequestId}`;
+  }
+  function replaceLast(text, search2, replacement) {
+    let index = text.lastIndexOf(search2);
+    return index === -1 ? text : text.slice(0, index) + replacement + text.slice(index + search2.length);
+  }
+  function showSubtitleWords(subtitle, template, pullRequest) {
+    let templateAuthor = avatarName(template.querySelector(AUTHOR_AVATAR_SELECTOR) ?? subtitle), templateId = new URL(template.getAttribute("href") ?? "", "https://relative.invalid").pathname.split("/").at(-1) ?? "", words = [...subtitle.childNodes].filter((node) => node.nodeType === subtitle.TEXT_NODE);
+    for (let word of words) {
+      let text = word.textContent ?? "", withAuthor = templateAuthor === "" ? text : text.replace(templateAuthor, pullRequest.createdBy?.displayName ?? "");
+      word.textContent = replaceLast(withAuthor, templateId, String(pullRequest.pullRequestId));
+    }
+  }
+  function showSubtitle(row, template, pullRequest) {
+    let subtitle = row.querySelector(SUBTITLE_SELECTOR);
+    subtitle !== null && (showSubtitleWords(subtitle, template, pullRequest), subtitle.querySelector(REPOSITORY_SELECTOR)?.replaceChildren(pullRequest.repository?.name ?? ""), subtitle.querySelector(BRANCH_SELECTOR)?.replaceChildren((pullRequest.targetRefName ?? "").replace(BRANCH_PREFIX, "")));
+  }
+  function titlePills(document2, pullRequest, reviewerId) {
+    let isRequired = pullRequest.reviewers?.find(({ id }) => id === reviewerId)?.isRequired === !0;
+    return [
+      [DRAFT_PILL_SELECTOR2, pullRequest.isDraft === !0],
+      [CONFLICTS_PILL_SELECTOR, pullRequest.mergeStatus === CONFLICTS_MERGE_STATUS],
+      [REQUIRED_PILL_SELECTOR, isRequired]
+    ].flatMap(([selector, isShown]) => {
+      let pill = isShown ? document2.querySelector(selector) : null, copy = pill ? copyOf(pill) : null;
+      return copy ? [copy] : [];
+    });
+  }
+  function showTitle(row, pullRequest, reviewerId) {
+    let title = row.querySelector(TITLE_SELECTOR2);
+    title && (title.textContent = pullRequest.title ?? "");
+    for (let pill of row.querySelectorAll(TITLE_PILL_SELECTOR))
+      pill.remove();
+    title?.after(...titlePills(row.ownerDocument, pullRequest, reviewerId));
+  }
+  function showMoreCount(avatars, rest) {
+    let morePill = avatars.querySelector(":scope > .bolt-pill");
+    return morePill === null || rest <= 0 ? null : (morePill.querySelector(".bolt-pill-content")?.replaceChildren(`+${rest}`), morePill);
+  }
+  function createVoteIcon(document2, vote) {
+    let [state, iconName] = VOTE_ICONS.get(vote ?? 0) ?? [];
+    if (state === void 0 || iconName === void 0)
+      return null;
+    let wrapper = Object.assign(document2.createElement("span"), {
+      className: "fluent-icons-enabled"
+    }), icon = Object.assign(document2.createElement("span"), {
+      className: `repos-pr-reviewer-vote absolute ${state} flex-noshrink fabric-icon ${iconName}`
+    });
+    return icon.setAttribute("aria-hidden", "true"), wrapper.append(icon), wrapper;
+  }
+  function createReviewerAvatar(template, reviewer) {
+    let avatar = copyOf(template);
+    if (avatar === null)
+      return null;
+    showAvatar(avatar.querySelector(".bolt-coin"), reviewer), avatar.querySelector(VOTE_ICON_SELECTOR)?.remove();
+    let voteIcon = createVoteIcon(avatar.ownerDocument, reviewer.vote);
+    return voteIcon && avatar.append(voteIcon), avatar;
+  }
+  function showReviewers(row, pullRequest) {
+    let shown = [...row.querySelectorAll(REVIEWER_SELECTOR2)], [first] = shown, parent = first?.parentElement;
+    if (first === void 0 || !parent)
+      return;
+    let reviewers = pullRequest.reviewers ?? [], avatars = reviewers.slice(0, MAX_SHOWN_REVIEWERS).flatMap((reviewer) => {
+      let avatar = createReviewerAvatar(first, reviewer);
+      return avatar === null ? [] : [avatar];
+    }), morePill = showMoreCount(parent, reviewers.length - avatars.length);
+    parent.replaceChildren(...avatars, ...morePill ? [morePill] : []);
+  }
+  function showCreated(row, pullRequest, now) {
+    let time = row.querySelector("time"), created = Date.parse(pullRequest.creationDate ?? "");
+    time === null || Number.isNaN(created) || (time.setAttribute("datetime", pullRequest.creationDate ?? ""), time.textContent = relativeTime(
+      created,
+      now,
+      row.ownerDocument.documentElement.lang || void 0
+    ), time.parentElement?.setAttribute("aria-label", new Date(created).toLocaleString()));
+  }
+  function emptyCopy(template) {
+    let row = copyOf(template);
+    for (let mark of row?.querySelectorAll(SCRIPT_MARK_SELECTOR) ?? [])
+      mark.remove();
+    return row?.querySelector(COMMENTS_CELL_SELECTOR)?.replaceChildren(), row?.querySelector(ROW_MENU_SELECTOR)?.replaceChildren(), row;
+  }
+  function buildAssignedRow(template, pullRequest, { basePath: basePath2, now, reviewerId }) {
+    let row = emptyCopy(template);
+    return row === null ? null : (row.setAttribute("href", pullRequestHref(basePath2, pullRequest)), showAvatar(row.querySelector(AUTHOR_AVATAR_SELECTOR), pullRequest.createdBy), showTitle(row, pullRequest, reviewerId), showSubtitle(row, template, pullRequest), showReviewers(row, pullRequest), showCreated(row, pullRequest, now), row);
+  }
+
+  // azure-devops/src/features/assigned-to-me-stacked/assigned-tabs.ts
+  var ACTIVE_TAB_ID = "__bolt-tab-activeMine", WAITING_FOR_AUTHOR_TAB_ID = "__bolt-tab-waitingForAuthor";
+  function isVoteOnTab(vote, tabId) {
+    return tabId === ACTIVE_TAB_ID ? vote === 0 : tabId === WAITING_FOR_AUTHOR_TAB_ID ? vote === -5 : vote !== 0 && vote !== -5;
+  }
+  var createdAt = ({ creationDate }) => creationDate === void 0 ? 0 : Date.parse(creationDate);
+  function pullRequestsOnTab(pullRequests, reviewerId, tabId) {
+    return pullRequests.filter(({ reviewers }) => {
+      let vote = reviewers?.find(({ id }) => id === reviewerId)?.vote;
+      return vote !== void 0 && isVoteOnTab(vote, tabId);
+    }).toSorted((first, second) => createdAt(second) - createdAt(first));
+  }
+
+  // azure-devops/src/features/assigned-to-me-stacked/assigned-card.ts
+  var CARD_SELECTOR2 = ".repos-pr-section-card", TAB_SELECTOR = '.repos-pr-section-tabs [role="tab"]', TABLE_CONTAINER_SELECTOR = ".bolt-table-container", ROW_SELECTOR5 = 'a.bolt-table-row[href*="/pullrequest/"]', STACKED_CLASS = "fix-ado-assigned-stacked", BUILT_CARD_CLASS = "fix-ado-assigned-card", PEEKING_CLASS = "fix-ado-assigned-peeking", CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis", TAB_NAME_CLASS = "fix-ado-assigned-tab-name";
+  function findAssignedCard(document2) {
+    let card = document2.querySelector(`#${ACTIVE_TAB_ID}`)?.closest(CARD_SELECTOR2), table = card?.querySelector(TABLE_CONTAINER_SELECTOR);
+    if (!card || !table)
+      return null;
+    let tabs = [...card.querySelectorAll(TAB_SELECTOR)].map((tab) => ({
+      element: tab,
+      id: tab.id,
+      isSelected: tab.getAttribute("aria-selected") === "true"
+    }));
+    return { card, table, tabs };
+  }
+  function createTable(adoTable) {
+    let container = copyOf(adoTable);
+    container?.classList.remove("invisible");
+    let table = container?.querySelector("table");
+    return table?.removeAttribute("aria-label"), table?.removeAttribute("aria-rowcount"), table?.querySelector("tbody")?.replaceChildren(), container;
+  }
+  function tabNameOf(tab) {
+    return {
+      count: tab.querySelector(".bolt-tab-badge")?.textContent ?? "",
+      label: tab.querySelector(".bolt-tab-text")?.textContent ?? ""
+    };
+  }
+  function createCountPill(document2, count) {
+    let pill = Object.assign(document2.createElement("div"), {
+      className: "margin-left-8 bolt-pill flex-row flex-center standard regular"
+    }), content = Object.assign(document2.createElement("div"), {
+      className: "bolt-pill-content text-ellipsis",
+      textContent: count
+    });
+    return content.setAttribute("role", "presentation"), pill.append(content), pill;
+  }
+  function createTabName(card, { label, count }, key) {
+    let name = Object.assign(card.ownerDocument.createElement("span"), {
+      className: TAB_NAME_CLASS
+    });
+    return name.dataset.fixAdoShown = key, name.append(`· ${label}`, ...count === "" ? [] : [createCountPill(card.ownerDocument, count)]), name;
+  }
+  function showTabName(card, tabName) {
+    let key = JSON.stringify(tabName);
+    card.dataset.fixAdoTabName !== key && (card.dataset.fixAdoTabName = key);
+    let title = card.querySelector(CARD_TITLE_SELECTOR), shown = card.querySelector(`.${TAB_NAME_CLASS}`), isInPlace2 = title?.nextElementSibling === shown;
+    shown?.dataset.fixAdoShown === key && isInPlace2 || (shown?.remove(), title?.after(shown?.dataset.fixAdoShown === key ? shown : createTabName(card, tabName, key)));
+  }
+  function shownTabName(card) {
+    let key = card.dataset.fixAdoTabName;
+    return key === void 0 ? null : JSON.parse(key);
+  }
+  function showOnlyTab(card, tabId, count) {
+    for (let tab of card.querySelectorAll(TAB_SELECTOR))
+      tab.id === tabId ? (tab.querySelector(".bolt-tab-badge .bolt-pill-content")?.replaceChildren(String(count)), showTabName(card, tabNameOf(tab))) : tab.remove();
+  }
+  function createRows(found, pullRequests, context) {
+    let template = found.table.querySelector(ROW_SELECTOR5);
+    return pullRequests.flatMap((pullRequest, index) => {
+      let row = template ? buildAssignedRow(template, pullRequest, context) : null;
+      return row?.classList.toggle("first-row", index === 0), row?.setAttribute("aria-rowindex", String(index + 1)), row ? [row] : [];
+    });
+  }
+  function markAsBuilt(card) {
+    card.classList.remove(STACKED_CLASS, PEEKING_CLASS), card.classList.add(BUILT_CARD_CLASS);
+    for (let element4 of card.querySelectorAll("[id]"))
+      element4.removeAttribute("id");
+  }
+  function createCard3(found, { tab, pullRequests }, context) {
+    let card = copyOf(found.card), table = createTable(found.table);
+    return card === null || table === null ? null : (card.querySelector(TABLE_CONTAINER_SELECTOR)?.replaceWith(table), table.querySelector("tbody")?.append(...createRows(found, pullRequests, context)), showOnlyTab(card, tab.id, pullRequests.length), markAsBuilt(card), card);
+  }
+
+  // azure-devops/src/features/assigned-to-me-stacked/card-peek.ts
+  var FOLD_BUTTON_SELECTOR = ".repos-pr-section-expand-button", CARD_CONTENT_SELECTOR = ".bolt-card-content", PEEK_DEADLINE_MS = 5e3, titleOf = (card) => card.querySelector(CARD_TITLE_SELECTOR)?.textContent ?? "";
+  function foldedCardTitled(document2, title) {
+    return [...document2.querySelectorAll(
+      `${CARD_SELECTOR2}:not(.${BUILT_CARD_CLASS})`
+    )].find(
+      (card) => title !== "" && titleOf(card) === title && card.querySelector(CARD_CONTENT_SELECTOR) === null
+    ) ?? null;
+  }
+  function rememberTitle(document2, titles) {
+    let card = document2.querySelector(`.${STACKED_CLASS}`), title = card ? titleOf(card) : "";
+    title !== "" && titles.get() !== title && titles.set(title);
+  }
+  function createCardPeek(now, titles) {
+    let peeking = null, builtKey = null;
+    function foldAgain() {
+      peeking?.card.querySelector(FOLD_BUTTON_SELECTOR)?.click(), peeking?.card.classList.remove(PEEKING_CLASS), peeking = null;
+    }
+    function unfold(document2) {
+      let card = foldedCardTitled(document2, titles.get());
+      card && (card.classList.add(PEEKING_CLASS), peeking = { card, startedAt: now() }, card.querySelector(FOLD_BUTTON_SELECTOR)?.click());
+    }
+    return {
+      sync(document2, status, shownKey2) {
+        status === "stacked" ? (rememberTitle(document2, titles), builtKey = shownKey2, peeking && foldAgain()) : peeking ? now() - peeking.startedAt > PEEK_DEADLINE_MS && (builtKey = shownKey2, foldAgain()) : shownKey2 !== null && shownKey2 !== builtKey && unfold(document2);
+      }
+    };
+  }
+
+  // azure-devops/src/features/assigned-to-me-stacked/card-folding.ts
+  var FOLDED_CLASS = "fix-ado-assigned-folded", FOLD_BUTTON_SELECTOR2 = ".repos-pr-section-expand-button";
+  function listenToFoldButton(button2, tabId, folding) {
+    button2.dataset.fixAdoFoldTab !== tabId && (button2.dataset.fixAdoFoldTab = tabId, button2.addEventListener("click", () => {
+      folding.onToggle(tabId);
+    }));
+  }
+  function showCardFolding(card, tabId, folding) {
+    let isFolded = folding.foldedTabIds.has(tabId);
+    card.classList.contains(FOLDED_CLASS) !== isFolded && card.classList.toggle(FOLDED_CLASS, isFolded);
+    let button2 = card.querySelector(FOLD_BUTTON_SELECTOR2);
+    if (button2 === null)
+      return;
+    listenToFoldButton(button2, tabId, folding);
+    let name = button2.getAttribute("aria-label") ?? "";
+    showFoldToggleState(button2, !isFolded, { folded: name, name, open: name });
+  }
+
+  // azure-devops/src/features/assigned-to-me-stacked/stacked-tabs.ts
+  function shownKey(tab, pullRequests, now) {
+    return JSON.stringify([
+      tab.id,
+      pullRequests.map((pullRequest) => [
+        pullRequest.pullRequestId,
+        pullRequest.title,
+        pullRequest.isDraft,
+        pullRequest.mergeStatus,
+        pullRequest.targetRefName,
+        pullRequest.createdBy?.displayName,
+        pullRequest.reviewers?.map(({ displayName, isRequired, vote }) => [
+          displayName,
+          isRequired,
+          vote
+        ]),
+        relativeTime(Date.parse(pullRequest.creationDate ?? ""), now)
+      ])
+    ]);
+  }
+  function shownCard(document2, key) {
+    return [...document2.querySelectorAll(`.${BUILT_CARD_CLASS}`)].find(
+      (card) => card.dataset.fixAdoShown === key
+    );
+  }
+  function createKeyedCard(found, { key, ...tabList }, context) {
+    let card = createCard3(found, tabList, context);
+    return card && (card.dataset.fixAdoShown = key, card.dataset.fixAdoTabId = tabList.tab.id), card;
+  }
+  function builtCard(found, tab, { assigned, context }) {
+    let pullRequests = pullRequestsOnTab(assigned.pullRequests, assigned.reviewerId, tab.id);
+    if (pullRequests.length === 0)
+      return [];
+    let key = shownKey(tab, pullRequests, context.now), card = shownCard(found.card.ownerDocument, key) ?? createKeyedCard(
+      found,
+      { key, pullRequests, tab },
+      { ...context, reviewerId: assigned.reviewerId }
+    );
+    return card && showCardFolding(card, tab.id, context.folding), card ? [card] : [];
+  }
+  function placeAround(adoCard, ordered) {
+    if (ordered.every(
+      (node, index) => index === 0 || ordered[index - 1]?.nextElementSibling === node
+    ))
+      return;
+    let adoIndex = ordered.indexOf(adoCard);
+    for (let node of ordered.slice(0, adoIndex))
+      adoCard.before(node);
+    let previous = adoCard;
+    for (let node of ordered.slice(adoIndex + 1))
+      previous.after(node), previous = node;
+  }
+  function removeStacking(document2, kept) {
+    for (let card of document2.querySelectorAll(`.${BUILT_CARD_CLASS}`))
+      kept.includes(card) || card.remove();
+    if (kept.length === 0)
+      for (let card of document2.querySelectorAll(`.${STACKED_CLASS}`))
+        card.querySelector(`.${TAB_NAME_CLASS}`)?.remove(), card.classList.remove(STACKED_CLASS), delete card.dataset.fixAdoTabName;
+  }
+  function markAsStacked({ card, tabs }) {
+    let selected = tabs.find(({ isSelected }) => isSelected);
+    selected && showTabName(card, tabNameOf(selected.element)), card.classList.contains(STACKED_CLASS) || card.classList.add(STACKED_CLASS);
+  }
+  function showFoldedCard(document2, assigned, folding) {
+    let folded = document2.querySelector(`.${STACKED_CLASS}`), tabName = folded ? shownTabName(folded) : null;
+    if (assigned === null || folded === null || tabName === null)
+      return removeStacking(document2, []), "none";
+    showTabName(folded, tabName);
+    for (let card of document2.querySelectorAll(`.${BUILT_CARD_CLASS}`))
+      showCardFolding(card, card.dataset.fixAdoTabId ?? "", folding);
+    return "folded";
+  }
+  function showStackedTabs(document2, assigned, context) {
+    let found = findAssignedCard(document2);
+    if (found === null || assigned === null)
+      return showFoldedCard(document2, assigned, context.folding);
+    let ordered = found.tabs.flatMap(
+      (tab) => tab.isSelected ? [found.card] : builtCard(found, tab, { assigned, context })
+    );
+    return removeStacking(document2, ordered), placeAround(found.card, ordered), markAsStacked(found), "stacked";
+  }
+
+  // azure-devops/src/features/assigned-to-me-stacked/style.css
+  var style_default16 = `/* The "Assigned to me" card, one card per tab. stacked-tabs.ts marks Azure DevOps's card and
+   builds the others; each card's title names its tab, so the tab bars have no job left. */
+.fix-ado-assigned-stacked .repos-pr-section-tabs,
+.fix-ado-assigned-card .repos-pr-section-tabs {
+  display: none;
+}
+
+/* Without its tab bar, a header with tabs gets the bottom padding of one without. */
+.fix-ado-assigned-stacked .repos-pr-section-header.with-tabs,
+.fix-ado-assigned-card .repos-pr-section-header.with-tabs {
+  padding-bottom: 16px;
+}
+
+/* A folded card's title shows the count of all its tabs; the tab's own count replaces it. */
+.fix-ado-assigned-stacked .repos-pr-section-header-title > .bolt-pill {
+  display: none;
+}
+
+/* "· Waiting for author" and its count, after the card's title. */
+.fix-ado-assigned-tab-name {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 0.3em;
+}
+
+/* A built card the owner folded with its fold button. card-folding.ts marks it. */
+.fix-ado-assigned-folded .bolt-card-content {
+  display: none;
+}
+
+/* While the script unfolds Azure DevOps's folded card for a moment, its list and tabs stay
+   out of sight. The list keeps its width, so Azure DevOps lays out its columns. */
+.fix-ado-assigned-peeking .bolt-card-content,
+.fix-ado-assigned-peeking .repos-pr-section-tabs {
+  visibility: hidden;
+  max-height: 0;
+  overflow: hidden;
+}
+`;
+
+  // azure-devops/src/features/assigned-to-me-stacked/index.ts
+  var FOLDED_TABS_KEY = "assigned-to-me-folded-tabs", CARD_TITLE_KEY = "assigned-to-me-card-title", ASSIGNED_REFRESH_INTERVAL_MS = 6e4;
+  function repositoryOf(page) {
+    if (page.kind === "pull-request-list") {
+      let { project, repository } = page.listPage;
+      return { project, repository };
+    }
+    return page.kind === "pull-request-inbox" ? null : void 0;
+  }
+  var CARD_TITLES = {
+    get: () => GM_getValue(CARD_TITLE_KEY, ""),
+    set: (title) => {
+      GM_setValue(CARD_TITLE_KEY, title);
+    }
+  };
+  function shownKeyOf({ pullRequests }) {
+    return JSON.stringify(
+      pullRequests.map((pullRequest) => [
+        pullRequest.pullRequestId,
+        pullRequest.title,
+        pullRequest.isDraft,
+        pullRequest.mergeStatus,
+        pullRequest.reviewers?.map(({ id, vote, isRequired }) => [id, vote, isRequired])
+      ])
+    );
+  }
+  function createCardFolding(onChange) {
+    let foldedTabIds = new Set(GM_getValue(FOLDED_TABS_KEY, []));
+    return {
+      foldedTabIds,
+      onToggle(tabId) {
+        foldedTabIds.delete(tabId) || foldedTabIds.add(tabId), GM_setValue(FOLDED_TABS_KEY, [...foldedTabIds]), onChange();
+      }
+    };
+  }
+  var assignedToMeStacked = {
+    change: { kind: "new", version: "1.25.0" },
+    description: "The tabs of the Assigned to me card as cards of their own, under each other, each titled with its tab, so you scroll through them all.",
+    id: "assigned-to-me-stacked",
+    name: "Assigned to me tabs under each other",
+    start({ basePath: basePath2, client, document: document2, now }) {
+      let assigned = null, nextFetchAt = 0, isFetching = !1, shownScope = null, folding = createCardFolding(() => {
+        show3(shownScope);
+      }), peek = createCardPeek(now, CARD_TITLES);
+      async function fetchAssigned(repository, scope) {
+        isFetching = !0;
+        try {
+          let reviewerId = await client.getAuthenticatedUserId();
+          if (reviewerId !== null) {
+            let { pullRequests } = await client.getPullRequestsAssignedTo(reviewerId, repository);
+            assigned = { scope, value: { pullRequests, reviewerId } };
+          }
+          nextFetchAt = now() + ASSIGNED_REFRESH_INTERVAL_MS;
+        } catch {
+          nextFetchAt = now() + FAILED_REQUEST_RETRY_MS;
+        } finally {
+          isFetching = !1;
+        }
+      }
+      function show3(scope) {
+        shownScope = scope;
+        let shown = scope !== null && assigned?.scope === scope ? assigned.value : null, status = showStackedTabs(document2, shown, { basePath: basePath2, folding, now: now() });
+        peek.sync(document2, status, shown === null ? null : shownKeyOf(shown));
+      }
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          let repository = repositoryOf(page), scope = repository === void 0 ? null : JSON.stringify(repository);
+          show3(scope);
+          let isDue = assigned?.scope !== scope || now() >= nextFetchAt;
+          repository !== void 0 && scope !== null && isTabActive2 && isDue && !isFetching && fetchAssigned(repository, scope).then(() => {
+            show3(scope);
+          });
+        }
+      };
+    },
+    styles: [style_default16]
+  };
 
   // azure-devops/src/features/linked-work-item/linked-work-item-fetcher.ts
   var LINKED_WORK_ITEMS_REFRESH_INTERVAL_MS = 3e5;
@@ -17012,10 +17212,10 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/linked-work-item/group-toggle.ts
-  var TOGGLE_CLASS6 = "fix-ado-group-toggle", BAR_CLASS2 = "fix-ado-group-toggle-bar", LABEL4 = "Group by work item", TABBAR_SELECTOR4 = ".bolt-tabbar:has(> .bolt-tabbar-tabs)", PAGE_CONTENT_SELECTOR = ".page-content", onToggleBySwitch = /* @__PURE__ */ new WeakMap();
-  function createToggle4(document2) {
+  var TOGGLE_CLASS5 = "fix-ado-group-toggle", BAR_CLASS = "fix-ado-group-toggle-bar", LABEL4 = "Group by work item", TABBAR_SELECTOR4 = ".bolt-tabbar:has(> .bolt-tabbar-tabs)", PAGE_CONTENT_SELECTOR = ".page-content", onToggleBySwitch = /* @__PURE__ */ new WeakMap();
+  function createToggle3(document2) {
     let toggle = createSwitch(document2, LABEL4);
-    return toggle.classList.add(TOGGLE_CLASS6), toggle.addEventListener("click", () => {
+    return toggle.classList.add(TOGGLE_CLASS5), toggle.addEventListener("click", () => {
       onToggleBySwitch.get(toggle)?.();
     }), toggle;
   }
@@ -17027,7 +17227,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     return buttons === null ? toggle.parentElement !== tabbar && tabbar.append(toggle) : toggle.nextElementSibling !== buttons && buttons.before(toggle), !0;
   }
   function barAboveLists(content) {
-    let bar = content.querySelector(`:scope > .${BAR_CLASS2}`) ?? Object.assign(content.ownerDocument.createElement("div"), { className: BAR_CLASS2 });
+    let bar = content.querySelector(`:scope > .${BAR_CLASS}`) ?? Object.assign(content.ownerDocument.createElement("div"), { className: BAR_CLASS });
     return content.firstElementChild !== bar && content.prepend(bar), bar;
   }
   function placeAboveLists(document2, toggle) {
@@ -17040,12 +17240,12 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     toggle.parentElement !== bar && bar.append(toggle);
   }
   function showGroupToggle(document2, state) {
-    let shown = document2.querySelector(`.${TOGGLE_CLASS6}`);
+    let shown = document2.querySelector(`.${TOGGLE_CLASS5}`);
     if (state === null) {
-      shown?.remove(), document2.querySelector(`.${BAR_CLASS2}`)?.remove();
+      shown?.remove(), document2.querySelector(`.${BAR_CLASS}`)?.remove();
       return;
     }
-    let toggle = shown ?? createToggle4(document2);
+    let toggle = shown ?? createToggle3(document2);
     placeInTabbar(document2, toggle) || placeAboveLists(document2, toggle), onToggleBySwitch.set(toggle, state.onToggle), showSwitchOn(toggle, state.isGrouped);
   }
 
@@ -17219,7 +17419,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   };
 
   // azure-devops/src/features/published-since/published-since.ts
-  var relativeTime = new Intl.RelativeTimeFormat("en", { numeric: "always" }), isDraftUpdate = (thread) => thread.isDeleted !== !0 && thread.properties?.CodeReviewThreadType?.$value === "IsDraftUpdate" && thread.publishedDate !== void 0;
+  var relativeTime2 = new Intl.RelativeTimeFormat("en", { numeric: "always" }), isDraftUpdate = (thread) => thread.isDeleted !== !0 && thread.properties?.CodeReviewThreadType?.$value === "IsDraftUpdate" && thread.publishedDate !== void 0;
   function publishedAt(creationDate, threads) {
     let draftUpdates = threads.filter((thread) => isDraftUpdate(thread)).map((thread) => Date.parse(thread.publishedDate ?? ""));
     return draftUpdates.length > 0 ? Math.max(...draftUpdates) : Date.parse(creationDate);
@@ -17229,7 +17429,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     if (elapsed < 6e4)
       return "Published just now";
     let [count, unit] = largestWholeUnit(elapsed);
-    return `Published ${relativeTime.format(-count, unit)}`;
+    return `Published ${relativeTime2.format(-count, unit)}`;
   }
   function largestWholeUnit(elapsedMs) {
     let days = Math.floor(elapsedMs / 864e5);
@@ -17466,18 +17666,295 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     styles: [style_default19]
   };
 
+  // azure-devops/src/features/pull-request-list-features.ts
+  var PULL_REQUEST_LIST_FEATURES = [
+    pipelineStatusOnPullRequests,
+    requiredReviewers,
+    publishedSince,
+    linkedWorkItem,
+    assignedToMeStacked
+  ];
+
+  // azure-devops/src/features/days-in-column/days-in-column.ts
+  var CARD_SELECTOR3 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS2 = "fix-ado-days-in-column";
+  function columnEnteredAt(updates) {
+    for (let update2 of updates.toReversed()) {
+      let columnChange = update2.fields?.["System.BoardColumn"];
+      if (columnChange !== void 0 && columnChange.newValue !== columnChange.oldValue) {
+        let changedDate = update2.fields?.["System.ChangedDate"]?.newValue;
+        return typeof changedDate == "string" ? changedDate : null;
+      }
+    }
+    return null;
+  }
+  function daysSince(enteredAt, now) {
+    return Math.max(0, Math.floor((now - Date.parse(enteredAt)) / 864e5));
+  }
+  function dotAge(day) {
+    return day <= 7 ? "fresh" : day <= 14 ? "aging" : "old";
+  }
+  var LOADING_DOT_COUNT = 3;
+  function dotsFor(document2, days) {
+    return (days === null ? Array.from({ length: LOADING_DOT_COUNT }, () => "loading") : Array.from({ length: Math.min(days, 30) }, (_entry, index) => dotAge(index + 1))).map((age) => {
+      let dot = document2.createElement("span");
+      return dot.dataset.age = age, dot;
+    });
+  }
+  function captionFor(days) {
+    return days === null ? "" : days === 0 ? "Less than a day in this column" : `${days} ${days === 1 ? "day" : "days"} in this column`;
+  }
+  function createDotBar(document2, days) {
+    let bar = document2.createElement("div");
+    return bar.className = BAR_CLASS2, bar.dataset.days = String(days), bar.title = captionFor(days), days === null ? bar.setAttribute("aria-hidden", "true") : (bar.setAttribute("aria-label", bar.title), bar.setAttribute("role", "img")), bar.append(...dotsFor(document2, days)), bar;
+  }
+  function showDaysInColumn(card, days) {
+    let existing = card.querySelector(`.${BAR_CLASS2}`);
+    existing?.dataset.days !== String(days) && (existing?.remove(), (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days)));
+  }
+  function findCards(document2) {
+    let cards = /* @__PURE__ */ new Map();
+    for (let card of document2.querySelectorAll(CARD_SELECTOR3)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && cards.set(id, [...cards.get(id) ?? [], card]);
+    }
+    return cards;
+  }
+  function columnIdOf(card) {
+    return card.closest(COLUMN_SELECTOR)?.dataset.column ?? null;
+  }
+  function noteMoves(tracker, cards) {
+    for (let [id, [element4]] of cards) {
+      let columnId = columnIdOf(element4), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
+      lastColumnId !== void 0 && lastColumnId !== columnId && entry !== void 0 && (entry.enteredAt = new Date(tracker.now()).toISOString()), tracker.columnIds.set(id, columnId);
+    }
+  }
+  function showBars(tracker, cards) {
+    noteMoves(tracker, cards);
+    for (let [id, elements] of cards) {
+      let entry = tracker.entries.get(id), enteredAt = entry?.enteredAt ?? null, days = null;
+      entry !== void 0 && (days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now()));
+      for (let element4 of elements)
+        showDaysInColumn(element4, days);
+    }
+  }
+  function pauseIfAsked(tracker, retryAfterSeconds) {
+    return retryAfterSeconds === null ? !1 : (tracker.pausedUntil = tracker.now() + retryAfterSeconds * 1e3, !0);
+  }
+  async function fetchChangedCards(tracker, ids) {
+    let { workItems, retryAfterSeconds } = await tracker.client.getWorkItems(ids);
+    if (pauseIfAsked(tracker, retryAfterSeconds))
+      return;
+    let changed = workItems.filter(({ id, rev }) => tracker.entries.get(id)?.rev !== rev);
+    for (let { id, rev } of changed) {
+      let response = await tracker.client.getWorkItemUpdates(id);
+      if (tracker.entries.set(id, { enteredAt: columnEnteredAt(response.updates), rev }), pauseIfAsked(tracker, response.retryAfterSeconds))
+        return;
+    }
+  }
+  function isCheckDue2(tracker, ids) {
+    let now = tracker.now(), isDue = ids.some((id) => !tracker.entries.has(id)) || now - tracker.lastCheckAt >= 6e4;
+    return !tracker.isChecking && ids.length > 0 && isDue && now >= tracker.pausedUntil;
+  }
+  async function check(tracker, ids) {
+    tracker.isChecking = !0, tracker.lastCheckAt = tracker.now();
+    try {
+      await fetchChangedCards(tracker, ids);
+    } catch {
+      tracker.pausedUntil = tracker.now() + 6e4;
+    } finally {
+      tracker.isChecking = !1;
+    }
+  }
+  function createDaysInColumn(options) {
+    let tracker = {
+      client: options.client,
+      columnIds: /* @__PURE__ */ new Map(),
+      entries: /* @__PURE__ */ new Map(),
+      isChecking: !1,
+      lastCheckAt: Number.NEGATIVE_INFINITY,
+      now: options.now,
+      pausedUntil: Number.NEGATIVE_INFINITY
+    };
+    return {
+      async sync() {
+        let cards = findCards(options.document);
+        showBars(tracker, cards);
+        let ids = [...cards.keys()];
+        isCheckDue2(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
+      }
+    };
+  }
+
+  // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
+  var HEADER_SELECTOR3 = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS6 = "fix-ado-days-toggle";
+  function showColumnState(column, toggle, isHidden) {
+    Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
+    let pressed = String(!isHidden);
+    toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", "Days in column"));
+  }
+  function createToggle4(document2, onClick3) {
+    let toggle = document2.createElement("button");
+    return toggle.type = "button", toggle.className = TOGGLE_CLASS6, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
+      event.preventDefault(), event.stopPropagation(), onClick3();
+    }), toggle;
+  }
+  function findOrAddToggle2(header, onClick3) {
+    let existing = header.querySelector(`.${TOGGLE_CLASS6}`);
+    if (existing !== null)
+      return existing;
+    let toggle = createToggle4(header.ownerDocument, onClick3);
+    return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
+  }
+  function createDaysInColumnToggles(options) {
+    let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
+    function flip2(columnId) {
+      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync4();
+    }
+    function sync4() {
+      let headers = [...document2.querySelectorAll(HEADER_SELECTOR3)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
+      if (headers.length === columns.length)
+        for (let [index, header] of headers.entries()) {
+          let column = columns[index], columnId = column?.dataset.column;
+          if (column !== void 0 && columnId !== void 0) {
+            let toggle = findOrAddToggle2(header, () => {
+              flip2(columnId);
+            });
+            showColumnState(column, toggle, hiddenColumnIds.has(columnId));
+          }
+        }
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/days-in-column/style.css
+  var style_default20 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+.fix-ado-days-in-column {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  /* One row of dots, also when empty, so a card keeps its height. */
+  min-height: 5px;
+  margin-top: 6px;
+}
+
+.fix-ado-days-in-column > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  /* Azure DevOps keeps its palette as bare "r, g, b" values, so it follows the theme. */
+  background: rgb(var(--palette-neutral-20, 200, 200, 200));
+}
+
+.fix-ado-days-in-column > span[data-age="aging"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+.fix-ado-days-in-column > span[data-age="old"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
+}
+
+/* Skeleton while the day count loads: three grey dots that pulse one after another. */
+.fix-ado-days-in-column > span[data-age="loading"] {
+  animation: fix-ado-pulse 1.2s ease-in-out infinite;
+}
+.fix-ado-days-in-column > span[data-age="loading"]:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.fix-ado-days-in-column > span[data-age="loading"]:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes fix-ado-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-days-in-column > span[data-age="loading"] {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.kanban-board-column[data-fix-ado-days-hidden] .fix-ado-days-in-column {
+  display: none;
+}
+
+/* The days-in-column toggle in a column header. It shows while the header is hovered, or
+   while something in it has keyboard focus. A click also focuses the toggle; that focus must
+   not keep it showing once the pointer leaves. */
+.fix-ado-days-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.kanban-board-column-header:is(:hover, :has(:focus-visible)) .fix-ado-days-toggle {
+  opacity: 1;
+}
+
+.fix-ado-days-toggle:hover {
+  background: rgba(var(--palette-black-alpha-6, 0, 0, 0, 0.06));
+}
+
+.fix-ado-days-toggle > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+/* Off: hollow dots. */
+.fix-ado-days-toggle[aria-pressed="false"] > span {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
+}
+`;
+
+  // azure-devops/src/features/days-in-column/index.ts
+  var HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns", daysInColumn = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "A dot per day a card has been in its board column, with a toggle per column.",
+    id: "days-in-column",
+    name: "Days in column",
+    start({ client, document: document2, now }) {
+      let days = createDaysInColumn({ client, document: document2, now }), toggles = createDaysInColumnToggles({
+        document: document2,
+        storage: {
+          load: () => GM_getValue(HIDDEN_COLUMNS_KEY, []),
+          save: (columnIds) => {
+            GM_setValue(HIDDEN_COLUMNS_KEY, columnIds);
+          }
+        }
+      });
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          page.kind === "board" && (toggles.sync(), isTabActive2 && days.sync());
+        }
+      };
+    },
+    styles: [style_default20]
+  };
+
   // azure-devops/src/features/index.ts
   var FEATURES_BY_CATEGORY = {
     Boards: [daysInColumn],
     Everywhere: EVERYWHERE_FEATURES,
     "Pull request": PULL_REQUEST_FEATURES,
     "Pull request Overview": OVERVIEW_FEATURES,
-    "Pull request lists": [
-      pipelineStatusOnPullRequests,
-      requiredReviewers,
-      publishedSince,
-      linkedWorkItem
-    ]
+    "Pull request lists": PULL_REQUEST_LIST_FEATURES
   }, FEATURE_CATEGORIES = CATEGORY_NAMES.map((name) => ({
     features: FEATURES_BY_CATEGORY[name],
     name

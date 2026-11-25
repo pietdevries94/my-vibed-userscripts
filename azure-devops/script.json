@@ -60,6 +60,6 @@
     "GM_listValues",
     "GM_registerMenuCommand"
   ],
-  "version": "1.24.1",
+  "version": "1.25.0",
   "mode": "sealed"
 }
