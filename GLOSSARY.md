@@ -103,3 +103,11 @@ _Avoid_: Draft comment, unsent comment
 **Unread comment**:
 A comment on a pull request that Azure DevOps marks with a dot because the owner has not seen it yet. Unread comments that follow each other in a thread form an **unread group**, which glows as one.
 _Avoid_: New comment, unseen comment
+
+**Pull request id**:
+A pull request's number, written `!` and the number, such as !123.
+_Avoid_: #123 (that is a work item id)
+
+**Work item id**:
+A work item's number, written `#` and the number, such as #123.
+_Avoid_: !123 (that is a pull request id)
