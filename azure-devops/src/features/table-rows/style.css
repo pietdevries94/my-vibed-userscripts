@@ -6,7 +6,7 @@
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
   /* One grid per table; the header and each row are subgrids of it. A column a list does not have
      is 0px wide, and its cells do not show. The title keeps at least 240px. Repository, Target and
-     Work item are as wide as their longest text in the table, up to 240px, and shrink first, with
+     Work item are as wide as their longest text in the table, and shrink first, with
      their full text on hover. */
   --fix-ado-table-author-width: 72px;
   --fix-ado-table-repository-width: 0px;
@@ -403,9 +403,6 @@
     > a.bolt-table-row
     > :is(.fix-ado-table-repository, .fix-ado-table-target, .fix-ado-table-work-item) {
     display: block;
-    box-sizing: border-box;
-    /* As wide as the text, up to 240px: the column takes the widest. */
-    max-width: 240px;
     line-height: 36px;
     overflow: hidden;
     text-overflow: ellipsis;
