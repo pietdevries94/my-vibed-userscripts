@@ -156,34 +156,36 @@ function showGroupsLoading(list: HTMLElement, isLoading: boolean): void {
   }
 }
 
-// A colour per work item, so the pull requests of one work item stand out together: a bar on
-// the right of each row that shares its work item with another row, and in a grouped list of
+// A colour per work item, so the pull requests of one work item stand out together: a bar at
+// the front of each row that shares its work item with another row, and in a grouped list of
 // every row of a work item's group and its group row. style.css draws the bar from the hue.
 
 const HUE_ATTRIBUTE = "data-fix-ado-work-item-hue";
 const HUE_PROPERTY = "--fix-ado-work-item-hue";
-/** The golden angle: ids next to each other get hues far apart, and no hue comes back soon. */
-const GOLDEN_ANGLE = 137.508;
 const FULL_TURN = 360;
+/** The hue of Azure DevOps's blue, of its links and its marks. The work items' hues dodge it. */
+const BLUE_HUE = 250;
 const GROUP_ROW_SELECTOR = ":scope > tr.fix-ado-work-item-group";
 
-/** The hue of a work item's colour, 0 to 359, the same for the same id on every page. */
-function workItemHue(workItemId: number): number {
-  return Math.floor((workItemId * GOLDEN_ANGLE) % FULL_TURN);
+/** A list's rows with their linked work items, and whether it shows them grouped. */
+interface ColoredList {
+  list: HTMLElement;
+  rows: { row: HTMLElement; linked: LinkedWorkItems | null }[];
+  isGrouped: boolean;
 }
 
-/** Gives the element the work item's colour, or takes it away for null. Only writes on a change. */
-function showHue(element: HTMLElement, workItemId: number | null): void {
-  const hue = workItemId === null ? null : String(workItemHue(workItemId));
-  if (element.getAttribute(HUE_ATTRIBUTE) === hue) {
+/** Gives the element a hue, or takes it away for null. Only writes on a change. */
+function showHue(element: HTMLElement, hue: number | null): void {
+  const shown = hue === null ? null : String(hue);
+  if (element.getAttribute(HUE_ATTRIBUTE) === shown) {
     return;
   }
-  if (hue === null) {
+  if (shown === null) {
     element.removeAttribute(HUE_ATTRIBUTE);
     element.style.removeProperty(HUE_PROPERTY);
   } else {
-    element.setAttribute(HUE_ATTRIBUTE, hue);
-    element.style.setProperty(HUE_PROPERTY, hue);
+    element.setAttribute(HUE_ATTRIBUTE, shown);
+    element.style.setProperty(HUE_PROPERTY, shown);
   }
 }
 
@@ -191,8 +193,9 @@ function showHue(element: HTMLElement, workItemId: number | null): void {
 const singleWorkItem = (linked: LinkedWorkItems | null): number | null =>
   linked?.ids.length === 1 ? (linked.ids[0] ?? null) : null;
 
-/** How many rows have each work item as their one work item. */
-function rowsPerWorkItem(rows: { linked: LinkedWorkItems | null }[]): Map<number, number> {
+/** The work items that get a colour in a list: grouped, every one with its own group; not
+ *  grouped, those that more than one row has. */
+function coloredWorkItems({ rows, isGrouped }: ColoredList): Set<number> {
   const counts = new Map<number, number>();
   for (const { linked } of rows) {
     const id = singleWorkItem(linked);
@@ -200,27 +203,52 @@ function rowsPerWorkItem(rows: { linked: LinkedWorkItems | null }[]): Map<number
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
   }
-  return counts;
+  return new Set([...counts].filter(([, count]) => isGrouped || count > 1).map(([id]) => id));
 }
 
 /**
- * Colours the rows of one list (a `tbody`) by work item. Grouped: every row with one work item,
- * and each work item's group row. Not grouped: the rows whose work item another row has too.
+ * A hue for each work item, spread evenly around the colour circle with Azure DevOps's blue as
+ * one of the places, in the order of their ids, so the colours on a page are as far apart as they
+ * can be, from each other and from the blue. The same work items always get the same hues.
  */
-function showWorkItemColors(
-  list: HTMLElement,
-  rows: { row: HTMLElement; linked: LinkedWorkItems | null }[],
-  isGrouped: boolean,
+function workItemHues(workItemIds: Iterable<number>): Map<number, number> {
+  const ids = [...new Set(workItemIds)].toSorted((first, second) => first - second);
+  return new Map(
+    ids.map((id, index) => [
+      id,
+      Math.floor(BLUE_HUE + ((index + 1) * FULL_TURN) / (ids.length + 1)) % FULL_TURN,
+    ]),
+  );
+}
+
+function showListColors(
+  { list, rows, isGrouped }: ColoredList,
+  colored: Set<number>,
+  hues: Map<number, number>,
 ): void {
-  const counts = rowsPerWorkItem(rows);
+  const hueOf = (id: number | null): number | null =>
+    id !== null && colored.has(id) ? (hues.get(id) ?? null) : null;
   for (const { row, linked } of rows) {
-    const id = singleWorkItem(linked);
-    showHue(row, id !== null && (isGrouped || (counts.get(id) ?? 0) > 1) ? id : null);
+    showHue(row, hueOf(singleWorkItem(linked)));
   }
   for (const groupRow of list.querySelectorAll<HTMLElement>(GROUP_ROW_SELECTOR)) {
     const id = Number(groupRow.dataset.fixAdoWorkItemGroup);
-    showHue(groupRow, isGrouped && Number.isInteger(id) ? id : null);
+    showHue(groupRow, isGrouped && Number.isInteger(id) ? hueOf(id) : null);
   }
 }
 
-export { showGroupsLoading, showWorkItemColors, showWorkItemGroups, workItemHue };
+/**
+ * Colours the page's lists by work item, with hues that dodge each other across the page.
+ * Grouped: every row with one work item, and each work item's group row. Not grouped: the rows
+ * whose work item another row in the list has too.
+ */
+function showWorkItemColors(lists: ColoredList[]): void {
+  const colored = lists.map((list) => coloredWorkItems(list));
+  const hues = workItemHues(colored.flatMap((ids) => [...ids]));
+  for (const [index, list] of lists.entries()) {
+    showListColors(list, colored[index] ?? new Set(), hues);
+  }
+}
+
+export type { ColoredList };
+export { showGroupsLoading, showWorkItemColors, showWorkItemGroups, workItemHues };

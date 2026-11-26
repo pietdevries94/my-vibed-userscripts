@@ -4,6 +4,7 @@ import {
   showWorkItemColors,
   showWorkItemGroups,
 } from "./work-item-group-rows.ts";
+import type { ColoredList } from "./work-item-group-rows.ts";
 import type { Feature } from "../../core/feature.ts";
 import type { LinkedWorkItemFetcher } from "./linked-work-item-fetcher.ts";
 import type { LinkedWorkItems } from "./linked-work-item.ts";
@@ -77,14 +78,20 @@ const linkedWorkItem: Feature = {
     let isList = false;
 
     function showAll(): void {
+      const colored: ColoredList[] = [];
       for (const list of document.querySelectorAll<HTMLElement>(LIST_SELECTOR)) {
         const rows = findRows(list);
         const groups = isList && isGrouped ? groupsOf(rows, fetcher) : null;
         showWorkItemGroups(list, basePath, groups);
         showGroupsLoading(list, isList && isGrouped && groups === null && rows.length > 0);
         showLinkedWorkItemLabels(rows, fetcher, groups !== null);
-        showWorkItemColors(list, isList ? withLinkedWorkItems(rows, fetcher) : [], groups !== null);
+        colored.push({
+          isGrouped: groups !== null,
+          list,
+          rows: isList ? withLinkedWorkItems(rows, fetcher) : [],
+        });
       }
+      showWorkItemColors(colored);
       showListSwitch(
         document,
         GROUP_SWITCH,

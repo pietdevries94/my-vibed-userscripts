@@ -1,4 +1,4 @@
-import { showWorkItemColors, workItemHue } from "./work-item-group-rows.ts";
+import { showWorkItemColors, workItemHues } from "./work-item-group-rows.ts";
 import { JSDOM } from "jsdom";
 import type { LinkedWorkItems } from "./linked-work-item.ts";
 import assert from "node:assert/strict";
@@ -16,73 +16,103 @@ function createList(): { list: HTMLElement; rows: HTMLElement[]; band: HTMLEleme
 }
 
 const linked = (...ids: number[]): LinkedWorkItems => ({ ids, title: null });
-const hueOf = (element: HTMLElement): string | undefined => element.dataset.fixAdoWorkItemHue;
+const hueOf = (element: HTMLElement | undefined): string | undefined =>
+  element?.dataset.fixAdoWorkItemHue;
 
-test("gives each work item its own hue, always the same, and far apart for ids next to each other", () => {
-  assert.equal(workItemHue(77), workItemHue(77));
-  const apart = Math.abs(workItemHue(77) - workItemHue(78));
-  assert.ok(Math.min(apart, 360 - apart) > 90);
+test("spreads the hues of a page's work items evenly around the circle, away from Azure DevOps's blue at 250", () => {
+  assert.deepEqual(
+    [...workItemHues([78, 77, 79])],
+    [
+      [77, 340],
+      [78, 70],
+      [79, 160],
+    ],
+  );
+  assert.deepEqual([...workItemHues([79, 78, 77])], [...workItemHues([77, 78, 79])]);
 });
 
 test("colours the rows that share their work item with another row, also when not grouped", () => {
   const { list, rows } = createList();
   const [first, second, third] = rows;
   assert.ok(first !== undefined && second !== undefined && third !== undefined);
-  showWorkItemColors(
-    list,
-    [
-      { linked: linked(77), row: first },
-      { linked: linked(77), row: second },
-      { linked: linked(78), row: third },
-    ],
-    false,
-  );
-  assert.equal(hueOf(first), String(workItemHue(77)));
-  assert.equal(hueOf(second), String(workItemHue(77)));
+  showWorkItemColors([
+    {
+      isGrouped: false,
+      list,
+      rows: [
+        { linked: linked(77), row: first },
+        { linked: linked(77), row: second },
+        { linked: linked(78), row: third },
+      ],
+    },
+  ]);
+  assert.equal(hueOf(first), "70");
+  assert.equal(hueOf(second), "70");
   assert.equal(hueOf(third), undefined);
-  assert.equal(first.style.getPropertyValue("--fix-ado-work-item-hue"), String(workItemHue(77)));
+  assert.equal(first.style.getPropertyValue("--fix-ado-work-item-hue"), "70");
 });
 
 test("colours every row of a work item's group, and its group row, when grouped", () => {
   const { band, list, rows } = createList();
   const [first, second, third] = rows;
   assert.ok(first !== undefined && second !== undefined && third !== undefined);
-  showWorkItemColors(
-    list,
-    [
-      { linked: linked(77), row: first },
-      { linked: linked(78), row: second },
-      { linked: linked(78, 79), row: third },
-    ],
-    true,
-  );
-  assert.equal(hueOf(band), String(workItemHue(77)));
-  assert.equal(hueOf(first), String(workItemHue(77)));
-  assert.equal(hueOf(second), String(workItemHue(78)));
+  showWorkItemColors([
+    {
+      isGrouped: true,
+      list,
+      rows: [
+        { linked: linked(77), row: first },
+        { linked: linked(78), row: second },
+        { linked: linked(78, 79), row: third },
+      ],
+    },
+  ]);
+  assert.equal(hueOf(band), "10");
+  assert.equal(hueOf(first), "10");
+  assert.equal(hueOf(second), "130");
   // Several work items share no single colour.
   assert.equal(hueOf(third), undefined);
+});
+
+test("gives a work item the same colour in every list of the page", () => {
+  const first = createList();
+  const second = createList();
+  const [onlyRow] = first.rows;
+  const [otherRow, sameRow] = second.rows;
+  assert.ok(onlyRow !== undefined && otherRow !== undefined && sameRow !== undefined);
+  showWorkItemColors([
+    { isGrouped: true, list: first.list, rows: [{ linked: linked(77), row: onlyRow }] },
+    {
+      isGrouped: true,
+      list: second.list,
+      rows: [
+        { linked: linked(78), row: otherRow },
+        { linked: linked(77), row: sameRow },
+      ],
+    },
+  ]);
+  assert.equal(hueOf(onlyRow), hueOf(sameRow));
+  assert.notEqual(hueOf(otherRow), hueOf(sameRow));
 });
 
 test("takes the colour away from a row that no longer shares its work item", () => {
   const { list, rows } = createList();
   const [first, second] = rows;
   assert.ok(first !== undefined && second !== undefined);
-  showWorkItemColors(
-    list,
-    [
-      { linked: linked(77), row: first },
-      { linked: linked(77), row: second },
-    ],
-    false,
-  );
-  showWorkItemColors(
-    list,
-    [
-      { linked: linked(77), row: first },
-      { linked: null, row: second },
-    ],
-    false,
-  );
+  const show = (secondLinked: LinkedWorkItems | null): void => {
+    showWorkItemColors([
+      {
+        isGrouped: false,
+        list,
+        rows: [
+          { linked: linked(77), row: first },
+          { linked: secondLinked, row: second },
+        ],
+      },
+    ]);
+  };
+  show(linked(77));
+  show(null);
   assert.equal(hueOf(first), undefined);
   assert.equal(first.style.getPropertyValue("--fix-ado-work-item-hue"), "");
 });
