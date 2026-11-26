@@ -459,6 +459,28 @@
   & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) > .pr-reviewer {
     display: flex;
     margin: 0 -5px 0 0 !important;
+    /* The left one on top, so each vote shows; required ones, which come first, above all. */
+    z-index: calc(10 - var(--fix-ado-reviewer-index, 0));
+  }
+
+  & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) {
+    isolation: isolate;
+
+    & > .pr-reviewer:nth-child(2) {
+      --fix-ado-reviewer-index: 1;
+    }
+
+    & > .pr-reviewer:nth-child(3) {
+      --fix-ado-reviewer-index: 2;
+    }
+
+    & > .pr-reviewer:nth-child(4) {
+      --fix-ado-reviewer-index: 3;
+    }
+
+    & > .pr-reviewer[data-fix-ado-required] {
+      z-index: calc(20 - var(--fix-ado-reviewer-index, 0));
+    }
   }
 
   & .pr-reviewer .bolt-coin {
@@ -472,9 +494,9 @@
       0 0 0 3px var(--communication-background, rgb(0, 120, 212));
   }
 
-  /* A reviewer's vote: an 11px badge on the avatar's corner. */
+  /* A reviewer's vote: an 11px badge on the avatar's corner, inside the row's height. */
   & .repos-pr-reviewer-vote {
-    inset: auto -3px -3px auto;
+    inset: auto -3px 0 auto;
     display: grid;
     place-items: center;
     box-sizing: border-box;
