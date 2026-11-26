@@ -1,0 +1,397 @@
+/* The pull request lists as a table, as design B of the inbox redesigns. table-rows.ts marks
+   <html> on a list page while the Table switch is on, and adds the header and the cells Azure
+   DevOps has no column for. Each row becomes a grid on the same columns, so the site's cells can
+   take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
+:root[data-fix-ado-table]:not([data-fix-ado-win98]) table.repos-pr-list {
+  --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
+  /* Fixed widths, so the columns of every list on the page line up. */
+  --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 140px [id] 72px [target]
+    180px [reviewers] 100px [comments] 92px [age] 172px;
+
+  display: block;
+  font-size: 14px;
+  line-height: 20px;
+
+  /* Without Group by work item, a Work item column takes the place of the group rows. */
+  &:not(:has(.fix-ado-work-item-group)) {
+    --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 140px [id] 72px
+      [target] 180px [work-item] 110px [reviewers] 100px [comments] 92px [age] 172px;
+  }
+
+  & > colgroup {
+    display: none;
+  }
+
+  & > tbody,
+  & > tbody > tr.bolt-list-row-spacer {
+    display: block;
+  }
+
+  /* The header and the rows: one grid each, on the same columns. */
+  & > .fix-ado-table-head,
+  & > .fix-ado-table-head > tr,
+  & > tbody > a.bolt-table-row {
+    display: grid;
+    grid-template-columns: var(--fix-ado-table-columns);
+    border-bottom: 1px solid var(--fix-ado-table-line);
+  }
+
+  & > .fix-ado-table-head {
+    display: block;
+    border-bottom: 0;
+  }
+
+  & > .fix-ado-table-head > tr > th,
+  & > tbody > a.bolt-table-row > td {
+    display: flex;
+    grid-row: 1;
+    align-items: center;
+    min-width: 0;
+    padding: 0 10px;
+    border: 0;
+  }
+
+  & > .fix-ado-table-head th {
+    height: 32px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: 0.04em;
+    text-align: start;
+    text-transform: uppercase;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  }
+
+  & .fix-ado-table-head-comments,
+  & .fix-ado-table-head-age {
+    justify-content: flex-end;
+  }
+
+  /* Azure DevOps skips rows out of view and holds 32px for each. A row here is 36px without
+     its line, so the list keeps its height when it scrolls into view. */
+  & > tbody > a.bolt-table-row {
+    position: relative;
+    contain-intrinsic-size: auto 36px;
+  }
+
+  /* No line under the last row: the card ends there. */
+  & > tbody > a.bolt-table-row:not(:has(~ a.bolt-table-row)) {
+    border-bottom: 0;
+  }
+
+  & > tbody > a.bolt-table-row > td {
+    height: 36px;
+  }
+
+  & .bolt-table-cell-content {
+    min-width: 0;
+    padding: 0;
+  }
+
+  /* Azure DevOps's spacer cells on both ends. */
+  & > tbody > a.bolt-table-row > td.bolt-table-cell-compact {
+    display: none;
+  }
+
+  /* The row's More button keeps its place on the right, over the age, when it shows. */
+  & > tbody > a.bolt-table-row > td.bolt-table-cell-side-action {
+    position: absolute;
+    inset: 0 0 auto auto;
+    padding: 0;
+  }
+
+  & .bolt-table-cell-side-action .bolt-button {
+    padding: 4px;
+  }
+
+  /* A work item group row: a 28px band. */
+  & > tbody > tr.fix-ado-work-item-group {
+    display: block;
+    border-bottom: 1px solid var(--fix-ado-table-line);
+  }
+
+  & > tbody > tr.fix-ado-work-item-group > td {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    /* 28px with the line under it. */
+    height: 27px;
+    padding: 0 10px;
+    border-top: 0;
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  }
+
+  /* The row after a group row keeps its own line: the group row has none above it. */
+  & .fix-ado-work-item-group + a.bolt-table-row > .bolt-table-cell {
+    border-top-color: transparent;
+  }
+
+  /* The pipeline status and the title: the status sits in the first column. */
+  & [aria-colindex="2"] {
+    grid-column: pipeline / author;
+    overflow: hidden;
+  }
+
+  & .bolt-table-two-line-cell > .bolt-table-cell-content {
+    flex-direction: row;
+    min-width: 0;
+  }
+
+  & .bolt-table-two-line-cell-item:first-child {
+    overflow: visible;
+    padding: 0;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  & .bolt-table-two-line-cell-item:nth-child(2) {
+    display: none;
+  }
+
+  & .fix-ado-pipeline-status {
+    order: -1;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 0 12px 0 0;
+  }
+
+  & .bolt-table-two-line-cell-item .body-l {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  }
+
+  /* Draft, Auto-complete, Conflicts and the other pills after the title, in Azure DevOps's
+     colours. */
+  & .bolt-table-two-line-cell-item:first-child .bolt-pill {
+    box-sizing: border-box;
+    height: 18px;
+    margin: 0;
+    padding: 0 7px;
+    border-width: 1px;
+    border-style: solid;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+
+    & .bolt-pill-content {
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  /* The author: a 22px avatar and the name. */
+  & [aria-colindex="1"] {
+    grid-column: author;
+
+    & .bolt-table-cell-content {
+      gap: 6px;
+    }
+  }
+
+  & :is([aria-colindex="1"], .pr-reviewer) :is(.bolt-coin, .bolt-coin-content) {
+    --fix-ado-avatar-size: 22px !important;
+    width: 22px;
+    height: 22px;
+  }
+
+  & .fix-ado-table-author {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  }
+
+  & :is(.fix-ado-table-id, .fix-ado-table-target, .fix-ado-table-work-item, [aria-colindex="4"]) {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  }
+
+  & .fix-ado-table-id {
+    grid-column: id;
+  }
+
+  & > tbody > a.bolt-table-row > :is(.fix-ado-table-target, .fix-ado-table-work-item) {
+    display: block;
+    line-height: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  & .fix-ado-table-target {
+    grid-column: target;
+  }
+
+  & .fix-ado-table-branch {
+    font-family: "Cascadia Mono", Menlo, Consolas, "Courier New", monospace;
+    font-size: 11px;
+  }
+
+  & .fix-ado-table-work-item {
+    grid-column: work-item;
+  }
+
+  & .fix-ado-table-work-item[data-fix-ado-is-id] {
+    color: var(--communication-foreground, rgb(0, 90, 158));
+  }
+
+  /* The work item's place before Linked work item adds the label after its own text. */
+  & .fix-ado-linked-work-item::before {
+    content: none;
+  }
+
+  /* Grouped lists show the work item in the group rows. */
+  &:has(.fix-ado-work-item-group) > tbody > a.bolt-table-row > .fix-ado-table-work-item,
+  &:has(.fix-ado-work-item-group) .fix-ado-table-head-work-item {
+    display: none;
+  }
+
+  /* Reviewers: 22px avatars that overlap, each with a ring in the row's colour. Required ones
+     come first with a blue ring. */
+  & [aria-colindex="3"] {
+    grid-column: reviewers;
+
+    & .bolt-table-cell-content > div {
+      min-width: 0;
+    }
+  }
+
+  & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) > .pr-reviewer {
+    display: flex;
+    margin: 0 -5px 0 0 !important;
+  }
+
+  & .pr-reviewer .bolt-coin {
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px var(--background-color, #fff);
+  }
+
+  & .pr-reviewer[data-fix-ado-required] .bolt-coin {
+    box-shadow:
+      0 0 0 1.5px var(--background-color, #fff),
+      0 0 0 3px var(--communication-background, rgb(0, 120, 212));
+  }
+
+  /* A reviewer's vote: an 11px badge on the avatar's corner. */
+  & .repos-pr-reviewer-vote {
+    inset: auto -3px -3px auto;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 11px;
+    height: 11px;
+    border: 1.5px solid var(--background-color, #fff);
+    border-radius: 50%;
+    font-size: 7px;
+  }
+
+  /* The +2 after the reviewers: plain text. */
+  & [aria-colindex="3"] .bolt-pill {
+    min-width: 0;
+    margin-left: 13px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+
+    & .bolt-pill-content {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  /* Comments: on the right, a 12px icon and the count. */
+  & [aria-colindex="4"] {
+    grid-column: comments;
+    justify-content: flex-end;
+
+    & [role="group"] {
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    & .fluent-icons-enabled {
+      display: flex;
+      flex: none;
+      width: 12px;
+      height: 12px;
+      overflow: clip;
+    }
+
+    & .fabric-icon {
+      font-size: 12px;
+    }
+
+    & .repos-pr-list-comment-count {
+      padding: 0;
+    }
+
+    & .has-active-comments,
+    & [role="group"]:has(.has-active-comments) {
+      color: var(--status-warning-text, rgba(184, 94, 6, 1));
+    }
+  }
+
+  /* The age: on the right, the publish time alone when it shows, as it says more. */
+  & [aria-colindex="5"] {
+    grid-column: age;
+    justify-content: flex-end;
+    color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+
+    & .bolt-table-cell-content {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: end;
+      line-height: 36px;
+    }
+
+    /* Inline down to the time, so "Updated 3 days ago" reads as one run of text. */
+    & .bolt-table-cell-content > *,
+    & .bolt-table-cell-content > * > .text-ellipsis {
+      display: inline;
+      overflow: visible;
+    }
+  }
+
+  & .bolt-table-cell-content:has(> .fix-ado-published-since) > :not(.fix-ado-published-since) {
+    display: none;
+  }
+}
+
+/* The card's column around the list sizes to its content; the table fills the card, as Azure
+   DevOps's own table does. */
+:root[data-fix-ado-table]:not([data-fix-ado-win98])
+  .flex-column:has(> .bolt-table-container > table.repos-pr-list) {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+/* Forced colors drop box shadows, so a required reviewer keeps an outline. */
+@media (forced-colors: active) {
+  :root[data-fix-ado-table]:not([data-fix-ado-win98])
+    table.repos-pr-list
+    .pr-reviewer[data-fix-ado-required]
+    .bolt-coin {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+}

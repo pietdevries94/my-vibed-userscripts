@@ -74,7 +74,7 @@
   "overrides": [
     {
       // Command-line tools and dev servers: they run on Node and talk to the terminal.
-      "files": ["build/**", "shared/dev/**", "*/fake-site/**"],
+      "files": ["build/**", "shared/dev/**", "*/fake-site/**", "*/design-diffs/**"],
       "rules": {
         "import/no-nodejs-modules": "off",
         "eslint/no-console": "off",
