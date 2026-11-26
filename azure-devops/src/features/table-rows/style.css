@@ -286,7 +286,7 @@
     background-color: color-mix(
       in srgb,
       rgba(var(--palette-neutral-2, 248, 248, 248), 1) 50%,
-      var(--background-color, #fff)
+      var(--callout-background-color, var(--background-color, #fff))
     );
     border-bottom: 1px solid var(--fix-ado-table-line);
   }
@@ -463,12 +463,12 @@
 
   & .pr-reviewer .bolt-coin {
     border-radius: 50%;
-    box-shadow: 0 0 0 1.5px var(--background-color, #fff);
+    box-shadow: 0 0 0 1.5px var(--callout-background-color, var(--background-color, #fff));
   }
 
   & .pr-reviewer[data-fix-ado-required] .bolt-coin {
     box-shadow:
-      0 0 0 1.5px var(--background-color, #fff),
+      0 0 0 1.5px var(--callout-background-color, var(--background-color, #fff)),
       0 0 0 3px var(--communication-background, rgb(0, 120, 212));
   }
 
@@ -480,7 +480,7 @@
     box-sizing: border-box;
     width: 11px;
     height: 11px;
-    border: 1.5px solid var(--background-color, #fff);
+    border: 1.5px solid var(--callout-background-color, var(--background-color, #fff));
     border-radius: 50%;
     font-size: 7px;
   }
