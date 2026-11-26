@@ -516,8 +516,13 @@
       overflow: clip;
     }
 
+    /* Azure DevOps moves the active comment icon 4px right and 2px down, which the box would
+       cut off. */
     & .fabric-icon {
+      position: static;
+      padding: 0;
       font-size: 12px;
+      line-height: 12px;
     }
 
     & .repos-pr-list-comment-count {
