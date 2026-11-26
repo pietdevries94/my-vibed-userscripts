@@ -86,9 +86,11 @@ function markCreatedByMe(list: HTMLTableElement, isTable: boolean): void {
   }
 }
 
+/** The header above a list with pull requests. A list without, which shows Azure DevOps's empty
+ *  message, gets none. */
 function showHead(list: HTMLTableElement, isTable: boolean): void {
   const shown = list.querySelector(`:scope > .${HEAD_CLASS}`);
-  if (!isTable) {
+  if (!isTable || list.querySelector(ROW_SELECTOR) === null) {
     shown?.remove();
     return;
   }

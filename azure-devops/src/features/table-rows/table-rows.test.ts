@@ -94,6 +94,21 @@ test("puts a header with the column names above each list", () => {
   assert.equal(document.querySelector("table > thead + tbody") !== null, true);
 });
 
+test("leaves the header out of a list without pull requests, which shows Azure DevOps's empty message", () => {
+  const { document } = createList().window;
+  rowOf(document).remove();
+  showTableRows(document, true, NO_CREATION_DATES);
+  assert.equal(document.querySelector(".fix-ado-table-head"), null);
+});
+
+test("takes the header away when the last pull request leaves the list", () => {
+  const { document } = createList().window;
+  showTableRows(document, true, NO_CREATION_DATES);
+  rowOf(document).remove();
+  showTableRows(document, true, NO_CREATION_DATES);
+  assert.equal(document.querySelector(".fix-ado-table-head"), null);
+});
+
 test("gives each pull request the author's name as a tooltip, its id, repository, target branch and work item", () => {
   const { document } = createList().window;
   showTableRows(document, true, NO_CREATION_DATES);

@@ -219,18 +219,36 @@ function showCreated(row: HTMLElement, pullRequest: AssignedPullRequest, now: nu
   time.parentElement?.setAttribute("aria-label", new Date(created).toLocaleString());
 }
 
-/** A copy of the site's row with only its markup: no other feature's marks, no comments, no menu. */
+/** Takes the other features' attributes off the row and its cells, and Azure DevOps's mark of
+ *  something new, which belongs to the template's own pull request. */
+function removeMarks(row: HTMLElement): void {
+  for (const element of [row, ...row.querySelectorAll("*")]) {
+    for (const name of element.getAttributeNames()) {
+      if (name.startsWith("data-fix-ado-")) {
+        element.removeAttribute(name);
+      }
+    }
+  }
+  row.classList.remove("bolt-list-row-marked");
+  row.style.removeProperty("--fix-ado-work-item-hue");
+}
+
+/** A copy of the site's row with only its markup: no other feature's marks, no comments, no menu,
+ *  and not marked as new, which the template's own pull request may be. */
 function emptyCopy(template: HTMLElement): HTMLElement | null {
   const row = copyOf(template);
   for (const mark of row?.querySelectorAll(SCRIPT_MARK_SELECTOR) ?? []) {
     mark.remove();
+  }
+  if (row !== null) {
+    removeMarks(row);
   }
   row?.querySelector(COMMENTS_CELL_SELECTOR)?.replaceChildren();
   row?.querySelector(ROW_MENU_SELECTOR)?.replaceChildren();
   return row;
 }
 
-/** The row of one pull request, built from `template`, a row of the same card. */
+/** The row of one pull request, built from `template`, a row of the same card or another. */
 function buildAssignedRow(
   template: HTMLElement,
   pullRequest: AssignedPullRequest,

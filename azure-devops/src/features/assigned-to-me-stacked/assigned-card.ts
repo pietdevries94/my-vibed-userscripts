@@ -152,7 +152,12 @@ function createRows(
   pullRequests: AssignedPullRequest[],
   context: RowContext,
 ): HTMLElement[] {
-  const template = found.table.querySelector<HTMLElement>(ROW_SELECTOR);
+  // Every card's rows have the same columns: with this tab empty, a row of another card will do.
+  const template =
+    found.table.querySelector<HTMLElement>(ROW_SELECTOR) ??
+    found.card.ownerDocument.querySelector<HTMLElement>(
+      `${CARD_SELECTOR}:not(.${BUILT_CARD_CLASS}) ${ROW_SELECTOR}`,
+    );
   return pullRequests.flatMap((pullRequest, index) => {
     const row = template ? buildAssignedRow(template, pullRequest, context) : null;
     row?.classList.toggle("first-row", index === 0);

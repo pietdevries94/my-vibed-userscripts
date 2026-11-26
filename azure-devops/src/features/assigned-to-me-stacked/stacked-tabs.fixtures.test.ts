@@ -123,6 +123,25 @@ for (const page of ["pr-list-assigned-waiting", "pr-inbox-assigned-waiting-inbox
   });
 }
 
+test(
+  "with Active empty, the other tabs build their rows from a row of another card",
+  { skip: fixtures.skip },
+  () => {
+    const { assigned, document } = capturedPage("pr-inbox-assigned-active-inbox");
+    for (const row of assignedCard(document).querySelectorAll("a.bolt-table-row")) {
+      row.remove();
+    }
+
+    showStackedTabs(document, assigned, CONTEXT);
+
+    assert.deepEqual(shownLists(document), [
+      "card · Active",
+      "card · Waiting for author",
+      ...idsWithMyVote(assigned, -5),
+    ]);
+  },
+);
+
 test("a built row links to its pull request and names it", { skip: fixtures.skip }, () => {
   const { assigned, document } = capturedPage("pr-list-assigned-waiting");
   showStackedTabs(document, assigned, CONTEXT);
