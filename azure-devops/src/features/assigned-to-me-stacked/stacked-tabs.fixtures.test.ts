@@ -204,3 +204,27 @@ test(
     assert.equal(title.nextElementSibling?.className, "fix-ado-assigned-tab-name");
   },
 );
+
+for (const page of [
+  "pr-list-assigned-active",
+  "pr-list-assigned-waiting",
+  "pr-list-assigned-empty-message",
+  "pr-inbox-assigned-active-empty",
+]) {
+  test(`${page}: each built row shows its reviewers`, { skip: fixtures.skip }, () => {
+    const { assigned, document } = capturedPage(page);
+
+    showStackedTabs(document, assigned, CONTEXT);
+
+    const rows = [...document.querySelectorAll(".fix-ado-assigned-card a.bolt-table-row")];
+    assert.ok(rows.length > 0, "the page has built rows");
+    for (const row of rows) {
+      const id = row.getAttribute("href")?.split("/").at(-1);
+      const pullRequest = assigned.pullRequests.find(
+        ({ pullRequestId }) => String(pullRequestId) === id,
+      );
+      const expected = Math.min(pullRequest?.reviewers?.length ?? 0, 3);
+      assert.equal(row.querySelectorAll(".pr-reviewer").length, expected, `row ${id}`);
+    }
+  });
+}

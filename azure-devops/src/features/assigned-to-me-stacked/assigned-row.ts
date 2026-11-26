@@ -18,6 +18,9 @@ const BRANCH_SELECTOR = ".monospaced-xs";
 /** The inbox names the repository before the branch. */
 const REPOSITORY_SELECTOR = ":scope > .padding-horizontal-4:not(.monospaced-xs)";
 const REVIEWER_SELECTOR = ".pr-reviewer";
+const REVIEWERS_CELL_SELECTOR = '[aria-colindex="3"] .bolt-table-cell-content';
+/** The avatars in the reviewers cell of a site row with reviewers. */
+const REVIEWER_GROUP_SELECTOR = `a.bolt-table-row:not(.fix-ado-assigned-card *) ${REVIEWERS_CELL_SELECTOR} > :has(> ${REVIEWER_SELECTOR})`;
 /** The icon on a reviewer's avatar, in its wrapper. */
 const VOTE_ICON_SELECTOR = ".fluent-icons-enabled:has(> .repos-pr-reviewer-vote)";
 const APPROVED_VOTE = 10;
@@ -187,8 +190,22 @@ function createReviewerAvatar(template: Element, reviewer: Reviewer & Person): E
   return avatar;
 }
 
+/**
+ * Another site row's avatars, when the row has none: the site leaves the reviewers cell empty
+ * on a pull request without reviewers, so there is no avatar to copy.
+ */
+function addReviewerGroup(row: HTMLElement): void {
+  const cell = row.querySelector(REVIEWERS_CELL_SELECTOR);
+  const group = row.ownerDocument.querySelector(REVIEWER_GROUP_SELECTOR);
+  const copy = group ? copyOf(group) : null;
+  if (cell !== null && copy !== null && row.querySelector(REVIEWER_SELECTOR) === null) {
+    cell.replaceChildren(copy);
+  }
+}
+
 /** The first reviewers' avatars, then "+2" for the rest when the site's row has such a pill. */
 function showReviewers(row: HTMLElement, pullRequest: AssignedPullRequest): void {
+  addReviewerGroup(row);
   const shown = [...row.querySelectorAll(REVIEWER_SELECTOR)];
   const [first] = shown;
   const parent = first?.parentElement;
