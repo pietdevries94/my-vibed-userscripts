@@ -1,5 +1,6 @@
-/* The panel in the side panel grey of a project, as Azure DevOps draws .project-navigation. */
-.top-level-navigation:has(.fix-ado-organization-panel-toggle) {
+/* The panel in the side panel grey of a project, as Azure DevOps draws .project-navigation.
+   Windows 98 mode has its own look for the panel, in its style.css. */
+:root:not([data-fix-ado-win98]) .top-level-navigation:has(.fix-ado-organization-panel-toggle) {
   background: var(--nav-vertical-background-color, rgba(0, 0, 0, 0.08));
 }
 
@@ -7,7 +8,9 @@
    the collapse button next to it. Collapsed, the two stack. Each icon sits in a 47px cell with
    12px above and below, in a row with 4px more, as a project's .hub.stand-alone does. The line is
    drawn here, so Azure DevOps's own elements stay where they are. */
-.top-level-navigation .navigation-footer:has(.fix-ado-organization-panel-toggle) {
+:root:not([data-fix-ado-win98])
+  .top-level-navigation
+  .navigation-footer:has(.fix-ado-organization-panel-toggle) {
   position: relative;
   display: flex;
   flex-direction: row;
@@ -46,8 +49,9 @@
   }
 }
 
-/* The collapse button: a double chevron only, that glows blue on hover as on a project. */
-.fix-ado-organization-panel-toggle {
+/* The collapse button: a double chevron only, that glows blue on hover as on a project.
+   Windows 98 mode draws it as a raised button instead. */
+:root:not([data-fix-ado-win98]) .fix-ado-organization-panel-toggle {
   display: flex;
   flex: none;
   align-items: center;
