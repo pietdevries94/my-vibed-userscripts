@@ -5,7 +5,7 @@
 :root[data-fix-ado-table]:not([data-fix-ado-win98]) table.repos-pr-list {
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
   /* Fixed widths, so the columns of every list on the page line up. */
-  --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 140px [id] 72px [target]
+  --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 72px [id] 72px [target]
     180px [reviewers] 100px [comments] 92px [age] 172px;
 
   display: block;
@@ -14,8 +14,23 @@
 
   /* Without Group by work item, a Work item column takes the place of the group rows. */
   &:not(:has(.fix-ado-work-item-group)) {
-    --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 140px [id] 72px
-      [target] 180px [work-item] 110px [reviewers] 100px [comments] 92px [age] 172px;
+    --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 72px [id] 72px [target]
+      180px [work-item] 110px [reviewers] 100px [comments] 92px [age] 172px;
+  }
+
+  /* "Created by me" lists only your own pull requests, so it has no Author column. */
+  &[data-fix-ado-created-by-me] {
+    --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [id] 72px [target] 180px
+      [reviewers] 100px [comments] 92px [age] 172px;
+
+    & :is(.fix-ado-table-head-author, a.bolt-table-row > [aria-colindex="1"]) {
+      display: none;
+    }
+  }
+
+  &[data-fix-ado-created-by-me]:not(:has(.fix-ado-work-item-group)) {
+    --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [id] 72px [target] 180px
+      [work-item] 110px [reviewers] 100px [comments] 92px [age] 172px;
   }
 
   & > colgroup {
@@ -148,7 +163,7 @@
 
   /* The pipeline status and the title: the status sits in the first column. */
   & [aria-colindex="2"] {
-    grid-column: pipeline / author;
+    grid-column: pipeline / span 2;
     overflow: hidden;
   }
 
@@ -206,27 +221,15 @@
     }
   }
 
-  /* The author: a 22px avatar and the name. */
+  /* The author: a 22px avatar, with the name as the cell's tooltip. */
   & [aria-colindex="1"] {
     grid-column: author;
-
-    & .bolt-table-cell-content {
-      gap: 6px;
-    }
   }
 
   & :is([aria-colindex="1"], .pr-reviewer) :is(.bolt-coin, .bolt-coin-content) {
     --fix-ado-avatar-size: 22px !important;
     width: 22px;
     height: 22px;
-  }
-
-  & .fix-ado-table-author {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
   }
 
   & :is(.fix-ado-table-id, .fix-ado-table-target, .fix-ado-table-work-item, [aria-colindex="4"]) {

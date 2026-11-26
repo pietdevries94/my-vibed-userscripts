@@ -38,6 +38,8 @@ interface TableState extends FakeSitePage {
   isGrouped: boolean;
   /** Only these cards, by index, where the capture's other cards hold marks of its own. */
   cards?: number[];
+  /** Renames the first card, as a stand-in for a title the capture scrubbed. */
+  firstCardTitle?: string;
 }
 
 const STATES: TableState[] = [
@@ -87,6 +89,24 @@ const STATES: TableState[] = [
     path: LIST,
   },
   { capture: "assigned-active", isGrouped: false, name: "list-plain", page: "pr-list", path: LIST },
+  {
+    capture: "assigned-active-inbox",
+    cards: [0],
+    firstCardTitle: "Created by me",
+    isGrouped: true,
+    name: "inbox-created-by-me-grouped",
+    page: "pr-inbox",
+    path: INBOX,
+  },
+  {
+    capture: "assigned-active-inbox",
+    cards: [0],
+    firstCardTitle: "Created by me",
+    isGrouped: false,
+    name: "inbox-created-by-me-plain",
+    page: "pr-inbox",
+    path: INBOX,
+  },
 ];
 
 interface Run {
@@ -146,6 +166,16 @@ async function siteTables(
   page: Page,
 ): Promise<{ tables: DesignTable[]; shots: Buffer[] }> {
   await openFakeSitePage(page, state);
+  if (state.firstCardTitle !== undefined) {
+    await page
+      .locator(".repos-pr-section-card .repos-pr-section-header-title > .text-ellipsis")
+      .first()
+      .evaluate((title, text) => {
+        title.textContent = text;
+      }, state.firstCardTitle);
+    // The script marks the card's list on the change.
+    await page.locator("table[data-fix-ado-created-by-me]").waitFor({ state: "attached" });
+  }
   await page.addStyleTag({ content: SITE_MASK });
   const tables: DesignTable[] = await page.evaluate(READ_TABLES_SCRIPT);
   const shots = await shootEach(page, ".repos-pr-section-card:has(table.repos-pr-list)", (index) =>

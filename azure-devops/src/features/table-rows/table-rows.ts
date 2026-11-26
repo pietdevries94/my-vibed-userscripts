@@ -1,12 +1,18 @@
 // The pull request lists as a table, as design B of the inbox redesigns. Marks <html>, puts a
-// header above each list and gives each row the cells Azure DevOps has no column for: the
-// author's name, the id, the target and the work item. style.css lays the rows out from the mark.
+// header above each list and gives each row the cells Azure DevOps has no column for: the id, the
+// target and the work item. The author shows as an avatar, with the name as its cell's tooltip.
+// style.css lays the rows out from the mark.
 
 import { avatarName } from "../../pull-requests/avatars.ts";
 
 const TABLE_ATTRIBUTE = "data-fix-ado-table";
 const HEAD_CLASS = "fix-ado-table-head";
-const AUTHOR_CLASS = "fix-ado-table-author";
+/** On the "Created by me" list: it lists only your own pull requests, so it has no Author column. */
+const CREATED_BY_ME_ATTRIBUTE = "data-fix-ado-created-by-me";
+const CREATED_BY_ME_TITLE = "Created by me";
+const CARD_SELECTOR = ".repos-pr-section-card";
+const CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis";
+const AUTHOR_CELL_SELECTOR = '[aria-colindex="1"]';
 const ID_CLASS = "fix-ado-table-id";
 const TARGET_CLASS = "fix-ado-table-target";
 const BRANCH_CLASS = "fix-ado-table-branch";
@@ -43,6 +49,18 @@ function createHead(document: Document): HTMLTableSectionElement {
   return head;
 }
 
+function isCreatedByMe(list: HTMLTableElement): boolean {
+  const title = list.closest(CARD_SELECTOR)?.querySelector(CARD_TITLE_SELECTOR);
+  return title?.textContent?.trim() === CREATED_BY_ME_TITLE;
+}
+
+function markCreatedByMe(list: HTMLTableElement, isTable: boolean): void {
+  const isMarked = isTable && isCreatedByMe(list);
+  if (list.hasAttribute(CREATED_BY_ME_ATTRIBUTE) !== isMarked) {
+    list.toggleAttribute(CREATED_BY_ME_ATTRIBUTE, isMarked);
+  }
+}
+
 function showHead(list: HTMLTableElement, isTable: boolean): void {
   const shown = list.querySelector(`:scope > .${HEAD_CLASS}`);
   if (!isTable) {
@@ -73,19 +91,17 @@ function showText(element: Element, text: string): void {
   }
 }
 
+/** The author's name as the tooltip of the author's cell, which shows only the avatar. */
 function showAuthor(row: Element): void {
-  const avatar = row.querySelector('[aria-colindex="1"] .bolt-coin');
-  const content = row.querySelector('[aria-colindex="1"] .bolt-table-cell-content');
-  if (avatar === null || content === null) {
+  const cell = row.querySelector(`:scope > ${AUTHOR_CELL_SELECTOR}`);
+  const avatar = cell?.querySelector(".bolt-coin");
+  if (!cell || !avatar) {
     return;
   }
-  let name = content.querySelector(`:scope > .${AUTHOR_CLASS}`);
-  if (name === null) {
-    name = row.ownerDocument.createElement("span");
-    name.className = AUTHOR_CLASS;
-    content.append(name);
+  const name = avatarName(avatar);
+  if (cell.getAttribute("title") !== name) {
+    cell.setAttribute("title", name);
   }
-  showText(name, avatarName(avatar));
 }
 
 function showId(row: Element): void {
@@ -132,9 +148,8 @@ function removeCells(row: Element): void {
   if (label !== null) {
     row.querySelector(LINE_UNDER_TITLE_SELECTOR)?.append(label);
   }
-  for (const added of row.querySelectorAll(
-    `.${AUTHOR_CLASS}, .${ID_CLASS}, .${TARGET_CLASS}, .${WORK_ITEM_CLASS}`,
-  )) {
+  row.querySelector(`:scope > ${AUTHOR_CELL_SELECTOR}`)?.removeAttribute("title");
+  for (const added of row.querySelectorAll(`.${ID_CLASS}, .${TARGET_CLASS}, .${WORK_ITEM_CLASS}`)) {
     added.remove();
   }
 }
@@ -154,6 +169,7 @@ function showTableRows(document: Document, isTable: boolean): void {
   }
   for (const list of document.querySelectorAll<HTMLTableElement>(LIST_SELECTOR)) {
     showHead(list, isTable);
+    markCreatedByMe(list, isTable);
     for (const row of list.querySelectorAll(ROW_SELECTOR)) {
       (isTable ? showCells : removeCells)(row);
     }

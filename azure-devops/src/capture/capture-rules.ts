@@ -166,6 +166,8 @@ const rules: ScrubRules = {
     "Assigned to me",
     "Waiting for author",
     "Reviewed",
+    // The "Created by me" card, whose table has no Author column.
+    "Created by me",
   ],
   mapUrl: fakeLink,
 };

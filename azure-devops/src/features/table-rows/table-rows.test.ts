@@ -15,11 +15,15 @@ const CELLS = `<td class="bolt-table-cell-compact"></td>
       <span class="padding-horizontal-4">Webshop</span><span class="monospaced-xs padding-horizontal-4">main</span></span><span class="fix-ado-linked-work-item">#77</span></div></div>
   </div></td>`;
 
-/** A list with one pull request row. Azure DevOps puts an <a> row in the table with DOM calls,
- *  which an HTML parser would move out of the table, so the row is built the same way. */
-function createList(): JSDOM {
+/** A section card with this title and a list with one pull request row. Azure DevOps puts an <a>
+ *  row in the table with DOM calls, which an HTML parser would move out of the table, so the row is
+ *  built the same way. */
+function createList(cardTitle = "Assigned to me"): JSDOM {
   const dom = new JSDOM(
-    `<!doctype html><body><table class="repos-pr-list"><colgroup><col><col></colgroup><tbody></tbody></table></body>`,
+    `<!doctype html><body><div class="repos-pr-section-card">
+      <div class="repos-pr-section-header-title"><span class="text-ellipsis">${cardTitle}</span></div>
+      <table class="repos-pr-list"><colgroup><col><col></colgroup><tbody></tbody></table>
+    </div></body>`,
   );
   const { document } = dom.window;
   const cells = document.createElement("tbody");
@@ -46,6 +50,14 @@ function isIdCell(row: Element): boolean {
   return Object.hasOwn(cell.dataset, "fixAdoIsId");
 }
 
+/** True when the table shows the list of a card with this title as the Created by me list. */
+function isMarkedCreatedByMe(cardTitle: string): boolean {
+  const { document } = createList(cardTitle).window;
+  showTableRows(document, true);
+  const list = document.querySelector<HTMLElement>("table");
+  return list !== null && Object.hasOwn(list.dataset, "fixAdoCreatedByMe");
+}
+
 test("marks the page while the lists show as a table, and unmarks it after", () => {
   const { document } = createList().window;
   showTableRows(document, true);
@@ -65,14 +77,11 @@ test("puts a header with the column names above each list", () => {
   assert.equal(document.querySelector("table > thead + tbody") !== null, true);
 });
 
-test("gives each pull request the author's name, its id, its target and its work item", () => {
+test("gives each pull request the author's name as a tooltip, its id, its target and its work item", () => {
   const { document } = createList().window;
   showTableRows(document, true);
   const row = rowOf(document);
-  assert.equal(
-    row.querySelector('[aria-colindex="1"] .fix-ado-table-author')?.textContent,
-    "Doe, Jane",
-  );
+  assert.equal(row.querySelector('[aria-colindex="1"]')?.getAttribute("title"), "Doe, Jane");
   assert.equal(row.querySelector(":scope > td.fix-ado-table-id")?.textContent, "!4021");
   const target = row.querySelector(":scope > td.fix-ado-table-target");
   assert.equal(target?.textContent, "Webshop → main");
@@ -80,6 +89,11 @@ test("gives each pull request the author's name, its id, its target and its work
   const workItem = row.querySelector(":scope > td.fix-ado-table-work-item");
   assert.equal(workItem?.textContent, "#77");
   assert.equal(isIdCell(row), true);
+});
+
+test("marks the Created by me list, which lists only your own pull requests and so has no Author column", () => {
+  assert.equal(isMarkedCreatedByMe("Created by me"), true);
+  assert.equal(isMarkedCreatedByMe("Assigned to me"), false);
 });
 
 test("marks a work item cell without an id, such as Multiple work items, as plain text", () => {
@@ -115,10 +129,11 @@ test("shows the branch alone where Azure DevOps names no repository, as on a rep
 });
 
 test("takes everything away when turned off, and puts the work item back under the title", () => {
-  const { document } = createList().window;
+  const { document } = createList("Created by me").window;
   showTableRows(document, true);
   showTableRows(document, false);
   assert.equal(document.querySelector('[class*="fix-ado-table"]'), null);
+  assert.equal(document.querySelector("[title], [data-fix-ado-created-by-me]"), null);
   assert.equal(
     document.querySelector(".secondary-text > .fix-ado-linked-work-item")?.textContent,
     "#77",
