@@ -34,6 +34,10 @@ test(
       "· Reviewed",
     );
     assert.equal(reviewed?.querySelectorAll("a.bolt-table-row").length, 0);
+    assert.equal(
+      reviewed?.querySelector(".repos-pr-section-no-results-message")?.textContent,
+      "No pull requests for current view",
+    );
   },
 );
 
@@ -55,5 +59,28 @@ test(
       "card · Reviewed",
       ...reviewedIds(assigned),
     ]);
+  },
+);
+
+test(
+  "with Active empty, the other cards list their pull requests, and only an empty card has the empty message",
+  { skip: fixtures.skip },
+  () => {
+    const { assigned, document } = capturedPage("pr-list-assigned-empty-message");
+
+    showStackedTabs(document, assigned, CONTEXT);
+
+    assert.deepEqual(shownLists(document), [
+      "card · Active",
+      "card · Waiting for author",
+      ...idsWithMyVote(assigned, -5),
+      "card · Reviewed",
+      ...reviewedIds(assigned),
+    ]);
+    // Azure DevOps's empty message only on a card without pull requests: here Reviewed.
+    const messages = [...document.querySelectorAll(".fix-ado-assigned-card")].map(
+      (card) => card.querySelector(".repos-pr-section-no-results-message") !== null,
+    );
+    assert.deepEqual(messages, [false, reviewedIds(assigned).length === 0]);
   },
 );

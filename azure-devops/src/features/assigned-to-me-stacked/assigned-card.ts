@@ -8,6 +8,9 @@ import type { RowContext } from "./assigned-row.ts";
 const CARD_SELECTOR = ".repos-pr-section-card";
 const TAB_SELECTOR = '.repos-pr-section-tabs [role="tab"]';
 const TABLE_CONTAINER_SELECTOR = ".bolt-table-container";
+/** Azure DevOps's message above an empty list, and its words. */
+const NO_RESULTS_CLASS = "repos-pr-section-no-results-message";
+const NO_RESULTS_TEXT = "No pull requests for current view";
 const ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]';
 /** Azure DevOps's card, with its other tabs hidden. */
 const STACKED_CLASS = "fix-ado-assigned-stacked";
@@ -165,6 +168,25 @@ function createRows(
   });
 }
 
+/**
+ * Azure DevOps's "No pull requests for current view" above the list of an empty card, and not
+ * on a card with pull requests, which copied it from Azure DevOps's empty card.
+ */
+function showEmptyMessage(card: HTMLElement, table: HTMLElement, isEmpty: boolean): void {
+  const copied = card.querySelector(`.${NO_RESULTS_CLASS}`);
+  if (!isEmpty) {
+    copied?.remove();
+    return;
+  }
+  table.before(
+    copied ??
+      Object.assign(card.ownerDocument.createElement("div"), {
+        className: `${NO_RESULTS_CLASS} padding-16 secondary-text`,
+        textContent: NO_RESULTS_TEXT,
+      }),
+  );
+}
+
 /** Marks a copy of the card as the script's, without the ids that Azure DevOps's card has. Last, as the tabs go by id. */
 function markAsBuilt(card: HTMLElement): void {
   card.classList.remove(STACKED_CLASS, PEEKING_CLASS);
@@ -187,6 +209,7 @@ function createCard(
   }
   card.querySelector(TABLE_CONTAINER_SELECTOR)?.replaceWith(table);
   table.querySelector("tbody")?.append(...createRows(found, pullRequests, context));
+  showEmptyMessage(card, table, pullRequests.length === 0);
   showOnlyTab(card, tab, pullRequests.length);
   markAsBuilt(card);
   return card;
