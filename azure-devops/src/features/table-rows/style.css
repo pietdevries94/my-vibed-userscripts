@@ -40,9 +40,98 @@
     display: none;
   }
 
-  /* Grouped lists show the work item in the group rows instead of a column. */
-  &:has(.fix-ado-work-item-group) {
+  /* Grouped lists show the work item in the group rows instead of a column, also while Linked
+     work item loads the groups. */
+  &:is(:has(.fix-ado-work-item-group), [data-fix-ado-groups-loading]) {
     --fix-ado-table-work-item-width: 0px;
+  }
+
+  /* While Linked work item loads the groups, the rows show as a skeleton instead of popping from
+     ungrouped to grouped. Each row keeps its height and its text, hidden, so the columns keep
+     their widths; each column shows a grey bar that pulses. */
+  &[data-fix-ado-groups-loading] {
+    & > .fix-ado-table-head th.fix-ado-table-head-work-item,
+    & > tbody > a.bolt-table-row > .fix-ado-table-work-item {
+      display: none;
+    }
+
+    & > tbody > a.bolt-table-row > td {
+      position: relative;
+      color: transparent;
+    }
+
+    & > tbody > a.bolt-table-row > td > * {
+      visibility: hidden;
+    }
+
+    /* The bar every column shares, in :where() so each column's own bar below wins. */
+    & > tbody > a.bolt-table-row > :where(td:not(.bolt-table-cell-side-action))::after,
+    & > tbody > a.bolt-table-row > :where([aria-colindex="2"])::before {
+      content: "";
+      position: absolute;
+      top: 13px;
+      left: 10px;
+      height: 10px;
+      border-radius: 5px;
+      background: var(--fix-ado-table-line);
+      animation: fix-ado-table-skeleton 1.2s ease-in-out infinite alternate;
+    }
+
+    /* The pipeline status, then the title, in rows of three lengths. */
+    & > tbody > a.bolt-table-row > [aria-colindex="2"]::before {
+      top: 10px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="2"]::after {
+      left: 46px;
+      width: 320px;
+    }
+
+    & > tbody > a.bolt-table-row:nth-of-type(3n + 2) > [aria-colindex="2"]::after {
+      width: 220px;
+    }
+
+    & > tbody > a.bolt-table-row:nth-of-type(3n + 3) > [aria-colindex="2"]::after {
+      width: 400px;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="1"]::after {
+      top: 7px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+    }
+
+    & > tbody > a.bolt-table-row > .fix-ado-table-id::after {
+      width: 44px;
+    }
+
+    & > tbody > a.bolt-table-row > .fix-ado-table-repository::after {
+      width: 64px;
+    }
+
+    & > tbody > a.bolt-table-row > .fix-ado-table-target::after {
+      width: 96px;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="3"]::after {
+      width: 56px;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="4"]::after {
+      right: 10px;
+      left: auto;
+      width: 24px;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="5"]::after {
+      right: 10px;
+      left: auto;
+      width: 96px;
+    }
   }
 
   & > colgroup {
@@ -590,5 +679,26 @@
     .bolt-coin {
     outline: 2px solid Highlight;
     outline-offset: 1px;
+  }
+}
+
+@keyframes fix-ado-table-skeleton {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::after,
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::before {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::after,
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::before {
+    forced-color-adjust: none;
+    background: GrayText;
   }
 }

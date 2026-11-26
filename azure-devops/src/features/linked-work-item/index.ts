@@ -1,4 +1,5 @@
 import { findPullRequestRows, showLinkedWorkItem } from "../../pull-requests/pr-list.ts";
+import { showGroupsLoading, showWorkItemGroups } from "./work-item-group-rows.ts";
 import type { Feature } from "../../core/feature.ts";
 import type { LinkedWorkItemFetcher } from "./linked-work-item-fetcher.ts";
 import type { LinkedWorkItems } from "./linked-work-item.ts";
@@ -9,7 +10,6 @@ import { groupByWorkItem } from "./work-item-groups.ts";
 import { linkedWorkItemLabel } from "./linked-work-item.ts";
 import listSwitchStyle from "../../core/list-switch.css";
 import { showListSwitch } from "../../core/list-switch.ts";
-import { showWorkItemGroups } from "./work-item-group-rows.ts";
 import style from "./style.css";
 import switchStyle from "../../core/switch.css";
 
@@ -66,6 +66,7 @@ const linkedWorkItem: Feature = {
         const rows = findRows(list);
         const groups = isList && isGrouped ? groupsOf(rows, fetcher) : null;
         showWorkItemGroups(list, basePath, groups);
+        showGroupsLoading(list, isList && isGrouped && groups === null && rows.length > 0);
         showLinkedWorkItemLabels(rows, fetcher, groups !== null);
       }
       showListSwitch(

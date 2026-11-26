@@ -48,6 +48,8 @@ interface DesignTable {
   count: string;
   width: number;
   isGrouped: boolean;
+  /** Linked work item is still loading the groups: the rows show as a skeleton. */
+  isLoading: boolean;
   section: TableSection;
 }
 
@@ -158,7 +160,7 @@ function cardName(card: Element): string {
 }
 
 function readTable(card: Element): DesignTable {
-  const table = card.querySelector("table.repos-pr-list");
+  const table = card.querySelector<HTMLElement>("table.repos-pr-list");
   const groups: TableSection["groups"] = [];
   for (const child of table?.querySelector("tbody")?.children ?? []) {
     if (child.classList.contains("fix-ado-work-item-group")) {
@@ -176,6 +178,7 @@ function readTable(card: Element): DesignTable {
         card.querySelector(".repos-pr-section-header-title .bolt-pill"),
     ),
     isGrouped: groups.some(({ band }) => band !== null),
+    isLoading: table !== null && Object.hasOwn(table.dataset, "fixAdoGroupsLoading"),
     name: cardName(card),
     section: { groups },
     width: card.getBoundingClientRect().width,

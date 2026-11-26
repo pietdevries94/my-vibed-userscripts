@@ -29,9 +29,13 @@ const INBOX = "/fake-org/_pulls";
 const LIST = "/fake-org/text-2/_git/text-16/pullrequests";
 
 /** Font icons and images differ by nature; the capture's own stale group rows are not the script's. */
-const SITE_MASK = `img, .fabric-icon, [class*="ms-Icon"], .bolt-coin-content.using-image { visibility: hidden !important; }
+/** The skeleton pulses; both sides are shot without it. */
+const NO_ANIMATION = "*, *::before, *::after { animation: none !important; }";
+const SITE_MASK = `${NO_ANIMATION}
+  img, .fabric-icon, [class*="ms-Icon"], .bolt-coin-content.using-image { visibility: hidden !important; }
   table.repos-pr-list > tbody > tr:not([class]) { display: none !important; }`;
-const DESIGN_MASK = ".t-comment-icon, .vote, .chev { visibility: hidden !important; }";
+const DESIGN_MASK = `${NO_ANIMATION}
+  .t-comment-icon, .vote, .chev { visibility: hidden !important; }`;
 
 interface TableState extends FakeSitePage {
   name: string;
@@ -40,6 +44,8 @@ interface TableState extends FakeSitePage {
   cards?: number[];
   /** Renames the first card, as a stand-in for a title the capture scrubbed. */
   firstCardTitle?: string;
+  /** Holds back the linked work items, so the lists stay loading their groups. */
+  isLoadingGroups?: boolean;
 }
 
 const STATES: TableState[] = [
@@ -89,6 +95,14 @@ const STATES: TableState[] = [
     path: LIST,
   },
   { capture: "assigned-active", isGrouped: false, name: "list-plain", page: "pr-list", path: LIST },
+  {
+    capture: "assigned-active-inbox",
+    isGrouped: true,
+    isLoadingGroups: true,
+    name: "inbox-loading",
+    page: "pr-inbox",
+    path: INBOX,
+  },
   {
     capture: "assigned-active-inbox",
     cards: [0],
@@ -159,12 +173,16 @@ async function shootEach(
   );
 }
 
-/** The fake site's tables: what they show, and their screenshots. */
-async function siteTables(
-  run: Run,
-  state: TableState,
-  page: Page,
-): Promise<{ tables: DesignTable[]; shots: Buffer[] }> {
+/** Never answers, so Linked work item keeps loading the groups. */
+async function holdBack(): Promise<void> {
+  // Nothing: the request stays open.
+}
+
+/** Opens the state's page, with its work items held back and its first card renamed. */
+async function openStatePage(state: TableState, page: Page): Promise<void> {
+  if (state.isLoadingGroups === true) {
+    await page.route(/\/workitems\?/u, holdBack);
+  }
   await openFakeSitePage(page, state);
   if (state.firstCardTitle !== undefined) {
     await page
@@ -176,6 +194,15 @@ async function siteTables(
     // The script marks the card's list on the change.
     await page.locator("table[data-fix-ado-created-by-me]").waitFor({ state: "attached" });
   }
+}
+
+/** The fake site's tables: what they show, and their screenshots. */
+async function siteTables(
+  run: Run,
+  state: TableState,
+  page: Page,
+): Promise<{ tables: DesignTable[]; shots: Buffer[] }> {
+  await openStatePage(state, page);
   await page.addStyleTag({ content: SITE_MASK });
   const tables: DesignTable[] = await page.evaluate(READ_TABLES_SCRIPT);
   const shots = await shootEach(page, ".repos-pr-section-card:has(table.repos-pr-list)", (index) =>

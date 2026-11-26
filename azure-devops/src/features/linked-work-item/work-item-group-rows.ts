@@ -136,4 +136,23 @@ function showWorkItemGroups(
   );
 }
 
-export { showWorkItemGroups };
+const LOADING_ATTRIBUTE = "data-fix-ado-groups-loading";
+
+/**
+ * Marks the list's table, and tells screen readers it is busy, while its groups are on their
+ * way: until then the rows show ungrouped. Pull requests as a table shows a skeleton instead.
+ */
+function showGroupsLoading(list: HTMLElement, isLoading: boolean): void {
+  const table = list.closest("table");
+  if (table === null || table.hasAttribute(LOADING_ATTRIBUTE) === isLoading) {
+    return;
+  }
+  table.toggleAttribute(LOADING_ATTRIBUTE, isLoading);
+  if (isLoading) {
+    table.setAttribute("aria-busy", "true");
+  } else {
+    table.removeAttribute("aria-busy");
+  }
+}
+
+export { showGroupsLoading, showWorkItemGroups };
