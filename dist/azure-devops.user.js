@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.28.0
+// @version      1.28.1
 // @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -16919,11 +16919,17 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       row.ownerDocument.documentElement.lang || void 0
     ), time.parentElement?.setAttribute("aria-label", new Date(created).toLocaleString()));
   }
+  function removeMarks(row) {
+    for (let element4 of [row, ...row.querySelectorAll("*")])
+      for (let name of element4.getAttributeNames())
+        name.startsWith("data-fix-ado-") && element4.removeAttribute(name);
+    row.classList.remove("bolt-list-row-marked"), row.style.removeProperty("--fix-ado-work-item-hue");
+  }
   function emptyCopy(template) {
     let row = copyOf(template);
     for (let mark of row?.querySelectorAll(SCRIPT_MARK_SELECTOR) ?? [])
       mark.remove();
-    return row?.querySelector(COMMENTS_CELL_SELECTOR)?.replaceChildren(), row?.querySelector(ROW_MENU_SELECTOR)?.replaceChildren(), row;
+    return row !== null && removeMarks(row), row?.querySelector(COMMENTS_CELL_SELECTOR)?.replaceChildren(), row?.querySelector(ROW_MENU_SELECTOR)?.replaceChildren(), row;
   }
   function buildAssignedRow(template, pullRequest, { basePath: basePath2, now, reviewerId }) {
     let row = emptyCopy(template);
@@ -16931,7 +16937,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/assigned-to-me-stacked/assigned-tabs.ts
-  var ACTIVE_TAB_ID = "__bolt-tab-activeMine", WAITING_FOR_AUTHOR_TAB_ID = "__bolt-tab-waitingForAuthor";
+  var ACTIVE_TAB_ID = "__bolt-tab-activeMine", WAITING_FOR_AUTHOR_TAB_ID = "__bolt-tab-waitingForAuthor", REVIEWED_TAB_ID = "fix-ado-reviewed-tab";
   function isVoteOnTab(vote, tabId) {
     return tabId === ACTIVE_TAB_ID ? vote === 0 : tabId === WAITING_FOR_AUTHOR_TAB_ID ? vote === -5 : vote !== 0 && vote !== -5;
   }
@@ -16944,7 +16950,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/assigned-to-me-stacked/assigned-card.ts
-  var CARD_SELECTOR2 = ".repos-pr-section-card", TAB_SELECTOR = '.repos-pr-section-tabs [role="tab"]', TABLE_CONTAINER_SELECTOR = ".bolt-table-container", ROW_SELECTOR5 = 'a.bolt-table-row[href*="/pullrequest/"]', STACKED_CLASS = "fix-ado-assigned-stacked", BUILT_CARD_CLASS = "fix-ado-assigned-card", PEEKING_CLASS = "fix-ado-assigned-peeking", CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis", TAB_NAME_CLASS = "fix-ado-assigned-tab-name";
+  var CARD_SELECTOR2 = ".repos-pr-section-card", TAB_SELECTOR = '.repos-pr-section-tabs [role="tab"]', TABLE_CONTAINER_SELECTOR = ".bolt-table-container", NO_RESULTS_CLASS = "repos-pr-section-no-results-message", NO_RESULTS_TEXT = "No pull requests for current view", ROW_SELECTOR5 = 'a.bolt-table-row[href*="/pullrequest/"]', STACKED_CLASS = "fix-ado-assigned-stacked", BUILT_CARD_CLASS = "fix-ado-assigned-card", PEEKING_CLASS = "fix-ado-assigned-peeking", CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis", TAB_NAME_CLASS = "fix-ado-assigned-tab-name";
   function findAssignedCard(document2) {
     let card = document2.querySelector(`#${ACTIVE_TAB_ID}`)?.closest(CARD_SELECTOR2), table = card?.querySelector(TABLE_CONTAINER_SELECTOR);
     if (!card || !table)
@@ -16993,16 +16999,32 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let key = card.dataset.fixAdoTabName;
     return key === void 0 ? null : JSON.parse(key);
   }
-  function showOnlyTab(card, tabId, count) {
+  function showOnlyTab(card, { id, element: element4 }, count) {
     for (let tab of card.querySelectorAll(TAB_SELECTOR))
-      tab.id === tabId ? (tab.querySelector(".bolt-tab-badge .bolt-pill-content")?.replaceChildren(String(count)), showTabName(card, tabNameOf(tab))) : tab.remove();
+      tab.id !== id && tab.remove();
+    showTabName(card, { count: String(count), label: tabNameOf(element4).label });
   }
   function createRows(found, pullRequests, context) {
-    let template = found.table.querySelector(ROW_SELECTOR5);
+    let template = found.table.querySelector(ROW_SELECTOR5) ?? found.card.ownerDocument.querySelector(
+      `${CARD_SELECTOR2}:not(.${BUILT_CARD_CLASS}) ${ROW_SELECTOR5}`
+    );
     return pullRequests.flatMap((pullRequest, index) => {
       let row = template ? buildAssignedRow(template, pullRequest, context) : null;
       return row?.classList.toggle("first-row", index === 0), row?.setAttribute("aria-rowindex", String(index + 1)), row ? [row] : [];
     });
+  }
+  function showEmptyMessage(card, table, isEmpty) {
+    let copied = card.querySelector(`.${NO_RESULTS_CLASS}`);
+    if (!isEmpty) {
+      copied?.remove();
+      return;
+    }
+    table.before(
+      copied ?? Object.assign(card.ownerDocument.createElement("div"), {
+        className: `${NO_RESULTS_CLASS} padding-16 secondary-text`,
+        textContent: NO_RESULTS_TEXT
+      })
+    );
   }
   function markAsBuilt(card) {
     card.classList.remove(STACKED_CLASS, PEEKING_CLASS), card.classList.add(BUILT_CARD_CLASS);
@@ -17011,7 +17033,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
   function createCard3(found, { tab, pullRequests }, context) {
     let card = copyOf(found.card), table = createTable(found.table);
-    return card === null || table === null ? null : (card.querySelector(TABLE_CONTAINER_SELECTOR)?.replaceWith(table), table.querySelector("tbody")?.append(...createRows(found, pullRequests, context)), showOnlyTab(card, tab.id, pullRequests.length), markAsBuilt(card), card);
+    return card === null || table === null ? null : (card.querySelector(TABLE_CONTAINER_SELECTOR)?.replaceWith(table), table.querySelector("tbody")?.append(...createRows(found, pullRequests, context)), showEmptyMessage(card, table, pullRequests.length === 0), showOnlyTab(card, tab, pullRequests.length), markAsBuilt(card), card);
   }
 
   // azure-devops/src/features/assigned-to-me-stacked/card-peek.ts
@@ -17091,15 +17113,22 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     return card && (card.dataset.fixAdoShown = key, card.dataset.fixAdoTabId = tabList.tab.id), card;
   }
   function builtCard(found, tab, { assigned, context }) {
-    let pullRequests = pullRequestsOnTab(assigned.pullRequests, assigned.reviewerId, tab.id);
-    if (pullRequests.length === 0)
-      return [];
-    let key = shownKey(tab, pullRequests, context.now), card = shownCard(found.card.ownerDocument, key) ?? createKeyedCard(
+    let pullRequests = pullRequestsOnTab(assigned.pullRequests, assigned.reviewerId, tab.id), key = shownKey(tab, pullRequests, context.now), card = shownCard(found.card.ownerDocument, key) ?? createKeyedCard(
       found,
       { key, pullRequests, tab },
       { ...context, reviewerId: assigned.reviewerId }
     );
     return card && showCardFolding(card, tab.id, context.folding), card ? [card] : [];
+  }
+  function withReviewedTab(tabs) {
+    let known = /* @__PURE__ */ new Set([ACTIVE_TAB_ID, WAITING_FOR_AUTHOR_TAB_ID]), template = tabs.find(({ id }) => id === WAITING_FOR_AUTHOR_TAB_ID), element4 = template ? createReviewedTab(template.element) : null;
+    return tabs.some(({ id }) => !known.has(id)) || !element4 ? tabs : [...tabs, { element: element4, id: REVIEWED_TAB_ID, isSelected: !1 }];
+  }
+  function createReviewedTab(template) {
+    let element4 = copyOf(template);
+    element4?.removeAttribute("id"), element4?.querySelector(".bolt-tab-badge")?.remove();
+    let label = element4?.querySelector(".bolt-tab-text");
+    return label && (label.textContent = "Reviewed"), element4;
   }
   function placeAround(adoCard, ordered) {
     if (ordered.every(
@@ -17137,7 +17166,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let found = findAssignedCard(document2);
     if (found === null || assigned === null)
       return showFoldedCard(document2, assigned, context.folding);
-    let ordered = found.tabs.flatMap(
+    let ordered = withReviewedTab(found.tabs).flatMap(
       (tab) => tab.isSelected ? [found.card] : builtCard(found, tab, { assigned, context })
     );
     return removeStacking(document2, ordered), placeAround(found.card, ordered), markAsStacked(found), "stacked";
@@ -18055,7 +18084,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
   function showHead(list, isTable) {
     let shown = list.querySelector(`:scope > .${HEAD_CLASS}`);
-    if (!isTable) {
+    if (!isTable || list.querySelector(ROW_SELECTOR6) === null) {
       shown?.remove();
       return;
     }
@@ -18456,7 +18485,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     background-color: color-mix(
       in srgb,
       rgba(var(--palette-neutral-2, 248, 248, 248), 1) 50%,
-      var(--background-color, #fff)
+      var(--callout-background-color, var(--background-color, #fff))
     );
     border-bottom: 1px solid var(--fix-ado-table-line);
   }
@@ -18629,28 +18658,50 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) > .pr-reviewer {
     display: flex;
     margin: 0 -5px 0 0 !important;
+    /* The left one on top, so each vote shows; required ones, which come first, above all. */
+    z-index: calc(10 - var(--fix-ado-reviewer-index, 0));
+  }
+
+  & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) {
+    isolation: isolate;
+
+    & > .pr-reviewer:nth-child(2) {
+      --fix-ado-reviewer-index: 1;
+    }
+
+    & > .pr-reviewer:nth-child(3) {
+      --fix-ado-reviewer-index: 2;
+    }
+
+    & > .pr-reviewer:nth-child(4) {
+      --fix-ado-reviewer-index: 3;
+    }
+
+    & > .pr-reviewer[data-fix-ado-required] {
+      z-index: calc(20 - var(--fix-ado-reviewer-index, 0));
+    }
   }
 
   & .pr-reviewer .bolt-coin {
     border-radius: 50%;
-    box-shadow: 0 0 0 1.5px var(--background-color, #fff);
+    box-shadow: 0 0 0 1.5px var(--callout-background-color, var(--background-color, #fff));
   }
 
   & .pr-reviewer[data-fix-ado-required] .bolt-coin {
     box-shadow:
-      0 0 0 1.5px var(--background-color, #fff),
+      0 0 0 1.5px var(--callout-background-color, var(--background-color, #fff)),
       0 0 0 3px var(--communication-background, rgb(0, 120, 212));
   }
 
-  /* A reviewer's vote: an 11px badge on the avatar's corner. */
+  /* A reviewer's vote: an 11px badge on the avatar's corner, inside the row's height. */
   & .repos-pr-reviewer-vote {
-    inset: auto -3px -3px auto;
+    inset: auto -3px 0 auto;
     display: grid;
     place-items: center;
     box-sizing: border-box;
     width: 11px;
     height: 11px;
-    border: 1.5px solid var(--background-color, #fff);
+    border: 1.5px solid var(--callout-background-color, var(--background-color, #fff));
     border-radius: 50%;
     font-size: 7px;
   }
@@ -18749,6 +18800,13 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     letter-spacing: 0;
     text-transform: none;
   }
+}
+
+/* Azure DevOps's "No pull requests for current view" in an empty card, in line with the titles
+   of a table: after its 40px status column and the title's 10px padding. */
+:root[data-fix-ado-table]:not([data-fix-ado-win98]) .repos-pr-section-no-results-message {
+  margin-left: 0;
+  padding-left: 50px;
 }
 
 /* The section cards, as design B draws them: a 1px line and 8px corners instead of a shadow, a
