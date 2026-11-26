@@ -4,6 +4,8 @@ import type { Reviewer } from "../../pull-requests/reviewers.ts";
 
 const ACTIVE_TAB_ID = "__bolt-tab-activeMine";
 const WAITING_FOR_AUTHOR_TAB_ID = "__bolt-tab-waitingForAuthor";
+/** The Reviewed tab the script adds while Azure DevOps shows none, as it does while it is empty. */
+const REVIEWED_TAB_ID = "fix-ado-reviewed-tab";
 const NO_VOTE = 0;
 const WAITING_FOR_AUTHOR_VOTE = -5;
 
@@ -51,4 +53,4 @@ function pullRequestsOnTab<PullRequest extends AssignedPullRequest>(
 }
 
 export type { AssignedPullRequest, Person };
-export { ACTIVE_TAB_ID, pullRequestsOnTab };
+export { ACTIVE_TAB_ID, REVIEWED_TAB_ID, WAITING_FOR_AUTHOR_TAB_ID, pullRequestsOnTab };

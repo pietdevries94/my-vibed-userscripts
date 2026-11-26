@@ -1,5 +1,11 @@
 // Shows each tab of the "Assigned to me" card as a card of its own, under each other, and
 // puts the page back as it was.
+import {
+  ACTIVE_TAB_ID,
+  REVIEWED_TAB_ID,
+  WAITING_FOR_AUTHOR_TAB_ID,
+  pullRequestsOnTab,
+} from "./assigned-tabs.ts";
 import type { AssignedCard, AssignedToMe, CardTab, TabList } from "./assigned-card.ts";
 import {
   BUILT_CARD_CLASS,
@@ -14,7 +20,7 @@ import {
 import type { AssignedPullRequest } from "./assigned-tabs.ts";
 import type { CardFolding } from "./card-folding.ts";
 import type { RowContext } from "./assigned-row.ts";
-import { pullRequestsOnTab } from "./assigned-tabs.ts";
+import { copyOf } from "./assigned-row.ts";
 import { relativeTime } from "./relative-time.ts";
 import { showCardFolding } from "./card-folding.ts";
 
@@ -71,9 +77,6 @@ function builtCard(
   { assigned, context }: { assigned: AssignedToMe; context: ShownContext },
 ): HTMLElement[] {
   const pullRequests = pullRequestsOnTab(assigned.pullRequests, assigned.reviewerId, tab.id);
-  if (pullRequests.length === 0) {
-    return [];
-  }
   const key = shownKey(tab, pullRequests, context.now);
   const card =
     shownCard(found.card.ownerDocument, key) ??
@@ -86,6 +89,31 @@ function builtCard(
     showCardFolding(card, tab.id, context.folding);
   }
   return card ? [card] : [];
+}
+
+/**
+ * The card's tabs, and a Reviewed tab after them while Azure DevOps shows none: it leaves the tab
+ * out while it is empty, and its card stays, empty.
+ */
+function withReviewedTab(tabs: CardTab[]): CardTab[] {
+  const known = new Set([ACTIVE_TAB_ID, WAITING_FOR_AUTHOR_TAB_ID]);
+  const template = tabs.find(({ id }) => id === WAITING_FOR_AUTHOR_TAB_ID);
+  const element = template ? createReviewedTab(template.element) : null;
+  return tabs.some(({ id }) => !known.has(id)) || !element
+    ? tabs
+    : [...tabs, { element, id: REVIEWED_TAB_ID, isSelected: false }];
+}
+
+/** A copy of a tab, named Reviewed, without a count or an id. */
+function createReviewedTab(template: Element): Element | null {
+  const element = copyOf(template);
+  element?.removeAttribute("id");
+  element?.querySelector(".bolt-tab-badge")?.remove();
+  const label = element?.querySelector(".bolt-tab-text");
+  if (label) {
+    label.textContent = "Reviewed";
+  }
+  return element;
 }
 
 /** Puts the cards in order around Azure DevOps's card, which stays where it is. */
@@ -169,7 +197,7 @@ function showStackedTabs(
   if (found === null || assigned === null) {
     return showFoldedCard(document, assigned, context.folding);
   }
-  const ordered = found.tabs.flatMap((tab) =>
+  const ordered = withReviewedTab(found.tabs).flatMap((tab) =>
     tab.isSelected ? [found.card] : builtCard(found, tab, { assigned, context }),
   );
   removeStacking(document, ordered);

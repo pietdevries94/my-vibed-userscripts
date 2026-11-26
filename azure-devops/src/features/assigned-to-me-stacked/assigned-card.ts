@@ -136,15 +136,14 @@ function shownTabName(card: HTMLElement): TabName | null {
 }
 
 /** Names this tab after the card's title, with `count`, and leaves only it in the hidden tab bar. */
-function showOnlyTab(card: HTMLElement, tabId: string, count: number): void {
+function showOnlyTab(card: HTMLElement, { id, element }: CardTab, count: number): void {
   for (const tab of card.querySelectorAll(TAB_SELECTOR)) {
-    if (tab.id === tabId) {
-      tab.querySelector(".bolt-tab-badge .bolt-pill-content")?.replaceChildren(String(count));
-      showTabName(card, tabNameOf(tab));
-    } else {
+    if (tab.id !== id) {
       tab.remove();
     }
   }
+  // A tab the script added, such as Reviewed, is not in Azure DevOps's card: its name comes from it.
+  showTabName(card, { count: String(count), label: tabNameOf(element).label });
 }
 
 function createRows(
@@ -188,7 +187,7 @@ function createCard(
   }
   card.querySelector(TABLE_CONTAINER_SELECTOR)?.replaceWith(table);
   table.querySelector("tbody")?.append(...createRows(found, pullRequests, context));
-  showOnlyTab(card, tab.id, pullRequests.length);
+  showOnlyTab(card, tab, pullRequests.length);
   markAsBuilt(card);
   return card;
 }
