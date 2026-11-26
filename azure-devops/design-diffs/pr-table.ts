@@ -71,17 +71,15 @@ const STATES: TableState[] = [
     path: INBOX,
   },
   {
-    // The capture was made with the script on: its stacked cards hold the script's title marks.
-    capture: "unread-prs",
-    cards: [0],
+    // A row Azure DevOps marks as new, and both Assigned to me cards.
+    capture: "assigned-active-empty",
     isGrouped: true,
     name: "inbox-marked-grouped",
     page: "pr-inbox",
     path: INBOX,
   },
   {
-    capture: "unread-prs",
-    cards: [0],
+    capture: "assigned-active-empty",
     isGrouped: false,
     name: "inbox-marked-plain",
     page: "pr-inbox",
@@ -205,29 +203,46 @@ async function openStatePage(state: TableState, page: Page): Promise<void> {
   }
 }
 
+/** Makes the window as tall as the page, so no card scrolls under Azure DevOps's sticky bars. */
+async function showWholePage(page: Page): Promise<void> {
+  const height = await page.evaluate(() =>
+    Math.max(...[...document.querySelectorAll("*")].map((element) => element.scrollHeight)),
+  );
+  await page.setViewportSize({ height: Math.max(VIEWPORT.height, height), width: VIEWPORT.width });
+}
+
 /** The fake site's tables: what they show, and their screenshots. */
 async function siteTables(
   run: Run,
   state: TableState,
   page: Page,
-): Promise<{ tables: DesignTable[]; shots: Buffer[] }> {
+): Promise<{ tables: DesignTable[]; shots: Buffer[]; isDark: boolean }> {
   await openStatePage(state, page);
   await page.addStyleTag({ content: SITE_MASK });
+  await showWholePage(page);
   const tables: DesignTable[] = await page.evaluate(READ_TABLES_SCRIPT);
+  // Azure DevOps marks its body; on the fake site the captured body is a div.
+  const isDark = await page.evaluate(
+    () => document.querySelector(".ms-vss-web-vsts-theme-dark") !== null,
+  );
   const shots = await shootEach(page, ".repos-pr-section-card:has(table.repos-pr-list)", (index) =>
     path.join(run.shots, `${state.name}-${index}-site.png`),
   );
   await resetFakeSite(page);
-  return { shots, tables };
+  return { isDark, shots, tables };
 }
 
 /** The design's tables, drawn with the site's rows. */
 async function designTables(
   run: Run,
-  state: TableState & { tables: DesignTable[] },
+  state: TableState & { tables: DesignTable[]; isDark: boolean },
   page: Page,
 ): Promise<Buffer[]> {
   await page.addInitScript(`window.FIX_ADO_DESIGN_TABLES = ${JSON.stringify(state.tables)};`);
+  // The site's theme, so the design draws with the same colours.
+  await page.addInitScript(
+    `window.FIX_ADO_DESIGN_THEME = ${JSON.stringify(state.isDark ? "dark" : "light")};`,
+  );
   await page.goto(fileUrl(run.designPage));
   await page.addStyleTag({ content: DESIGN_MASK });
   return shootEach(page, ".fix-ado-design-card", (index) =>
@@ -241,7 +256,11 @@ async function diffState(run: Run, state: TableState): Promise<string[]> {
   try {
     const site = await siteTables(run, state, await context.newPage());
     const page = await context.newPage();
-    const design = await designTables(run, { ...state, tables: site.tables }, page);
+    const design = await designTables(
+      run,
+      { ...state, isDark: site.isDark, tables: site.tables },
+      page,
+    );
     const indexes = [...design.keys()].filter((index) => state.cards?.includes(index) ?? true);
     return await inSequence(indexes, async (index) => {
       const diff = await pixelDiff(page, design[index], site.shots[index]);

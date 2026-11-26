@@ -8,7 +8,7 @@ interface Person {
   hue: string;
 }
 
-type ChipKind = "draft" | "auto" | "conflicts" | "other";
+type ChipKind = "draft" | "auto" | "conflicts" | "label" | "other";
 
 interface TableRow {
   /** Azure DevOps marks a row with something new since the last visit. */
@@ -74,6 +74,10 @@ function person(coin: HTMLElement | null): Person {
 }
 
 function chipKind(pill: Element): ChipKind {
+  // A pull request's labels, in a group of their own, as on the Completed tab.
+  if (pill.closest(".bolt-pill-group") !== null) {
+    return "label";
+  }
   if (pill.classList.contains("repos-pr-list-draft-pill")) {
     return "draft";
   }
