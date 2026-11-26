@@ -305,11 +305,13 @@ html[data-fix-ado-win98] .navigation-container {
     }
   }
 
-  /* Items 24px and sub items 20px tall, with 16px icons, as in the design. */
+  /* Items 24px and sub items 20px tall, with 16px icons, as in the design. The navy hover
+     comes at once: Win98 has no fades. */
   .navigation-element {
     height: 24px;
     min-height: 0;
     color: #000;
+    transition: none;
 
     &.hub:not(.hub-group, .stand-alone) {
       height: 20px;
@@ -5759,8 +5761,9 @@ html[data-fix-ado-win98] .bolt-portal-host {
     box-shadow: none;
   }
 
-  /* Links have no hover fill: Win98 has no hover state. */
-  .bolt-link:hover {
+  /* Links have no hover fill: Win98 has no hover state. Side bar items are menu items, which
+     turn navy on hover. */
+  .bolt-link:not(.navigation-element):hover {
     background-color: transparent;
   }
 
