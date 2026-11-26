@@ -74,6 +74,16 @@
     contain-intrinsic-size: auto 36px;
   }
 
+  /* Something new since the last visit: Azure DevOps's 2px bar, on the row as its first cell is
+     hidden, and its semibold title. */
+  & > tbody > a.bolt-list-row-marked {
+    box-shadow: inset 2px 0 0 rgba(var(--palette-primary-tint-10, 43, 136, 216), 1);
+  }
+
+  & .bolt-list-row-marked .bolt-table-two-line-cell-item .body-l.font-weight-semibold {
+    font-weight: 600;
+  }
+
   /* No line under the last row: the card ends there. */
   & > tbody > a.bolt-table-row:not(:has(~ a.bolt-table-row)) {
     border-bottom: 0;
@@ -104,9 +114,15 @@
     padding: 4px;
   }
 
-  /* A work item group row: a 28px band. */
+  /* A work item group row: a 28px band, halfway between the page's grey and the card's white,
+     so it stands apart from both. */
   & > tbody > tr.fix-ado-work-item-group {
     display: block;
+    background-color: color-mix(
+      in srgb,
+      rgba(var(--palette-neutral-2, 248, 248, 248), 1) 50%,
+      var(--background-color, #fff)
+    );
     border-bottom: 1px solid var(--fix-ado-table-line);
   }
 
@@ -165,7 +181,7 @@
     flex: 0 1 auto;
     min-width: 0;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 400;
     line-height: 20px;
     color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
   }
@@ -374,6 +390,96 @@
 
   & .bolt-table-cell-content:has(> .fix-ado-published-since) > :not(.fix-ado-published-since) {
     display: none;
+  }
+}
+
+/* The section cards, as design B draws them: a 1px line and 8px corners instead of a shadow, a
+   40px header with its line under it, a 15px semibold title, a 12px chevron and a count pill,
+   and 14px between cards. */
+:root[data-fix-ado-table]:not([data-fix-ado-win98]) .repos-pr-section-card {
+  overflow: clip;
+  padding: 0;
+  border: 1px solid var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
+  border-radius: 8px;
+  box-shadow: none;
+
+  .rhythm-vertical-16 > &:not(:first-child) {
+    margin-top: 14px;
+  }
+
+  & > .flex-row:first-child {
+    box-sizing: border-box;
+    align-items: center;
+    gap: 10px;
+    height: 39px;
+    padding: 0 16px;
+  }
+
+  &:has(> .bolt-card-content) > .flex-row:first-child {
+    border-bottom: 1px solid var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
+  }
+
+  & .repos-pr-section-expand-button.bolt-button.icon-only {
+    flex: none;
+    align-self: center;
+    width: 12px;
+    min-width: 0;
+    height: 12px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+
+    & .fabric-icon {
+      font-size: 12px;
+    }
+  }
+
+  & .repos-pr-section-header {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  & .repos-pr-section-header .bolt-header-title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 18px;
+    color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  }
+
+  & .repos-pr-section-header-title {
+    align-items: center;
+    padding: 0;
+    white-space: nowrap;
+  }
+
+  /* "· Waiting for author" after the title, a space apart, as one line of text. */
+  & .fix-ado-assigned-tab-name {
+    margin-inline-start: 0;
+
+    &::before {
+      content: "\a0";
+    }
+  }
+
+  & .repos-pr-section-header-title .bolt-pill {
+    box-sizing: border-box;
+    margin: 0 0 0 10px;
+    padding: 0 7px;
+    border: 1px solid var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
+    border-radius: 999px;
+    background: rgba(var(--palette-neutral-100, 0, 0, 0), 0.03);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 15px;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+
+    & .bolt-pill-content {
+      margin: 0;
+      padding: 0;
+    }
   }
 }
 

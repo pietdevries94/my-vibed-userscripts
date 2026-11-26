@@ -11,6 +11,8 @@ interface Person {
 type ChipKind = "draft" | "auto" | "conflicts" | "other";
 
 interface TableRow {
+  /** Azure DevOps marks a row with something new since the last visit. */
+  isMarked: boolean;
   status: string;
   title: string;
   /** Draft, Auto-complete, Conflicts and the other pills after the title, in order. */
@@ -32,13 +34,16 @@ interface TableSection {
   groups: { band: Band | null; prs: TableRow[] }[];
 }
 
+/** A section card: its title and count, and its list. */
 interface DesignTable {
+  name: string;
+  count: string;
   width: number;
   isGrouped: boolean;
   section: TableSection;
 }
 
-function text(element: Element | null | undefined): string {
+function text(element: Node | null | undefined): string {
   return (element?.textContent ?? "").replaceAll(/\s+/gu, " ").trim();
 }
 
@@ -115,6 +120,7 @@ function readRow(row: Element): TableRow {
         ? null
         : { isActive: count.classList.contains("has-active-comments"), text: text(count) },
     id: Number(/\/pullrequest\/(?<id>\d+)/u.exec(row.getAttribute("href") ?? "")?.groups?.id),
+    isMarked: row.classList.contains("bolt-list-row-marked"),
     moreReviewers: text(reviewerCell?.querySelector(".bolt-pill")),
     repo: text(row.querySelector(".secondary-text .padding-horizontal-4:not(.monospaced-xs)")),
     reviewers: reviewersOf(reviewerCell),
@@ -135,9 +141,18 @@ function readBand(row: Element): Band {
   return { link: text(link), title: title === "" ? null : title };
 }
 
-function readTable(table: Element): DesignTable {
+/** "Assigned to me · Waiting for author": the title, and the stacked card's tab after it. */
+function cardName(card: Element): string {
+  const title = text(card.querySelector(".repos-pr-section-header-title > .text-ellipsis"));
+  const tab = card.querySelector(".fix-ado-assigned-tab-name");
+  const tabLabel = tab === null ? "" : text(tab.firstChild);
+  return tabLabel === "" ? title : `${title} ${tabLabel}`;
+}
+
+function readTable(card: Element): DesignTable {
+  const table = card.querySelector("table.repos-pr-list");
   const groups: TableSection["groups"] = [];
-  for (const child of table.querySelector("tbody")?.children ?? []) {
+  for (const child of table?.querySelector("tbody")?.children ?? []) {
     if (child.classList.contains("fix-ado-work-item-group")) {
       groups.push({ band: readBand(child), prs: [] });
     } else if (child.matches('a.bolt-table-row[href*="/pullrequest/"]')) {
@@ -148,15 +163,22 @@ function readTable(table: Element): DesignTable {
     }
   }
   return {
+    count: text(
+      card.querySelector(".fix-ado-assigned-tab-name .bolt-pill") ??
+        card.querySelector(".repos-pr-section-header-title .bolt-pill"),
+    ),
     isGrouped: groups.some(({ band }) => band !== null),
+    name: cardName(card),
     section: { groups },
-    width: table.getBoundingClientRect().width,
+    width: card.getBoundingClientRect().width,
   };
 }
 
-/** Each pull request table on the page, top to bottom. */
+/** Each section card with a pull request list, top to bottom. */
 function readTables(): DesignTable[] {
-  return [...document.querySelectorAll("table.repos-pr-list")].map((table) => readTable(table));
+  return [...document.querySelectorAll(".repos-pr-section-card:has(table.repos-pr-list)")].map(
+    (card) => readTable(card),
+  );
 }
 
 const HELPERS = [
@@ -168,6 +190,7 @@ const HELPERS = [
   timeOf,
   readRow,
   readBand,
+  cardName,
   readTable,
   readTables,
 ];

@@ -1,5 +1,5 @@
 // Usage: node azure-devops/design-diffs/pr-table.ts [state ...]
-// Diffs each pull request table on the fake site, with Pull requests as a table on, against design B
+// Diffs each pull request section card on the fake site, header and list,, with Pull requests as a table on, against design B
 // of the inbox redesigns drawn with the same rows. Writes both screenshots of each table to
 // .restyle-runs/pr-table-<start>/ and prints one "state#table percent" line each. What stays is
 // glyph anti-aliasing, a few dozen pixels a table.
@@ -31,11 +31,13 @@ const LIST = "/fake-org/text-2/_git/text-16/pullrequests";
 /** Font icons and images differ by nature; the capture's own stale group rows are not the script's. */
 const SITE_MASK = `img, .fabric-icon, [class*="ms-Icon"], .bolt-coin-content.using-image { visibility: hidden !important; }
   table.repos-pr-list > tbody > tr:not([class]) { display: none !important; }`;
-const DESIGN_MASK = ".t-comment-icon, .vote { visibility: hidden !important; }";
+const DESIGN_MASK = ".t-comment-icon, .vote, .chev { visibility: hidden !important; }";
 
 interface TableState extends FakeSitePage {
   name: string;
   isGrouped: boolean;
+  /** Only these cards, by index, where the capture's other cards hold marks of its own. */
+  cards?: number[];
 }
 
 const STATES: TableState[] = [
@@ -57,6 +59,23 @@ const STATES: TableState[] = [
     capture: "assigned-waiting-inbox",
     isGrouped: true,
     name: "inbox-waiting-grouped",
+    page: "pr-inbox",
+    path: INBOX,
+  },
+  {
+    // The capture was made with the script on: its stacked cards hold the script's title marks.
+    capture: "unread-prs",
+    cards: [0],
+    isGrouped: true,
+    name: "inbox-marked-grouped",
+    page: "pr-inbox",
+    path: INBOX,
+  },
+  {
+    capture: "unread-prs",
+    cards: [0],
+    isGrouped: false,
+    name: "inbox-marked-plain",
     page: "pr-inbox",
     path: INBOX,
   },
@@ -129,7 +148,7 @@ async function siteTables(
   await openFakeSitePage(page, state);
   await page.addStyleTag({ content: SITE_MASK });
   const tables: DesignTable[] = await page.evaluate(READ_TABLES_SCRIPT);
-  const shots = await shootEach(page, "table.repos-pr-list", (index) =>
+  const shots = await shootEach(page, ".repos-pr-section-card:has(table.repos-pr-list)", (index) =>
     path.join(run.shots, `${state.name}-${index}-site.png`),
   );
   await resetFakeSite(page);
@@ -145,7 +164,7 @@ async function designTables(
   await page.addInitScript(`window.FIX_ADO_DESIGN_TABLES = ${JSON.stringify(state.tables)};`);
   await page.goto(fileUrl(run.designPage));
   await page.addStyleTag({ content: DESIGN_MASK });
-  return shootEach(page, ".fix-ado-design-table", (index) =>
+  return shootEach(page, ".fix-ado-design-card", (index) =>
     path.join(run.shots, `${state.name}-${index}-design.png`),
   );
 }
@@ -157,7 +176,8 @@ async function diffState(run: Run, state: TableState): Promise<string[]> {
     const site = await siteTables(run, state, await context.newPage());
     const page = await context.newPage();
     const design = await designTables(run, { ...state, tables: site.tables }, page);
-    return await inSequence([...design.keys()], async (index) => {
+    const indexes = [...design.keys()].filter((index) => state.cards?.includes(index) ?? true);
+    return await inSequence(indexes, async (index) => {
       const diff = await pixelDiff(page, design[index], site.shots[index]);
       const value = diff.sizes
         ? `size ${diff.sizes.join(" vs ")}`
