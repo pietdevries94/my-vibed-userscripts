@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.28.1
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
+// @version      1.29.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. General: Pull request lists and boards that reload on changes. Appearance: Light or Dark to match the system; Avatar initials; A Windows 98 mode, a work in progress and off by default. Pull request lists: Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Comments and activity: Oldest first, with a button to flip the order; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A New chip that glows on pushes and other changes you have not seen; A button that scrolls to the bottom; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread. Code review: Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them; Starred reviewers to add in one click, also on a new pull request. Pipelines: Pipeline status on each pull request in the lists; Each check's warnings and errors above the description, in a box that collapses; A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request. Boards: Days in column dots on cards, with a toggle per column.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -16,13 +16,15 @@
 // ==/UserScript==
 "use strict";
 (() => {
-  // azure-devops/src/features/category-names.ts
-  var CATEGORY_NAMES = [
+  // azure-devops/src/features/section-names.ts
+  var SECTION_NAMES = [
+    "General",
+    "Appearance",
     "Pull request lists",
-    "Pull request",
-    "Pull request Overview",
-    "Boards",
-    "Everywhere"
+    "Comments and activity",
+    "Code review",
+    "Pipelines",
+    "Boards"
   ];
 
   // azure-devops/src/pull-requests/reviewers.ts
@@ -124,10 +126,10 @@
   // azure-devops/src/features/avatar-initials/index.ts
   var avatarInitials = {
     change: { kind: "new", version: "1.7.2" },
-    description: "Initials on avatars, in a colour per person.",
+    description: "Shows initials in a colour per person.",
     // The key of the earlier menu setting, so the owner's choice stays.
     id: "avatar-initials",
-    name: "Avatar initials",
+    name: "Initials on avatars",
     start: ({ document: document2 }) => ({
       sync() {
         showInitialsOnAvatars(document2);
@@ -271,10 +273,10 @@
   // azure-devops/src/features/system-theme/index.ts
   var THEME_LOOKS_KEY = "system-theme-looks", SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)", followSystemTheme = {
     change: { kind: "new", version: "1.7.2" },
-    description: "Azure DevOps shows Light or Dark to match the system.",
+    description: "Switches between Light and Dark with your system.",
     // The key of the earlier menu setting, so the owner's choice stays.
     id: "follow-system-theme",
-    name: "Follow system theme",
+    name: "Match the system theme",
     start({ client, document: document2, isInFrame: isInFrame2, reloadWhenIdle: reloadWhenIdle2 }) {
       if (isInFrame2)
         return null;
@@ -296,775 +298,6 @@
       return new MutationObserver(() => {
         theme.onPageChange();
       }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), theme.start(), null;
-    },
-    styles: []
-  };
-
-  // azure-devops/src/boards/board.ts
-  var CARD_SELECTOR = ".wit-card[data-itemid]";
-  function isBoardLocation(location2) {
-    return location2.pathname.includes("/_boards/board/");
-  }
-  function findBoardCardIds(root) {
-    let ids = /* @__PURE__ */ new Set();
-    for (let card of root.querySelectorAll(CARD_SELECTOR)) {
-      let id = Number(card.dataset.itemid);
-      Number.isInteger(id) && id > 0 && ids.add(id);
-    }
-    return [...ids];
-  }
-  function hasBoardChanged(loaded, current) {
-    for (let [id, workItem] of current.workItems) {
-      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
-      if (isChanged && !isMyOwnChange)
-        return !0;
-    }
-    return !1;
-  }
-  function watchBoard(client, location2, cardIds) {
-    return {
-      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
-      extendLoaded: (loaded, current) => ({
-        myUserId: current.myUserId,
-        workItems: new Map([...current.workItems, ...loaded.workItems])
-      }),
-      async fetchSnapshot() {
-        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
-          client.getWorkItems(cardIds),
-          client.getAuthenticatedUserId()
-        ]);
-        return {
-          retryAfterSeconds,
-          snapshot: {
-            myUserId,
-            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
-          }
-        };
-      },
-      hasChanged: hasBoardChanged,
-      key: `board:${location2.pathname}${location2.search}`
-    };
-  }
-
-  // azure-devops/src/pull-requests/assigned-pull-request-requests.ts
-  var MAX_ASSIGNED_PULL_REQUESTS = 200;
-  function pullRequestsPath(repository) {
-    return repository === null ? "/_apis/git/pullrequests" : `/${encodeURIComponent(repository.project)}/_apis/git/repositories/${encodeURIComponent(repository.repository)}/pullrequests`;
-  }
-  function createAssignedPullRequestRequests(options) {
-    return {
-      async getPullRequestsAssignedTo(reviewerId, repository) {
-        let { body, retryAfterSeconds } = await getJson(
-          options,
-          `${pullRequestsPath(repository)}?searchCriteria.reviewerId=${encodeURIComponent(reviewerId)}&searchCriteria.status=active&$top=${MAX_ASSIGNED_PULL_REQUESTS}&api-version=7.1`
-        );
-        return { pullRequests: body.value, retryAfterSeconds };
-      }
-    };
-  }
-
-  // azure-devops/src/pipeline/build-requests.ts
-  var MAX_PULL_REQUEST_BUILDS = 50;
-  async function getPullRequestBuilds(options, { project, pullRequestId }) {
-    let branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`), { body, retryAfterSeconds } = await getJson(
-      options,
-      `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}&queryOrder=queueTimeDescending&$top=${MAX_PULL_REQUEST_BUILDS}&api-version=7.1`
-    );
-    return { builds: body.value ?? [], retryAfterSeconds };
-  }
-  function isBuildPipeline(value) {
-    return typeof value == "object" && value !== null && "id" in value && typeof value.id == "number" && "name" in value && typeof value.name == "string";
-  }
-  async function getBuildPipeline(options, project, buildId) {
-    let body = await (await sendRequest(
-      options,
-      `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`
-    )).json(), definition = typeof body == "object" && body !== null && "definition" in body ? body.definition : null;
-    if (!isBuildPipeline(definition))
-      throw new Error(`Run ${buildId} has no pipeline in Azure DevOps's answer`);
-    return { id: definition.id, name: definition.name };
-  }
-  function createBuildRequests(options) {
-    return {
-      getBuildPipeline: async (project, buildId) => getBuildPipeline(options, project, buildId),
-      getPullRequestBuilds: async (project, pullRequestId) => getPullRequestBuilds(options, { project, pullRequestId })
-    };
-  }
-
-  // azure-devops/src/pull-requests/review-requests.ts
-  var API_VERSION = "api-version=7.1", CHANGES_PER_REQUEST = 500, ACTIVE_THREAD_STATUS = 1, TEXT_COMMENT_TYPE = 1;
-  function pullRequestPath({ project, repository, pullRequestId }) {
-    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}`;
-  }
-  async function getPullRequest(options, pullRequest) {
-    return await (await sendRequest(options, `${pullRequestPath(pullRequest)}?${API_VERSION}`)).json();
-  }
-  function pageAfter({ nextSkip, nextTop }) {
-    return nextSkip !== void 0 && nextSkip > 0 ? { skip: nextSkip, top: nextTop ?? CHANGES_PER_REQUEST } : null;
-  }
-  async function getIterationChanges(options, pullRequest, iteration) {
-    let changes = [], next = { skip: 0, top: CHANGES_PER_REQUEST };
-    for (; next !== null; ) {
-      let body = await (await sendRequest(
-        options,
-        `${pullRequestPath(pullRequest)}/iterations/${iteration}/changes?$top=${next.top}&$skip=${next.skip}&${API_VERSION}`
-      )).json(), page = body.changeEntries ?? [];
-      changes.push(...page), next = page.length === 0 ? null : pageAfter(body);
-    }
-    return changes;
-  }
-  function threadBody({ content, iteration, threadContext }) {
-    return {
-      comments: [{ commentType: TEXT_COMMENT_TYPE, content, parentCommentId: 0 }],
-      status: ACTIVE_THREAD_STATUS,
-      ...threadContext === void 0 ? {} : { threadContext },
-      ...iteration === void 0 ? {} : {
-        pullRequestThreadContext: {
-          changeTrackingId: iteration.changeTrackingId,
-          iterationContext: {
-            firstComparingIteration: iteration.id,
-            secondComparingIteration: iteration.id
-          }
-        }
-      }
-    };
-  }
-  async function createPullRequestThread(options, pullRequest, thread) {
-    return (await (await sendRequest(
-      options,
-      `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`,
-      { body: threadBody(thread), method: "POST" }
-    )).json()).id;
-  }
-  function createReviewRequests(options) {
-    return {
-      createPullRequestThread: async (pullRequest, thread) => createPullRequestThread(options, pullRequest, thread),
-      getIterationChanges: async (pullRequest, iteration) => getIterationChanges(options, pullRequest, iteration),
-      getPullRequestCreationDate: async (pullRequest) => getPullRequest(options, pullRequest).then(({ creationDate }) => creationDate ?? ""),
-      async getPullRequestIterationIds(pullRequest) {
-        let { body } = await getJson(
-          options,
-          `${pullRequestPath(pullRequest)}/iterations?${API_VERSION}`
-        );
-        return (body.value ?? []).map(({ id }) => id);
-      },
-      getPullRequestStatus: async (pullRequest) => getPullRequest(options, pullRequest).then(({ status }) => status ?? ""),
-      async getPullRequestThreads(pullRequest) {
-        let { body } = await getJson(
-          options,
-          `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`
-        );
-        return body.value ?? [];
-      },
-      async setPullRequestVote(pullRequest, { reviewerId, vote }) {
-        await sendRequest(
-          options,
-          `${pullRequestPath(pullRequest)}/reviewers/${encodeURIComponent(reviewerId)}?${API_VERSION}`,
-          { body: { vote }, method: "PUT" }
-        );
-      }
-    };
-  }
-
-  // azure-devops/src/pull-requests/reviewer-requests.ts
-  var SEARCH_OPTIONS = { MaxResults: 40, MinResults: 5 }, SEARCH_PROPERTIES = [
-    "DisplayName",
-    "IsMru",
-    "ScopeName",
-    "SamAccountName",
-    "Active",
-    "SubjectDescriptor",
-    "Mail",
-    "MailNickname",
-    "SignInAddress",
-    "Guest"
-  ];
-  function reviewersPath({ project, repository, pullRequestId }) {
-    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/reviewers`;
-  }
-  async function getPullRequestReviewers(options, pullRequest) {
-    return ((await (await sendRequest(options, `${reviewersPath(pullRequest)}?api-version=7.1`)).json()).value ?? []).flatMap(
-      ({ id, displayName, uniqueName, isContainer }) => id === void 0 ? [] : [
-        {
-          displayName: displayName ?? "",
-          id,
-          isGroup: isContainer === !0,
-          signInAddress: isContainer === !0 ? "" : uniqueName ?? ""
-        }
-      ]
-    );
-  }
-  async function addPullRequestReviewer(options, pullRequest, { reviewerId, isRequired }) {
-    await sendRequest(
-      options,
-      `${reviewersPath(pullRequest)}/${encodeURIComponent(reviewerId)}?api-version=7.1`,
-      { body: { isRequired, vote: 0 }, method: "PUT" }
-    );
-  }
-  function identityOf(body) {
-    let { localId, displayName, signInAddress, mail, entityType } = body;
-    if (localId == null || localId === "")
-      return [];
-    let isGroup = entityType?.toLowerCase() === "group";
-    return [
-      {
-        displayName: displayName ?? "",
-        id: localId,
-        isGroup,
-        signInAddress: isGroup ? "" : signInAddress ?? mail ?? ""
-      }
-    ];
-  }
-  async function searchIdentities(options, query) {
-    let found = ((await (await sendRequest(
-      options,
-      "/_apis/IdentityPicker/Identities?api-version=5.0-preview.1",
-      {
-        body: {
-          identityTypes: ["user", "group"],
-          operationScopes: ["ims", "source"],
-          options: SEARCH_OPTIONS,
-          properties: SEARCH_PROPERTIES,
-          query
-        },
-        method: "POST"
-      }
-    )).json()).results ?? []).flatMap(({ identities }) => identities ?? []);
-    return logFound(found), found.flatMap((identity) => identityOf(identity));
-  }
-  function logFound(found) {
-    log("Starred reviewers: search answered", {
-      found: found.map((identity) => ({
-        entityType: identity.entityType,
-        // Field names only: each one maps to true, so the capture keeps them and no value.
-        fields: Object.fromEntries(Object.keys(identity).map((key) => [key, !0])),
-        hasLocalId: identityOf(identity).length > 0,
-        originDirectory: identity.originDirectory
-      })),
-      foundCount: found.length
-    });
-  }
-  function createReviewerRequests(options) {
-    return {
-      addPullRequestReviewer: async (pullRequest, reviewer) => addPullRequestReviewer(options, pullRequest, reviewer),
-      getPullRequestReviewers: async (pullRequest) => getPullRequestReviewers(options, pullRequest),
-      searchIdentities: async (query) => searchIdentities(options, query)
-    };
-  }
-
-  // azure-devops/src/core/work-item-requests.ts
-  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200;
-  function toBoardWorkItems(values) {
-    return values.flatMap(
-      (workItem) => workItem === null ? [] : [
-        {
-          changedById: workItem.fields?.["System.ChangedBy"]?.id ?? null,
-          id: workItem.id,
-          rev: workItem.rev
-        }
-      ]
-    );
-  }
-  async function getWorkItems(options, ids) {
-    let workItems = [], retryAfterSeconds = null;
-    for (let start = 0; start < ids.length; start += MAX_WORK_ITEMS_PER_REQUEST) {
-      let idsInRequest = ids.slice(start, start + MAX_WORK_ITEMS_PER_REQUEST), response = await getJson(
-        options,
-        `/_apis/wit/workitems?ids=${idsInRequest.join(",")}&fields=System.Rev,System.ChangedBy&errorPolicy=Omit&api-version=7.1`
-      );
-      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds, workItems.push(...toBoardWorkItems(response.body.value));
-    }
-    return { retryAfterSeconds, workItems };
-  }
-  async function getWorkItemUpdates(options, id) {
-    let updates = [], retryAfterSeconds = null;
-    for (let skip = 0; ; skip += MAX_UPDATES_PER_REQUEST) {
-      let response = await getJson(
-        options,
-        `/_apis/wit/workItems/${id}/updates?$top=${MAX_UPDATES_PER_REQUEST}&$skip=${skip}&api-version=7.1`
-      );
-      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
-      let page = response.body.value ?? [];
-      if (updates.push(...page), page.length < MAX_UPDATES_PER_REQUEST)
-        return { retryAfterSeconds, updates };
-    }
-  }
-  async function getPullRequestWorkItemIds(options, { project, repository, pullRequestId }) {
-    let { body } = await getJson(
-      options,
-      `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/workitems?api-version=7.1`
-    );
-    return (body.value ?? []).map(({ id }) => Number(id));
-  }
-  async function getWorkItemTitle(options, id) {
-    let { body } = await getJson(
-      options,
-      `/_apis/wit/workitems?ids=${id}&fields=System.Title&errorPolicy=Omit&api-version=7.1`
-    ), [workItem] = body.value ?? [];
-    return workItem?.fields?.["System.Title"] ?? null;
-  }
-  function createWorkItemRequests(options) {
-    return {
-      getPullRequestWorkItemIds: async (pullRequest) => getPullRequestWorkItemIds(options, pullRequest),
-      getWorkItemTitle: async (id) => getWorkItemTitle(options, id),
-      getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
-      getWorkItems: async (ids) => getWorkItems(options, ids)
-    };
-  }
-
-  // azure-devops/src/core/ado-client.ts
-  var MAX_LISTED_PULL_REQUESTS = 200, THEME_SETTING_KEY = "WebPlatform/Theme";
-  function createProjectIdCache(options) {
-    let projectIdRequests = /* @__PURE__ */ new Map();
-    return async (project) => {
-      let request = projectIdRequests.get(project);
-      return request || (request = getJson(
-        options,
-        `/_apis/projects/${encodeURIComponent(project)}?api-version=7.1`
-      ).then(({ body }) => String(body.id)), request.catch(() => projectIdRequests.delete(project)), projectIdRequests.set(project, request)), request;
-    };
-  }
-  async function getPolicyEvaluations(options, projectId, { pullRequestId }) {
-    let artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`, { body, retryAfterSeconds } = await getJson(
-      options,
-      `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`
-    );
-    return { evaluations: body.value, retryAfterSeconds };
-  }
-  async function cancelBuild(options, project, buildId) {
-    await sendRequest(
-      options,
-      `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`,
-      { body: { status: "cancelling" }, method: "PATCH" }
-    );
-  }
-  async function saveTheme(options, themeId) {
-    await sendRequest(options, "/_apis/Settings/Entries/globalme?api-version=7.1-preview.1", {
-      body: { [THEME_SETTING_KEY]: themeId },
-      method: "PATCH"
-    });
-  }
-  async function requeuePolicyEvaluation(options, projectId, evaluationId) {
-    await sendRequest(
-      options,
-      `/${projectId}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}?api-version=7.1-preview.1`,
-      { body: { status: "queued" }, method: "PATCH" }
-    );
-  }
-  function createAdoClient(options) {
-    let getProjectId = createProjectIdCache(options), authenticatedUserIdRequest = null;
-    return {
-      cancelBuild: async (project, buildId) => cancelBuild(options, project, buildId),
-      async getAuthenticatedUserId() {
-        return authenticatedUserIdRequest ??= getJson(options, "/_apis/connectionData").then(({ body }) => body.authenticatedUser?.id ?? null).catch(() => null), authenticatedUserIdRequest;
-      },
-      getPolicyEvaluations: async (pullRequest) => getPolicyEvaluations(options, await getProjectId(pullRequest.project), pullRequest),
-      async getPullRequests({ project, repository, status }) {
-        let { body, retryAfterSeconds } = await getJson(
-          options,
-          `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullrequests?searchCriteria.status=${status}&$top=${MAX_LISTED_PULL_REQUESTS}&api-version=7.1`
-        );
-        return { pullRequests: body.value, retryAfterSeconds };
-      },
-      async getTimeline(project, buildId) {
-        let { body, retryAfterSeconds } = await getJson(
-          options,
-          `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?api-version=7.1`
-        );
-        return { records: body.records ?? [], retryAfterSeconds };
-      },
-      requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
-      saveTheme: async (themeId) => saveTheme(options, themeId),
-      ...createAssignedPullRequestRequests(options),
-      ...createBuildRequests(options),
-      ...createReviewRequests(options),
-      ...createWorkItemRequests(options),
-      ...createReviewerRequests(options)
-    };
-  }
-
-  // azure-devops/src/features/reload-on-changes/page-reloader.ts
-  var PAGE_CHECK_INTERVAL_MS = 3e4, FAILED_PAGE_CHECK_RETRY_MS = 6e4, MS_PER_SECOND = 1e3;
-  function isCheckDue(state, page, immediately) {
-    return state.loadedSnapshots.has(page.key) ? !state.options.isTabActive() || state.options.now() < state.pausedUntil ? !1 : immediately || state.options.now() >= state.nextCheckAt : !0;
-  }
-  function pauseFor(state, retryAfterSeconds) {
-    retryAfterSeconds !== null && (state.pausedUntil = state.options.now() + retryAfterSeconds * MS_PER_SECOND);
-  }
-  function compareWithLoaded(state, { page, hasLoadedSnapshot }, snapshot) {
-    hasLoadedSnapshot ? page.hasChanged(state.loadedSnapshots.get(page.key), snapshot) ? state.options.reload() : page.extendLoaded && state.loadedSnapshots.set(
-      page.key,
-      page.extendLoaded(state.loadedSnapshots.get(page.key), snapshot)
-    ) : state.loadedSnapshots.set(page.key, snapshot);
-  }
-  function recordFailure(state, error) {
-    error instanceof AdoRequestError && pauseFor(state, error.retryAfterSeconds), state.nextCheckAt = state.options.now() + FAILED_PAGE_CHECK_RETRY_MS;
-  }
-  async function runCheck(state, page) {
-    let checkedPage = { hasLoadedSnapshot: state.loadedSnapshots.has(page.key), page };
-    state.isChecking = !0;
-    try {
-      let { snapshot, retryAfterSeconds } = await page.fetchSnapshot();
-      pauseFor(state, retryAfterSeconds), state.nextCheckAt = state.options.now() + PAGE_CHECK_INTERVAL_MS, compareWithLoaded(state, checkedPage, snapshot);
-    } catch (error) {
-      recordFailure(state, error);
-    } finally {
-      state.isChecking = !1;
-    }
-  }
-  function createPageReloader(options) {
-    let state = {
-      isChecking: !1,
-      loadedSnapshots: /* @__PURE__ */ new Map(),
-      nextCheckAt: 0,
-      options,
-      pausedUntil: 0
-    };
-    return {
-      async check({ immediately = !1 } = {}) {
-        let page = options.currentPage();
-        !page || state.isChecking || !isCheckDue(state, page, immediately) || await runCheck(state, page);
-      }
-    };
-  }
-
-  // azure-devops/src/pipeline/pipeline-status-icon.ts
-  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE = "http://www.w3.org/2000/svg", LABELS = {
-    cancelling: "Pipeline cancelling",
-    expired: "Pipeline result expired",
-    failed: "Pipeline failed",
-    loading: "Pipeline status loading",
-    none: "No pipeline status",
-    notStarted: "Pipeline not started",
-    queued: "Pipeline queued",
-    running: "Pipeline running",
-    succeeded: "Pipeline succeeded"
-  }, DISC = ["circle", { cx: "8", cy: "8", fill: "currentColor", r: "8" }], RING = [
-    "circle",
-    { cx: "8", cy: "8", fill: "none", r: "7", stroke: "currentColor", "stroke-width": "2" }
-  ], SPINNER = [
-    "circle",
-    {
-      cx: "8",
-      cy: "8",
-      fill: "none",
-      r: "6.5",
-      stroke: "currentColor",
-      "stroke-dasharray": "28 13",
-      "stroke-linecap": "round",
-      "stroke-width": "2.5"
-    }
-  ];
-  function line(pathData, stroke) {
-    return ["path", { d: pathData, ...{
-      fill: "none",
-      stroke,
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round",
-      "stroke-width": "1.75"
-    } }];
-  }
-  var SHAPES = {
-    cancelling: [RING, line("M5 11l6-6", "currentColor")],
-    expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
-    failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
-    loading: [DISC],
-    none: [DISC],
-    notStarted: [RING],
-    queued: [RING, line("M8 4.5V8l2.5 1.5", "currentColor")],
-    running: [SPINNER],
-    succeeded: [DISC, line("M4.5 8.3l2.3 2.3 4.7-5", "#fff")]
-  };
-  function setAttributes(element4, attributes) {
-    for (let [name, value] of Object.entries(attributes))
-      element4.setAttribute(name, value);
-  }
-  function createShape(document2, [tag, attributes]) {
-    let shape = document2.createElementNS(SVG_NAMESPACE, tag);
-    return setAttributes(shape, attributes), shape;
-  }
-  function createStatusIcon(document2, status, label = LABELS[status]) {
-    let icon = document2.createElementNS(SVG_NAMESPACE, "svg");
-    setAttributes(icon, {
-      "aria-label": label,
-      class: PIPELINE_STATUS_ICON_CLASS,
-      height: "16",
-      role: "img",
-      viewBox: "0 0 16 16",
-      width: "16"
-    }), icon.dataset.status = status;
-    let title = document2.createElementNS(SVG_NAMESPACE, "title");
-    return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
-  }
-  function createPipelineStatusIcon(document2, status, pullRequestId) {
-    let icon = createStatusIcon(document2, status);
-    return icon.dataset.pullRequestId = String(pullRequestId), icon;
-  }
-
-  // azure-devops/src/pull-requests/pull-request-link.ts
-  function apiBasePath(location2) {
-    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
-    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
-  }
-  function pathSegments(pathname) {
-    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
-  }
-  function projectOf(segments, gitIndex, basePath2) {
-    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
-    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
-  }
-  function parsePullRequestHref(href, basePath2) {
-    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
-    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
-  }
-  function parsePullRequestListLocation(location2, basePath2) {
-    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
-    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
-      return null;
-    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
-    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
-  }
-  function isPullRequestInboxLocation(location2) {
-    return pathSegments(location2.pathname).at(-1) === "_pulls";
-  }
-  function isPullRequestCreateLocation(location2) {
-    let segments = pathSegments(location2.pathname);
-    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
-  }
-
-  // azure-devops/src/core/tooltip.ts
-  var TOOLTIP_ATTRIBUTE = "data-fix-ado-tooltip", TOOLTIP_ID = "fix-ado-tooltip";
-  function createTooltip(document2, text) {
-    let portal = Object.assign(document2.createElement("div"), {
-      className: "bolt-portal absolute-fill"
-    });
-    portal.innerHTML = '<div class="bolt-callout absolute bolt-tooltip" role="tooltip"><div class="bolt-callout-content"><div class="bolt-tooltip-content body-m"></div></div></div>';
-    let callout = portal.querySelector(".bolt-callout"), content = portal.querySelector(".bolt-tooltip-content");
-    return callout !== null && content !== null && (callout.id = TOOLTIP_ID, content.textContent = text), portal;
-  }
-  function place(tooltip, trigger) {
-    let callout = tooltip.querySelector(".bolt-callout"), view = trigger.ownerDocument.defaultView;
-    if (callout === null || view === null)
-      return;
-    let box = trigger.getBoundingClientRect(), width = callout.offsetWidth, left = Math.min(
-      Math.max(8, box.left + box.width / 2 - width / 2),
-      view.innerWidth - width - 8
-    );
-    Object.assign(callout.style, {
-      left: `${left}px`,
-      position: "fixed",
-      top: `${box.bottom + 8}px`
-    });
-  }
-  function createShower(document2) {
-    let shown = null;
-    function hide() {
-      shown?.tooltip.remove(), shown?.trigger.removeAttribute("aria-describedby"), shown = null;
-    }
-    return {
-      hide,
-      show(trigger) {
-        hide();
-        let tooltip = createTooltip(document2, trigger.getAttribute(TOOLTIP_ATTRIBUTE) ?? "");
-        (document2.querySelector(".bolt-portal-host") ?? document2.body).append(tooltip), place(tooltip, trigger), trigger.setAttribute("aria-describedby", TOOLTIP_ID), shown = { tooltip, trigger };
-      }
-    };
-  }
-  function triggerOf(view, event) {
-    return view !== null && event.target instanceof view.Element ? event.target.closest(`[${TOOLTIP_ATTRIBUTE}]`) : null;
-  }
-  function isLeaving(trigger, event) {
-    let view = trigger.ownerDocument.defaultView, next = "relatedTarget" in event ? event.relatedTarget : null;
-    return !(view !== null && next instanceof view.Node && trigger.contains(next));
-  }
-  function createHover(view, shower, hoverDelayMs) {
-    let timer = null, hovered = null, hide = () => {
-      timer !== null && clearTimeout(timer), hovered = null, shower.hide();
-    };
-    return {
-      hide,
-      onPointerOver(event) {
-        let trigger = triggerOf(view, event);
-        trigger !== null && trigger !== hovered && (hide(), hovered = trigger, timer = setTimeout(() => {
-          shower.show(trigger);
-        }, hoverDelayMs));
-      }
-    };
-  }
-  function createListeners(document2, hoverDelayMs) {
-    let shower = createShower(document2), view = document2.defaultView, { hide, onPointerOver } = createHover(view, shower, hoverDelayMs), onLeave = (event) => {
-      let trigger = triggerOf(view, event);
-      trigger !== null && isLeaving(trigger, event) && hide();
-    };
-    return { hide, listeners: [
-      ["pointerover", onPointerOver],
-      ["pointerout", onLeave],
-      ["focusin", (event) => {
-        let trigger = triggerOf(view, event);
-        trigger !== null && shower.show(trigger);
-      }],
-      ["focusout", onLeave],
-      ["keydown", (event) => {
-        "key" in event && event.key === "Escape" && hide();
-      }]
-    ] };
-  }
-  var startedDocuments = /* @__PURE__ */ new WeakSet();
-  function startTooltips(document2, options = {}) {
-    if (startedDocuments.has(document2))
-      return () => {
-      };
-    startedDocuments.add(document2);
-    let { hide, listeners } = createListeners(document2, options.hoverDelayMs ?? 500);
-    for (let [type, listener] of listeners)
-      document2.addEventListener(type, listener);
-    return () => {
-      startedDocuments.delete(document2), hide();
-      for (let [type, listener] of listeners)
-        document2.removeEventListener(type, listener);
-    };
-  }
-  function showTooltip(element4, text) {
-    startTooltips(element4.ownerDocument), text === null ? element4.removeAttribute(TOOLTIP_ATTRIBUTE) : element4.getAttribute(TOOLTIP_ATTRIBUTE) !== text && element4.setAttribute(TOOLTIP_ATTRIBUTE, text);
-  }
-
-  // azure-devops/src/pull-requests/pr-list.ts
-  var PULL_REQUEST_ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]', TITLE_LINE_SELECTOR = ".bolt-table-two-line-cell-item";
-  function findPullRequestRows(root, apiBasePath2) {
-    let rows = [];
-    for (let row of root.querySelectorAll(PULL_REQUEST_ROW_SELECTOR)) {
-      let pullRequest = parsePullRequestHref(row.getAttribute("href") ?? "", apiBasePath2);
-      pullRequest && rows.push({ pullRequest, row });
-    }
-    return rows;
-  }
-  function showPipelineStatus(row, pullRequestId, status) {
-    let shownIcon = row.querySelector(`.${PIPELINE_STATUS_ICON_CLASS}`);
-    if (shownIcon?.dataset.status === status && shownIcon.dataset.pullRequestId === String(pullRequestId))
-      return;
-    shownIcon?.remove(), row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
-  }
-  var DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill", UPDATE_TIME_SELECTOR = "time.bolt-time-item", PUBLISHED_SINCE_CLASS = "fix-ado-published-since", TOO_LONG_AGO_CLASS = "fix-ado-published-since-too-long";
-  function isDraftRow(row) {
-    return row.querySelector(DRAFT_PILL_SELECTOR) !== null;
-  }
-  function publishedSinceLine(row) {
-    let shown = row.querySelector(`.${PUBLISHED_SINCE_CLASS}`);
-    if (shown)
-      return shown;
-    let updateLine = row.querySelector(UPDATE_TIME_SELECTOR)?.closest(".bolt-table-cell-content > *");
-    if (!updateLine)
-      return null;
-    let line2 = row.ownerDocument.createElement("div");
-    return line2.className = PUBLISHED_SINCE_CLASS, updateLine.after(line2), line2;
-  }
-  function showPublishedSince(row, shown) {
-    if (shown === null) {
-      row.querySelector(`.${PUBLISHED_SINCE_CLASS}`)?.remove();
-      return;
-    }
-    let line2 = publishedSinceLine(row);
-    line2 && (line2.textContent !== shown.text && (line2.textContent = shown.text), line2.classList.contains(TOO_LONG_AGO_CLASS) !== shown.isTooLongAgo && line2.classList.toggle(TOO_LONG_AGO_CLASS, shown.isTooLongAgo));
-  }
-  var LINE_UNDER_TITLE_SELECTOR = `${TITLE_LINE_SELECTOR}:nth-child(2) .secondary-text`, LINKED_WORK_ITEM_CLASS = "fix-ado-linked-work-item";
-  function linkedWorkItemElement(row) {
-    let shown = row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`), lineUnderTitle = row.querySelector(LINE_UNDER_TITLE_SELECTOR);
-    if (shown !== null || lineUnderTitle === null)
-      return shown;
-    let label = row.ownerDocument.createElement("span");
-    return label.className = LINKED_WORK_ITEM_CLASS, lineUnderTitle.append(label), label;
-  }
-  function showLinkedWorkItem(row, shown) {
-    if (shown === null) {
-      row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`)?.remove();
-      return;
-    }
-    let label = linkedWorkItemElement(row);
-    label !== null && (label.textContent !== shown.text && (label.textContent = shown.text), showTooltip(label, shown.tooltip));
-  }
-  var REVIEWER_SELECTOR = ".pr-reviewer";
-  function markRequiredReviewers(row, reviewers) {
-    for (let reviewerElement of row.querySelectorAll(REVIEWER_SELECTOR)) {
-      let avatar = reviewerElement.querySelector(AVATAR_SELECTOR), reviewer = avatar ? findReviewerByLabel(avatarName(avatar), reviewers) : null;
-      reviewerElement.toggleAttribute("data-fix-ado-required", reviewer?.isRequired ?? !1), reviewerElement.parentElement?.toggleAttribute("data-fix-ado-reviewers", !0);
-    }
-  }
-
-  // azure-devops/src/features/reload-on-changes/pr-list-changes.ts
-  function snapshotOf(pullRequests) {
-    return new Map(
-      pullRequests.map((pullRequest) => [
-        pullRequest.pullRequestId,
-        JSON.stringify([
-          pullRequest.title,
-          pullRequest.isDraft,
-          pullRequest.status,
-          pullRequest.targetRefName,
-          pullRequest.lastMergeSourceCommit?.commitId,
-          pullRequest.autoCompleteSetBy?.id,
-          (pullRequest.reviewers ?? []).map((reviewer) => `${reviewer.id}:${reviewer.vote}:${reviewer.isRequired ?? !1}`).toSorted()
-        ])
-      ])
-    );
-  }
-  function hasListChanged(before, after, onScreenPullRequestIds) {
-    if (before.size !== after.size)
-      return !0;
-    for (let pullRequestId of before.keys())
-      if (!after.has(pullRequestId))
-        return !0;
-    for (let pullRequestId of onScreenPullRequestIds)
-      if (before.has(pullRequestId) && before.get(pullRequestId) !== after.get(pullRequestId))
-        return !0;
-    return !1;
-  }
-
-  // azure-devops/src/features/reload-on-changes/pr-list-watch.ts
-  function watchPullRequestList(client, listPage, onScreenPullRequestIds) {
-    return {
-      async fetchSnapshot() {
-        let { pullRequests, retryAfterSeconds } = await client.getPullRequests(listPage);
-        return { retryAfterSeconds, snapshot: snapshotOf(pullRequests) };
-      },
-      hasChanged: (loaded, current) => hasListChanged(loaded, current, onScreenPullRequestIds()),
-      key: `pull-request-list:${JSON.stringify(listPage)}`
-    };
-  }
-
-  // azure-devops/src/features/reload-on-changes/index.ts
-  var reloadOnChanges = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "Pull request lists and boards reload when their content changes on the server.",
-    id: "reload-on-changes",
-    name: "Reload on changes",
-    start({ basePath: basePath2, client, document: document2, now, reloadWhenIdle: reloadWhenIdle2 }) {
-      let shownPage = { kind: "other" };
-      function watchedPage() {
-        if (shownPage.kind === "pull-request-list")
-          return watchPullRequestList(
-            client,
-            shownPage.listPage,
-            () => findPullRequestRows(document2, basePath2).map(
-              ({ pullRequest }) => pullRequest.pullRequestId
-            )
-          );
-        if (shownPage.kind === "board") {
-          let cardIds = findBoardCardIds(document2);
-          return cardIds.length > 0 ? watchBoard(client, location, cardIds) : null;
-        }
-        return null;
-      }
-      let isTabActive2 = !1, reloader = createPageReloader({
-        currentPage: watchedPage,
-        isTabActive: () => isTabActive2,
-        now,
-        reload: reloadWhenIdle2
-      });
-      return {
-        sync(tick) {
-          shownPage = tick.page, { isTabActive: isTabActive2 } = tick, reloader.check({ immediately: tick.reason === "tab-shown" });
-        }
-      };
     },
     styles: []
   };
@@ -2193,17 +1426,16 @@ html[data-fix-ado-win98] .fix-ado-settings-button .fix-ado-settings-badge.fix-ad
   font: 700 9px/9px var(--win98-font);
 }
 
-/* The settings panel, as in the Settings artboards: a window whose frame is a border image, so
-   the features scroll inside it, under a title bar that stays at the top and buttons that stay
-   at the bottom. */
+/* The settings panel, after the Settings artboards: a window whose frame is a border image,
+   with a title bar across the top. The side bar is a list box with the section in navy, each
+   group a group box, each switch a checkbox, and the buttons along the bottom. */
 html[data-fix-ado-win98] .fix-ado-settings {
   box-sizing: border-box;
-  overflow-y: auto;
   border: 3px solid transparent;
   border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7' shape-rendering='crispEdges'%3E%3Crect width='7' height='7' fill='%230a0a0a'/%3E%3Cpath d='M0 0h6v1H1v5H0z' fill='%23dfdfdf'/%3E%3Crect x='1' y='1' width='5' height='5' fill='%23808080'/%3E%3Cpath d='M1 1h4v1H2v3H1z' fill='%23fff'/%3E%3Crect x='2' y='2' width='3' height='3' fill='%23c0c0c0'/%3E%3C/svg%3E")
     3 / 3px stretch;
   border-radius: 0;
-  padding: 0 7px 7px;
+  padding: 18px 0 0;
   background: var(--win98-face);
   box-shadow: none;
   color: #000;
@@ -2214,19 +1446,101 @@ html[data-fix-ado-win98] .fix-ado-settings {
   }
 
   .fix-ado-settings-title {
-    position: sticky;
+    position: absolute;
     top: 0;
-    z-index: 1;
+    right: 0;
+    left: 0;
     height: 18px;
-    margin: 0 -7px;
+    margin: 0;
     padding: 0 4px;
     background: var(--win98-title);
     color: #fff;
     font: 700 11px/18px var(--win98-font);
   }
 
-  .fix-ado-settings-category,
-  .fix-ado-settings-category + .fix-ado-settings-category {
+  .fix-ado-settings-nav {
+    width: 180px;
+    padding: 8px 0 8px 8px;
+    border: 0;
+  }
+
+  .fix-ado-settings-search-field {
+    height: 21px;
+    border: 0;
+    border-radius: 0;
+    padding: 0 4px;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
+    font: 11px var(--win98-font);
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: -4px;
+    }
+  }
+
+  .fix-ado-settings-nav-items {
+    flex-grow: 1;
+    gap: 0;
+    margin-bottom: 8px;
+    padding: 2px;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
+  }
+
+  .fix-ado-settings-nav-item {
+    padding: 1px 3px;
+    border-radius: 0;
+
+    &:hover {
+      background: transparent;
+    }
+
+    &[aria-current="page"] {
+      background: var(--win98-navy);
+      color: #fff;
+      font-weight: 400;
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: -1px;
+    }
+  }
+
+  .fix-ado-settings-nav-count {
+    min-width: 0;
+    border: 1px solid #000;
+    border-radius: 0;
+    padding: 0 3px;
+    background: var(--win98-tooltip);
+    color: #000;
+    font: 700 10px/12px var(--win98-font);
+  }
+
+  .fix-ado-settings-pane {
+    padding: 8px 10px 10px;
+  }
+
+  .fix-ado-settings-view-note,
+  .fix-ado-settings-no-match,
+  .fix-ado-settings-section-description {
+    margin-bottom: 8px;
+    color: #000;
+  }
+
+  .fix-ado-settings-section-name,
+  .fix-ado-settings-pane-filtered .fix-ado-settings-section-name {
+    margin: 0 0 4px;
+    font: 700 11px/14px var(--win98-font);
+  }
+
+  .fix-ado-settings-section:not([hidden]) ~ .fix-ado-settings-section {
+    margin-top: 14px;
+  }
+
+  /* A group box: an etched line round the features, its name on the line. */
+  .fix-ado-settings-group {
     position: relative;
     margin-top: 14px;
     padding: 12px 8px 6px;
@@ -2236,7 +1550,7 @@ html[data-fix-ado-win98] .fix-ado-settings {
       1px 1px #fff;
   }
 
-  .fix-ado-settings-category-name {
+  .fix-ado-settings-group-name {
     position: absolute;
     top: -7px;
     left: 6px;
@@ -2247,14 +1561,52 @@ html[data-fix-ado-win98] .fix-ado-settings {
     font: 400 11px/14px var(--win98-font);
   }
 
-  .fix-ado-settings-feature,
-  .fix-ado-settings-feature:hover {
-    gap: 6px;
+  .fix-ado-settings-features {
     border: 0;
     border-radius: 0;
+  }
+
+  /* Each row's switch as a Win98 checkbox before the name, as core/switch.css looks on
+     captured pages. */
+  .fix-ado-settings-feature.fix-ado-switch,
+  .fix-ado-settings-feature.fix-ado-switch:hover {
+    align-items: flex-start;
+    gap: 6px;
     padding: 3px 2px;
+    border: 0;
     background: transparent;
-    box-shadow: none;
+    color: #000;
+    font-size: 11px;
+
+    &:focus-visible {
+      outline: 0;
+
+      .fix-ado-switch-text {
+        outline: 1px dotted #000;
+      }
+    }
+
+    .fix-ado-switch-pill {
+      order: 0;
+      width: 13px;
+      height: 13px;
+      margin-top: 1px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: #fff;
+      box-shadow: var(--win98-sunken);
+    }
+
+    &[aria-checked="true"] .fix-ado-switch-pill {
+      background:
+        var(--win98-check) center / 7px 7px no-repeat,
+        #fff;
+    }
+
+    .fix-ado-switch-knob {
+      display: none;
+    }
   }
 
   .fix-ado-settings-feature-name {
@@ -2263,29 +1615,6 @@ html[data-fix-ado-win98] .fix-ado-settings {
 
   .fix-ado-settings-feature-description {
     color: #404040;
-  }
-
-  .fix-ado-settings-checkbox {
-    appearance: none;
-    width: 13px;
-    height: 13px;
-    margin: 1px 0 0;
-    border: 0;
-    border-radius: 0;
-    background: #fff;
-    box-shadow: var(--win98-sunken);
-
-    &:checked {
-      background:
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E")
-          center / 7px 7px no-repeat,
-        #fff;
-    }
-
-    &:focus-visible {
-      outline: 1px dotted #000;
-      outline-offset: 2px;
-    }
   }
 
   /* New: tooltip yellow. Updated: the face grey, so the two read apart. The class twice
@@ -2312,12 +1641,9 @@ html[data-fix-ado-win98] .fix-ado-settings {
 
   /* The buttons: Save and reload page first as the default, then Cancel, as Win98 orders them. */
   .fix-ado-settings-buttons {
-    position: sticky;
-    bottom: -7px;
-    z-index: 1;
     gap: 6px;
-    margin: 0 -7px -7px;
-    padding: 8px 7px 7px;
+    padding: 8px 10px 10px;
+    border: 0;
     background: var(--win98-face);
 
     & > .primary {
@@ -2332,10 +1658,16 @@ html[data-fix-ado-win98] .fix-ado-settings {
     }
   }
 
+  /* The issue link first, then the number of changes, before the buttons. */
   .fix-ado-settings-issue-link {
-    order: -2;
+    order: -3;
     color: #0000ee;
     text-decoration: underline;
+  }
+
+  .fix-ado-settings-change-count {
+    order: -2;
+    color: #000;
   }
 }
 
@@ -9787,7 +9119,7 @@ html[data-fix-ado-win98]:is(
   // azure-devops/src/features/windows-98-mode/index.ts
   var windows98Mode = {
     change: { kind: "new", version: "1.19.0" },
-    description: "Azure DevOps as Windows 98: title bar, Start menu side bar, bevelled buttons and grey windows.",
+    description: "Title bars, a Start menu side bar, bevelled buttons and grey windows.",
     id: "windows-98-mode",
     isOffByDefault: !0,
     name: "Windows 98 mode",
@@ -9803,3090 +9135,297 @@ html[data-fix-ado-win98]:is(
     tag: "WIP"
   };
 
-  // azure-devops/src/features/everywhere-features.ts
-  var EVERYWHERE_FEATURES = [
-    avatarInitials,
-    followSystemTheme,
-    reloadOnChanges,
-    windows98Mode
-  ];
+  // azure-devops/src/features/settings-sections/appearance.ts
+  var appearanceSection = {
+    description: "How Azure DevOps looks.",
+    groups: [{ features: [followSystemTheme, avatarInitials, windows98Mode] }],
+    name: "Appearance"
+  };
 
-  // azure-devops/src/features/activity-order/activity-order.ts
-  var FEED_SELECTOR = ".activity-feed-list", FILTER_SELECTOR = ".repos-activity-filter-dropdown", BUTTON_CLASS = "fix-ado-activity-order", TEXT_CLASS = "bolt-button-text", SVG_NAMESPACE2 = "http://www.w3.org/2000/svg", SORT_ICON_PATHS = ["M5 13V3M2.5 5.5L5 3l2.5 2.5", "M11 3v10M8.5 10.5L11 13l2.5-2.5"], DEFAULT_ORDER = "oldest-first", LABELS2 = {
-    "newest-first": "Newest first",
-    "oldest-first": "Oldest first"
-  }, flipped = (order) => order === "oldest-first" ? "newest-first" : "oldest-first";
-  function sortIcon(document2) {
-    let svg = document2.createElementNS(SVG_NAMESPACE2, "svg");
-    svg.setAttribute("aria-hidden", "true"), svg.setAttribute("class", "fix-ado-activity-order-icon"), svg.setAttribute("viewBox", "0 0 16 16");
-    for (let data of SORT_ICON_PATHS) {
-      let path = document2.createElementNS(SVG_NAMESPACE2, "path");
-      path.setAttribute("d", data), svg.append(path);
+  // azure-devops/src/features/days-in-column/days-in-column.ts
+  var CARD_SELECTOR = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS = "fix-ado-days-in-column";
+  function columnEnteredAt(updates) {
+    for (let update2 of updates.toReversed()) {
+      let columnChange = update2.fields?.["System.BoardColumn"];
+      if (columnChange !== void 0 && columnChange.newValue !== columnChange.oldValue) {
+        let changedDate = update2.fields?.["System.ChangedDate"]?.newValue;
+        return typeof changedDate == "string" ? changedDate : null;
+      }
     }
-    return svg;
+    return null;
   }
-  function createButton(document2, onClick3) {
-    let button2 = document2.createElement("button");
-    button2.type = "button", button2.className = `${BUTTON_CLASS} bolt-button enabled bolt-focus-treatment`;
-    let text = document2.createElement("span");
-    return text.className = TEXT_CLASS, button2.append(sortIcon(document2), text), button2.addEventListener("click", onClick3), button2;
+  function daysSince(enteredAt, now) {
+    return Math.max(0, Math.floor((now - Date.parse(enteredAt)) / 864e5));
   }
-  function spacingBox(button2) {
-    let box = button2.ownerDocument.createElement("div");
-    return box.className = "margin-bottom-16 margin-right-8 inline-flex-row", box.append(button2), box;
+  function dotAge(day) {
+    return day <= 7 ? "fresh" : day <= 14 ? "aging" : "old";
   }
-  function findOrAddButton(document2, onClick3) {
-    let existing = document2.querySelector(`.${BUTTON_CLASS}`);
+  var LOADING_DOT_COUNT = 3;
+  function dotsFor(document2, days) {
+    return (days === null ? Array.from({ length: LOADING_DOT_COUNT }, () => "loading") : Array.from({ length: Math.min(days, 30) }, (_entry, index) => dotAge(index + 1))).map((age) => {
+      let dot = document2.createElement("span");
+      return dot.dataset.age = age, dot;
+    });
+  }
+  function captionFor(days) {
+    return days === null ? "" : days === 0 ? "Less than a day in this column" : `${days} ${days === 1 ? "day" : "days"} in this column`;
+  }
+  function createDotBar(document2, days) {
+    let bar = document2.createElement("div");
+    return bar.className = BAR_CLASS, bar.dataset.days = String(days), bar.title = captionFor(days), days === null ? bar.setAttribute("aria-hidden", "true") : (bar.setAttribute("aria-label", bar.title), bar.setAttribute("role", "img")), bar.append(...dotsFor(document2, days)), bar;
+  }
+  function showDaysInColumn(card, days) {
+    let existing = card.querySelector(`.${BAR_CLASS}`);
+    existing?.dataset.days !== String(days) && (existing?.remove(), (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days)));
+  }
+  function findCards(document2) {
+    let cards = /* @__PURE__ */ new Map();
+    for (let card of document2.querySelectorAll(CARD_SELECTOR)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && cards.set(id, [...cards.get(id) ?? [], card]);
+    }
+    return cards;
+  }
+  function columnIdOf(card) {
+    return card.closest(COLUMN_SELECTOR)?.dataset.column ?? null;
+  }
+  function noteMoves(tracker, cards) {
+    for (let [id, [element4]] of cards) {
+      let columnId = columnIdOf(element4), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
+      lastColumnId !== void 0 && lastColumnId !== columnId && entry !== void 0 && (entry.enteredAt = new Date(tracker.now()).toISOString()), tracker.columnIds.set(id, columnId);
+    }
+  }
+  function showBars(tracker, cards) {
+    noteMoves(tracker, cards);
+    for (let [id, elements] of cards) {
+      let entry = tracker.entries.get(id), enteredAt = entry?.enteredAt ?? null, days = null;
+      entry !== void 0 && (days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now()));
+      for (let element4 of elements)
+        showDaysInColumn(element4, days);
+    }
+  }
+  function pauseIfAsked(tracker, retryAfterSeconds) {
+    return retryAfterSeconds === null ? !1 : (tracker.pausedUntil = tracker.now() + retryAfterSeconds * 1e3, !0);
+  }
+  async function fetchChangedCards(tracker, ids) {
+    let { workItems, retryAfterSeconds } = await tracker.client.getWorkItems(ids);
+    if (pauseIfAsked(tracker, retryAfterSeconds))
+      return;
+    let changed = workItems.filter(({ id, rev }) => tracker.entries.get(id)?.rev !== rev);
+    for (let { id, rev } of changed) {
+      let response = await tracker.client.getWorkItemUpdates(id);
+      if (tracker.entries.set(id, { enteredAt: columnEnteredAt(response.updates), rev }), pauseIfAsked(tracker, response.retryAfterSeconds))
+        return;
+    }
+  }
+  function isCheckDue(tracker, ids) {
+    let now = tracker.now(), isDue = ids.some((id) => !tracker.entries.has(id)) || now - tracker.lastCheckAt >= 6e4;
+    return !tracker.isChecking && ids.length > 0 && isDue && now >= tracker.pausedUntil;
+  }
+  async function check(tracker, ids) {
+    tracker.isChecking = !0, tracker.lastCheckAt = tracker.now();
+    try {
+      await fetchChangedCards(tracker, ids);
+    } catch {
+      tracker.pausedUntil = tracker.now() + 6e4;
+    } finally {
+      tracker.isChecking = !1;
+    }
+  }
+  function createDaysInColumn(options) {
+    let tracker = {
+      client: options.client,
+      columnIds: /* @__PURE__ */ new Map(),
+      entries: /* @__PURE__ */ new Map(),
+      isChecking: !1,
+      lastCheckAt: Number.NEGATIVE_INFINITY,
+      now: options.now,
+      pausedUntil: Number.NEGATIVE_INFINITY
+    };
+    return {
+      async sync() {
+        let cards = findCards(options.document);
+        showBars(tracker, cards);
+        let ids = [...cards.keys()];
+        isCheckDue(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
+      }
+    };
+  }
+
+  // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
+  var HEADER_SELECTOR = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS = "fix-ado-days-toggle";
+  function showColumnState(column, toggle, isHidden) {
+    Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
+    let pressed = String(!isHidden);
+    toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", "Days in column"));
+  }
+  function createToggle(document2, onClick3) {
+    let toggle = document2.createElement("button");
+    return toggle.type = "button", toggle.className = TOGGLE_CLASS, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
+      event.preventDefault(), event.stopPropagation(), onClick3();
+    }), toggle;
+  }
+  function findOrAddToggle(header, onClick3) {
+    let existing = header.querySelector(`.${TOGGLE_CLASS}`);
     if (existing !== null)
       return existing;
-    let filters = document2.querySelector(FILTER_SELECTOR)?.parentElement;
-    if (filters == null)
-      return null;
-    let button2 = createButton(document2, onClick3);
-    return filters.prepend(spacingBox(button2)), button2;
+    let toggle = createToggle(header.ownerDocument, onClick3);
+    return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
   }
-  function renderAllRows(document2) {
-    let view = document2.defaultView;
-    view !== null && document2.dispatchEvent(
-      new view.KeyboardEvent("keydown", { altKey: !0, bubbles: !0, ctrlKey: !0, key: "v" })
-    );
-  }
-  function showOrder(feed, button2, order) {
-    feed.dataset.fixAdoActivityOrder !== order && (feed.dataset.fixAdoActivityOrder = order);
-    let text = button2?.querySelector(`.${TEXT_CLASS}`);
-    button2 !== null && text !== null && text !== void 0 && text.textContent !== LABELS2[order] && (text.textContent = LABELS2[order], button2.title = `Show ${LABELS2[flipped(order)].toLowerCase()}`);
-  }
-  function createActivityOrder(options) {
-    let { document: document2, storage } = options, order = storage.load() ?? DEFAULT_ORDER, fullyRenderedFeeds = /* @__PURE__ */ new WeakSet();
-    function flip2() {
-      order = flipped(order), storage.save(order), sync4();
+  function createDaysInColumnToggles(options) {
+    let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
+    function flip2(columnId) {
+      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync4();
     }
     function sync4() {
-      let feed = document2.querySelector(FEED_SELECTOR);
-      feed !== null && (order === "oldest-first" && !fullyRenderedFeeds.has(feed) && (fullyRenderedFeeds.add(feed), renderAllRows(document2)), showOrder(feed, findOrAddButton(document2, flip2), order));
+      let headers = [...document2.querySelectorAll(HEADER_SELECTOR)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
+      if (headers.length === columns.length)
+        for (let [index, header] of headers.entries()) {
+          let column = columns[index], columnId = column?.dataset.column;
+          if (column !== void 0 && columnId !== void 0) {
+            let toggle = findOrAddToggle(header, () => {
+              flip2(columnId);
+            });
+            showColumnState(column, toggle, hiddenColumnIds.has(columnId));
+          }
+        }
     }
     return { sync: sync4 };
   }
 
-  // azure-devops/src/features/activity-order/style.css
-  var style_default3 = `/* The activity feed on a pull request's Overview, oldest first. Azure DevOps renders the rows
-   newest first and keeps them that way in the DOM; the feed lays them out bottom to top. */
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"] {
-  display: block;
-}
-
-/* Tab and screen reader order follow the rows as shown, where reading-flow is supported. */
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody {
+  // azure-devops/src/features/days-in-column/style.css
+  var style_default3 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
+.fix-ado-days-in-column {
   display: flex;
-  flex-direction: column-reverse;
-  reading-flow: flex-visual;
+  flex-wrap: wrap;
+  gap: 3px;
+  /* One row of dots, also when empty, so a card keeps its height. */
+  min-height: 5px;
+  margin-top: 6px;
 }
 
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody > tr {
-  display: block;
+.fix-ado-days-in-column > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  /* Azure DevOps keeps its palette as bare "r, g, b" values, so it follows the theme. */
+  background: rgb(var(--palette-neutral-20, 200, 200, 200));
 }
 
-/* The timeline line ends at the row that is now on top, and at the one now at the bottom. */
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-first-row
-  .bolt-timeline-icon-prefix,
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-last-row
-  .bolt-timeline-icon-suffix {
-  visibility: visible;
+.fix-ado-days-in-column > span[data-age="aging"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
 }
 
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-first-row
-  .bolt-timeline-icon-suffix,
-.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-last-row
-  .bolt-timeline-icon-prefix {
-  visibility: hidden;
+.fix-ado-days-in-column > span[data-age="old"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
 }
 
-/* The dashed piece of the line leads to the comment box, which is now the bottom row. */
-.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-row:nth-child(4)
-  .bolt-timeline-icon-prefix {
-  border-left-style: solid;
+/* Skeleton while the day count loads: three grey dots that pulse one after another. */
+.fix-ado-days-in-column > span[data-age="loading"] {
+  animation: fix-ado-pulse 1.2s ease-in-out infinite;
+}
+.fix-ado-days-in-column > span[data-age="loading"]:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.fix-ado-days-in-column > span[data-age="loading"]:nth-child(3) {
+  animation-delay: 0.4s;
 }
 
-.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-first-row
-  .bolt-timeline-icon-prefix,
-.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
-  .bolt-timeline-first-row
-  + .bolt-timeline-row
-  .bolt-timeline-icon-suffix {
-  border-left-style: dashed;
+@keyframes fix-ado-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
-/* The sort button's icon, drawn like Azure DevOps's line icons. */
-.fix-ado-activity-order-icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin-right: 8px;
-  vertical-align: middle;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-days-in-column > span[data-age="loading"] {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.kanban-board-column[data-fix-ado-days-hidden] .fix-ado-days-in-column {
+  display: none;
+}
+
+/* The days-in-column toggle in a column header. It shows while the header is hovered, or
+   while something in it has keyboard focus. A click also focuses the toggle; that focus must
+   not keep it showing once the pointer leaves. */
+.fix-ado-days-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.kanban-board-column-header:is(:hover, :has(:focus-visible)) .fix-ado-days-toggle {
+  opacity: 1;
+}
+
+.fix-ado-days-toggle:hover {
+  background: rgba(var(--palette-black-alpha-6, 0, 0, 0, 0.06));
+}
+
+.fix-ado-days-toggle > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--component-status-warning, rgb(214, 119, 48));
+}
+
+/* Off: hollow dots. */
+.fix-ado-days-toggle[aria-pressed="false"] > span {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
 }
 `;
 
-  // azure-devops/src/features/activity-order/index.ts
-  var ORDER_KEY = "activity-order", activityOrder = {
-    change: { kind: "new", version: "1.11.0" },
-    description: "The comments and updates on a pull request's Overview run from old to new, with a button to flip them.",
-    id: "activity-order",
-    name: "Oldest first",
-    start({ document: document2, isInFrame: isInFrame2 }) {
-      if (isInFrame2)
-        return null;
-      let order = createActivityOrder({
+  // azure-devops/src/features/days-in-column/index.ts
+  var HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns", daysInColumn = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "A dot per day a card has been in its column. Turn it on per column on the board.",
+    id: "days-in-column",
+    name: "Days in column",
+    start({ client, document: document2, now }) {
+      let days = createDaysInColumn({ client, document: document2, now }), toggles = createDaysInColumnToggles({
         document: document2,
         storage: {
-          load: () => GM_getValue(ORDER_KEY, null),
-          save: (picked) => {
-            GM_setValue(ORDER_KEY, picked);
+          load: () => GM_getValue(HIDDEN_COLUMNS_KEY, []),
+          save: (columnIds) => {
+            GM_setValue(HIDDEN_COLUMNS_KEY, columnIds);
           }
         }
       });
       return {
-        sync({ page }) {
-          page.kind === "pull-request" && order.sync();
+        sync({ page, isTabActive: isTabActive2 }) {
+          page.kind === "board" && (toggles.sync(), isTabActive2 && days.sync());
         }
       };
     },
     styles: [style_default3]
   };
 
-  // azure-devops/src/core/fold-toggle.ts
-  var CHEVRONS = { folded: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
-  function createChevron(document2) {
-    let iconFont = document2.createElement("span");
-    iconFont.className = "fluent-icons-enabled";
-    let chevron = document2.createElement("span");
-    return chevron.className = "left-icon flex-noshrink fabric-icon small", chevron.setAttribute("aria-hidden", "true"), iconFont.append(chevron), iconFont;
-  }
-  function createFoldToggle(document2, className) {
-    let toggle = document2.createElement("button");
-    return toggle.type = "button", toggle.className = `${className} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`, toggle.append(createChevron(document2)), toggle;
-  }
-  function showFoldToggleState(toggle, isOpen, labels) {
-    let expanded = String(isOpen);
-    if (toggle.getAttribute("aria-expanded") === expanded)
-      return;
-    toggle.setAttribute("aria-expanded", expanded), toggle.title = isOpen ? labels.open : labels.folded, toggle.setAttribute("aria-label", labels.name);
-    let chevron = toggle.querySelector(".fabric-icon");
-    chevron?.classList.toggle(CHEVRONS.open, isOpen), chevron?.classList.toggle(CHEVRONS.folded, !isOpen);
-  }
-
-  // azure-devops/src/features/collapsible-threads/bulk-buttons.ts
-  var FILTER_SELECTOR2 = ".repos-activity-filter-dropdown", BULK_BOX_CLASS = "fix-ado-thread-bulk-buttons", BULK_BUTTONS = [
-    {
-      className: "fix-ado-all-threads-button",
-      group: "all",
-      labels: { collapse: "Collapse all threads", expand: "Expand all threads" }
-    },
-    {
-      className: "fix-ado-done-threads-button",
-      group: "done",
-      labels: { collapse: "Collapse done threads", expand: "Expand done threads" }
-    }
-  ], isEveryCollapsed = (feedThreads) => feedThreads.length > 0 && feedThreads.every((feedThread) => feedThread.thread.dataset.fixAdoThread === "collapsed"), doneThreadsOf = (feedThreads) => feedThreads.filter((feedThread) => feedThread.isDone);
-  function groupStatesAfter(group2, feedThreads, current) {
-    if (group2 === "all") {
-      let state = isEveryCollapsed(feedThreads) ? "open" : "collapsed";
-      return { done: state, other: state };
-    }
-    return isEveryCollapsed(doneThreadsOf(feedThreads)) ? { ...current, done: "open" } : { done: "collapsed", other: "open" };
-  }
-  function createBulkButton(document2, { className, group: group2, labels }, onClick3) {
-    let text = Object.assign(document2.createElement("span"), {
-      className: "bolt-button-text",
-      textContent: labels.collapse
-    }), button2 = document2.createElement("button");
-    return button2.type = "button", button2.className = `${className} bolt-button enabled bolt-focus-treatment`, button2.append(text), button2.addEventListener("click", () => {
-      onClick3(group2);
-    }), button2;
-  }
-  function createBulkBox(document2, onClick3) {
-    let box = Object.assign(document2.createElement("div"), {
-      className: `${BULK_BOX_CLASS} margin-bottom-16 inline-flex-row`
-    });
-    return box.append(...BULK_BUTTONS.map((bulkButton) => createBulkButton(document2, bulkButton, onClick3))), box;
-  }
-  function findOrAddBulkBox(document2, onClick3) {
-    let bar = document2.querySelector(FILTER_SELECTOR2)?.parentElement;
-    if (bar == null)
-      return null;
-    let existing = bar.querySelector(`.${BULK_BOX_CLASS}`);
-    if (existing !== null)
-      return existing;
-    let box = createBulkBox(document2, onClick3);
-    return bar.prepend(box), box;
-  }
-  function setHidden(element4, hidden) {
-    element4.hidden !== hidden && (element4.hidden = hidden);
-  }
-  function setLabel(button2, label) {
-    let text = button2.querySelector(".bolt-button-text");
-    text !== null && text.textContent !== label && (text.textContent = label);
-  }
-  function showBulkButtons(box, feedThreads) {
-    for (let { className, group: group2, labels } of BULK_BUTTONS) {
-      let button2 = box.querySelector(`.${className}`), groupThreads = group2 === "all" ? feedThreads : doneThreadsOf(feedThreads);
-      button2 !== null && (setLabel(button2, isEveryCollapsed(groupThreads) ? labels.expand : labels.collapse), setHidden(button2, group2 === "done" && groupThreads.length === 0));
-    }
-  }
-
-  // azure-devops/src/pull-requests/feed-threads.ts
-  var FEED_THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread", HEADER_SELECTOR = ".repos-discussion-comment-header", STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label", RESOLVED_STATUS = "Resolved", UNREAD_COMMENT_MARKER_SELECTOR = ".repos-unread-comment-marker", UNRESOLVED_STATUSES = /* @__PURE__ */ new Set(["Active", "Pending"]);
-  function timeBoxOf(header) {
-    let nameAndTime = header.firstElementChild;
-    return nameAndTime === null ? null : nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime;
-  }
-  function feedThreadOf(thread) {
-    let header = thread.querySelector(HEADER_SELECTOR), timeBox = header === null ? null : timeBoxOf(header);
-    if (header === null || timeBox === null)
-      return null;
-    let status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "", isUnresolved = UNRESOLVED_STATUSES.has(status);
-    return {
-      hasUnreadComment: thread.querySelector(UNREAD_COMMENT_MARKER_SELECTOR) !== null,
-      header,
-      isDone: status !== "" && !isUnresolved,
-      isResolved: status === RESOLVED_STATUS,
-      isUnresolved,
-      status,
-      thread,
-      timeBox
-    };
-  }
-  var feedThreadElements = (document2) => [
-    ...document2.querySelectorAll(FEED_THREAD_SELECTOR)
-  ];
-
-  // azure-devops/src/features/collapsible-threads/collapsible-threads.ts
-  var TOGGLE_CLASS = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", name: "Thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u, FILE_HEADER_SELECTOR = ".comment-file-header", FILE_TITLE_SELECTOR = ".comment-file-header-title", AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
-  function threadIdOf(thread, knownIds) {
-    let field = thread.querySelector(".repos-discussion-thread-reply input"), id = THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id;
-    return id !== void 0 && knownIds.set(thread, id), id ?? knownIds.get(thread) ?? null;
-  }
-  function fileHeaderOf(thread) {
-    let before = thread.previousElementSibling;
-    return before?.matches(FILE_HEADER_SELECTOR) === !0 ? before : null;
-  }
-  function findOrCreateToggle({ header, thread }, onClick3) {
-    let existing = thread.querySelector(`.${TOGGLE_CLASS}`) ?? fileHeaderOf(thread)?.querySelector(`.${TOGGLE_CLASS}`);
-    if (existing != null)
-      return existing;
-    let toggle = createFoldToggle(header.ownerDocument, TOGGLE_CLASS);
-    return toggle.addEventListener("click", () => {
-      onClick3(thread);
-    }), toggle;
-  }
-  function toggleBoxOf({ header, thread }, state) {
-    let fileTitle = fileHeaderOf(thread)?.querySelector(FILE_TITLE_SELECTOR) ?? null;
-    return state === "open" && fileTitle !== null ? fileTitle : header.closest(AUTHOR_COLUMN_SELECTOR)?.parentElement ?? header;
-  }
-  function placeToggle(toggle, box) {
-    box.firstElementChild !== toggle && box.prepend(toggle);
-  }
-  function unpickedStateOf(feedThread, groupStates) {
-    return (feedThread.isDone ? groupStates.done : groupStates.other) ?? (feedThread.isDone && !feedThread.hasUnreadComment ? "collapsed" : "open");
-  }
-  function dropPicks({
-    feedThreads,
-    group: group2,
-    knownIds,
-    pickedStates
-  }) {
-    let doneThreads = doneThreadsOf(feedThreads);
-    if (group2 !== "done" || !isEveryCollapsed(doneThreads)) {
-      pickedStates.clear();
-      return;
-    }
-    for (let { thread } of doneThreads)
-      pickedStates.delete(threadIdOf(thread, knownIds) ?? "");
-  }
-  var loadedFeedThreads = (document2) => feedThreadElements(document2).map((thread) => feedThreadOf(thread)).filter((feedThread) => feedThread !== null);
-  function createCollapsibleThreads({ document: document2 }) {
-    let pickedStates = /* @__PURE__ */ new Map(), knownIds = /* @__PURE__ */ new WeakMap(), groupStates = { done: null, other: null };
-    function stateOf(feedThread) {
-      return pickedStates.get(threadIdOf(feedThread.thread, knownIds) ?? "") ?? unpickedStateOf(feedThread, groupStates);
-    }
-    function applyBulk(group2) {
-      let feedThreads = loadedFeedThreads(document2);
-      dropPicks({ feedThreads, group: group2, knownIds, pickedStates }), groupStates = groupStatesAfter(group2, feedThreads, groupStates), sync4();
-    }
-    function flip2(thread) {
-      let threadId = threadIdOf(thread, knownIds);
-      threadId !== null && (pickedStates.set(threadId, thread.dataset.fixAdoThread === "open" ? "collapsed" : "open"), sync4());
-    }
-    function syncThread2(feedThread) {
-      let state = stateOf(feedThread);
-      feedThread.thread.dataset.fixAdoThread !== state && (feedThread.thread.dataset.fixAdoThread = state);
-      let toggle = findOrCreateToggle(feedThread, flip2);
-      placeToggle(toggle, toggleBoxOf(feedThread, state)), showFoldToggleState(toggle, state === "open", TOGGLE_LABELS);
-    }
-    function sync4() {
-      let box = findOrAddBulkBox(document2, applyBulk), feedThreads = loadedFeedThreads(document2);
-      for (let feedThread of feedThreads)
-        syncThread2(feedThread);
-      box !== null && showBulkButtons(box, feedThreads);
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/collapsible-threads/style.css
-  var style_default4 = `/* The toggle sits before the author of the first comment, level with the avatar, or before the
-   file's icon on an open thread on a file. The box it is in gives up some room on the left. */
-.fix-ado-thread-toggle {
-  flex: none;
-  align-self: flex-start;
-  margin-right: 4px;
-}
-
-.comment-file-header-title > .fix-ado-thread-toggle {
-  align-self: center;
-}
-
-.repos-discussion-comment:has(> .flex-column > .flex-row > .fix-ado-thread-toggle),
-.comment-file-header-title:has(> .fix-ado-thread-toggle) {
-  padding-left: 8px;
-}
-
-/* Before the author, the toggle keeps the offset it has before a file's icon: the comment's own
-   box sits 16px further in (a 4px margin and 12px padding). */
-.repos-discussion-comment .fix-ado-thread-toggle {
-  margin-left: -16px;
-}
-
-/* A collapsed thread shows the header of its first comment: who wrote it, when, and the
-   thread's Resolved or Unresolved chip. Its text, the other comments and the reply box hide. */
-[data-fix-ado-thread="collapsed"] .repos-comment-viewer:not(:first-child),
-[data-fix-ado-thread="collapsed"] .repos-discussion-thread-reply,
-[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header ~ * {
-  display: none;
-}
-
-[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header {
-  margin-bottom: 0;
-}
-
-/* The actions at the end of the header hide too. The status dropdown among them stays in
-   the page, where the script reads the thread's status. */
-[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header > :not(:first-child) {
-  display: none;
-}
-
-/* The card stays, with little room around the one line that is left. */
-[data-fix-ado-thread="collapsed"] .repos-comment-viewer {
-  padding: 0 12px;
-}
-
-/* Azure DevOps gives a first comment with replies its own border and bottom padding, in a rule
-   as specific as the plain one. The second selector outranks it. */
-[data-fix-ado-thread="collapsed"] .repos-discussion-comment,
-[data-fix-ado-thread="collapsed"] .repos-discussion-comment.has-replies {
-  padding: 4px 20px;
-  border-bottom: 0;
-}
-
-[data-fix-ado-thread="collapsed"] .repos-discussion-comment > .flex-column > .flex-row {
-  align-items: center;
-}
-
-[data-fix-ado-thread="collapsed"] .fix-ado-thread-toggle {
-  align-self: center;
-}
-
-/* One line, also in a narrow window, where Azure DevOps puts the time under the name. */
-[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header > :first-child {
-  flex-direction: row;
-  align-items: center;
-}
-
-[data-fix-ado-thread="collapsed"] .repos-comment-header-persona {
-  margin-top: 0;
-}
-
-/* A collapsed thread on a file hides the file's name and code too. */
-.comment-file-header:has(+ [data-fix-ado-thread="collapsed"]) {
-  display: none;
-}
-
-/* Azure DevOps keeps the height a thread had when it loaded, as a min-height on its row. A
-   collapsed thread drops it. */
-.activity-feed-list [style*="min-height"]:has([data-fix-ado-thread="collapsed"]) {
-  min-height: 0 !important;
-}
-
-/* Collapse all threads and Collapse done threads sit on the left of the bar above the feed.
-   The bar puts its filters on the right. */
-.fix-ado-thread-bulk-buttons {
-  order: -1;
-  gap: 8px;
-  margin-right: auto;
-}
-
-/* A hidden bulk button leaves no gap. Azure DevOps's button classes would show it. */
-.fix-ado-thread-bulk-buttons > [hidden] {
-  display: none !important;
-}
-`;
-
-  // azure-devops/src/features/collapsible-threads/index.ts
-  var collapsibleThreads = {
-    change: { kind: "updated", version: "1.22.0" },
-    description: "A button on every thread on a pull request's Overview collapses it. Resolved, Won't fix and Closed threads start collapsed, unless one of their comments is unread. Above the feed, Collapse all threads collapses every thread and turns into Expand all threads. Collapse done threads collapses the done ones, opens the others and turns into Expand done threads, which opens the done ones only. Both also apply to threads that load later.",
-    id: "collapsible-threads",
-    name: "Collapsible threads",
-    start({ document: document2, isInFrame: isInFrame2 }) {
-      if (isInFrame2)
-        return null;
-      let threads = createCollapsibleThreads({ document: document2 });
-      return {
-        sync({ page }) {
-          page.kind === "pull-request" && threads.sync();
-        }
-      };
-    },
-    styles: [style_default4]
-  };
-
-  // azure-devops/src/features/folded-pushes/folded-pushes.ts
-  var HEADER_SELECTOR2 = ".activity-feed-list .iteration-card-header", TITLE_SELECTOR = ".iteration-header .font-weight-semibold", COMMITS_SELECTOR = ".bolt-table-container", TOGGLE_CLASS2 = "fix-ado-push-toggle", TOGGLE_LABELS2 = { folded: "Show commits", name: "Commits", open: "Hide commits" };
-  function pushOf(header) {
-    let card = header.closest(".bolt-card");
-    if (card === null)
-      return null;
-    let pushedAt = header.querySelector("time")?.getAttribute("datetime") ?? null;
-    return { card, header, pushedAt };
-  }
-  function findOrAddToggle({ header }, onClick3) {
-    let existing = header.querySelector(`.${TOGGLE_CLASS2}`);
-    if (existing !== null)
-      return existing;
-    let title = header.querySelector(TITLE_SELECTOR);
-    if (title === null)
-      return null;
-    let toggle = createFoldToggle(header.ownerDocument, TOGGLE_CLASS2);
-    return toggle.addEventListener("click", (event) => {
-      event.preventDefault(), event.stopPropagation(), onClick3(header);
-    }), title.after(toggle), toggle;
-  }
-  function createFoldedPushes({ document: document2 }) {
-    let openPushes = /* @__PURE__ */ new Set();
-    function flip2(header) {
-      let pushedAt = pushOf(header)?.pushedAt ?? null;
-      pushedAt !== null && (openPushes.delete(pushedAt) || openPushes.add(pushedAt), sync4());
-    }
-    function syncPush(push) {
-      let hasCommits = push.card.querySelector(COMMITS_SELECTOR) !== null, state = hasCommits && push.pushedAt !== null && openPushes.has(push.pushedAt) ? "open" : "folded";
-      if (push.card.dataset.fixAdoPush !== state && (push.card.dataset.fixAdoPush = state), hasCommits) {
-        let toggle = findOrAddToggle(push, flip2);
-        toggle !== null && showFoldToggleState(toggle, state === "open", TOGGLE_LABELS2);
-      } else
-        push.header.querySelector(`.${TOGGLE_CLASS2}`)?.remove();
-    }
-    function sync4() {
-      for (let header of document2.querySelectorAll(HEADER_SELECTOR2)) {
-        let push = pushOf(header);
-        push !== null && syncPush(push);
-      }
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/folded-pushes/style.css
-  var style_default5 = `/* A push in the activity feed of a pull request's Overview. Its header is one line, like the
-   feed's other updates: avatar, title, toggle, and the time at the right. */
-[data-fix-ado-push] .iteration-header {
-  align-items: center;
-  padding: 6px 20px;
-}
-
-[data-fix-ado-push] .iteration-header > .flex-column {
-  flex-direction: row;
-  align-items: center;
-}
-
-[data-fix-ado-push] .iteration-header .font-weight-semibold {
-  font-weight: normal;
-}
-
-[data-fix-ado-push] .iteration-header .bolt-coin {
-  margin-top: 0;
-}
-
-[data-fix-ado-push] .iteration-header .secondary-text {
-  flex: none;
-  margin-left: auto;
-  padding-left: 4px;
-  line-height: 32px;
-}
-
-.fix-ado-push-toggle {
-  flex: none;
-  margin: 0 4px;
-}
-
-/* Folded: no card around it, no commits under it. */
-[data-fix-ado-push="folded"] {
-  margin: 0 20px;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-[data-fix-ado-push="folded"] .iteration-card-header,
-[data-fix-ado-push="folded"] .iteration-card-header:hover {
-  margin: 0;
-  background: transparent;
-}
-
-[data-fix-ado-push="folded"] .iteration-header {
-  padding: 2px 0;
-  border-bottom: 0;
-}
-
-/* The push number in the timeline needs more room than a dot. A folded push gives it less
-   line above and below, so the row is as tall as the feed's other updates and the number
-   sits level with the avatar. */
-.bolt-timeline-row:has([data-fix-ado-push="folded"])
-  .activity-feed-sequence
-  .bolt-timeline-icon-prefix {
-  min-height: 3px;
-}
-
-.bolt-timeline-row:has([data-fix-ado-push="folded"])
-  .activity-feed-sequence
-  .bolt-timeline-icon-suffix {
-  min-height: 0;
-}
-
-[data-fix-ado-push="folded"] .iteration-card-header ~ * {
-  display: none;
-}
-
-/* Azure DevOps keeps the height a push had when it loaded, as a min-height on its row. A
-   folded push drops it. */
-.activity-feed-list [style*="min-height"]:has([data-fix-ado-push="folded"]) {
-  min-height: 0 !important;
-}
-`;
-
-  // azure-devops/src/features/folded-pushes/index.ts
-  var foldedPushes = {
-    change: { kind: "new", version: "1.12.0" },
-    description: "A push on a pull request's Overview is one line, like its other updates, with a button that shows its commits.",
-    id: "folded-pushes",
-    name: "Folded pushes",
-    start({ document: document2, isInFrame: isInFrame2 }) {
-      if (isInFrame2)
-        return null;
-      let pushes = createFoldedPushes({ document: document2 });
-      return {
-        sync({ page }) {
-          page.kind === "pull-request" && pushes.sync();
-        }
-      };
-    },
-    styles: [style_default5]
-  };
-
-  // azure-devops/src/features/joined-reviewer-lines/joined-reviewer-lines.ts
-  var ROW_SELECTOR = ".activity-feed-list > tbody > .bolt-timeline-row", JOINED_CLASS = "fix-ado-joined-line", LINE_SELECTOR = `.activity-card-subtle:not(.${JOINED_CLASS})`, PERSON_LINE_PART_COUNT = 6, isBlank = (node) => node.nodeType === node.TEXT_NODE && (node.textContent ?? "").trim() === "", isText = (node) => node?.nodeType === node?.TEXT_NODE;
-  function avatarNamesOf(line2) {
-    let names = [...line2.querySelectorAll(".bolt-coin")].map(
-      (avatar) => avatar.getAttribute("aria-label") ?? ""
-    ), [actorName, personName] = names;
-    return names.length === 2 && actorName !== void 0 && personName !== void 0 ? [actorName, personName] : null;
-  }
-  function personLineOf(row) {
-    let line2 = row.querySelector(LINE_SELECTOR);
-    if (line2 === null)
-      return null;
-    let parts = [...line2.childNodes].filter((node) => !isBlank(node)), [actorAvatar, actorLabel, words, avatar, label, ending] = parts, names = avatarNamesOf(line2);
-    return names === null || parts.length !== PERSON_LINE_PART_COUNT || actorAvatar === void 0 || actorLabel === void 0 || avatar === void 0 || label === void 0 || !isText(words) || !isText(ending) ? null : {
-      actor: [actorAvatar, actorLabel],
-      actorName: names[0],
-      ending: ending.textContent ?? "",
-      line: line2,
-      person: [avatar, label],
-      personName: names[1],
-      row,
-      words: words.textContent ?? ""
-    };
-  }
-  var continuesRun = (run, next) => run[0]?.actorName === next.actorName && run[0].words.trim() === next.words.trim();
-  function runsOf(rows) {
-    let runs = [], current = [];
-    for (let row of rows) {
-      let personLine = personLineOf(row);
-      personLine !== null && continuesRun(current, personLine) ? current.push(personLine) : (current = personLine === null ? [] : [personLine], personLine !== null && runs.push(current));
-    }
-    return runs.filter((run) => run.length > 1);
-  }
-  function groupsOf(run) {
-    let groups = /* @__PURE__ */ new Map();
-    for (let personLine of run.toReversed()) {
-      let key = personLine.ending.trim();
-      groups.set(key, [...groups.get(key) ?? [], personLine]);
-    }
-    return [...groups.values()];
-  }
-  var signatureOf = (run) => JSON.stringify(
-    run.map(({ actorName, ending, personName, words }) => [actorName, words, personName, ending])
-  ), clonesOf = (nodes) => nodes.map((node) => node.cloneNode(!0));
-  function groupParts(group2) {
-    let parts = [];
-    for (let [index, personLine] of group2.entries())
-      index > 0 && parts.push(", "), parts.push(...clonesOf(personLine.person));
-    return parts.push(group2[0]?.ending ?? ""), parts;
-  }
-  function joinedParts(newest, run) {
-    let parts = [...clonesOf(newest.actor), newest.words];
-    for (let [index, group2] of groupsOf(run).entries())
-      index > 0 && parts.push(", "), parts.push(...groupParts(group2));
-    return parts;
-  }
-  function createJoinedLine(newest, run, signature) {
-    let joined = newest.line.cloneNode(!1);
-    return joined.classList.add(JOINED_CLASS), joined.dataset.fixAdoJoinedFrom = signature, joined.append(...joinedParts(newest, run)), joined;
-  }
-  function showJoined(run) {
-    let [newest] = run;
-    if (newest === void 0)
-      return;
-    let signature = signatureOf(run), existing = newest.row.querySelector(`.${JOINED_CLASS}`);
-    existing?.dataset.fixAdoJoinedFrom !== signature && (existing?.remove(), newest.line.after(createJoinedLine(newest, run, signature)));
-  }
-  function markRow(row, mark) {
-    row.dataset.fixAdoJoined !== mark && (row.dataset.fixAdoJoined = mark), mark === "hidden" && row.querySelector(`.${JOINED_CLASS}`)?.remove();
-  }
-  function unmarkRow(row) {
-    delete row.dataset.fixAdoJoined, row.querySelector(`.${JOINED_CLASS}`)?.remove();
-  }
-  function createJoinedReviewerLines({ document: document2 }) {
-    function sync4() {
-      let runs = runsOf([...document2.querySelectorAll(ROW_SELECTOR)]), joinedRows = new Set(runs.flat().map(({ row }) => row));
-      for (let row of document2.querySelectorAll("[data-fix-ado-joined]"))
-        joinedRows.has(row) || unmarkRow(row);
-      for (let run of runs) {
-        for (let [index, { row }] of run.entries())
-          markRow(row, index === 0 ? "line" : "hidden");
-        showJoined(run);
-      }
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/joined-reviewer-lines/style.css
-  var style_default6 = `/* Lines that add a reviewer, joined to one. The newest row of a run shows the joined line in
-   place of Azure DevOps's own; the other rows hide. */
-[data-fix-ado-joined="hidden"] {
-  /* The sort order of the feed sets a display on its rows. */
-  display: none !important;
-}
-
-[data-fix-ado-joined="line"] .activity-card-subtle:not(.fix-ado-joined-line) {
-  display: none;
-}
-`;
-
-  // azure-devops/src/features/joined-reviewer-lines/index.ts
-  var joinedReviewerLines = {
-    change: { kind: "new", version: "1.12.0" },
-    description: "Lines next to each other on a pull request's Overview that add a reviewer are one line, with required and optional reviewers grouped.",
-    id: "joined-reviewer-lines",
-    name: "Joined reviewer lines",
-    start({ document: document2, isInFrame: isInFrame2 }) {
-      if (isInFrame2)
-        return null;
-      let lines = createJoinedReviewerLines({ document: document2 });
-      return {
-        sync({ page }) {
-          page.kind === "pull-request" && lines.sync();
-        }
-      };
-    },
-    styles: [style_default6]
-  };
-
-  // azure-devops/src/features/new-activity-chips/new-activity-chips.ts
-  var ROW_SELECTOR2 = ".activity-feed-list .bolt-timeline-row", FLAGGED_ROW_SELECTOR = ".activity-feed-sequence.new", THREAD_SELECTOR = ".repos-discussion-thread", CHIP_CLASS = "fix-ado-new-chip";
-  function createChip(document2) {
-    let chip = document2.createElement("div");
-    chip.className = `${CHIP_CLASS} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
-    let content = document2.createElement("div");
-    return content.className = "bolt-pill-content text-ellipsis", content.textContent = "New", chip.append(content), chip;
-  }
-  function isNewRow(row, time, lastVisit) {
-    if (row.querySelector(THREAD_SELECTOR) !== null)
-      return !1;
-    let happenedAt = Date.parse(time.dateTime);
-    return lastVisit !== null && happenedAt > lastVisit || row.querySelector(FLAGGED_ROW_SELECTOR) !== null;
-  }
-  function syncRow(row, lastVisit) {
-    let chip = row.querySelector(`.${CHIP_CLASS}`), time = row.querySelector("time"), timeBox = time?.parentElement ?? null;
-    if (time === null || timeBox === null || !isNewRow(row, time, lastVisit)) {
-      chip?.remove();
-      return;
-    }
-    (chip === null || timeBox.nextElementSibling !== chip) && timeBox.after(chip ?? createChip(row.ownerDocument));
-  }
-  function createNewActivityChips({
-    document: document2,
-    now,
-    visits
-  }) {
-    let shownKey2 = null, lastVisit = null;
-    function leave() {
-      shownKey2 !== null && visits.save(shownKey2, now());
-    }
-    function sync4(pullRequestKey) {
-      if (pullRequestKey !== shownKey2 && (leave(), shownKey2 = pullRequestKey, lastVisit = pullRequestKey === null ? null : visits.lastVisit(pullRequestKey)), pullRequestKey !== null)
-        for (let row of document2.querySelectorAll(ROW_SELECTOR2))
-          syncRow(row, lastVisit);
-    }
-    return { leave, sync: sync4 };
-  }
-
-  // azure-devops/src/features/new-activity-chips/visit-store.ts
-  var KEY_PREFIX = "last-visit:", visitedAtOf = (value) => typeof value == "number" && Number.isFinite(value) ? value : null;
-  function createVisitStore(storage) {
-    return {
-      deleteOlderThan(maxAgeMs, now) {
-        for (let key of storage.keys().filter((name) => name.startsWith(KEY_PREFIX))) {
-          let visitedAt = visitedAtOf(storage.load(key));
-          (visitedAt === null || now - visitedAt > maxAgeMs) && storage.remove(key);
-        }
-      },
-      lastVisit: (pullRequestKey) => visitedAtOf(storage.load(`${KEY_PREFIX}${pullRequestKey}`)),
-      save(pullRequestKey, visitedAt) {
-        storage.save(`${KEY_PREFIX}${pullRequestKey}`, visitedAt);
-      }
-    };
-  }
-
-  // azure-devops/src/core/page.ts
-  function parsePullRequestPage(location2, basePath2) {
-    if (isPullRequestCreateLocation(location2))
-      return { kind: "pull-request-create" };
-    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
-    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
-  }
-  function parsePage(location2, basePath2) {
-    if (isBoardLocation(location2))
-      return { kind: "board" };
-    let listPage = parsePullRequestListLocation(location2, basePath2);
-    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
-  }
-  function pullRequestOf(page) {
-    return page.kind === "pull-request" ? page.pullRequest : null;
-  }
-
-  // azure-devops/src/features/new-activity-chips/style.css
-  var style_default7 = `/* The New chip glows like an unread comment, in Azure DevOps's colour for links and focus. */
-.bolt-pill.fix-ado-new-chip {
-  border-color: var(--communication-background, rgb(0, 120, 212));
-  box-shadow: 0 0 6px 2px var(--communication-background, rgb(0, 120, 212));
-  color: var(--communication-foreground, rgb(0, 90, 158));
-  font-weight: 600;
-}
-
-/* A push shows its time in a block under its title: the chip sits on the same line. */
-.fix-ado-new-chip {
-  display: inline-flex;
-  vertical-align: middle;
-}
-
-/* Forced colors drop box shadows, so the glow becomes an outline there. */
-@media (forced-colors: active) {
-  .bolt-pill.fix-ado-new-chip {
-    outline: 2px solid Highlight;
-    outline-offset: 1px;
-  }
-}
-`;
-
-  // azure-devops/src/features/new-activity-chips/index.ts
-  var MAX_VISIT_AGE_MS = 2592e6, newActivityChips = {
-    change: { kind: "new", version: "1.18.0" },
-    description: "A New chip that glows on pushes, votes and other lines on a pull request's Overview that came after your last visit.",
-    id: "new-activity-chips",
-    name: "New chips on pushes and other changes",
-    start({ basePath: basePath2, document: document2, isInFrame: isInFrame2, now }) {
-      if (isInFrame2)
-        return null;
-      let visits = createVisitStore({
-        keys: () => GM_listValues(),
-        load: (key) => GM_getValue(key, null),
-        remove: (key) => {
-          GM_deleteValue(key);
-        },
-        save: (key, visitedAt) => {
-          GM_setValue(key, visitedAt);
-        }
-      });
-      visits.deleteOlderThan(MAX_VISIT_AGE_MS, now());
-      let chips = createNewActivityChips({ document: document2, now, visits }), keyOf2 = ({ project, pullRequestId, repository }) => `${location.host}${basePath2}/${project}/${repository}/${pullRequestId}`;
-      return globalThis.addEventListener("pagehide", chips.leave), document2.addEventListener("visibilitychange", () => {
-        document2.visibilityState === "hidden" && chips.leave();
-      }), {
-        sync({ page }) {
-          let pullRequest = pullRequestOf(page);
-          chips.sync(pullRequest === null ? null : keyOf2(pullRequest));
-        }
-      };
-    },
-    styles: [style_default7]
-  };
-
-  // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
-  var COLLAPSE_ICONS = { collapsed: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
-  function setCollapsed(box, button2, isCollapsed) {
-    box.toggleAttribute("data-collapsed", isCollapsed), button2.setAttribute("aria-expanded", String(!isCollapsed));
-    let icon = button2.querySelector(".fabric-icon");
-    icon?.classList.toggle(COLLAPSE_ICONS.collapsed, isCollapsed), icon?.classList.toggle(COLLAPSE_ICONS.open, !isCollapsed);
-  }
-  function createChevron2(document2) {
-    let iconFont = document2.createElement("span");
-    iconFont.className = "fluent-icons-enabled";
-    let icon = document2.createElement("span");
-    return icon.className = "left-icon flex-noshrink fabric-icon small", icon.setAttribute("aria-hidden", "true"), iconFont.append(icon), iconFont;
-  }
-  function createCollapseButton(document2) {
-    let button2 = document2.createElement("button");
-    return button2.type = "button", button2.className = "bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-issue-box-collapse", button2.setAttribute("aria-label", "Errors and warnings"), button2.append(createChevron2(document2)), button2;
-  }
-  function addCollapseButton(box, header, collapse) {
-    let button2 = createCollapseButton(box.ownerDocument);
-    button2.addEventListener("click", () => {
-      let isCollapsed = !Object.hasOwn(box.dataset, "collapsed");
-      setCollapsed(box, button2, isCollapsed), collapse.onToggle(isCollapsed);
-    }), header.prepend(button2), setCollapsed(box, button2, collapse.isCollapsed);
-  }
-
-  // azure-devops/src/pipeline/pipeline-issues.ts
-  var NO_ISSUES = { errorCount: 0, warningCount: 0 }, COUNT_FIELDS = { error: "errorCount", warning: "warningCount" };
-  function isIssueKind(type) {
-    return type === "error" || type === "warning";
-  }
-  function issueKey(issue) {
-    return `${issue.type}
-${issue.message ?? ""}`;
-  }
-  function childrenByParentOf(records) {
-    let children = /* @__PURE__ */ new Map();
-    for (let record of records)
-      record.parentId !== null && children.set(record.parentId, [...children.get(record.parentId) ?? [], record]);
-    return children;
-  }
-  function descendantsOf(record, childrenByParent) {
-    let descendants = [];
-    for (let child of childrenByParent.get(record.id) ?? [])
-      descendants.push(child, ...descendantsOf(child, childrenByParent));
-    return descendants;
-  }
-  function ownIssuesOf(records) {
-    let childrenByParent = childrenByParentOf(records);
-    return new Map(
-      records.map((record) => {
-        let below = new Set(
-          descendantsOf(record, childrenByParent).flatMap(
-            (descendant) => (descendant.issues ?? []).map((issue) => issueKey(issue))
-          )
-        ), own = (record.issues ?? []).filter(
-          (issue) => isIssueKind(issue.type) && !below.has(issueKey(issue))
-        );
-        return [record.id, own];
-      })
-    );
-  }
-  function ownCountOf(record, own, kind) {
-    let listed = (record.issues ?? []).filter((issue) => issue.type === kind).length, repeated = listed - own.filter((issue) => issue.type === kind).length;
-    return Math.max(0, Math.max(record[COUNT_FIELDS[kind]] ?? 0, listed) - repeated);
-  }
-  function issueCountsOf(records) {
-    let childrenByParent = childrenByParentOf(records), ownIssues = ownIssuesOf(records), ownCounts = new Map(
-      records.map((record) => {
-        let own = ownIssues.get(record.id) ?? [];
-        return [
-          record.id,
-          {
-            errorCount: ownCountOf(record, own, "error"),
-            warningCount: ownCountOf(record, own, "warning")
-          }
-        ];
-      })
-    );
-    return new Map(
-      records.map((record) => [
-        record.id,
-        sumIssueCounts(
-          [record, ...descendantsOf(record, childrenByParent)].map(
-            ({ id }) => ownCounts.get(id) ?? NO_ISSUES
-          )
-        )
-      ])
-    );
-  }
-  function sumIssueCounts(counts) {
-    let total = { ...NO_ISSUES };
-    for (let count of counts)
-      total.errorCount += count.errorCount, total.warningCount += count.warningCount;
-    return total;
-  }
-  function runIssueOf(issue, spot) {
-    let place2 = (spot.job === null ? [spot.stage.name] : [spot.job.name, spot.step?.name]).filter((name) => name != null), lineNumber = Number(issue.data?.logFileLineNumber ?? Number.NaN);
-    return {
-      jobId: spot.job?.id ?? null,
-      kind: issue.type,
-      lineNumber: Number.isInteger(lineNumber) ? lineNumber : null,
-      message: issue.message ?? "",
-      place: place2,
-      stageId: spot.stage.id,
-      stepId: spot.step?.id ?? null
-    };
-  }
-  function runIssuesAt(spot, issues) {
-    return issues.flatMap(
-      (issue) => isIssueKind(issue.type) ? [runIssueOf({ ...issue, type: issue.type }, spot)] : []
-    );
-  }
-  function runIssuesOf(stages) {
-    let issues = stages.flatMap((stage) => stage.issues);
-    return [
-      ...issues.filter((issue) => issue.kind === "error"),
-      ...issues.filter((issue) => issue.kind === "warning")
-    ];
-  }
-
-  // azure-devops/src/pipeline/pipeline-issue-list.ts
-  var SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", ICON_SIZES = {
-    large: { className: " margin-4", drawing: 32, pixels: 24 },
-    small: { className: "", drawing: 16, pixels: 16 }
-  }, ICON_MARKS = {
-    error: {
-      large: "M21.99 9.99a1.5 1.5 0 0 0-2.122 0L16 13.856 12.132 9.99a1.5 1.5 0 0 0-2.121 2.122l3.868 3.868-3.89 3.889a1.5 1.5 0 0 0 2.122 2.121L16 18.1l3.89 3.89a1.5 1.5 0 0 0 2.12-2.122l-3.889-3.89 3.868-3.867a1.5 1.5 0 0 0 0-2.122z",
-      small: "M10.984 5.004a.9.9 0 0 1 0 1.272L9.27 7.99l1.74 1.741a.9.9 0 1 1-1.272 1.273l-1.74-1.741-1.742 1.74a.9.9 0 1 1-1.272-1.272l1.74-1.74-1.713-1.714a.9.9 0 0 1 1.273-1.273l1.713 1.713 1.714-1.713a.9.9 0 0 1 1.273 0z"
-    },
-    warning: {
-      large: "M16 7a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 16 7zm-1.5 16a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z",
-      small: "M8.91 3.9a.9.9 0 0 0-1.8 0v4.7a.9.9 0 1 0 1.8 0V3.9zm-.95 8.65a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8z"
-    }
-  }, KIND_STATUSES = { error: "failed", warning: "warning" }, KIND_LABELS = { error: "Error", warning: "Warning" }, LIST_ROW_WRAPPERS = [
-    { className: "bolt-list-cell-content flex-row", tag: "div" },
-    { className: "bolt-list-cell", tag: "td" },
-    { className: "bolt-list-row first-row", role: "listitem", tag: "tr" },
-    { className: "relative", tag: "tbody" },
-    {
-      className: "preview-check-list bolt-list body-m relative scroll-hidden",
-      role: "list",
-      tag: "table"
-    },
-    { className: "status-details-container fix-ado-issue-box", tag: "div" }
-  ];
-  function countText(count, kind) {
-    return `${count} ${kind}${count === 1 ? "" : "s"}`;
-  }
-  function issueSummary(parts) {
-    let { errorCount, warningCount } = sumIssueCounts(parts);
-    return [
-      ...errorCount > 0 ? [countText(errorCount, "error")] : [],
-      ...warningCount > 0 ? [countText(warningCount, "warning")] : []
-    ].join(", ");
-  }
-  function worstKindOf(issues) {
-    return issues.some((issue) => issue.kind === "error") ? "error" : "warning";
-  }
-  function createElement(document2, { className, role, tag, text }) {
-    let created = document2.createElement(tag);
-    return created.className = className, text !== void 0 && (created.textContent = text), role !== void 0 && created.setAttribute("role", role), created;
-  }
-  function wrapIn(document2, content, wrappers) {
-    let wrapped = content;
-    for (let wrapper of wrappers) {
-      let outer = createElement(document2, wrapper);
-      outer.append(wrapped), wrapped = outer;
-    }
-    return wrapped;
-  }
-  function setAttributes2(element4, attributes) {
-    for (let [name, value] of Object.entries(attributes))
-      element4.setAttribute(name, value);
-  }
-  function createKindIcon(document2, kind, size) {
-    let { className, drawing, pixels: pixels2 } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE3, "svg");
-    setAttributes2(icon, {
-      "aria-label": KIND_LABELS[kind],
-      class: `bolt-status flex-noshrink ${KIND_STATUSES[kind]}${className} fix-ado-kind-icon`,
-      "data-kind": kind,
-      height: String(pixels2),
-      role: "img",
-      viewBox: `0 0 ${drawing} ${drawing}`,
-      width: String(pixels2)
-    });
-    let circle = document2.createElementNS(SVG_NAMESPACE3, "circle"), middle = String(drawing / 2);
-    setAttributes2(circle, { cx: middle, cy: middle, r: middle });
-    let mark = document2.createElementNS(SVG_NAMESPACE3, "path");
-    return setAttributes2(mark, { d: ICON_MARKS[kind][size], fill: "#fff" }), icon.append(circle, mark), icon;
-  }
-  function createIssueCounts(document2, counts) {
-    return ["error", "warning"].flatMap((kind) => {
-      let count = kind === "error" ? counts.errorCount : counts.warningCount;
-      if (count === 0)
-        return [];
-      let text = String(count), badge = createElement(document2, { className: "fix-ado-issue-count", tag: "span", text });
-      return badge.dataset.kind = kind, badge.setAttribute("role", "img"), badge.setAttribute("aria-label", countText(count, kind)), badge.title = countText(count, kind), [badge];
-    });
-  }
-  function createOutputLine(document2, issue) {
-    let line2 = createElement(document2, {
-      className: "flex-row monospaced-m dark-build-output fix-ado-issue-output",
-      tag: "div"
-    });
-    issue.lineNumber !== null && line2.append(createElement(document2, { className: "line-number padding-horizontal-16", tag: "div", text: String(issue.lineNumber) }));
-    let className = `${issue.kind === "error" ? "error-text" : "fix-ado-warning-text"} word-break fix-ado-issue-message`;
-    return line2.append(createElement(document2, { className, tag: "div", text: issue.message })), line2;
-  }
-  function fillIssueLink(link, issue) {
-    let { ownerDocument: document2 } = link;
-    link.className = "bolt-table-link full-width-link-no-padding no-underline-link bolt-link fix-ado-issue", link.dataset.kind = issue.kind;
-    let place2 = createElement(document2, {
-      className: "padding-horizontal-16 padding-vertical-8 text-ellipsis separator-line-top secondary-text body-s fix-ado-issue-place",
-      tag: "div",
-      text: issue.place.join(" / ")
-    }), output = createElement(document2, { className: "flex-column", tag: "div" });
-    return output.append(createOutputLine(document2, issue)), link.append(place2, output), link;
-  }
-  function createBoxHeader(document2, box) {
-    let text = createElement(document2, {
-      className: "pr-completion-status-header flex-row flex-center flex-grow rhythm-horizontal-8 text-ellipsis",
-      tag: "div"
-    }), { title } = box;
-    text.append(
-      createElement(document2, {
-        className: "text-ellipsis fix-ado-issue-box-title",
-        tag: "span",
-        text: title
-      })
-    ), box.details !== null && text.append(createElement(document2, { className: "secondary-text fix-ado-issue-box-details", tag: "span", text: box.details }));
-    let header = createElement(document2, {
-      className: "flex-row flex-grow flex-center padding-horizontal-16 rhythm-horizontal-8 fix-ado-issue-box-header",
-      tag: "div"
-    });
-    return header.append(createKindIcon(document2, worstKindOf(box.issues), "small"), text), header;
-  }
-  function createIssueBox(document2, box) {
-    let content = createElement(document2, {
-      className: "flex-column flex-grow text-ellipsis",
-      tag: "div"
-    }), links = box.issues.map((issue) => box.createLink(issue)), header = createBoxHeader(document2, box);
-    content.append(header, ...links);
-    let wrapped = wrapIn(document2, content, LIST_ROW_WRAPPERS);
-    return box.collapse !== void 0 && addCollapseButton(wrapped, header, box.collapse), wrapped;
-  }
-
-  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues-card.ts
-  var OVERVIEW_ISSUES_CLASS = "fix-ado-overview-issues";
-  function runLinkOf({ apiBasePath: apiBasePath2, project }, buildId, { jobId, stepId }) {
-    return jobId !== null && stepId !== null ? pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) : pipelineRunPath(apiBasePath2, project, buildId);
-  }
-  function createCheckIssueBox(document2, content, { check: check2, counts, issues }) {
-    return createIssueBox(document2, {
-      createLink: (issue) => {
-        let link = document2.createElement("a");
-        return link.href = runLinkOf(content, check2.buildId, issue), fillIssueLink(link, issue);
-      },
-      details: issueSummary([counts]),
-      issues,
-      title: check2.name
-    });
-  }
-  function headingOf(checks) {
-    let runs = checks.length === 1 ? "the latest run" : "the latest runs";
-    return `${issueSummary(checks.map(({ counts }) => counts))} in ${runs}`;
-  }
-  var CARD_WRAPPERS = [
-    { className: "flex-column flex-grow scroll-hidden", tag: "div" },
-    { className: "bolt-card-content flex-row flex-grow bolt-default-horizontal-spacing", tag: "div" },
-    {
-      className: `bolt-table-card bolt-card flex-column depth-8 bolt-card-white ${OVERVIEW_ISSUES_CLASS}`,
-      role: "region",
-      tag: "section"
-    }
-  ];
-  function createHeading(document2, checks) {
-    let heading = createElement(document2, {
-      className: "fix-ado-overview-issues-heading",
-      tag: "span",
-      text: headingOf(checks)
-    }), text = wrapIn(document2, heading, [
-      { className: "flex-column flex-grow scroll-hidden", tag: "div" }
-    ]), row = createElement(document2, {
-      className: "flex-row flex-center rhythm-horizontal-8 fix-ado-overview-issues-heading-row",
-      tag: "div"
-    }), kind = worstKindOf(checks.flatMap(({ issues }) => issues));
-    return row.append(createKindIcon(document2, kind, "large"), text), row;
-  }
-  function createIssuesCard(document2, content) {
-    let { checks } = content, rows = createElement(document2, {
-      className: "padding-vertical-16 padding-horizontal-20 rhythm-vertical-16",
-      tag: "div"
-    }), heading = createHeading(document2, checks);
-    rows.append(
-      heading,
-      ...checks.map((checkIssues) => createCheckIssueBox(document2, content, checkIssues))
-    );
-    let block = wrapIn(document2, rows, CARD_WRAPPERS);
-    return addCollapseButton(block, heading, content.collapse), block.setAttribute("aria-label", "Pipeline warnings and errors"), block.dataset.fixAdoRendered = JSON.stringify(checks), block;
-  }
-
-  // azure-devops/src/pipeline/pipeline-status.ts
-  var BUILD_POLICY_TYPE_ID = "0609b952-1397-4640-95ec-e00a01b2c241";
-  function hasStatus(evaluations, status) {
-    return evaluations.some((evaluation) => evaluation.status === status);
-  }
-  var STATUS_RULES = [
-    [
-      "failed",
-      (evaluations) => hasStatus(evaluations, "rejected") || hasStatus(evaluations, "broken")
-    ],
-    ["running", (evaluations) => hasStatus(evaluations, "running")],
-    [
-      "expired",
-      (evaluations) => evaluations.some((evaluation) => !!evaluation.context?.isExpired)
-    ],
-    [
-      "queued",
-      (evaluations) => evaluations.some(
-        (evaluation) => evaluation.status === "queued" && (evaluation.context?.buildId ?? null) !== null
-      )
-    ],
-    ["notStarted", (evaluations) => hasStatus(evaluations, "queued")],
-    ["succeeded", (evaluations) => hasStatus(evaluations, "approved")]
-  ];
-  function pipelineStatusOf(evaluations) {
-    let buildEvaluations = evaluations.filter(
-      (evaluation) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID
-    ), requiredBuildEvaluations = buildEvaluations.filter(
-      (evaluation) => evaluation.configuration.isBlocking
-    ), decisiveEvaluations = requiredBuildEvaluations.length > 0 ? requiredBuildEvaluations : buildEvaluations;
-    return STATUS_RULES.find(([, matches]) => matches(decisiveEvaluations))?.[0] ?? null;
-  }
-  function isInProgress(status) {
-    return status === "running" || status === "queued";
-  }
-
-  // azure-devops/src/pipeline/pipeline-checks.ts
-  function checkNameOf(evaluation, fallback) {
-    return evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? fallback;
-  }
-  function pipelineCheckOf(evaluation) {
-    let buildId = evaluation.context?.buildId ?? 0;
-    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId <= 0 ? null : {
-      buildId,
-      isRequired: evaluation.configuration.isBlocking,
-      name: checkNameOf(evaluation, `Run ${buildId}`),
-      startedAt: evaluation.context?.buildStartedUtc ?? null,
-      status: pipelineStatusOf([evaluation])
-    };
-  }
-  function startedAtMs(check2) {
-    return check2.startedAt === null ? 0 : Date.parse(check2.startedAt);
-  }
-  function pipelineChecksOf(evaluations) {
-    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check2) => check2 !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
-  }
-  function startableChecksOf(evaluations) {
-    return evaluations.flatMap(
-      ({ evaluationId, ...evaluation }) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && evaluationId !== void 0 ? [
-        {
-          evaluationId,
-          isRequired: evaluation.configuration.isBlocking,
-          name: checkNameOf(evaluation, "Build check")
-        }
-      ] : []
-    );
-  }
-
-  // azure-devops/src/pipeline/pipeline-timeline.ts
-  var RESULT_STATUSES = {
-    abandoned: { label: "Canceled", status: "notStarted" },
-    canceled: { label: "Canceled", status: "notStarted" },
-    failed: { label: "Failed", status: "failed" },
-    skipped: { label: "Skipped", status: "notStarted" },
-    succeeded: { label: "Succeeded", status: "succeeded" },
-    succeededWithIssues: { label: "Succeeded with warnings", status: "expired" }
-  };
-  function recordStatusOf({ result, state }) {
-    return state === "inProgress" ? { label: "Running", status: "running" } : (result === null ? void 0 : RESULT_STATUSES[result]) ?? { label: "Not started", status: "notStarted" };
-  }
-  var NO_STAGE_ID = "", DEFAULT_STAGE_NAME = "__default";
-  function inRunOrder(records) {
-    return records.toSorted((first, second) => (first.order ?? 0) - (second.order ?? 0));
-  }
-  function stageIdOf(record, byId) {
-    let parent = record.parentId === null ? void 0 : byId.get(record.parentId);
-    for (; parent !== void 0 && parent.type !== "Stage"; )
-      parent = parent.parentId === null ? void 0 : byId.get(parent.parentId);
-    return parent?.id ?? NO_STAGE_ID;
-  }
-  function countsOf(index, id) {
-    return index.counts.get(id) ?? NO_ISSUES;
-  }
-  function jobOf(job, index) {
-    let steps = inRunOrder(
-      index.records.filter((record) => record.type === "Task" && record.parentId === job.id)
-    ).map(({ id, name, result, state }) => {
-      let { errorCount, warningCount } = countsOf(index, id);
-      return { errorCount, id, jobId: job.id, name, result, state, warningCount };
-    });
-    return {
-      id: job.id,
-      name: job.name,
-      result: job.result,
-      state: job.state,
-      steps,
-      ...countsOf(index, job.id)
-    };
-  }
-  function stageIssuesOf(stage, jobs, index) {
-    let ownOf = (id) => index.ownIssues.get(id) ?? [], stageSpot = {
-      job: null,
-      stage: {
-        id: stage.id,
-        name: stage.id === NO_STAGE_ID || stage.name === DEFAULT_STAGE_NAME ? null : stage.name
-      },
-      step: null
-    };
-    return [
-      ...index.records.filter(
-        (record) => record.type !== "Job" && record.type !== "Task" && (record.id === stage.id || stageIdOf(record, index.byId) === stage.id)
-      ).flatMap((record) => runIssuesAt(stageSpot, ownOf(record.id))),
-      ...jobs.flatMap((job) => {
-        let jobSpot = { ...stageSpot, job };
-        return [
-          ...runIssuesAt(jobSpot, ownOf(job.id)),
-          ...job.steps.flatMap((step) => runIssuesAt({ ...jobSpot, step }, ownOf(step.id)))
-        ];
-      })
-    ];
-  }
-  function stagesOf(records) {
-    let index = {
-      byId: new Map(records.map((record) => [record.id, record])),
-      counts: issueCountsOf(records),
-      ownIssues: ownIssuesOf(records),
-      records
-    }, jobs = inRunOrder(records.filter((record) => record.type === "Job")), stages = inRunOrder(records.filter((record) => record.type === "Stage"));
-    return (stages.length > 0 || jobs.length === 0 ? stages : [{ id: NO_STAGE_ID, name: "Jobs", result: null, state: "" }]).map((stage) => {
-      let stageJobs = jobs.filter((job) => stageIdOf(job, index.byId) === stage.id).map((job) => jobOf(job, index)), { errorCount, warningCount } = stage.id === NO_STAGE_ID ? sumIssueCounts(stageJobs) : countsOf(index, stage.id);
-      return {
-        errorCount,
-        id: stage.id,
-        issues: stageIssuesOf(stage, stageJobs, index),
-        jobs: stageJobs,
-        name: stage.name,
-        result: stage.result,
-        state: stage.state,
-        warningCount
-      };
-    });
-  }
-  function defaultStepOf(stages) {
-    let steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
-    return steps.find((step) => step.state === "inProgress") ?? steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
-  }
-
-  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues.ts
-  var REFRESH_MS = 3e4, DESCRIPTION_SELECTOR = ".repos-pr-description-card", CHECKS_AREA_ERROR_SELECTOR = ".dark-build-output .error-text", RUN_LINK_SELECTOR = 'a[href*="/_build/results?"]';
-  function isBusy(check2) {
-    return check2.status === "running" || check2.status === "queued";
-  }
-  function isTimelineDue(data, check2, now) {
-    let loaded = data.timelines.get(check2.buildId);
-    return loaded === void 0 || loaded.checkStatus !== check2.status || isBusy(check2) && now - loaded.loadedAt >= REFRESH_MS;
-  }
-  function checksAreaErrorsOf(document2) {
-    let errors = /* @__PURE__ */ new Map();
-    for (let line2 of document2.querySelectorAll(CHECKS_AREA_ERROR_SELECTOR)) {
-      let href = line2.closest(RUN_LINK_SELECTOR)?.getAttribute("href"), run = href == null || line2.closest(`.${OVERVIEW_ISSUES_CLASS}`) !== null ? null : parsePipelineRunLocation(new URL(href, document2.baseURI));
-      run !== null && errors.set(run.buildId, (errors.get(run.buildId) ?? /* @__PURE__ */ new Set()).add(line2.textContent.trim()));
-    }
-    return errors;
-  }
-  function checkIssuesOf(check2, stages, shownErrors) {
-    let all = runIssuesOf(stages), issues = all.filter(
-      (issue) => issue.kind !== "error" || !shownErrors.has(issue.message.trim())
-    ), { errorCount, warningCount } = sumIssueCounts(stages), hiddenCount = all.length - issues.length;
-    return {
-      check: check2,
-      counts: { errorCount: Math.max(0, errorCount - hiddenCount), warningCount },
-      issues
-    };
-  }
-  function checksWithIssues(data, document2) {
-    let checksAreaErrors = checksAreaErrorsOf(document2);
-    return data.checks.flatMap((check2) => {
-      let stages = data.timelines.get(check2.buildId)?.stages ?? [], shownErrors = checksAreaErrors.get(check2.buildId) ?? /* @__PURE__ */ new Set(), checkIssues = checkIssuesOf(check2, stages, shownErrors);
-      return checkIssues.issues.length > 0 ? [checkIssues] : [];
-    });
-  }
-  function isBlockShown(block, checks, description) {
-    return block?.dataset.fixAdoRendered === JSON.stringify(checks) && block.nextElementSibling === description;
-  }
-  function render(state) {
-    let { data, options } = state, description = options.document.querySelector(DESCRIPTION_SELECTOR), existing = options.document.querySelector(`.${OVERVIEW_ISSUES_CLASS}`), checks = data === null ? [] : checksWithIssues(data, options.document);
-    if (description === null || data === null || checks.length === 0) {
-      existing?.remove();
-      return;
-    }
-    isBlockShown(existing, checks, description) || (existing?.remove(), description.before(createCard(options, data, checks)));
-  }
-  function createCard({ apiBasePath: apiBasePath2, document: document2 }, data, checks) {
-    let collapse = {
-      isCollapsed: data.isCollapsed,
-      onToggle: (isCollapsed) => {
-        data.isCollapsed = isCollapsed;
-      }
-    };
-    return createIssuesCard(document2, {
-      apiBasePath: apiBasePath2,
-      checks,
-      collapse,
-      project: data.pullRequest.project
-    });
-  }
-  function showIfCurrent(state, data) {
-    state.data === data && render(state);
-  }
-  async function loadTimeline(state, data, check2) {
-    let { options } = state, loaded = {
-      checkStatus: check2.status,
-      loadedAt: options.now(),
-      stages: data.timelines.get(check2.buildId)?.stages ?? null
-    };
-    data.timelines.set(check2.buildId, loaded);
-    try {
-      loaded.stages = stagesOf(await options.getTimeline(data.pullRequest.project, check2.buildId));
-    } catch {
-    }
-    showIfCurrent(state, data);
-  }
-  async function loadChecks(state, data) {
-    let { options } = state;
-    data.checksLoadedAt = options.now();
-    try {
-      data.checks = pipelineChecksOf(await options.getEvaluations(data.pullRequest));
-    } catch {
-      return;
-    }
-    let now = options.now();
-    for (let check2 of data.checks.filter((candidate) => isTimelineDue(data, candidate, now)))
-      loadTimeline(state, data, check2);
-    showIfCurrent(state, data);
-  }
-  function syncOverview(state, pullRequest, canFetch) {
-    JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest) && (state.data = pullRequest === null ? null : {
-      checks: [],
-      checksLoadedAt: Number.NEGATIVE_INFINITY,
-      isCollapsed: !1,
-      pullRequest,
-      timelines: /* @__PURE__ */ new Map()
-    }), render(state);
-    let { data, options } = state, isOnOverview = options.document.querySelector(DESCRIPTION_SELECTOR) !== null;
-    data !== null && canFetch && isOnOverview && options.now() - data.checksLoadedAt >= REFRESH_MS && loadChecks(state, data);
-  }
-  function createOverviewPipelineIssues(options) {
-    let state = { data: null, options };
-    return {
-      sync: (pullRequest, canFetch) => {
-        syncOverview(state, pullRequest, canFetch);
-      }
-    };
-  }
-
-  // azure-devops/src/pipeline/pipeline-issue-list.css
-  var pipeline_issue_list_default = `/* A run's warnings and errors, in a box like Azure DevOps's check list on a pull
-   request's Overview. Azure DevOps's own classes on it style it there; these rules keep
-   the look where they do not reach, such as the Pipeline tab. */
-.fix-ado-issue-box {
-  border: 1px solid rgba(var(--palette-neutral-8, 234, 234, 234), 1);
-  border-radius: 4px;
-  background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
-}
-
-.fix-ado-issue-box > table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.fix-ado-issue-box td {
-  padding: 0;
-  border: 0;
-}
-
-.fix-ado-issue-box-header {
-  min-height: 48px;
-}
-
-/* A collapsed box keeps its header row; a collapsed Overview card keeps its heading. */
-.fix-ado-issue-box[data-collapsed] .fix-ado-issue,
-.fix-ado-overview-issues[data-collapsed] .fix-ado-issue-box {
-  display: none;
-}
-
-.fix-ado-issue-box-collapse {
-  flex-shrink: 0;
-  margin-left: -4px;
-}
-
-.fix-ado-issue {
-  display: block;
-  color: inherit;
-  text-decoration: none;
-}
-
-.fix-ado-issue:hover {
-  background: var(--component-grid-row-hover-color, rgba(0, 0, 0, 0.02));
-}
-
-.fix-ado-issue-output {
-  padding: 8px 0;
-  background: rgb(30, 30, 30);
-  color: rgb(212, 212, 212);
-}
-
-.fix-ado-issue-output > .line-number {
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-/* A long message wraps, and keeps its own line breaks. */
-.fix-ado-issue-message {
-  min-width: 0;
-  padding-right: 16px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* Without a line number, the message keeps the line number's left padding. */
-.fix-ado-issue-message:first-child {
-  padding-left: 16px;
-}
-
-.fix-ado-issue-output > .error-text {
-  color: rgb(241, 112, 112);
-}
-
-.fix-ado-warning-text {
-  color: rgb(240, 190, 90);
-}
-
-.fix-ado-kind-icon[data-kind="error"] {
-  fill: var(--component-status-error, rgb(205, 74, 69));
-}
-
-.fix-ado-kind-icon[data-kind="warning"] {
-  fill: var(--component-status-warning, rgb(214, 127, 60));
-}
-
-/* The counts of warnings and errors on a stage, job or step in the run tree. */
-.fix-ado-issue-count {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 0 6px;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-}
-
-.fix-ado-issue-count + .fix-ado-issue-count {
-  margin-left: 0;
-}
-
-.fix-ado-issue-count[data-kind="error"] {
-  background: var(--component-status-error, rgb(205, 74, 69));
-}
-
-/* Dark text: white on the warning orange is about 3:1. */
-.fix-ado-issue-count[data-kind="warning"] {
-  background: var(--component-status-warning, rgb(214, 119, 48));
-  color: rgba(0, 0, 0, 0.9);
-}
-
-/* Forced colors turn the disc into the text colour, which can be white; the mark takes the
-   background colour. */
-@media (forced-colors: active) {
-  .fix-ado-kind-icon path[fill="#fff"] {
-    fill: Canvas;
-  }
-}
-`;
-
-  // azure-devops/src/features/overview-pipeline-issues/index.ts
-  var overviewPipelineIssues = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "The warnings and errors of each check's latest run, above the pull request description.",
-    id: "overview-pipeline-issues",
-    name: "Warnings and errors",
-    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
-      if (isInFrame2)
-        return null;
-      let issues = createOverviewPipelineIssues({
-        apiBasePath: basePath2,
-        document: document2,
-        getEvaluations: async (pullRequest) => {
-          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
-          return evaluations;
-        },
-        getTimeline: async (project, buildId) => {
-          let { records } = await client.getTimeline(project, buildId);
-          return records;
-        },
-        now
-      });
-      return {
-        sync({ page, isTabActive: isTabActive2 }) {
-          issues.sync(pullRequestOf(page), isTabActive2);
-        }
-      };
-    },
-    styles: [pipeline_issue_list_default]
-  };
-
-  // azure-devops/src/features/resolved-thread-chips/resolved-thread-chips.ts
-  var CHIP_CLASS2 = "fix-ado-thread-chip";
-  function chipKindOf(feedThread) {
-    if (feedThread === null || feedThread.status === "")
-      return null;
-    let { isResolved, isUnresolved, status } = feedThread;
-    return isResolved ? { className: "fix-ado-resolved-chip", label: status } : {
-      className: isUnresolved ? "fix-ado-unresolved-chip" : "fix-ado-done-chip",
-      label: status
-    };
-  }
-  function createChip2(document2, { className, label }) {
-    let chip = document2.createElement("div");
-    chip.className = `${CHIP_CLASS2} ${className} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
-    let content = document2.createElement("div");
-    return content.className = "bolt-pill-content text-ellipsis", content.textContent = label, chip.append(content), chip;
-  }
-  function syncThread(thread) {
-    let feedThread = feedThreadOf(thread), kind = chipKindOf(feedThread), chip = thread.querySelector(`.${CHIP_CLASS2}`);
-    kind !== null && chip?.classList.contains(kind.className) === !0 && chip.textContent === kind.label || (chip?.remove(), feedThread !== null && kind !== null && feedThread.timeBox.append(createChip2(thread.ownerDocument, kind)));
-  }
-  function createResolvedThreadChips({ document: document2 }) {
-    function sync4() {
-      for (let thread of feedThreadElements(document2))
-        syncThread(thread);
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/resolved-thread-chips/style.css
-  var style_default8 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success, Active and
-   Pending in its colour for warnings, another done status in its secondary text colour. */
-.bolt-pill.fix-ado-thread-chip {
-  font-weight: 600;
-}
-
-.bolt-pill.fix-ado-resolved-chip {
-  border-color: var(--component-status-success, rgb(85, 163, 98));
-  color: var(--component-status-success, rgb(85, 163, 98));
-}
-
-.bolt-pill.fix-ado-unresolved-chip {
-  border-color: var(--status-warning-text, rgba(184, 94, 6, 1));
-  color: var(--status-warning-text, rgba(184, 94, 6, 1));
-}
-
-.bolt-pill.fix-ado-done-chip {
-  border-color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-}
-`;
-
-  // azure-devops/src/features/resolved-thread-chips/index.ts
-  var resolvedThreadChips = {
-    change: { kind: "updated", version: "1.22.0" },
-    description: "A chip with its status on every thread on a pull request's Overview: green for Resolved, orange for Active and Pending, grey for Won't fix and Closed.",
-    id: "resolved-thread-chips",
-    name: "Status chips on threads",
-    start({ document: document2, isInFrame: isInFrame2 }) {
-      if (isInFrame2)
-        return null;
-      let chips = createResolvedThreadChips({ document: document2 });
-      return {
-        sync({ page }) {
-          page.kind === "pull-request" && chips.sync();
-        }
-      };
-    },
-    styles: [style_default8]
-  };
-
-  // azure-devops/src/core/scroll-behavior.ts
-  function scrollBehaviorOf(document2) {
-    return document2.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? !1 ? "instant" : "smooth";
-  }
-
-  // azure-devops/src/features/scroll-to-bottom/scroll-to-bottom.ts
-  var FEED_SELECTOR2 = ".activity-feed-list", SCROLLER_SELECTOR = ".v-scroll-auto", BUTTON_CLASS2 = "fix-ado-scroll-to-bottom", LABEL = "Scroll to bottom", BOTTOM_MARGIN = 16, FOLLOW_QUIET_MS = 2e3, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg", ARROW_DOWN_PATH = "M8 3v10M3.5 8.5L8 13l4.5-4.5";
-  function arrowDownIcon(document2) {
-    let svg = document2.createElementNS(SVG_NAMESPACE4, "svg");
-    svg.setAttribute("aria-hidden", "true"), svg.setAttribute("viewBox", "0 0 16 16");
-    let path = document2.createElementNS(SVG_NAMESPACE4, "path");
-    return path.setAttribute("d", ARROW_DOWN_PATH), svg.append(path), svg;
-  }
-  function scrollerOf(feed) {
-    let box = feed.parentElement?.closest(SCROLLER_SELECTOR) ?? null;
-    for (; box !== null && box.scrollHeight <= box.clientHeight; )
-      box = box.parentElement?.closest(SCROLLER_SELECTOR) ?? null;
-    return box;
-  }
-  function createButton2(document2, onClick3, onBlur) {
-    let button2 = document2.createElement("button");
-    return button2.type = "button", button2.className = BUTTON_CLASS2, button2.title = LABEL, button2.setAttribute("aria-label", LABEL), button2.append(arrowDownIcon(document2)), button2.addEventListener("click", onClick3), button2.addEventListener("blur", onBlur), button2;
-  }
-  function overviewScrollerOf(document2) {
-    let feed = document2.querySelector(FEED_SELECTOR2);
-    return feed === null ? null : scrollerOf(feed);
-  }
-  var isAtBottom = (scroller) => scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= BOTTOM_MARGIN;
-  function shouldShowButton(scroller, button2) {
-    let hasFocus = button2 !== null && button2.ownerDocument.activeElement === button2;
-    return scroller !== null && (!isAtBottom(scroller) || hasFocus);
-  }
-  var OWNER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "pointerdown"];
-  function createBottomFollow(now) {
-    let followed = null;
-    function start(scroller) {
-      followed = { height: scroller.scrollHeight, lastActiveAt: now() }, scroller.scrollTo({
-        behavior: scrollBehaviorOf(scroller.ownerDocument),
-        top: scroller.scrollHeight
-      });
-    }
-    function step(scroller, isScrollEvent) {
-      followed !== null && (scroller === null || now() - followed.lastActiveAt > FOLLOW_QUIET_MS ? followed = null : scroller.scrollHeight !== followed.height ? start(scroller) : isScrollEvent && (followed.lastActiveAt = now()));
-    }
-    return {
-      start,
-      step,
-      stop: () => {
-        followed = null;
-      }
-    };
-  }
-  function listen(document2, events) {
-    document2.addEventListener("scroll", events.onScroll, { capture: !0, passive: !0 }), document2.defaultView?.addEventListener("resize", events.onResize);
-    for (let type of OWNER_SCROLL_EVENTS)
-      document2.addEventListener(type, events.onOwnerScroll, { capture: !0, passive: !0 });
-  }
-  function createScrollToBottom(options) {
-    let { document: document2 } = options, follow = createBottomFollow(options.now), button2 = null;
-    function scrollToBottom2() {
-      let scroller = overviewScrollerOf(document2);
-      scroller !== null && follow.start(scroller);
-    }
-    function showOrHideButton(scroller) {
-      let isShown = shouldShowButton(scroller, button2);
-      button2 === null && !isShown || (button2 ??= createButton2(document2, scrollToBottom2, sync4), button2.isConnected || document2.body.append(button2), button2.hidden === isShown && (button2.hidden = !isShown));
-    }
-    function sync4(event) {
-      let scroller = overviewScrollerOf(document2);
-      follow.step(scroller, event?.type === "scroll"), showOrHideButton(scroller);
-    }
-    return listen(document2, {
-      onOwnerScroll: (event) => {
-        event.target !== button2 && follow.stop();
-      },
-      onResize: sync4,
-      onScroll: sync4
-    }), {
-      sync: () => {
-        sync4();
-      }
-    };
-  }
-
-  // azure-devops/src/features/scroll-to-bottom/style.css
-  var style_default9 = `/* The button that scrolls a pull request's Overview to its bottom: round, in the corner of the window. */
-.fix-ado-scroll-to-bottom {
-  position: fixed;
-  right: 32px;
-  bottom: 32px;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
-  border-radius: 50%;
-  background: var(--callout-background-color, rgb(255, 255, 255));
-  box-shadow: 0 3px 8px var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
-  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
-  cursor: pointer;
-}
-
-.fix-ado-scroll-to-bottom[hidden] {
-  display: none;
-}
-
-.fix-ado-scroll-to-bottom:hover {
-  border-color: var(--communication-background, rgb(0, 120, 212));
-  color: var(--communication-background, rgb(0, 120, 212));
-}
-
-.fix-ado-scroll-to-bottom:focus-visible {
-  outline: 2px solid var(--communication-background, rgb(0, 120, 212));
-  outline-offset: 2px;
-}
-
-/* The arrow, drawn like Azure DevOps's line icons. */
-.fix-ado-scroll-to-bottom svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-`;
-
-  // azure-devops/src/features/scroll-to-bottom/index.ts
-  var scrollToBottom = {
-    change: { kind: "new", version: "1.13.0" },
-    description: "A button in the corner of a pull request's Overview scrolls to its bottom. It keeps up while more content loads, and hides once you are there.",
-    id: "scroll-to-bottom",
-    name: "Scroll to bottom",
-    start({ document: document2, isInFrame: isInFrame2, now }) {
-      if (isInFrame2)
-        return null;
-      let scrollButton = createScrollToBottom({ document: document2, now });
-      return {
-        sync() {
-          scrollButton.sync();
-        }
-      };
-    },
-    styles: [style_default9]
-  };
-
-  // azure-devops/src/features/unread-comments/unread-comments.ts
-  var FEED_SELECTOR3 = ".activity-feed-list", ROW_SELECTOR3 = ".bolt-timeline-row", THREAD_SELECTOR2 = ".repos-discussion-thread", COMMENT_SELECTOR = ".repos-comment-viewer", NEW_ROW_SELECTOR = ".activity-feed-sequence.new", STICKY_TAB_BAR_SELECTOR = ".bolt-tabbar.sticky", FILTER_SELECTOR3 = ".repos-activity-filter-dropdown", FIRST_UNREAD_CLASS = "fix-ado-first-unread", FIRST_UNREAD_LABEL = "Go to first unread", NEXT_UNREAD_CLASS = "fix-ado-next-unread", NEXT_UNREAD_LABEL = "Go to next unread";
-  function rowsAsShown(feed) {
-    let rows = [...feed.querySelectorAll(ROW_SELECTOR3)];
-    return feed.dataset.fixAdoActivityOrder === "oldest-first" ? rows.toReversed() : rows;
-  }
-  function unreadGroupsOf(thread) {
-    let groups = [], group2 = [];
-    for (let comment of thread.querySelectorAll(COMMENT_SELECTOR))
-      comment.querySelector(UNREAD_COMMENT_MARKER_SELECTOR) === null ? group2 = [] : (group2.length === 0 && groups.push(group2), group2.push(comment));
-    return groups;
-  }
-  function markOf(index, size) {
-    return size === 1 ? "only" : index === 0 ? "first" : index === size - 1 ? "last" : "middle";
-  }
-  function markUnreadGroups(document2, groups) {
-    let marked = /* @__PURE__ */ new Set();
-    for (let group2 of groups)
-      for (let [index, comment] of group2.entries()) {
-        let mark = markOf(index, group2.length);
-        comment.dataset.fixAdoUnread !== mark && (comment.dataset.fixAdoUnread = mark), marked.add(comment);
-      }
-    for (let comment of document2.querySelectorAll("[data-fix-ado-unread]"))
-      marked.has(comment) || delete comment.dataset.fixAdoUnread;
-  }
-  function stopOfGroup(comments) {
-    let [first] = comments;
-    return first === void 0 ? [] : [{ comments, target: first }];
-  }
-  function stopsOfRow(row) {
-    let thread = row.querySelector(THREAD_SELECTOR2);
-    return thread === null ? [] : thread.querySelector(HEADER_SELECTOR) === null ? row.querySelector(NEW_ROW_SELECTOR) === null ? [] : [{ comments: [], target: row }] : unreadGroupsOf(thread).flatMap((comments) => stopOfGroup(comments));
-  }
-  function readStops(document2) {
-    let feed = document2.querySelector(FEED_SELECTOR3);
-    return feed === null ? [] : rowsAsShown(feed).flatMap((row) => stopsOfRow(row));
-  }
-  function createButton3(document2, className, label) {
-    let text = Object.assign(document2.createElement("span"), {
-      className: "bolt-button-text",
-      textContent: label
-    }), button2 = document2.createElement("button");
-    return button2.type = "button", button2.className = `${className} bolt-button enabled bolt-focus-treatment`, button2.append(text), button2;
-  }
-  function createFirstUnreadBox(document2, onClick3) {
-    let button2 = createButton3(document2, FIRST_UNREAD_CLASS, FIRST_UNREAD_LABEL);
-    button2.addEventListener("click", onClick3);
-    let box = Object.assign(document2.createElement("div"), {
-      className: `${FIRST_UNREAD_CLASS}-box margin-bottom-16 margin-right-8 inline-flex-row`
-    });
-    return box.append(button2), box;
-  }
-  function findOrAddFirstUnreadButton(document2, onClick3) {
-    let bar = document2.querySelector(FILTER_SELECTOR3)?.parentElement;
-    return bar == null ? null : (bar.querySelector(`.${FIRST_UNREAD_CLASS}`) === null && bar.prepend(createFirstUnreadBox(document2, onClick3)), bar.querySelector(`.${FIRST_UNREAD_CLASS}`));
-  }
-  var lastCommentOf = ({ comments }) => comments.at(-1) ?? null;
-  function findOrAddNextUnreadButton(comment, onClick3) {
-    let existing = comment.querySelector(`:scope > .${NEXT_UNREAD_CLASS}`), button2 = existing ?? createButton3(comment.ownerDocument, NEXT_UNREAD_CLASS, NEXT_UNREAD_LABEL);
-    return existing === null && button2.addEventListener("click", onClick3), comment.lastElementChild !== button2 && comment.append(button2), button2;
-  }
-  async function scrollIntoViewAndWait(element4, options) {
-    let scrolled = element4.scrollIntoView(options);
-    scrolled instanceof Promise && await scrolled;
-  }
-  function leaveRoomForTabBar(document2) {
-    let height = `${document2.querySelector(STICKY_TAB_BAR_SELECTOR)?.offsetHeight ?? 0}px`, feed = document2.querySelector(FEED_SELECTOR3);
-    feed !== null && feed.style.getPropertyValue("--fix-ado-sticky-height") !== height && feed.style.setProperty("--fix-ado-sticky-height", height);
-  }
-  function shownPartOf(target) {
-    return target.checkVisibility() ? target : target.closest(THREAD_SELECTOR2) ?? target;
-  }
-  function createStopScroller(document2) {
-    let scrollCount = 0;
-    return async (stop) => {
-      if (stop === void 0)
-        return;
-      scrollCount += 1;
-      let scroll = scrollCount, { target } = stop;
-      leaveRoomForTabBar(document2), await scrollIntoViewAndWait(shownPartOf(target), {
-        behavior: scrollBehaviorOf(document2),
-        block: "start"
-      }), scroll === scrollCount && (target.tabIndex = -1, target.focus({ preventScroll: !0 }));
-    };
-  }
-  function removeNextUnreadButtons(document2, kept) {
-    for (let button2 of document2.querySelectorAll(`.${NEXT_UNREAD_CLASS}`))
-      kept.has(button2) || button2.remove();
-  }
-  function createUnreadComments({ document: document2 }) {
-    let goTo = createStopScroller(document2);
-    function goToNextAfter(target) {
-      let stops = readStops(document2), index = stops.findIndex((stop) => stop.target === target);
-      goTo(index === -1 ? void 0 : stops[index + 1]);
-    }
-    function syncNextUnreadButtons(stops) {
-      let kept = /* @__PURE__ */ new Set();
-      for (let stop of stops.slice(0, -1)) {
-        let lastComment = lastCommentOf(stop);
-        lastComment !== null && kept.add(
-          findOrAddNextUnreadButton(lastComment, () => {
-            goToNextAfter(stop.target);
-          })
-        );
-      }
-      removeNextUnreadButtons(document2, kept);
-    }
-    function sync4() {
-      let stops = readStops(document2);
-      markUnreadGroups(
-        document2,
-        stops.map((stop) => stop.comments)
-      ), syncNextUnreadButtons(stops);
-      let firstUnread = findOrAddFirstUnreadButton(document2, () => {
-        goTo(readStops(document2)[0]);
-      });
-      firstUnread !== null && firstUnread.disabled !== (stops.length === 0) && (firstUnread.disabled = stops.length === 0);
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/unread-comments/style.css
-  var style_default10 = `/* Unread comments glow like a required reviewer, one glow around each group of unread comments
-   that follow each other. The thread clips what spills outside it, so the glow sits inside. Each
-   comment of a group draws its piece: across the 4px gap to a neighbour in the group, and cut off
-   there, so no edge shows between them. */
-[data-fix-ado-unread] {
-  --fix-ado-unread-glow: var(--communication-background, rgb(0, 120, 212));
-  position: relative;
-}
-
-/* A scroll to a stop ends 16px under the tab bar that sticks to the top. The script measures the
-   bar. A stop is a group's first comment, or the row of a thread that is not rendered yet. */
-.activity-feed-list [data-fix-ado-unread],
-.activity-feed-list .bolt-timeline-row {
-  scroll-margin-top: calc(var(--fix-ado-sticky-height, 0px) + 16px);
-}
-
-[data-fix-ado-unread]::after {
-  position: absolute;
-  inset: 0;
-  border-radius: 5px;
-  box-shadow:
-    inset 0 0 0 2px var(--fix-ado-unread-glow),
-    inset 0 0 6px 3px var(--fix-ado-unread-glow);
-  content: "";
-  pointer-events: none;
-}
-
-/* A comment after another of its group reaches 16px up: 4px across the gap, 12px it cuts off. */
-[data-fix-ado-unread="middle"]::after,
-[data-fix-ado-unread="last"]::after {
-  top: -16px;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  clip-path: inset(12px 0 0 0);
-}
-
-/* A comment before another of its group reaches 16px down the same way. */
-[data-fix-ado-unread="first"]::after,
-[data-fix-ado-unread="middle"]::after {
-  bottom: -16px;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  clip-path: inset(0 0 12px 0);
-}
-
-[data-fix-ado-unread="middle"]::after {
-  clip-path: inset(12px 0);
-}
-
-/* Go to first unread sits left of every other button in the bar above the feed, and glows while
-   there is something unread. */
-.fix-ado-first-unread-box {
-  order: -2;
-}
-
-.fix-ado-first-unread:not(:disabled) {
-  box-shadow:
-    0 0 0 2px var(--communication-background, rgb(0, 120, 212)),
-    0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
-}
-
-.fix-ado-first-unread:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-/* Go to next unread spans the bottom of a group's last comment, inside the glow. */
-.fix-ado-next-unread {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  margin: 8px 0 12px;
-}
-
-/* Forced colors drop box shadows, so the glows become outlines there. */
-@media (forced-colors: active) {
-  [data-fix-ado-unread]::after {
-    border-inline: 2px solid Highlight;
-    box-shadow: none;
-  }
-
-  [data-fix-ado-unread="only"]::after,
-  [data-fix-ado-unread="first"]::after {
-    border-top: 2px solid Highlight;
-  }
-
-  [data-fix-ado-unread="only"]::after,
-  [data-fix-ado-unread="last"]::after {
-    border-bottom: 2px solid Highlight;
-  }
-
-  .fix-ado-first-unread:not(:disabled) {
-    outline: 2px solid Highlight;
-    outline-offset: 1px;
-  }
-
-  .fix-ado-first-unread:disabled {
-    border-color: GrayText;
-    color: GrayText;
-    opacity: 1;
-  }
-}
-`;
-
-  // azure-devops/src/features/unread-comments/index.ts
-  var unreadComments = {
-    change: { kind: "new", version: "1.17.0" },
-    description: "Unread comments on a pull request's Overview glow, one glow around comments that follow each other. Go to first unread, above the feed, and Go to next unread, on each group, scroll to them.",
-    id: "unread-comments",
-    name: "Unread comments",
-    start({ document: document2, isInFrame: isInFrame2 }) {
-      if (isInFrame2)
-        return null;
-      let comments = createUnreadComments({ document: document2 });
-      return {
-        sync({ page }) {
-          page.kind === "pull-request" && comments.sync();
-        }
-      };
-    },
-    styles: [style_default10]
-  };
-
-  // azure-devops/src/features/overview-features.ts
-  var OVERVIEW_FEATURES = [
-    overviewPipelineIssues,
-    activityOrder,
-    scrollToBottom,
-    foldedPushes,
-    joinedReviewerLines,
-    resolvedThreadChips,
-    collapsibleThreads,
-    unreadComments,
-    newActivityChips
-  ];
-
-  // azure-devops/src/features/pipeline-tab/pipeline-run-frame.ts
-  function createPipelineRunFrame(document2) {
-    return parsePipelineRunLocation(document2.location) === null ? null : {
-      sync: () => {
-        document2.documentElement.dataset.fixAdoRunFrame = "";
-      }
-    };
-  }
-
-  // azure-devops/src/features/pipeline-tab/pipeline-tab-element.ts
-  var TAB_CLASS = "fix-ado-pipeline-tab", TAB_LABEL = "Pipeline", TAB_ID = "fix-ado-pipeline-tab", TAB_CLASSES = `bolt-tab focus-treatment flex-noshrink ${TAB_CLASS}`, OWN_TAB_ATTRIBUTE = "data-fix-ado-own-tab";
-  function createTab(document2) {
-    let text = Object.assign(document2.createElement("span"), {
-      className: "bolt-tab-text",
-      textContent: TAB_LABEL
-    });
-    text.dataset.content = TAB_LABEL;
-    let container = Object.assign(document2.createElement("span"), {
-      className: "bolt-tab-inner-container"
-    });
-    container.append(text);
-    let tab = Object.assign(document2.createElement("a"), {
-      className: TAB_CLASSES,
-      href: "#",
-      id: TAB_ID
-    });
-    return tab.setAttribute("role", "tab"), tab.dataset.fixAdoOwnTab = "", tab.append(container), tab.setAttribute("aria-selected", "false"), tab;
-  }
-
-  // azure-devops/src/core/closest-element.ts
-  function isElement(target) {
-    return target !== null && "nodeType" in target && target.nodeType === 1;
-  }
-  function closestElement(target, selector) {
-    return isElement(target) ? target.closest(selector) : null;
-  }
-  function isHtmlElement(element4) {
-    return "dataset" in element4;
-  }
-  function closestHtmlElement(target, selector) {
-    let found = closestElement(target, selector);
-    return found !== null && isHtmlElement(found) ? found : null;
-  }
-
-  // azure-devops/src/features/pipeline-tab/pipeline-tab-tree.ts
-  var DATE_FORMAT = { dateStyle: "short", timeStyle: "short" }, NAME_CLASS = "fix-ado-pipeline-item-name";
-  function textElement(document2, className, text) {
-    let element4 = document2.createElement("span");
-    return element4.className = className, element4.textContent = text, element4;
-  }
-  function createItemText(document2, item) {
-    let text = textElement(document2, "fix-ado-pipeline-item-text", "");
-    return text.append(textElement(document2, NAME_CLASS, item.name)), item.details !== void 0 && text.append(textElement(document2, "fix-ado-pipeline-item-details", item.details)), text;
-  }
-  function createItemParts(document2, item) {
-    let icon = item.status === null ? [] : [createStatusIcon(document2, item.status.status, item.status.label)], counts = item.issueCounts === void 0 ? [] : createIssueCounts(document2, item.issueCounts);
-    return [...icon, createItemText(document2, item), ...counts];
-  }
-  function foldPick(context, level) {
-    let { pick } = context;
-    return { ...pick, folded: pick.folded === level ? null : level };
-  }
-  function markItem(context, button2, item) {
-    button2.setAttribute("aria-current", String(item.isCurrent)), item.isCurrent && item.level !== null && button2.setAttribute("aria-expanded", String(context.pick.folded !== item.level));
-    let { buildId, jobId, stageId, stepId } = item.pick;
-    button2.dataset.fixAdoFocusKey = [buildId, stageId, jobId, stepId].join("/");
-  }
-  function createItem(context, item) {
-    let { document: document2 } = context, button2 = document2.createElement("button");
-    return button2.type = "button", button2.className = `fix-ado-pipeline-item ${item.className}`, markItem(context, button2, item), button2.append(...createItemParts(document2, item)), button2.addEventListener("click", () => {
-      let { level } = item;
-      context.onPick(item.isCurrent && level !== null ? foldPick(context, level) : item.pick);
-    }), button2;
-  }
-  function requiredLabel(isRequired) {
-    return isRequired ? "Required" : "Optional";
-  }
-  function runDetails(run) {
-    let kind = run.isRequired === null ? `#${run.buildNumber ?? run.buildId}` : requiredLabel(run.isRequired), started = run.startedAt === null ? [] : [new Date(run.startedAt).toLocaleString([], DATE_FORMAT)];
-    return [...run.status?.status === "cancelling" ? ["Cancelling"] : [], kind, ...started].join(" · ");
-  }
-  function group(document2, className, children) {
-    let element4 = document2.createElement("div");
-    return element4.className = className, element4.append(...children), element4;
-  }
-  function createJobSteps(context, job) {
-    let { run, stage, step } = context.shown, steps = job.steps.map(
-      (candidate) => createItem(context, {
-        className: "fix-ado-pipeline-step",
-        isCurrent: candidate.id === step?.id,
-        issueCounts: candidate,
-        level: null,
-        name: candidate.name,
-        pick: {
-          buildId: run.buildId,
-          folded: null,
-          jobId: candidate.jobId,
-          stageId: stage?.id ?? null,
-          stepId: candidate.id
-        },
-        status: recordStatusOf(candidate)
-      })
-    );
-    return group(context.document, "fix-ado-pipeline-steps", steps);
-  }
-  function createJob(context, job) {
-    let { shown } = context, isCurrent2 = shown.step?.jobId === job.id, item = createItem(context, {
-      className: "fix-ado-pipeline-job",
-      isCurrent: isCurrent2,
-      issueCounts: job,
-      level: "job",
-      name: job.name,
-      pick: {
-        buildId: shown.run.buildId,
-        folded: null,
-        jobId: job.id,
-        stageId: shown.stage?.id ?? null,
-        stepId: null
-      },
-      status: recordStatusOf(job)
-    });
-    return isCurrent2 && context.pick.folded === "job" ? [item] : [item, createJobSteps(context, job)];
-  }
-  function createJobs(context) {
-    let items = (context.shown.stage?.jobs ?? []).flatMap((job) => createJob(context, job));
-    return group(context.document, "fix-ado-pipeline-jobs", items);
-  }
-  function stageName(stage) {
-    return stage.name === DEFAULT_STAGE_NAME ? "Jobs" : stage.name;
-  }
-  function createStage(context, stage) {
-    let { shown } = context, isCurrent2 = stage.id === shown.stage?.id, item = createItem(context, {
-      className: "fix-ado-pipeline-stage",
-      isCurrent: isCurrent2,
-      issueCounts: stage,
-      level: "stage",
-      name: stageName(stage),
-      pick: {
-        buildId: shown.run.buildId,
-        folded: null,
-        jobId: null,
-        stageId: stage.id,
-        stepId: null
-      },
-      status: recordStatusOf(stage)
-    });
-    return isCurrent2 && context.pick.folded !== "stage" ? [item, createJobs(context)] : [item];
-  }
-  function createStages(context) {
-    let { document: document2, shown } = context;
-    if (shown.stages === null)
-      return textElement(document2, "fix-ado-pipeline-note", "Loading stages…");
-    if (shown.stages.length === 0)
-      return textElement(document2, "fix-ado-pipeline-note", "No stages yet.");
-    let items = shown.stages.flatMap((stage) => createStage(context, stage));
-    return group(document2, "fix-ado-pipeline-stages", items);
-  }
-  var SVG_NAMESPACE5 = "http://www.w3.org/2000/svg", OPEN_ICON_PATH = "M9 2h5v5h-1V3.7L7.35 9.35l-.7-.7L12.3 3H9V2zM3 4h4v1H4v8h8V9h1v5H3V4z";
-  function createOpenIcon(document2) {
-    let icon = document2.createElementNS(SVG_NAMESPACE5, "svg");
-    icon.setAttribute("viewBox", "0 0 16 16"), icon.setAttribute("width", "16"), icon.setAttribute("height", "16"), icon.setAttribute("aria-hidden", "true");
-    let path = document2.createElementNS(SVG_NAMESPACE5, "path");
-    return path.setAttribute("d", OPEN_ICON_PATH), path.setAttribute("fill", "currentColor"), icon.append(path), icon;
-  }
-  function createOpenRunLink(context, run) {
-    let { document: document2 } = context, link = document2.createElement("a");
-    return link.className = "fix-ado-pipeline-open-run", link.href = context.runPathOf(run.buildId), link.target = "_blank", link.rel = "noopener", link.setAttribute("aria-label", "Open run in new tab"), link.title = "Open run in new tab", link.append(createOpenIcon(document2)), link;
-  }
-  function createRunRow(context, item, run) {
-    let link = createOpenRunLink(context, run);
-    return group(context.document, "fix-ado-pipeline-run-row", [item, link]);
-  }
-  function createRun(context, run) {
-    let isCurrent2 = run.buildId === context.shown.run.buildId, item = createItem(context, {
-      className: "fix-ado-pipeline-run",
-      details: runDetails(run),
-      isCurrent: isCurrent2,
-      level: "run",
-      name: run.name,
-      pick: { buildId: run.buildId, folded: null, jobId: null, stageId: null, stepId: null },
-      status: run.status
-    }), row = createRunRow(context, item, run);
-    return isCurrent2 && context.pick.folded !== "run" ? [row, createStages(context)] : [row];
-  }
-  function showCutOffNames(tree) {
-    tree.addEventListener("mouseover", (event) => {
-      let row = closestElement(event.target, ".fix-ado-pipeline-item"), name = row?.querySelector(`.${NAME_CLASS}`);
-      row === null || name === null || name === void 0 || (name.scrollWidth > name.clientWidth ? row.setAttribute("title", name.textContent) : row.removeAttribute("title"));
-    });
-  }
-  function createRunTree(context) {
-    let items = context.runs.flatMap((run) => createRun(context, run)), tree = group(context.document, "fix-ado-pipeline-tree", items);
-    return tree.setAttribute("role", "group"), tree.setAttribute("aria-label", "Pipeline runs"), showCutOffNames(tree), tree;
-  }
-
-  // azure-devops/src/features/pipeline-tab/pipeline-tab-run-action.ts
-  var LABELS3 = {
-    cancel: {
-      failed: "Could not cancel the run.",
-      idle: "Cancel current run",
-      waiting: "Cancelling…"
-    },
-    start: { failed: "Could not start the run.", idle: "Start new run", waiting: "Starting…" }
-  }, LOOKS = { cancel: "danger", start: "primary" };
-  function textElement2(document2, className, text) {
-    let element4 = document2.createElement("span");
-    return element4.className = className, element4.textContent = text, element4;
-  }
-  function createChoice(context, choice) {
-    let { document: document2 } = context, row = document2.createElement("button");
-    row.type = "button", row.className = "fix-ado-pipeline-item fix-ado-pipeline-run-action-choice", row.dataset.fixAdoFocusKey = `run-action/${choice.key}`;
-    let text = textElement2(document2, "fix-ado-pipeline-item-text", "");
-    return text.append(
-      textElement2(document2, "fix-ado-pipeline-item-name", choice.name),
-      textElement2(document2, "fix-ado-pipeline-item-details", choice.details)
-    ), row.append(text), row.addEventListener("click", () => {
-      context.onPick(context.action, choice.key);
-    }), row;
-  }
-  function createChoices(context) {
-    let list = context.document.createElement("div");
-    return list.className = "fix-ado-pipeline-run-action-choices", list.append(...context.choices.map((choice) => createChoice(context, choice))), list;
-  }
-  function onButtonClick({ action, choices, onPick, onToggleList, state }) {
-    let [onlyChoice] = choices;
-    choices.length === 1 && onlyChoice !== void 0 ? onPick(action, onlyChoice.key) : onToggleList(state !== "choosing");
-  }
-  function createButton4(context) {
-    let { action, choices, document: document2, state } = context, isWaiting = state === "waiting", button2 = Object.assign(document2.createElement("button"), {
-      className: `bolt-button ${LOOKS[action]} bolt-focus-treatment ${isWaiting ? "disabled" : "enabled"} fix-ado-pipeline-run-action`,
-      disabled: isWaiting,
-      type: "button"
-    });
-    button2.dataset.fixAdoFocusKey = "run-action";
-    let label = LABELS3[action][isWaiting ? "waiting" : "idle"];
-    return button2.append(textElement2(document2, "bolt-button-text body-m", label)), choices.length > 1 && button2.setAttribute("aria-expanded", String(state === "choosing")), button2.addEventListener("click", () => {
-      onButtonClick(context);
-    }), button2;
-  }
-  function failedNote(document2, action) {
-    let note = textElement2(document2, "fix-ado-pipeline-note", LABELS3[action].failed);
-    return note.setAttribute("role", "alert"), note;
-  }
-  function createRunAction(context) {
-    let { action, choices, document: document2, state } = context;
-    if (choices.length === 0)
-      return null;
-    let button2 = createButton4(context);
-    return state === "choosing" ? [button2, createChoices(context)] : state === "failed" ? [button2, failedNote(document2, action)] : [button2];
-  }
-
-  // azure-devops/src/features/pipeline-tab/pipeline-log-frame.ts
-  var LOG_TITLE_SELECTOR = ".logs-view .log-header .job-header .title-m", TREE_ROW_SELECTOR = ".run-logs-tree .bolt-tree-row", ROW_NAME_SELECTOR = ".job-name-area [role=button]";
-  function load(frame, log2) {
-    frame.setAttribute("src", log2.path);
-  }
-  function shownStepName(frame) {
-    return frame.contentDocument?.querySelector(LOG_TITLE_SELECTOR)?.textContent.trim() ?? null;
-  }
-  function showsStep(frame, stepName) {
-    return shownStepName(frame) === stepName;
-  }
-  function stepInTree(document2, log2) {
-    let names = [...document2.querySelectorAll(TREE_ROW_SELECTOR)].map((row) => row.querySelector(ROW_NAME_SELECTOR)).filter((name) => name !== null), jobIndex = names.findIndex((name) => name.textContent.trim() === log2.jobName), isStep = (name) => name.textContent.trim() === log2.stepName;
-    return names.slice(jobIndex + 1).find((name) => isStep(name)) ?? names.find((name) => isStep(name)) ?? null;
-  }
-  function waitForSwitch(frame, log2, schedule2) {
-    let checksLeft = 15, check2 = () => {
-      frame.dataset.fixAdoLogPath !== log2.path || showsStep(frame, log2.stepName) || (checksLeft -= 1, checksLeft > 0 ? schedule2(check2, 100) : load(frame, log2));
-    };
-    schedule2(check2, 100);
-  }
-  function stepInFrame(frame, log2) {
-    let isSameRun = frame.dataset.fixAdoBuildId === String(log2.buildId), document2 = frame.contentDocument;
-    return isSameRun && document2 !== null ? stepInTree(document2, log2) : null;
-  }
-  function showStepLog(frame, log2, schedule2 = setTimeout) {
-    if (frame.dataset.fixAdoLogPath === log2.path)
-      return;
-    let step = stepInFrame(frame, log2);
-    if (frame.dataset.fixAdoLogPath = log2.path, frame.dataset.fixAdoBuildId = String(log2.buildId), step === null) {
-      load(frame, log2);
-      return;
-    }
-    step.click(), waitForSwitch(frame, log2, schedule2);
-  }
-  function watchShownStep(frame, onStep) {
-    if (frame.dataset.fixAdoWatched !== void 0)
-      return;
-    frame.dataset.fixAdoWatched = "";
-    let lastStepName = null, report = () => {
-      let stepName = shownStepName(frame);
-      stepName !== null && stepName !== lastStepName && (lastStepName = stepName, onStep(stepName));
-    }, watchPage = () => {
-      let view = frame.contentDocument?.defaultView;
-      if (frame.contentDocument !== null && view !== null && view !== void 0) {
-        let options = { characterData: !0, childList: !0, subtree: !0 };
-        new view.MutationObserver(report).observe(frame.contentDocument, options);
-      }
-    };
-    frame.addEventListener("load", watchPage), watchPage();
-  }
-
-  // azure-devops/src/features/pipeline-tab/pipeline-tab-panel.ts
-  var PANEL_CLASS = "fix-ado-pipeline-panel", TREE_SELECTOR = ":scope > .fix-ado-pipeline-tree", FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame", LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note", ISSUES_SELECTOR = ":scope > .fix-ado-issue-box", ISSUES_COLLAPSED_ATTRIBUTE = "data-fix-ado-issues-collapsed";
-  function message(panel, text, isError = !1) {
-    let note = panel.ownerDocument.createElement("p");
-    note.className = "fix-ado-pipeline-message", note.textContent = text, isError && note.setAttribute("role", "alert"), panel.replaceChildren(note);
-  }
-  function frameOf(panel) {
-    let existing = panel.querySelector(FRAME_SELECTOR);
-    if (existing !== null)
-      return existing;
-    let frame = panel.ownerDocument.createElement("iframe");
-    return frame.className = "fix-ado-pipeline-frame", frame.title = "Step log", panel.append(frame), frame;
-  }
-  function showLogNote(panel, text) {
-    let note = panel.querySelector(LOG_NOTE_SELECTOR);
-    if (text === null) {
-      note?.remove();
-      return;
-    }
-    note === null && (note = panel.ownerDocument.createElement("p"), note.className = "fix-ado-pipeline-log-note", panel.append(note)), note.textContent = text;
-  }
-  function stepLogOf(shown, step, content) {
-    let { buildId } = shown.run, jobName = shown.stage?.jobs.find((job) => job.id === step.jobId)?.name ?? "";
-    return { buildId, jobName, path: content.logPathOf(buildId, step), stepName: step.name };
-  }
-  function showLog(panel, shown, content) {
-    let { step } = shown;
-    if (step === null) {
-      panel.querySelector(FRAME_SELECTOR)?.setAttribute("hidden", ""), showLogNote(panel, shown.stages === null ? "Loading steps…" : "This run has no steps yet.");
-      return;
-    }
-    showLogNote(panel, null);
-    let frame = frameOf(panel);
-    frame.removeAttribute("hidden"), showStepLog(frame, stepLogOf(shown, step, content));
-  }
-  function stepOf(stages, stepId) {
-    return stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps)).find((step) => step.id === stepId);
-  }
-  function createIssueLink({ document: document2, shown }, issue, content) {
-    let { buildId } = shown.run, link = document2.createElement("a"), step = stepOf(shown.stages ?? [], issue.stepId);
-    return link.href = step === void 0 ? "#" : content.logPathOf(buildId, step), link.addEventListener("click", (event) => {
-      event.preventDefault();
-      let { jobId, stageId, stepId } = issue;
-      content.onPick({ buildId, folded: null, jobId, stageId, stepId });
-    }), fillIssueLink(link, issue);
-  }
-  function showIssues(panel, tree, content) {
-    panel.querySelector(ISSUES_SELECTOR)?.remove();
-    let { shown } = content, stages = shown?.stages ?? [], issues = runIssuesOf(stages);
-    if (shown === null || issues.length === 0)
-      return;
-    let context = { document: panel.ownerDocument, shown }, box = createIssueBox(context.document, {
-      collapse: {
-        isCollapsed: panel.hasAttribute(ISSUES_COLLAPSED_ATTRIBUTE),
-        onToggle: (isCollapsed) => {
-          panel.toggleAttribute(ISSUES_COLLAPSED_ATTRIBUTE, isCollapsed);
-        }
-      },
-      createLink: (issue) => createIssueLink(context, issue, content),
-      details: null,
-      issues,
-      title: issueSummary(stages)
-    });
-    tree.after(box);
-  }
-  function focusedKey(oldTree) {
-    let focused = oldTree?.ownerDocument.activeElement ?? null;
-    return focused !== null && oldTree?.contains(focused) === !0 ? focused.closest("[data-fix-ado-focus-key]")?.dataset.fixAdoFocusKey ?? null : null;
-  }
-  function placeTree(panel, tree) {
-    panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
-    let oldTree = panel.querySelector(TREE_SELECTOR), key = focusedKey(oldTree);
-    oldTree === null ? panel.prepend(tree) : oldTree.replaceWith(tree), key !== null && (tree.querySelector(`[data-fix-ado-focus-key="${key}"]`) ?? tree.querySelector('[aria-current="true"]'))?.focus();
-  }
-  function runActionOf(runs, checks) {
-    let busyRuns = runs.filter((run) => run.isBusy);
-    return busyRuns.length > 0 ? {
-      action: "cancel",
-      choices: busyRuns.map((run) => ({
-        details: runDetails(run),
-        key: String(run.buildId),
-        name: run.name
-      }))
-    } : {
-      action: "start",
-      choices: checks.map((check2) => ({
-        details: check2.isRequired ? "Required" : "Optional",
-        key: check2.evaluationId,
-        name: check2.name
-      }))
-    };
-  }
-  function runActionElements(panel, { runs, startableChecks }, content) {
-    return createRunAction({
-      ...runActionOf(runs, startableChecks),
-      document: panel.ownerDocument,
-      onPick: content.onRunAction,
-      onToggleList: content.onRunActionListToggle,
-      state: content.runActionState
-    }) ?? [];
-  }
-  function showRun(panel, loaded, content) {
-    let { shown } = content;
-    if (shown === null) {
-      message(panel, "This pull request has no pipeline runs."), panel.prepend(...runActionElements(panel, loaded, content));
-      return;
-    }
-    let tree = createRunTree({
-      document: panel.ownerDocument,
-      onPick: content.onPick,
-      pick: content.pick,
-      runPathOf: content.runPathOf,
-      runs: loaded.runs,
-      shown
-    });
-    tree.prepend(...runActionElements(panel, loaded, content)), placeTree(panel, tree), showIssues(panel, tree, content), showLog(panel, shown, content);
-  }
-  function renderKey({ pick, runActionState, runs, shown }) {
-    return JSON.stringify([runs, shown, pick, runActionState]);
-  }
-  function renderPanel(panel, content) {
-    let key = renderKey(content);
-    panel.dataset.fixAdoRendered !== key && (panel.dataset.fixAdoRendered = key, content.runs.kind === "loading" ? message(panel, "Loading pipeline runs…") : content.runs.kind === "failed" ? message(panel, "Could not load the pipeline runs.", !0) : showRun(panel, content.runs, content));
-  }
-  function createPanel(document2) {
-    let panel = document2.createElement("div");
-    return panel.className = PANEL_CLASS, panel.setAttribute("role", "tabpanel"), panel.setAttribute("aria-labelledby", TAB_ID), panel;
-  }
-
-  // azure-devops/src/pipeline/pipeline-runs.ts
-  var RESULT_STATUSES2 = {
-    canceled: { label: "Canceled", status: "notStarted" },
-    failed: { label: "Failed", status: "failed" },
-    partiallySucceeded: { label: "Partly succeeded", status: "expired" },
-    succeeded: { label: "Succeeded", status: "succeeded" }
-  }, PROGRESS_STATUSES = {
-    cancelling: { label: "Cancelling", status: "cancelling" },
-    inProgress: { label: "Running", status: "running" },
-    notStarted: { label: "Queued", status: "queued" },
-    postponed: { label: "Queued", status: "queued" }
-  }, BUSY_BUILD_STATUSES = /* @__PURE__ */ new Set(["inProgress", "notStarted", "postponed"]);
-  function buildStatusOf(build) {
-    return (build.result === void 0 ? void 0 : RESULT_STATUSES2[build.result]) ?? PROGRESS_STATUSES[build.status] ?? null;
-  }
-  function runStatusOf(build, check2) {
-    let isCancelling = build.status === "cancelling";
-    return check2?.status === null || check2 === void 0 || isCancelling ? buildStatusOf(build) : { status: check2.status };
-  }
-  function runOfBuild(build, check2) {
-    return {
-      buildId: build.id,
-      buildNumber: build.buildNumber,
-      isBusy: BUSY_BUILD_STATUSES.has(build.status),
-      isRequired: check2?.isRequired ?? null,
-      name: check2?.name ?? build.definition?.name ?? `Run ${build.buildNumber}`,
-      startedAt: build.startTime ?? build.queueTime ?? check2?.startedAt ?? null,
-      status: runStatusOf(build, check2)
-    };
-  }
-  function runOfCheck(check2) {
-    let status = check2.status === null ? null : { status: check2.status }, isBusy2 = check2.status === "running" || check2.status === "queued";
-    return { ...check2, buildNumber: null, isBusy: isBusy2, status };
-  }
-  function pipelineRunsOf(checks, builds) {
-    let listed = new Set(builds.map((build) => build.id));
-    return [
-      ...checks.filter((check2) => !listed.has(check2.buildId)).map((check2) => runOfCheck(check2)),
-      ...builds.map(
-        (build) => runOfBuild(
-          build,
-          checks.find((check2) => check2.buildId === build.id)
-        )
-      )
-    ];
-  }
-
-  // azure-devops/src/features/pipeline-tab/pipeline-tab-selection.ts
-  function stageWithStep(stages, stepId) {
-    return stages.find(
-      (stage) => stage.jobs.some((job) => job.steps.some((step) => step.id === stepId))
-    );
-  }
-  function pickedScope(stages, pick) {
-    let pickedStage = stages.find((stage) => stage.id === pick.stageId), pickedJob = (pickedStage?.jobs ?? []).find((job) => job.id === pick.jobId);
-    return pickedStage !== void 0 && pickedJob !== void 0 ? [{ ...pickedStage, jobs: [pickedJob] }] : pickedStage === void 0 ? stages : [pickedStage];
-  }
-  function shownStepOf(stages, pick) {
-    let scope = pickedScope(stages, pick);
-    return scope.flatMap((stage) => stage.jobs.flatMap((job) => job.steps)).find((step) => step.id === pick.stepId) ?? defaultStepOf(scope);
-  }
-  function shownRunOf(runs, stagesByBuildId, pick) {
-    let run = runs.find((candidate) => candidate.buildId === pick.buildId) ?? runs[0];
-    if (run === void 0)
-      return null;
-    let stages = stagesByBuildId.get(run.buildId) ?? null;
-    if (stages === null)
-      return { run, stage: null, stages, step: null };
-    let step = shownStepOf(stages, pick), stage = (step === null ? void 0 : stageWithStep(stages, step.id)) ?? stages.find((candidate) => candidate.id === pick.stageId) ?? stages[0] ?? null;
-    return { run, stage, stages, step };
-  }
-
-  // azure-devops/src/features/pipeline-tab/pipeline-tab-data.ts
-  var RUNS_REFRESH_MS = 3e4, ACTED_RUNS_REFRESH_MS = 5e3, ACTED_RUNS_REFRESH_WINDOW_MS = 6e4, RUNNING_TIMELINE_REFRESH_MS = 5e3, NO_PICK = {
-    buildId: null,
-    folded: null,
-    jobId: null,
-    stageId: null,
-    stepId: null
-  };
-  function createTabData(pullRequest) {
-    return {
-      fastRunsRefreshUntil: Number.NEGATIVE_INFINITY,
-      pick: NO_PICK,
-      pullRequest,
-      runActionState: "idle",
-      runs: { kind: "loading" },
-      runsLoadedAt: Number.NEGATIVE_INFINITY,
-      stagesByBuildId: /* @__PURE__ */ new Map(),
-      timelineLoadedAt: /* @__PURE__ */ new Map()
-    };
-  }
-  function shownRunOfData(data) {
-    return data.runs.kind === "loaded" ? shownRunOf(data.runs.runs, data.stagesByBuildId, data.pick) : null;
-  }
-  function logRunListFailure(error) {
-    return error instanceof AdoRequestError ? log("Pipeline tab: Azure DevOps refused the run list", { httpStatus: error.httpStatus }) : log("Pipeline tab: the run list request failed without an answer"), [];
-  }
-  async function loadRuns({ data, onChange, sources }) {
-    data.runsLoadedAt = sources.now();
-    try {
-      let [evaluations, builds] = await Promise.all([
-        sources.getEvaluations(data.pullRequest),
-        sources.getPullRequestBuilds(data.pullRequest).catch(logRunListFailure)
-      ]), checks = pipelineChecksOf(evaluations);
-      log("Pipeline tab: runs loaded", { checkCount: checks.length, runCount: builds.length }), data.runs = {
-        kind: "loaded",
-        runs: pipelineRunsOf(checks, builds),
-        startableChecks: startableChecksOf(evaluations)
-      };
-    } catch {
-      data.runs = data.runs.kind === "loaded" ? data.runs : { kind: "failed" };
-    }
-    onChange();
-  }
-  async function loadTimeline2(loader, buildId) {
-    let { data, onChange, sources } = loader;
-    data.timelineLoadedAt.set(buildId, sources.now());
-    try {
-      let records = await sources.getTimeline(data.pullRequest.project, buildId);
-      data.stagesByBuildId.set(buildId, stagesOf(records));
-    } catch {
-    }
-    onChange();
-  }
-  function isTimelineDue2(data, shown, now) {
-    let loadedAt = data.timelineLoadedAt.get(shown.run.buildId);
-    if (loadedAt === void 0)
-      return !0;
-    let status = shown.run.status?.status;
-    return (status === "running" || status === "queued" || (shown.stages ?? []).some((stage) => stage.state !== "completed") || shown.stages === null) && now - loadedAt >= RUNNING_TIMELINE_REFRESH_MS;
-  }
-  function loadWhatIsDue(loader) {
-    let { data, sources } = loader, now = sources.now(), runsRefreshMs = now < data.fastRunsRefreshUntil ? ACTED_RUNS_REFRESH_MS : RUNS_REFRESH_MS;
-    now - data.runsLoadedAt >= runsRefreshMs && loadRuns(loader);
-    let shown = shownRunOfData(data);
-    shown !== null && isTimelineDue2(data, shown, now) && loadTimeline2(loader, shown.run.buildId);
-  }
-  async function sendRunAction(loader, action, key) {
-    let { data, sources } = loader;
-    try {
-      return await (action === "start" ? sources.requeueCheck(data.pullRequest, key) : sources.cancelRun(data.pullRequest.project, Number(key))), data.runsLoadedAt = Number.NEGATIVE_INFINITY, data.fastRunsRefreshUntil = sources.now() + ACTED_RUNS_REFRESH_WINDOW_MS, log(
-        `Pipeline tab: run action ${action} sent`,
-        action === "cancel" ? { buildId: Number(key) } : {}
-      ), "idle";
-    } catch (error) {
-      return log(`Pipeline tab: Azure DevOps refused run action ${action}`, {
-        httpStatus: error instanceof AdoRequestError ? error.httpStatus : null
-      }), "failed";
-    }
-  }
-  async function performRunAction(loader, action, key) {
-    loader.data.runActionState = "waiting", loader.onChange(), loader.data.runActionState = await sendRunAction(loader, action, key), loader.onChange();
-  }
-  function expireTimeline(data, buildId) {
-    data.timelineLoadedAt.delete(buildId);
-  }
-
-  // azure-devops/src/features/pipeline-tab/pipeline-tab.ts
-  var OPEN_ATTRIBUTE = "data-fix-ado-pipeline-tab-open", PAGE_SELECTOR = ".repos-pr-details-page", TABBAR_SELECTOR = ".repos-pr-details-page-tabbar", CHECKS_PANEL_SELECTOR = ".bolt-panel", RUN_LINK = 'a[href*="/_build/results?"]', RUN_LINK_SELECTOR2 = `${PAGE_SELECTOR} ${RUN_LINK}, ${CHECKS_PANEL_SELECTOR} ${RUN_LINK}`;
-  function setSelected(tab, isSelected) {
-    tab.classList.toggle("selected", isSelected), tab.setAttribute("aria-selected", String(isSelected));
-  }
-  function isSamePullRequest(data, pullRequest) {
-    return JSON.stringify(data?.pullRequest ?? null) === JSON.stringify(pullRequest);
-  }
-  function panelOf(state, page) {
-    let existing = page.querySelector(`.${PANEL_CLASS}`), tabbar = page.querySelector(TABBAR_SELECTOR);
-    if (existing !== null || tabbar === null)
-      return existing;
-    let panel = createPanel(state.options.document);
-    return tabbar.after(panel), panel;
-  }
-  function render2(state) {
-    let { data } = state, page = state.options.document.querySelector(PAGE_SELECTOR), panel = page === null ? null : panelOf(state, page);
-    if (!state.isOpen || data === null || page === null || panel === null)
-      return;
-    page.setAttribute(OPEN_ATTRIBUTE, "");
-    let { apiBasePath: apiBasePath2 } = state.options, { project } = data.pullRequest;
-    renderPanel(panel, {
-      logPathOf: (buildId, step) => pipelineLogPath(apiBasePath2, project, { buildId, jobId: step.jobId, stepId: step.id }),
-      onPick: (pick) => {
-        data.pick = pick, update(state);
-      },
-      onRunAction: (action, key) => {
-        performRunAction(loaderOf(state, data), action, key);
-      },
-      onRunActionListToggle: (isOpen) => {
-        data.runActionState = isOpen ? "choosing" : "idle", update(state);
-      },
-      pick: data.pick,
-      runActionState: data.runActionState,
-      runPathOf: (buildId) => pipelineRunPath(apiBasePath2, project, buildId),
-      runs: data.runs,
-      shown: shownRunOfData(data)
-    }), watchLog(state, panel);
-  }
-  function onLogStep(state, stepName) {
-    let { data } = state, shown = data === null ? null : shownRunOfData(data);
-    data === null || shown === null || data.pick.stepId !== null || shown.step?.name === stepName || (expireTimeline(data, shown.run.buildId), update(state));
-  }
-  function watchLog(state, panel) {
-    let frame = panel.querySelector(".fix-ado-pipeline-frame");
-    frame !== null && watchShownStep(frame, (stepName) => {
-      onLogStep(state, stepName);
-    });
-  }
-  function loaderOf(state, data) {
-    return {
-      data,
-      onChange: () => {
-        state.data === data && update(state);
-      },
-      sources: state.options
-    };
-  }
-  function update(state) {
-    let { data } = state;
-    !state.isOpen || data === null || (render2(state), loadWhatIsDue(loaderOf(state, data)));
-  }
-  function selectTab(state) {
-    let { document: document2 } = state.options, tab = document2.querySelector(`.${TAB_CLASS}`);
-    for (let other of document2.querySelectorAll("[role=tablist] [role=tab].selected"))
-      other !== tab && (other.hasAttribute(OWN_TAB_ATTRIBUTE) || (state.replacedTab = other), setSelected(other, !1));
-    tab !== null && setSelected(tab, !0);
-  }
-  function openTab(state, run) {
-    if (state.isOpen = !0, run !== null && state.data !== null) {
-      let { buildId, jobId, stepId } = run;
-      state.data.pick = { buildId, folded: null, jobId, stageId: null, stepId };
-    }
-    selectTab(state), update(state);
-  }
-  function closeTab(state) {
-    let { document: document2 } = state.options;
-    state.isOpen = !1;
-    let page = document2.querySelector(PAGE_SELECTOR);
-    page?.removeAttribute(OPEN_ATTRIBUTE), page?.querySelector(`.${PANEL_CLASS}`)?.remove();
-    for (let tab of document2.querySelectorAll(`.${TAB_CLASS}`))
-      setSelected(tab, !1);
-    state.replacedTab !== null && (setSelected(state.replacedTab, !0), state.replacedTab = null);
-  }
-  function closeChecksPanel(target) {
-    closestElement(target, CHECKS_PANEL_SELECTOR)?.querySelector(".bolt-panel-header .ms-Icon--Clear")?.closest("button")?.click();
-  }
-  function clickedRun(event, document2) {
-    let link = closestElement(event.target, RUN_LINK_SELECTOR2), isPlainClick = event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey, button2 = closestElement(event.target, "button, [role=button]"), isOnButtonInLink = button2 !== null && link?.contains(button2) === !0;
-    if (link === null || !isPlainClick || isOnButtonInLink || closestElement(event.target, `.${PANEL_CLASS}`) !== null)
-      return null;
-    let url = new URL(link.getAttribute("href") ?? "", document2.location.href);
-    return parsePipelineRunLocation(url);
-  }
-  function onClick(state, event) {
-    if (state.data === null)
-      return;
-    let isPipelineTab = closestElement(event.target, `.${TAB_CLASS}`) !== null, run = clickedRun(event, state.options.document);
-    isPipelineTab || run !== null ? (event.preventDefault(), event.stopPropagation(), openTab(state, run), closeChecksPanel(event.target)) : state.isOpen && closestElement(event.target, "[role=tablist] [role=tab]") !== null && closeTab(state);
-  }
-  function addTab(document2) {
-    let tablist = document2.querySelector(`${TABBAR_SELECTOR} [role=tablist]`);
-    return tablist === null ? !1 : (tablist.querySelector(`.${TAB_CLASS}`) === null && tablist.append(createTab(document2)), !0);
-  }
-  function syncTab(state, pullRequest) {
-    isSamePullRequest(state.data, pullRequest) || (closeTab(state), state.data = pullRequest === null ? null : createTabData(pullRequest)), state.data !== null && addTab(state.options.document) && state.isOpen && (selectTab(state), update(state));
-  }
-  function createPipelineTab(options) {
-    let state = { data: null, isOpen: !1, options, replacedTab: null };
-    return options.document.addEventListener(
-      "click",
-      (event) => {
-        onClick(state, event);
-      },
-      { capture: !0 }
-    ), {
-      sync: (pullRequest) => {
-        syncTab(state, pullRequest);
-      }
-    };
-  }
-
-  // azure-devops/src/pipeline/pipeline-status-icon.css
-  var pipeline_status_icon_default = `.fix-ado-pipeline-status {
-  flex-shrink: 0;
-  align-self: center;
-  margin-left: 8px;
-}
-
-.fix-ado-pipeline-status[data-status="succeeded"] {
-  color: var(--component-status-success, rgb(85, 163, 98));
-}
-.fix-ado-pipeline-status[data-status="failed"] {
-  color: var(--component-status-error, rgb(205, 74, 69));
-}
-.fix-ado-pipeline-status[data-status="expired"],
-.fix-ado-pipeline-status[data-status="cancelling"] {
-  color: var(--component-status-warning, rgb(214, 119, 48));
-}
-.fix-ado-pipeline-status[data-status="running"] {
-  color: var(--component-status-info, rgb(0, 120, 212));
-}
-.fix-ado-pipeline-status[data-status="queued"],
-.fix-ado-pipeline-status[data-status="notStarted"] {
-  color: var(--component-status-neutral, rgb(102, 102, 102));
-}
-
-.fix-ado-pipeline-status[data-status="running"] {
-  animation: fix-ado-spin 1.5s linear infinite;
-}
-
-/* A grey circle that holds the icon's place while the status loads, or when there is none. */
-.fix-ado-pipeline-status[data-status="loading"],
-.fix-ado-pipeline-status[data-status="none"] {
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  opacity: 0.25;
-}
-
-@keyframes fix-ado-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Slower, not stopped, so a running pipeline still looks busy. */
-@media (prefers-reduced-motion: reduce) {
-  .fix-ado-pipeline-status[data-status="running"] {
-    animation-duration: 6s;
-  }
-}
-
-/* Forced colors turn the disc into the text colour, which can be white; the marks take the
-   background colour, so succeeded, failed and expired stay apart. */
-@media (forced-colors: active) {
-  .fix-ado-pipeline-status path[stroke="#fff"] {
-    stroke: Canvas;
-  }
-}
-`;
-
-  // azure-devops/src/features/pipeline-tab/style.css
-  var style_default11 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
-.repos-pr-details-page[data-fix-ado-pipeline-tab-open]
-  > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
-  display: none !important;
-}
-
-/* The pull request page is a column that fills the window; the panel takes what the
-   header and tabs leave, so the log reaches the bottom. */
-.fix-ado-pipeline-panel {
-  display: grid;
-  flex: 1 0 0;
-  grid-template-columns: 400px minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
-  min-height: 400px;
-  padding-top: 16px;
-}
-
-/* The tree runs down the left. The warnings and errors sit above the log on the right. */
-.fix-ado-pipeline-panel > .fix-ado-pipeline-message {
-  grid-column: 1 / -1;
-}
-
-.fix-ado-pipeline-panel > .fix-ado-issue-box {
-  grid-column: 2;
-  grid-row: 1;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.fix-ado-pipeline-panel > .fix-ado-pipeline-frame,
-.fix-ado-pipeline-panel > .fix-ado-pipeline-log-note {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.fix-ado-pipeline-tree {
-  display: flex;
-  grid-column: 1;
-  grid-row: 1 / -1;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-}
-
-.fix-ado-pipeline-item {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 0 4px 4px 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.fix-ado-pipeline-item:hover {
-  background: var(--palette-black-alpha-4, rgba(0, 0, 0, 0.04));
-}
-
-/* The picked run, stage, job and step get a bar on the left, as in Azure DevOps's own lists. */
-.fix-ado-pipeline-item[aria-current="true"] {
-  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
-  box-shadow: inset 3px 0 0 var(--communication-background, rgb(0, 120, 212));
-}
-
-/* Forced colors drop box shadows and backgrounds, so the bar becomes a border there. */
-@media (forced-colors: active) {
-  .fix-ado-pipeline-item[aria-current="true"] {
-    border-inline-start: 3px solid Highlight;
-  }
-}
-
-.fix-ado-pipeline-item:focus:not(:focus-visible) {
-  outline: none;
-}
-
-.fix-ado-pipeline-item .fix-ado-pipeline-status {
-  margin-left: 0;
-}
-
-.fix-ado-pipeline-item-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.fix-ado-pipeline-item-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fix-ado-pipeline-run .fix-ado-pipeline-item-name {
-  font-weight: 600;
-}
-
-.fix-ado-pipeline-item-details {
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  font-size: 12px;
-}
-
-/* Stages sit under their run, jobs under their stage, steps under their job. */
-.fix-ado-pipeline-stages,
-.fix-ado-pipeline-jobs,
-.fix-ado-pipeline-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-left: 16px;
-}
-
-/* A run's row holds its item and, at the right end, the link to its page. */
-.fix-ado-pipeline-run-row {
-  position: relative;
-}
-
-.fix-ado-pipeline-run-row > .fix-ado-pipeline-run {
-  padding-inline-end: 48px;
-}
-
-/* Open run in new tab: a subtle icon button beside the run's name, its icon's right edge
-   in line with the count badges of the rows below. */
-.fix-ado-pipeline-open-run {
-  position: absolute;
-  top: 4px;
-  inset-inline-end: 8px;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-}
-
-.fix-ado-pipeline-open-run:hover {
-  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
-}
-
-.fix-ado-pipeline-open-run:focus-visible {
-  outline: 2px solid var(--communication-background, rgb(0, 120, 212));
-  outline-offset: -2px;
-}
-
-/* A line above each run but the first, so the runs stand apart. The run keeps the same
-   padding above and below, as the rows under it. */
-.fix-ado-pipeline-run-row:not(:first-child) {
-  margin-top: 8px;
-  border-top: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
-
-  & > .fix-ado-pipeline-run {
-    border-radius: 0;
-  }
-}
-
-/* "Start new run" or "Cancel current run" above the runs. Azure DevOps's button
-   classes give its look. */
-.fix-ado-pipeline-run-action {
-  align-self: flex-start;
-  margin: 0 0 4px 12px;
-}
-
-/* Red, in case the page has no style for Azure DevOps's danger button. */
-.fix-ado-pipeline-run-action.danger {
-  background: var(--component-status-error, rgb(205, 74, 69));
-  border-color: var(--component-status-error, rgb(205, 74, 69));
-  color: #fff;
-}
-
-.fix-ado-pipeline-run-action-choices {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-left: 16px;
-}
-
-.fix-ado-pipeline-note {
-  padding: 6px 10px 2px;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  font-size: 12px;
-}
-
-.fix-ado-pipeline-log-note {
-  flex: 1 1 auto;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-}
-
-.fix-ado-pipeline-frame[hidden] {
-  display: none;
-}
-
-.fix-ado-pipeline-frame {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
-  border-radius: 4px;
-}
-
-/* The run page inside the Pipeline tab. pipeline-run-frame.ts marks it; only the log stays. */
-html[data-fix-ado-run-frame] .project-header,
-html[data-fix-ado-run-frame] .navigation-container,
-html[data-fix-ado-run-frame] .region-content-header,
-html[data-fix-ado-run-frame] .region-content-footer,
-html[data-fix-ado-run-frame] .region-footer,
-html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
-  display: none !important;
-}
-
-/* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */
-.fix-ado-pipeline-tab:focus:not(:focus-visible) {
-  outline: none;
-}
-`;
-
-  // azure-devops/src/features/pipeline-tab/index.ts
-  var pipelineTab = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "A Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs, and a button to start or cancel a run.",
-    id: "pipeline-tab",
-    name: "Pipeline tab",
-    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
-      if (isInFrame2) {
-        let runFrame = createPipelineRunFrame(document2);
-        return runFrame ? {
-          sync() {
-            runFrame.sync();
-          }
-        } : null;
-      }
-      let tab = createPipelineTab({
-        apiBasePath: basePath2,
-        cancelRun: async (project, buildId) => {
-          await client.cancelBuild(project, buildId);
-        },
-        document: document2,
-        getEvaluations: async (pullRequest) => {
-          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
-          return evaluations;
-        },
-        getPullRequestBuilds: async ({ project, pullRequestId }) => {
-          let { builds } = await client.getPullRequestBuilds(project, pullRequestId);
-          return builds;
-        },
-        getTimeline: async (project, buildId) => {
-          let { records } = await client.getTimeline(project, buildId);
-          return records;
-        },
-        now,
-        requeueCheck: async ({ project }, evaluationId) => {
-          await client.requeuePolicyEvaluation(project, evaluationId);
-        }
-      });
-      return {
-        sync({ page }) {
-          tab.sync(pullRequestOf(page));
-        }
-      };
-    },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default11]
+  // azure-devops/src/features/settings-sections/boards.ts
+  var boardsSection = {
+    description: "Work item boards.",
+    groups: [{ features: [daysInColumn] }],
+    name: "Boards"
   };
 
   // azure-devops/src/features/review/review-store.ts
-  var KEY_PREFIX2 = "review:";
+  var KEY_PREFIX = "review:";
   function reviewKey(hostAndBasePath, { project, pullRequestId, repository }) {
-    return `${KEY_PREFIX2}${hostAndBasePath}/${project}/${repository}/${pullRequestId}`;
+    return `${KEY_PREFIX}${hostAndBasePath}/${project}/${repository}/${pullRequestId}`;
   }
   function isLineAnchor(value) {
     return typeof value == "object" && value !== null && "filePath" in value && typeof value.filePath == "string" && "side" in value && (value.side === "left" || value.side === "right") && "line" in value && typeof value.line == "number" && "lineLength" in value && typeof value.lineLength == "number" && "iteration" in value && (value.iteration === null || typeof value.iteration == "number");
@@ -12899,7 +9438,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
   var isPending = ({ postedThreadId }) => postedThreadId === null;
   function deleteReviewsBefore(storage, time) {
-    for (let key of storage.keys().filter((name) => name.startsWith(KEY_PREFIX2))) {
+    for (let key of storage.keys().filter((name) => name.startsWith(KEY_PREFIX))) {
       let stored = storage.load(key);
       isReview(stored) && stored.updatedAt < time && storage.remove(key);
     }
@@ -12939,7 +9478,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/features/review/editor-comment-boxes.ts
-  var ZONE_SELECTOR = ".zone-widget", EDITOR_SELECTOR = ".monaco-editor", OLD_FILE_EDITOR_CLASS = "original-in-monaco-diff-editor", GUTTER_SELECTOR = ".margin", GUTTER_ROW_SELECTOR = ".margin-view-overlays > div", LINE_NUMBER_SELECTOR = ".line-numbers", LINE_SELECTOR2 = ".lines-content > .view-lines > .view-line", SHOWN_PATH_SELECTOR = ".repos-compare-toolbar .secondary-text.text-ellipsis";
+  var ZONE_SELECTOR = ".zone-widget", EDITOR_SELECTOR = ".monaco-editor", OLD_FILE_EDITOR_CLASS = "original-in-monaco-diff-editor", GUTTER_SELECTOR = ".margin", GUTTER_ROW_SELECTOR = ".margin-view-overlays > div", LINE_NUMBER_SELECTOR = ".line-numbers", LINE_SELECTOR = ".lines-content > .view-lines > .view-line", SHOWN_PATH_SELECTOR = ".repos-compare-toolbar .secondary-text.text-ellipsis";
   function pixels(element4, property2) {
     let length = element4?.style[property2] ?? "";
     return length.endsWith("px") ? Number(length.slice(0, -2)) : Number.NaN;
@@ -12955,7 +9494,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     ) ?? null;
   }
   function lineLengthAt(editor, top) {
-    return [...editor.querySelectorAll(LINE_SELECTOR2)].find(
+    return [...editor.querySelectorAll(LINE_SELECTOR)].find(
       (candidate) => pixels(candidate, "top") === top
     )?.textContent.length ?? 0;
   }
@@ -13042,15 +9581,30 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     return null;
   }
 
+  // azure-devops/src/core/closest-element.ts
+  function isElement(target) {
+    return target !== null && "nodeType" in target && target.nodeType === 1;
+  }
+  function closestElement(target, selector) {
+    return isElement(target) ? target.closest(selector) : null;
+  }
+  function isHtmlElement(element4) {
+    return "dataset" in element4;
+  }
+  function closestHtmlElement(target, selector) {
+    let found = closestElement(target, selector);
+    return found !== null && isHtmlElement(found) ? found : null;
+  }
+
   // azure-devops/src/features/review/review-markup.ts
   function element(document2, tag, { className, text } = {}) {
     let created = document2.createElement(tag);
     return className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text), created;
   }
-  var ACTION_ATTRIBUTE = "data-fix-ado-review-action", BUTTON_CLASS3 = "bolt-button enabled bolt-focus-treatment", PRIMARY_BUTTON_CLASS = "bolt-button enabled primary bolt-focus-treatment";
+  var ACTION_ATTRIBUTE = "data-fix-ado-review-action", BUTTON_CLASS = "bolt-button enabled bolt-focus-treatment", PRIMARY_BUTTON_CLASS = "bolt-button enabled primary bolt-focus-treatment";
   function actionButton(document2, { action, isPrimary = !1, text }) {
     let button2 = element(document2, "button", {
-      className: isPrimary ? PRIMARY_BUTTON_CLASS : BUTTON_CLASS3,
+      className: isPrimary ? PRIMARY_BUTTON_CLASS : BUTTON_CLASS,
       text
     });
     return button2.type = "button", button2.setAttribute(ACTION_ATTRIBUTE, action), button2;
@@ -13124,7 +9678,7 @@ ${content}`
       actionButton(document2, { action: "update", isPrimary: !0, text: "Update comment" })
     ), editor.append(textarea, buttons), editor;
   }
-  function createCard2(document2, { content, draft }, note) {
+  function createCard(document2, { content, draft }, note) {
     let card = element(document2, "div", { className: "fix-ado-review-card" }), body = draft === null ? element(document2, "div", { className: "fix-ado-review-card-text", text: content }) : cardEditor(document2, draft);
     return card.append(cardHeader(document2, note), body), card;
   }
@@ -13192,10 +9746,10 @@ ${content}`
   }
 
   // azure-devops/src/features/review/pending-cards.ts
-  var CARD_ROW_CLASS = "fix-ado-review-card-row", THREAD_SELECTOR3 = ".repos-diff-discussion", LINE_CELL_CLASS = "repos-line-content";
+  var CARD_ROW_CLASS = "fix-ado-review-card-row", THREAD_SELECTOR = ".repos-diff-discussion", LINE_CELL_CLASS = "repos-line-content";
   function cardCell(document2, comment) {
     let cell2 = element(document2, "div", { className: "fix-ado-review-card-cell body-m" });
-    return cell2.append(createCard2(document2, comment, ONLY_YOU_NOTE)), cell2;
+    return cell2.append(createCard(document2, comment, ONLY_YOU_NOTE)), cell2;
   }
   function cellsBeforeCode(lineRow) {
     return [...lineRow.children].findIndex((cell2) => cell2.classList.contains(LINE_CELL_CLASS));
@@ -13208,7 +9762,7 @@ ${content}`
     return row.append(cardCell(document2, comment)), row;
   }
   function isThreadRow(row) {
-    return row?.querySelector(`:scope > ${THREAD_SELECTOR3}`) !== null && row !== null;
+    return row?.querySelector(`:scope > ${THREAD_SELECTOR}`) !== null && row !== null;
   }
   function isCardRow(row) {
     return row?.classList.contains(CARD_ROW_CLASS) === !0;
@@ -13328,9 +9882,9 @@ ${content}`
     let cards = cardsByDocument.get(document2) ?? /* @__PURE__ */ new Map();
     return cardsByDocument.set(document2, cards), cards;
   }
-  function createItem2(document2, comment) {
+  function createItem(document2, comment) {
     let item = element(document2, "div", { className: "fix-ado-review-listed" });
-    return markHolder(item, comment), item.append(createCard2(document2, comment, ONLY_YOU_NOTE)), item;
+    return markHolder(item, comment), item.append(createCard(document2, comment, ONLY_YOU_NOTE)), item;
   }
   function showAt(card, editor, top) {
     let { contentLeft, contentWidth } = editor.getLayoutInfo();
@@ -13383,7 +9937,7 @@ ${content}`
     };
   }
   function showOverlay(document2, { comment, editor }) {
-    let card = element(document2, "div", { className: `${OVERLAY_CLASS} body-m` }), item = createItem2(document2, comment);
+    let card = element(document2, "div", { className: `${OVERLAY_CLASS} body-m` }), item = createItem(document2, comment);
     card.append(item);
     let overlay = {
       getDomNode: () => card,
@@ -13460,7 +10014,7 @@ ${content}`
   }
   function listItem(document2, comment) {
     let item = element(document2, "div", { className: ITEM_CLASS });
-    return markHolder(item, comment), item.append(createCard2(document2, comment, lineLabel(comment))), item;
+    return markHolder(item, comment), item.append(createCard(document2, comment, lineLabel(comment))), item;
   }
   function createList(document2, inFile, isOpen) {
     let list = element(document2, "details", { className: `${LIST_CLASS} body-m` });
@@ -13489,7 +10043,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/review-header.ts
-  var HEADER_CLASS = "fix-ado-review-header", TABBAR_SELECTOR2 = ".repos-pr-details-page-tabbar";
+  var HEADER_CLASS = "fix-ado-review-header", TABBAR_SELECTOR = ".repos-pr-details-page-tabbar";
   function submitButton(document2, count) {
     let button2 = actionButton(document2, {
       action: "finish",
@@ -13509,7 +10063,7 @@ ${content}`
     ), header;
   }
   function syncHeader(document2, state) {
-    let tabbar = state.count === 0 ? null : document2.querySelector(TABBAR_SELECTOR2), existing = document2.querySelector(`.${HEADER_CLASS}`), shown = `${state.count} ${state.isPullRequestActive}`;
+    let tabbar = state.count === 0 ? null : document2.querySelector(TABBAR_SELECTOR), existing = document2.querySelector(`.${HEADER_CLASS}`), shown = `${state.count} ${state.isPullRequestActive}`;
     if (tabbar === null)
       existing?.remove();
     else if (existing?.dataset.fixAdoReviewShown !== shown || existing.parentElement !== tabbar) {
@@ -13568,7 +10122,7 @@ ${content}`
       return row?.name === name && row.level === level + levelShift;
     });
   }
-  function runsOf2(drawn) {
+  function runsOf(drawn) {
     let runs = [];
     for (let row of drawn) {
       let run = row.isAfterGap ? void 0 : runs.at(-1);
@@ -13589,7 +10143,7 @@ ${content}`
     return fitting;
   }
   function findDrawn(changedPaths, drawn, folded) {
-    let listed = listedRows(changedPaths).filter(({ path }) => !isUnder(path, folded)), runs = runsOf2(drawn), everyStart = listed.map((_row, start) => start), starts = withoutOverlap(
+    let listed = listedRows(changedPaths).filter(({ path }) => !isUnder(path, folded)), runs = runsOf(drawn), everyStart = listed.map((_row, start) => start), starts = withoutOverlap(
       runs,
       runs.map((run) => everyStart.filter((start) => isDrawnAt(listed, run, start)))
     );
@@ -13642,7 +10196,7 @@ ${content}`
   }
 
   // azure-devops/src/pull-requests/file-tree/tree-rows.ts
-  var TREE_ROW_SELECTOR2 = ".repos-changes-explorer-tree tr.bolt-tree-row", THREAD_ITEM_CLASS = "repos-file-explorer-tree-thread-item", NAME_SELECTOR = ".bolt-tree-cell .text-ellipsis", INDEX_ATTRIBUTE = "aria-rowindex";
+  var TREE_ROW_SELECTOR = ".repos-changes-explorer-tree tr.bolt-tree-row", THREAD_ITEM_CLASS = "repos-file-explorer-tree-thread-item", NAME_SELECTOR = ".bolt-tree-cell .text-ellipsis", INDEX_ATTRIBUTE = "aria-rowindex";
   function isThreadRow2(row) {
     return row?.querySelector(`.${THREAD_ITEM_CLASS}`) !== null && row !== null;
   }
@@ -13655,7 +10209,7 @@ ${content}`
   }
   function drawnRows(document2) {
     let names = [];
-    return [...document2.querySelectorAll(TREE_ROW_SELECTOR2)].filter((row) => !isThreadRow2(row)).map((row) => {
+    return [...document2.querySelectorAll(TREE_ROW_SELECTOR)].filter((row) => !isThreadRow2(row)).map((row) => {
       let depth = Math.max(Number(row.getAttribute("aria-level")) - 1, 0);
       for (; names.length < depth; )
         names.push(null);
@@ -13692,11 +10246,11 @@ ${content}`
   }
 
   // azure-devops/src/features/review/tree-scroll-anchor.ts
-  var TREE_SELECTOR2 = ".repos-changes-explorer-tree", TREE_ROW_SELECTOR3 = `${TREE_SELECTOR2} tr.bolt-tree-row[aria-rowindex]`, SCROLLER_SELECTOR2 = ".v-scroll-auto", SMALLEST_MOVE = 1, LARGEST_SHIFT = 100, WEAR_PER_SCROLLED_PIXEL = 0.25, shiftByScroller = /* @__PURE__ */ new WeakMap();
+  var TREE_SELECTOR = ".repos-changes-explorer-tree", TREE_ROW_SELECTOR2 = `${TREE_SELECTOR} tr.bolt-tree-row[aria-rowindex]`, SCROLLER_SELECTOR = ".v-scroll-auto", SMALLEST_MOVE = 1, LARGEST_SHIFT = 100, WEAR_PER_SCROLLED_PIXEL = 0.25, shiftByScroller = /* @__PURE__ */ new WeakMap();
   function shiftTree(scroller, shift, pixels2) {
     let limited = Math.min(Math.max(pixels2, -LARGEST_SHIFT, -scroller.scrollTop), LARGEST_SHIFT);
     shift.pixels = Math.round(limited), shift.scrollTop = scroller.scrollTop;
-    let tree = scroller.querySelector(TREE_SELECTOR2), margin = shift.pixels === 0 ? "" : `${shift.pixels}px`;
+    let tree = scroller.querySelector(TREE_SELECTOR), margin = shift.pixels === 0 ? "" : `${shift.pixels}px`;
     tree !== null && tree.style.marginTop !== margin && (tree.style.marginTop = margin);
   }
   function wearOff(scroller, shift) {
@@ -13717,10 +10271,10 @@ ${content}`
     ), shift;
   }
   function firstRowInView(document2) {
-    let scroller = document2.querySelector(TREE_SELECTOR2)?.closest(SCROLLER_SELECTOR2) ?? null;
+    let scroller = document2.querySelector(TREE_SELECTOR)?.closest(SCROLLER_SELECTOR) ?? null;
     if (scroller === null)
       return null;
-    let viewTop = scroller.getBoundingClientRect().top, row = [...document2.querySelectorAll(TREE_ROW_SELECTOR3)].find(
+    let viewTop = scroller.getBoundingClientRect().top, row = [...document2.querySelectorAll(TREE_ROW_SELECTOR2)].find(
       (candidate) => candidate.getBoundingClientRect().top >= viewTop
     );
     return row === void 0 ? null : { row, scroller };
@@ -13808,7 +10362,7 @@ ${content}`
   }
 
   // azure-devops/src/features/review/review-view.ts
-  var TREE_SELECTOR3 = ".repos-changes-explorer-tree", OWN_CLASS_PREFIX = "fix-ado-review";
+  var TREE_SELECTOR2 = ".repos-changes-explorer-tree", OWN_CLASS_PREFIX = "fix-ado-review";
   function withDraft(comment, drafts) {
     return { ...comment, draft: drafts.get(comment.id) ?? null };
   }
@@ -13831,7 +10385,7 @@ ${content}`
     return "className" in node && String(node.className).includes(OWN_CLASS_PREFIX);
   }
   function isTreeChange({ addedNodes, removedNodes, target }) {
-    return "closest" in target && closestElement(target, TREE_SELECTOR3) !== null && [...addedNodes, ...removedNodes].some((node) => !isOwnNode(node));
+    return "closest" in target && closestElement(target, TREE_SELECTOR2) !== null && [...addedNodes, ...removedNodes].some((node) => !isOwnNode(node));
   }
   function watchTree(document2, onChange) {
     let view = document2.defaultView;
@@ -13986,10 +10540,10 @@ ${content}`
   }
 
   // azure-devops/src/features/review/unsaved-edits-dialog.ts
-  var BUTTON_CLASS4 = "bolt-button enabled bolt-focus-treatment", TITLE_ID2 = "fix-ado-review-unsaved-title";
+  var BUTTON_CLASS2 = "bolt-button enabled bolt-focus-treatment", TITLE_ID2 = "fix-ado-review-unsaved-title";
   function answerButton(dialog, text, answer) {
     let button2 = element(dialog.ownerDocument, "button", {
-      className: text === "Yes" ? `${BUTTON_CLASS4} primary` : BUTTON_CLASS4,
+      className: text === "Yes" ? `${BUTTON_CLASS2} primary` : BUTTON_CLASS2,
       text
     });
     return button2.type = "button", button2.addEventListener("click", () => {
@@ -14025,6 +10579,343 @@ ${content}`
       }),
       buttons
     ), document2.body.append(dialog), dialog.showModal();
+  }
+
+  // azure-devops/src/pull-requests/assigned-pull-request-requests.ts
+  var MAX_ASSIGNED_PULL_REQUESTS = 200;
+  function pullRequestsPath(repository) {
+    return repository === null ? "/_apis/git/pullrequests" : `/${encodeURIComponent(repository.project)}/_apis/git/repositories/${encodeURIComponent(repository.repository)}/pullrequests`;
+  }
+  function createAssignedPullRequestRequests(options) {
+    return {
+      async getPullRequestsAssignedTo(reviewerId, repository) {
+        let { body, retryAfterSeconds } = await getJson(
+          options,
+          `${pullRequestsPath(repository)}?searchCriteria.reviewerId=${encodeURIComponent(reviewerId)}&searchCriteria.status=active&$top=${MAX_ASSIGNED_PULL_REQUESTS}&api-version=7.1`
+        );
+        return { pullRequests: body.value, retryAfterSeconds };
+      }
+    };
+  }
+
+  // azure-devops/src/pipeline/build-requests.ts
+  var MAX_PULL_REQUEST_BUILDS = 50;
+  async function getPullRequestBuilds(options, { project, pullRequestId }) {
+    let branchName = encodeURIComponent(`refs/pull/${pullRequestId}/merge`), { body, retryAfterSeconds } = await getJson(
+      options,
+      `/${encodeURIComponent(project)}/_apis/build/builds?branchName=${branchName}&queryOrder=queueTimeDescending&$top=${MAX_PULL_REQUEST_BUILDS}&api-version=7.1`
+    );
+    return { builds: body.value ?? [], retryAfterSeconds };
+  }
+  function isBuildPipeline(value) {
+    return typeof value == "object" && value !== null && "id" in value && typeof value.id == "number" && "name" in value && typeof value.name == "string";
+  }
+  async function getBuildPipeline(options, project, buildId) {
+    let body = await (await sendRequest(
+      options,
+      `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`
+    )).json(), definition = typeof body == "object" && body !== null && "definition" in body ? body.definition : null;
+    if (!isBuildPipeline(definition))
+      throw new Error(`Run ${buildId} has no pipeline in Azure DevOps's answer`);
+    return { id: definition.id, name: definition.name };
+  }
+  function createBuildRequests(options) {
+    return {
+      getBuildPipeline: async (project, buildId) => getBuildPipeline(options, project, buildId),
+      getPullRequestBuilds: async (project, pullRequestId) => getPullRequestBuilds(options, { project, pullRequestId })
+    };
+  }
+
+  // azure-devops/src/pull-requests/review-requests.ts
+  var API_VERSION = "api-version=7.1", CHANGES_PER_REQUEST = 500, ACTIVE_THREAD_STATUS = 1, TEXT_COMMENT_TYPE = 1;
+  function pullRequestPath({ project, repository, pullRequestId }) {
+    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}`;
+  }
+  async function getPullRequest(options, pullRequest) {
+    return await (await sendRequest(options, `${pullRequestPath(pullRequest)}?${API_VERSION}`)).json();
+  }
+  function pageAfter({ nextSkip, nextTop }) {
+    return nextSkip !== void 0 && nextSkip > 0 ? { skip: nextSkip, top: nextTop ?? CHANGES_PER_REQUEST } : null;
+  }
+  async function getIterationChanges(options, pullRequest, iteration) {
+    let changes = [], next = { skip: 0, top: CHANGES_PER_REQUEST };
+    for (; next !== null; ) {
+      let body = await (await sendRequest(
+        options,
+        `${pullRequestPath(pullRequest)}/iterations/${iteration}/changes?$top=${next.top}&$skip=${next.skip}&${API_VERSION}`
+      )).json(), page = body.changeEntries ?? [];
+      changes.push(...page), next = page.length === 0 ? null : pageAfter(body);
+    }
+    return changes;
+  }
+  function threadBody({ content, iteration, threadContext }) {
+    return {
+      comments: [{ commentType: TEXT_COMMENT_TYPE, content, parentCommentId: 0 }],
+      status: ACTIVE_THREAD_STATUS,
+      ...threadContext === void 0 ? {} : { threadContext },
+      ...iteration === void 0 ? {} : {
+        pullRequestThreadContext: {
+          changeTrackingId: iteration.changeTrackingId,
+          iterationContext: {
+            firstComparingIteration: iteration.id,
+            secondComparingIteration: iteration.id
+          }
+        }
+      }
+    };
+  }
+  async function createPullRequestThread(options, pullRequest, thread) {
+    return (await (await sendRequest(
+      options,
+      `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`,
+      { body: threadBody(thread), method: "POST" }
+    )).json()).id;
+  }
+  function createReviewRequests(options) {
+    return {
+      createPullRequestThread: async (pullRequest, thread) => createPullRequestThread(options, pullRequest, thread),
+      getIterationChanges: async (pullRequest, iteration) => getIterationChanges(options, pullRequest, iteration),
+      getPullRequestCreationDate: async (pullRequest) => getPullRequest(options, pullRequest).then(({ creationDate }) => creationDate ?? ""),
+      async getPullRequestIterationIds(pullRequest) {
+        let { body } = await getJson(
+          options,
+          `${pullRequestPath(pullRequest)}/iterations?${API_VERSION}`
+        );
+        return (body.value ?? []).map(({ id }) => id);
+      },
+      getPullRequestStatus: async (pullRequest) => getPullRequest(options, pullRequest).then(({ status }) => status ?? ""),
+      async getPullRequestThreads(pullRequest) {
+        let { body } = await getJson(
+          options,
+          `${pullRequestPath(pullRequest)}/threads?${API_VERSION}`
+        );
+        return body.value ?? [];
+      },
+      async setPullRequestVote(pullRequest, { reviewerId, vote }) {
+        await sendRequest(
+          options,
+          `${pullRequestPath(pullRequest)}/reviewers/${encodeURIComponent(reviewerId)}?${API_VERSION}`,
+          { body: { vote }, method: "PUT" }
+        );
+      }
+    };
+  }
+
+  // azure-devops/src/pull-requests/reviewer-requests.ts
+  var SEARCH_OPTIONS = { MaxResults: 40, MinResults: 5 }, SEARCH_PROPERTIES = [
+    "DisplayName",
+    "IsMru",
+    "ScopeName",
+    "SamAccountName",
+    "Active",
+    "SubjectDescriptor",
+    "Mail",
+    "MailNickname",
+    "SignInAddress",
+    "Guest"
+  ];
+  function reviewersPath({ project, repository, pullRequestId }) {
+    return `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/reviewers`;
+  }
+  async function getPullRequestReviewers(options, pullRequest) {
+    return ((await (await sendRequest(options, `${reviewersPath(pullRequest)}?api-version=7.1`)).json()).value ?? []).flatMap(
+      ({ id, displayName, uniqueName, isContainer }) => id === void 0 ? [] : [
+        {
+          displayName: displayName ?? "",
+          id,
+          isGroup: isContainer === !0,
+          signInAddress: isContainer === !0 ? "" : uniqueName ?? ""
+        }
+      ]
+    );
+  }
+  async function addPullRequestReviewer(options, pullRequest, { reviewerId, isRequired }) {
+    await sendRequest(
+      options,
+      `${reviewersPath(pullRequest)}/${encodeURIComponent(reviewerId)}?api-version=7.1`,
+      { body: { isRequired, vote: 0 }, method: "PUT" }
+    );
+  }
+  function identityOf(body) {
+    let { localId, displayName, signInAddress, mail, entityType } = body;
+    if (localId == null || localId === "")
+      return [];
+    let isGroup = entityType?.toLowerCase() === "group";
+    return [
+      {
+        displayName: displayName ?? "",
+        id: localId,
+        isGroup,
+        signInAddress: isGroup ? "" : signInAddress ?? mail ?? ""
+      }
+    ];
+  }
+  async function searchIdentities(options, query) {
+    let found = ((await (await sendRequest(
+      options,
+      "/_apis/IdentityPicker/Identities?api-version=5.0-preview.1",
+      {
+        body: {
+          identityTypes: ["user", "group"],
+          operationScopes: ["ims", "source"],
+          options: SEARCH_OPTIONS,
+          properties: SEARCH_PROPERTIES,
+          query
+        },
+        method: "POST"
+      }
+    )).json()).results ?? []).flatMap(({ identities }) => identities ?? []);
+    return logFound(found), found.flatMap((identity) => identityOf(identity));
+  }
+  function logFound(found) {
+    log("Starred reviewers: search answered", {
+      found: found.map((identity) => ({
+        entityType: identity.entityType,
+        // Field names only: each one maps to true, so the capture keeps them and no value.
+        fields: Object.fromEntries(Object.keys(identity).map((key) => [key, !0])),
+        hasLocalId: identityOf(identity).length > 0,
+        originDirectory: identity.originDirectory
+      })),
+      foundCount: found.length
+    });
+  }
+  function createReviewerRequests(options) {
+    return {
+      addPullRequestReviewer: async (pullRequest, reviewer) => addPullRequestReviewer(options, pullRequest, reviewer),
+      getPullRequestReviewers: async (pullRequest) => getPullRequestReviewers(options, pullRequest),
+      searchIdentities: async (query) => searchIdentities(options, query)
+    };
+  }
+
+  // azure-devops/src/core/work-item-requests.ts
+  var MAX_WORK_ITEMS_PER_REQUEST = 200, MAX_UPDATES_PER_REQUEST = 200;
+  function toBoardWorkItems(values) {
+    return values.flatMap(
+      (workItem) => workItem === null ? [] : [
+        {
+          changedById: workItem.fields?.["System.ChangedBy"]?.id ?? null,
+          id: workItem.id,
+          rev: workItem.rev
+        }
+      ]
+    );
+  }
+  async function getWorkItems(options, ids) {
+    let workItems = [], retryAfterSeconds = null;
+    for (let start = 0; start < ids.length; start += MAX_WORK_ITEMS_PER_REQUEST) {
+      let idsInRequest = ids.slice(start, start + MAX_WORK_ITEMS_PER_REQUEST), response = await getJson(
+        options,
+        `/_apis/wit/workitems?ids=${idsInRequest.join(",")}&fields=System.Rev,System.ChangedBy&errorPolicy=Omit&api-version=7.1`
+      );
+      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds, workItems.push(...toBoardWorkItems(response.body.value));
+    }
+    return { retryAfterSeconds, workItems };
+  }
+  async function getWorkItemUpdates(options, id) {
+    let updates = [], retryAfterSeconds = null;
+    for (let skip = 0; ; skip += MAX_UPDATES_PER_REQUEST) {
+      let response = await getJson(
+        options,
+        `/_apis/wit/workItems/${id}/updates?$top=${MAX_UPDATES_PER_REQUEST}&$skip=${skip}&api-version=7.1`
+      );
+      retryAfterSeconds = response.retryAfterSeconds ?? retryAfterSeconds;
+      let page = response.body.value ?? [];
+      if (updates.push(...page), page.length < MAX_UPDATES_PER_REQUEST)
+        return { retryAfterSeconds, updates };
+    }
+  }
+  async function getPullRequestWorkItemIds(options, { project, repository, pullRequestId }) {
+    let { body } = await getJson(
+      options,
+      `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullRequests/${pullRequestId}/workitems?api-version=7.1`
+    );
+    return (body.value ?? []).map(({ id }) => Number(id));
+  }
+  async function getWorkItemTitle(options, id) {
+    let { body } = await getJson(
+      options,
+      `/_apis/wit/workitems?ids=${id}&fields=System.Title&errorPolicy=Omit&api-version=7.1`
+    ), [workItem] = body.value ?? [];
+    return workItem?.fields?.["System.Title"] ?? null;
+  }
+  function createWorkItemRequests(options) {
+    return {
+      getPullRequestWorkItemIds: async (pullRequest) => getPullRequestWorkItemIds(options, pullRequest),
+      getWorkItemTitle: async (id) => getWorkItemTitle(options, id),
+      getWorkItemUpdates: async (id) => getWorkItemUpdates(options, id),
+      getWorkItems: async (ids) => getWorkItems(options, ids)
+    };
+  }
+
+  // azure-devops/src/core/ado-client.ts
+  var MAX_LISTED_PULL_REQUESTS = 200, THEME_SETTING_KEY = "WebPlatform/Theme";
+  function createProjectIdCache(options) {
+    let projectIdRequests = /* @__PURE__ */ new Map();
+    return async (project) => {
+      let request = projectIdRequests.get(project);
+      return request || (request = getJson(
+        options,
+        `/_apis/projects/${encodeURIComponent(project)}?api-version=7.1`
+      ).then(({ body }) => String(body.id)), request.catch(() => projectIdRequests.delete(project)), projectIdRequests.set(project, request)), request;
+    };
+  }
+  async function getPolicyEvaluations(options, projectId, { pullRequestId }) {
+    let artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`, { body, retryAfterSeconds } = await getJson(
+      options,
+      `/${projectId}/_apis/policy/evaluations?artifactId=${encodeURIComponent(artifactId)}&api-version=7.1-preview.1`
+    );
+    return { evaluations: body.value, retryAfterSeconds };
+  }
+  async function cancelBuild(options, project, buildId) {
+    await sendRequest(
+      options,
+      `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?api-version=7.1`,
+      { body: { status: "cancelling" }, method: "PATCH" }
+    );
+  }
+  async function saveTheme(options, themeId) {
+    await sendRequest(options, "/_apis/Settings/Entries/globalme?api-version=7.1-preview.1", {
+      body: { [THEME_SETTING_KEY]: themeId },
+      method: "PATCH"
+    });
+  }
+  async function requeuePolicyEvaluation(options, projectId, evaluationId) {
+    await sendRequest(
+      options,
+      `/${projectId}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}?api-version=7.1-preview.1`,
+      { body: { status: "queued" }, method: "PATCH" }
+    );
+  }
+  function createAdoClient(options) {
+    let getProjectId = createProjectIdCache(options), authenticatedUserIdRequest = null;
+    return {
+      cancelBuild: async (project, buildId) => cancelBuild(options, project, buildId),
+      async getAuthenticatedUserId() {
+        return authenticatedUserIdRequest ??= getJson(options, "/_apis/connectionData").then(({ body }) => body.authenticatedUser?.id ?? null).catch(() => null), authenticatedUserIdRequest;
+      },
+      getPolicyEvaluations: async (pullRequest) => getPolicyEvaluations(options, await getProjectId(pullRequest.project), pullRequest),
+      async getPullRequests({ project, repository, status }) {
+        let { body, retryAfterSeconds } = await getJson(
+          options,
+          `/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repository)}/pullrequests?searchCriteria.status=${status}&$top=${MAX_LISTED_PULL_REQUESTS}&api-version=7.1`
+        );
+        return { pullRequests: body.value, retryAfterSeconds };
+      },
+      async getTimeline(project, buildId) {
+        let { body, retryAfterSeconds } = await getJson(
+          options,
+          `/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?api-version=7.1`
+        );
+        return { records: body.records ?? [], retryAfterSeconds };
+      },
+      requeuePolicyEvaluation: async (project, evaluationId) => requeuePolicyEvaluation(options, await getProjectId(project), evaluationId),
+      saveTheme: async (themeId) => saveTheme(options, themeId),
+      ...createAssignedPullRequestRequests(options),
+      ...createBuildRequests(options),
+      ...createReviewRequests(options),
+      ...createWorkItemRequests(options),
+      ...createReviewerRequests(options)
+    };
   }
 
   // azure-devops/src/features/review/review-submit.ts
@@ -14123,12 +11014,12 @@ ${content}`
       pending
     };
   }
-  function render3(state) {
+  function render(state) {
     showReview(state.options.document, shownReview(state));
   }
   function requestStatus(state, shown) {
     shown.isStatusRequested || state.options.store.pending(shown.key).length === 0 || (shown.isStatusRequested = !0, state.options.client.getPullRequestStatus(shown.pullRequest).then((status) => {
-      shown.isActive = status === "active", render3(state);
+      shown.isActive = status === "active", render(state);
     }).catch(() => null));
   }
   async function loadIteration(state, shown) {
@@ -14137,7 +11028,7 @@ ${content}`
       return;
     shown.newestIteration = Math.max(...ids);
     let changes = await client.getIterationChanges(shown.pullRequest, shown.newestIteration);
-    shown.changedPaths = changes.flatMap(({ item }) => item?.path ?? []), render3(state);
+    shown.changedPaths = changes.flatMap(({ item }) => item?.path ?? []), render(state);
   }
   function show(state, pullRequest) {
     let key = state.options.keyOf(pullRequest);
@@ -14167,13 +11058,13 @@ ${content}`
         side: anchor.side
       },
       content
-    }), closeBox(box), render3(state);
+    }), closeBox(box), render(state);
   }
   function openFinish(state, shown) {
     let { client, document: document2, reload, store } = state.options;
     openFinishDialog({
       discard: () => {
-        store.discard(shown.key), render3(state);
+        store.discard(shown.key), render(state);
       },
       document: document2,
       onSubmitted: reload,
@@ -14194,7 +11085,7 @@ ${content}`
       count: drafts.size,
       document: options.document,
       onAnswer: (shouldSave) => {
-        shouldSave && saveDrafts({ drafts, key: shown.key, store: options.store }), drafts.clear(), render3(state), openFinish(state, shown);
+        shouldSave && saveDrafts({ drafts, key: shown.key, store: options.store }), drafts.clear(), render(state), openFinish(state, shown);
       }
     });
   }
@@ -14227,7 +11118,7 @@ ${content}`
     if (shown === null || clicked === null)
       return;
     let restoreFocus = keepCardFocus(state.options.document, clicked.button), editedId = runAction(state, shown, clicked);
-    render3(state), restoreFocus(editedId);
+    render(state), restoreFocus(editedId);
   }
   function boxToAddFrom(state, shown, event) {
     let box = event.key === "Enter" && (event.ctrlKey || event.metaKey) ? commentBoxAround(event.target) : null, hasReview = state.options.store.pending(shown.key).length > 0;
@@ -14242,7 +11133,7 @@ ${content}`
     return document2.addEventListener("click", (event) => {
       handleClick(state, event);
     }), document2.addEventListener("input", (event) => {
-      (noteDraft(state.drafts, event.target) || commentBoxAround(event.target) !== null) && render3(state);
+      (noteDraft(state.drafts, event.target) || commentBoxAround(event.target) !== null) && render(state);
     }), watchTree(document2, () => {
       showInTree(document2, shownReview(state));
     }), document2.addEventListener(
@@ -14253,13 +11144,107 @@ ${content}`
       !0
     ), {
       sync(pullRequest) {
-        state.shown = pullRequest === null ? null : show(state, pullRequest), state.shown !== null && requestStatus(state, state.shown), render3(state);
+        state.shown = pullRequest === null ? null : show(state, pullRequest), state.shown !== null && requestStatus(state, state.shown), render(state);
       }
     };
   }
 
+  // azure-devops/src/pull-requests/pull-request-link.ts
+  function apiBasePath(location2) {
+    let firstPathSegment = location2.pathname.split("/")[1] ?? "";
+    return location2.hostname.endsWith(".visualstudio.com") ? firstPathSegment === "DefaultCollection" ? "/DefaultCollection" : "" : `/${firstPathSegment}`;
+  }
+  function pathSegments(pathname) {
+    return pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
+  }
+  function projectOf(segments, gitIndex, basePath2) {
+    let apiBaseSegmentCount = basePath2.split("/").filter(Boolean).length;
+    return gitIndex > apiBaseSegmentCount ? segments[gitIndex - 1] : segments[gitIndex + 1];
+  }
+  function parsePullRequestHref(href, basePath2) {
+    let segments = pathSegments(new URL(href, "https://relative.invalid").pathname), gitIndex = segments.indexOf("_git"), pullRequestIndex = segments.indexOf("pullrequest"), pullRequestId = Number(segments[pullRequestIndex + 1]), repository = segments[gitIndex + 1], project = projectOf(segments, gitIndex, basePath2);
+    return !(gitIndex !== -1 && pullRequestIndex !== -1 && Number.isInteger(pullRequestId)) || repository === void 0 || project === void 0 ? null : { project, pullRequestId, repository };
+  }
+  function parsePullRequestListLocation(location2, basePath2) {
+    let segments = pathSegments(location2.pathname), gitIndex = segments.indexOf("_git"), repository = segments[gitIndex + 1];
+    if (gitIndex === -1 || repository === void 0 || segments[gitIndex + 2] !== "pullrequests" || segments.length !== gitIndex + 3)
+      return null;
+    let project = projectOf(segments, gitIndex, basePath2) ?? repository, tab = new URLSearchParams(location2.search).get("_a");
+    return { project, repository, status: tab === "completed" || tab === "abandoned" ? tab : "active" };
+  }
+  function isPullRequestInboxLocation(location2) {
+    return pathSegments(location2.pathname).at(-1) === "_pulls";
+  }
+  function isPullRequestCreateLocation(location2) {
+    let segments = pathSegments(location2.pathname);
+    return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
+  }
+
+  // azure-devops/src/boards/board.ts
+  var CARD_SELECTOR2 = ".wit-card[data-itemid]";
+  function isBoardLocation(location2) {
+    return location2.pathname.includes("/_boards/board/");
+  }
+  function findBoardCardIds(root) {
+    let ids = /* @__PURE__ */ new Set();
+    for (let card of root.querySelectorAll(CARD_SELECTOR2)) {
+      let id = Number(card.dataset.itemid);
+      Number.isInteger(id) && id > 0 && ids.add(id);
+    }
+    return [...ids];
+  }
+  function hasBoardChanged(loaded, current) {
+    for (let [id, workItem] of current.workItems) {
+      let loadedWorkItem = loaded.workItems.get(id), isChanged = loadedWorkItem !== void 0 && loadedWorkItem.rev !== workItem.rev, isMyOwnChange = current.myUserId !== null && workItem.changedById === current.myUserId;
+      if (isChanged && !isMyOwnChange)
+        return !0;
+    }
+    return !1;
+  }
+  function watchBoard(client, location2, cardIds) {
+    return {
+      // Cards render as the user scrolls, and the user adds cards. Start comparing those too.
+      extendLoaded: (loaded, current) => ({
+        myUserId: current.myUserId,
+        workItems: new Map([...current.workItems, ...loaded.workItems])
+      }),
+      async fetchSnapshot() {
+        let [{ workItems, retryAfterSeconds }, myUserId] = await Promise.all([
+          client.getWorkItems(cardIds),
+          client.getAuthenticatedUserId()
+        ]);
+        return {
+          retryAfterSeconds,
+          snapshot: {
+            myUserId,
+            workItems: new Map(workItems.map((workItem) => [workItem.id, workItem]))
+          }
+        };
+      },
+      hasChanged: hasBoardChanged,
+      key: `board:${location2.pathname}${location2.search}`
+    };
+  }
+
+  // azure-devops/src/core/page.ts
+  function parsePullRequestPage(location2, basePath2) {
+    if (isPullRequestCreateLocation(location2))
+      return { kind: "pull-request-create" };
+    let pullRequest = parsePullRequestHref(location2.pathname, basePath2);
+    return pullRequest ? { kind: "pull-request", pullRequest } : { kind: "other" };
+  }
+  function parsePage(location2, basePath2) {
+    if (isBoardLocation(location2))
+      return { kind: "board" };
+    let listPage = parsePullRequestListLocation(location2, basePath2);
+    return listPage ? { kind: "pull-request-list", listPage } : isPullRequestInboxLocation(location2) ? { kind: "pull-request-inbox" } : parsePullRequestPage(location2, basePath2);
+  }
+  function pullRequestOf(page) {
+    return page.kind === "pull-request" ? page.pullRequest : null;
+  }
+
   // azure-devops/src/features/review/style.css
-  var style_default12 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
+  var style_default4 = `/* Azure DevOps's own post button, next to the review's button: it looks secondary and
    reads "Add single comment". Its aria-label carries that name, so the text here is
    left out of what a screen reader reads. */
 .repos-discussion-thread-reply
@@ -14551,7 +11536,7 @@ ${content}`
   // azure-devops/src/features/review/index.ts
   var MAX_REVIEW_AGE_MS = 2592e6, review = {
     change: { kind: "new", version: "1.10.0" },
-    description: "Start a review on a pull request: collect comments that only you see, then post them in one go, with your vote.",
+    description: "Collect comments only you see, then post them together with your vote.",
     id: "review",
     name: "Reviews",
     start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
@@ -14592,540 +11577,11 @@ ${content}`
         }
       };
     },
-    styles: [style_default12]
-  };
-
-  // azure-devops/src/features/run-page-tabs/run-tab-store.ts
-  var RUN_TAB_ID_PREFIX = "__bolt-tab-";
-  function runTabViewOf(tab) {
-    return tab.id.startsWith(RUN_TAB_ID_PREFIX) ? tab.id.slice(RUN_TAB_ID_PREFIX.length) : null;
-  }
-  function runTabViewsIn(document2) {
-    return [...document2.querySelectorAll(
-      ".run-details-page .bolt-tabbar [role=tablist] [role=tab]"
-    )].map((tab) => runTabViewOf(tab)).filter((view) => view !== null);
-  }
-  function runTabPath(runPath, view) {
-    return `${runPath}&view=${encodeURIComponent(view)}`;
-  }
-  function isSameRunTab(first, second) {
-    return first.pipelineId === second.pipelineId && first.view === second.view;
-  }
-
-  // azure-devops/src/features/run-page-tabs/run-tab-frame.ts
-  var RUN_TAB_FRAME_CLASS = "fix-ado-run-tab-frame", TAB_CONTENT_LINK_SELECTOR = ".run-details-tab-content a[href]";
-  function frameElementOf(document2) {
-    let element4 = document2.defaultView?.frameElement ?? null;
-    return element4?.classList.contains(RUN_TAB_FRAME_CLASS) === !0 && "dataset" in element4 ? (
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- an HTML element of the parent window
-      element4
-    ) : null;
-  }
-  function reportMissingTab(document2, frame, view) {
-    let views = runTabViewsIn(document2);
-    if (views.length === 0)
-      return;
-    let isMissing = !views.includes(view);
-    isMissing && frame.dataset.fixAdoMissingTab !== view ? frame.dataset.fixAdoMissingTab = view : !isMissing && frame.dataset.fixAdoMissingTab !== void 0 && delete frame.dataset.fixAdoMissingTab;
-  }
-  function openTabLinksApart(document2) {
-    document2.addEventListener(
-      "click",
-      (event) => {
-        let link = closestElement(event.target, TAB_CONTENT_LINK_SELECTOR);
-        link?.setAttribute("target", "_blank"), link?.setAttribute("rel", "noopener");
-      },
-      { capture: !0 }
-    );
-  }
-  function createRunTabFrame(document2, frame = frameElementOf(document2)) {
-    let view = pipelineRunTabViewOf(document2.location);
-    return frame === null || view === null || parsePipelineRunLocation(document2.location) === null ? null : (openTabLinksApart(document2), {
-      sync: () => {
-        document2.documentElement.dataset.fixAdoRunTabFrame = "", reportMissingTab(document2, frame, view);
-      }
-    });
-  }
-
-  // azure-devops/src/features/run-page-tabs/run-tab-elements.ts
-  var TAB_CLASS2 = "fix-ado-run-tab", PANEL_CLASS2 = "fix-ado-run-tab-panel", MISSING_CLASS = "fix-ado-run-tab-missing";
-  function setSelected2(tab, isSelected) {
-    tab.classList.toggle("selected", isSelected), tab.setAttribute("aria-selected", String(isSelected));
-  }
-  function setAttribute(element4, name, value) {
-    value === null ? element4.removeAttribute(name) : element4.getAttribute(name) !== value && element4.setAttribute(name, value);
-  }
-  function createTab2(document2, key) {
-    let container = Object.assign(document2.createElement("span"), {
-      className: "bolt-tab-inner-container"
-    });
-    container.append(Object.assign(document2.createElement("span"), { className: "bolt-tab-text" }));
-    let tab = Object.assign(document2.createElement("a"), {
-      className: `bolt-tab focus-treatment flex-noshrink ${TAB_CLASS2}`,
-      href: "#",
-      id: `fix-ado-run-tab-${key.replaceAll(/[^\w-]/gu, "-")}`
-    });
-    return tab.setAttribute("role", "tab"), tab.dataset.fixAdoOwnTab = "", tab.dataset.fixAdoRunTab = key, setSelected2(tab, !1), tab.append(container), tab;
-  }
-  function showTab(tab, { buildId, name, tab: runTab }) {
-    let text = tab.querySelector(".bolt-tab-text");
-    text !== null && text.textContent !== name && (text.textContent = name, text.dataset.content = name);
-    let isDisabled = buildId === null;
-    setAttribute(tab, "aria-disabled", isDisabled ? "true" : null), setAttribute(tab, "title", isDisabled ? `No run of ${runTab.pipelineName} yet` : null), tab.classList.toggle("fix-ado-run-tab-disabled", isDisabled);
-  }
-  function tabsFor(tablist, runTabs) {
-    let existing = new Map(
-      [...tablist.querySelectorAll(`.${TAB_CLASS2}`)].map((tab) => [
-        tab.dataset.fixAdoRunTab ?? "",
-        tab
-      ])
-    );
-    for (let [key, tab] of existing)
-      runTabs.some((runTab) => runTab.key === key) || tab.remove();
-    return runTabs.map(
-      (runTab) => existing.get(runTab.key) ?? createTab2(tablist.ownerDocument, runTab.key)
-    );
-  }
-  function showTabs(tablist, runTabs) {
-    let tabs = tabsFor(tablist, runTabs), tail = [...tablist.children].slice(-tabs.length);
-    tabs.some((tab, index) => tail[index] !== tab) && tablist.append(...tabs);
-    for (let [index, tab] of tabs.entries()) {
-      let runTab = runTabs[index];
-      runTab !== void 0 && showTab(tab, runTab);
-    }
-    return tabs;
-  }
-  function createPanel2(document2, tab) {
-    let panel = Object.assign(document2.createElement("div"), { className: PANEL_CLASS2 });
-    panel.setAttribute("role", "tabpanel"), panel.setAttribute("aria-labelledby", tab.id);
-    let frame = Object.assign(document2.createElement("iframe"), { className: RUN_TAB_FRAME_CLASS }), note = Object.assign(document2.createElement("p"), {
-      className: MISSING_CLASS,
-      hidden: !0
-    });
-    return note.setAttribute("role", "status"), panel.append(frame, note), { frame, note, panel };
-  }
-  function panelPartsIn(page, tab) {
-    let existing = page.querySelector(`:scope > .${PANEL_CLASS2}`), frame = existing?.querySelector(`.${RUN_TAB_FRAME_CLASS}`) ?? null, note = existing?.querySelector(`.${MISSING_CLASS}`) ?? null;
-    if (existing !== null && frame !== null && note !== null)
-      return setAttribute(existing, "aria-labelledby", tab.id), { frame, note };
-    existing?.remove();
-    let created = createPanel2(page.ownerDocument, tab);
-    return page.querySelector(".repos-pr-details-page-tabbar")?.after(created.panel), created;
-  }
-  function showMissingNote({ frame, note }, runTab) {
-    let isMissing = frame.dataset.fixAdoMissingTab === runTab.tab.view;
-    frame.hidden = isMissing, note.hidden = !isMissing;
-    let text = `This run has no ${runTab.tab.label} tab.`;
-    note.textContent !== text && (note.textContent = text);
-  }
-  function showPanel(page, tab, { path, runTab }) {
-    let { frame, note } = panelPartsIn(page, tab);
-    setAttribute(frame, "title", runTab.name), frame.getAttribute("src") !== path && (delete frame.dataset.fixAdoMissingTab, frame.setAttribute("src", path)), showMissingNote({ frame, note }, runTab);
-  }
-
-  // azure-devops/src/features/run-page-tabs/pull-request-run-tabs-data.ts
-  function pipelineIdOf(evaluation) {
-    return evaluation.configuration.settings?.buildDefinitionId ?? evaluation.context?.buildDefinitionId ?? null;
-  }
-  function checkRunsByPipeline(evaluations) {
-    let runs = /* @__PURE__ */ new Map();
-    for (let evaluation of evaluations) {
-      let pipelineId = pipelineIdOf(evaluation);
-      if (evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && pipelineId !== null) {
-        let buildId = evaluation.context?.buildId ?? 0;
-        runs.set(pipelineId, buildId > 0 ? buildId : runs.get(pipelineId) ?? null);
-      }
-    }
-    return runs;
-  }
-  function latestBuildId(pipelineId, checkRun, builds) {
-    let ids = builds.filter((build) => build.definition?.id === pipelineId).map(({ id }) => id), all = checkRun === null ? ids : [...ids, checkRun];
-    return all.length === 0 ? null : Math.max(...all);
-  }
-  function pullRequestRunTabsOf(tabs, evaluations, builds) {
-    let checkRuns = checkRunsByPipeline(evaluations), shown = tabs.filter((tab) => checkRuns.has(tab.pipelineId));
-    return shown.map((tab) => {
-      let isLabelShared = shown.some((other) => other !== tab && other.label === tab.label);
-      return {
-        buildId: latestBuildId(tab.pipelineId, checkRuns.get(tab.pipelineId) ?? null, builds),
-        key: `${tab.pipelineId}/${tab.view}`,
-        name: isLabelShared ? `${tab.label} (${tab.pipelineName})` : tab.label,
-        tab
-      };
-    });
-  }
-
-  // azure-devops/src/features/run-page-tabs/pull-request-run-tabs.ts
-  var REFRESH_MS2 = 3e4, PAGE_SELECTOR2 = ".repos-pr-details-page", TABLIST_SELECTOR = ".repos-pr-details-page-tabbar [role=tablist]", OPEN_ATTRIBUTE2 = "data-fix-ado-run-tab-open";
-  function runTabsOf({ data, options }) {
-    return data?.evaluations === null || data === null ? [] : pullRequestRunTabsOf(options.loadRunTabs(), data.evaluations, data.builds);
-  }
-  function closeTab2(state) {
-    let { document: document2 } = state.options;
-    state.openKey = null;
-    let page = document2.querySelector(PAGE_SELECTOR2);
-    page?.removeAttribute(OPEN_ATTRIBUTE2), page?.querySelector(`:scope > .${PANEL_CLASS2}`)?.remove();
-    for (let tab of document2.querySelectorAll(`.${TAB_CLASS2}[aria-selected="true"]`))
-      setSelected2(tab, !1);
-  }
-  function showOpenTab(state, page, shown) {
-    let index = shown.runTabs.findIndex(({ key }) => key === state.openKey), [runTab, tab] = [shown.runTabs[index], shown.tabs[index]], buildId = runTab?.buildId ?? null;
-    if (state.data === null || runTab === void 0 || tab === void 0 || buildId === null) {
-      closeTab2(state);
-      return;
-    }
-    let { apiBasePath: apiBasePath2 } = state.options, runPath = pipelineRunPath(apiBasePath2, state.data.pullRequest.project, buildId);
-    page.setAttribute(OPEN_ATTRIBUTE2, ""), showPanel(page, tab, { path: runTabPath(runPath, runTab.tab.view), runTab });
-  }
-  function render4(state) {
-    let { document: document2 } = state.options, tablist = document2.querySelector(TABLIST_SELECTOR), page = document2.querySelector(PAGE_SELECTOR2);
-    if (tablist === null || page === null || state.data === null)
-      return;
-    let runTabs = runTabsOf(state), tabs = showTabs(tablist, runTabs);
-    state.openKey !== null && showOpenTab(state, page, { runTabs, tabs });
-  }
-  function openTab2(state, tab) {
-    let { document: document2 } = state.options, selector = `${TABLIST_SELECTOR} [role=tab][aria-selected="true"]`;
-    for (let other of document2.querySelectorAll(selector))
-      setSelected2(other, !1);
-    setSelected2(tab, !0), state.openKey = tab.dataset.fixAdoRunTab ?? null, render4(state);
-  }
-  function closeForOtherTab(state, other) {
-    closeTab2(state), other.hasAttribute(OWN_TAB_ATTRIBUTE) || setSelected2(other, !0);
-  }
-  function onClick2(state, event) {
-    let tab = closestHtmlElement(event.target, `.${TAB_CLASS2}`), other = closestElement(event.target, `${TABLIST_SELECTOR} [role=tab]`);
-    if (tab === null) {
-      state.openKey !== null && other !== null && closeForOtherTab(state, other);
-      return;
-    }
-    event.preventDefault(), event.stopPropagation(), tab.getAttribute("aria-disabled") !== "true" && openTab2(state, tab);
-  }
-  async function loadChecksAndRuns(state, data) {
-    let { options } = state;
-    data.loadedAt = options.now();
-    let { project, pullRequestId } = data.pullRequest;
-    try {
-      let [evaluations, builds] = await Promise.all([
-        options.getEvaluations(data.pullRequest),
-        options.getPullRequestBuilds(project, pullRequestId)
-      ]);
-      data.evaluations = evaluations, data.builds = builds;
-    } catch {
-    }
-    state.data === data && render4(state);
-  }
-  function syncRunTabs(state, pullRequest, canFetch) {
-    JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest) && (closeTab2(state), state.data = pullRequest === null ? null : { builds: [], evaluations: null, loadedAt: Number.NEGATIVE_INFINITY, pullRequest });
-    let { data, options } = state;
-    if (data === null)
-      return;
-    let isDue = options.now() - data.loadedAt >= REFRESH_MS2;
-    canFetch && isDue && options.loadRunTabs().length > 0 && loadChecksAndRuns(state, data), render4(state);
-  }
-  function createPullRequestRunTabs(options) {
-    let state = { data: null, openKey: null, options };
-    return options.document.addEventListener(
-      "click",
-      (event) => {
-        onClick2(state, event);
-      },
-      { capture: !0 }
-    ), {
-      sync: (pullRequest, canFetch) => {
-        syncRunTabs(state, pullRequest, canFetch);
-      }
-    };
-  }
-
-  // azure-devops/src/core/switch.ts
-  var SWITCH_CLASS = "fix-ado-switch";
-  function createPill(document2) {
-    let pill = Object.assign(document2.createElement("span"), {
-      className: `${SWITCH_CLASS}-pill`
-    });
-    return pill.setAttribute("aria-hidden", "true"), pill.append(Object.assign(document2.createElement("span"), { className: `${SWITCH_CLASS}-knob` })), pill;
-  }
-  function createSwitch(document2, label) {
-    let toggle = Object.assign(document2.createElement("button"), {
-      className: SWITCH_CLASS,
-      type: "button"
-    });
-    toggle.setAttribute("role", "switch"), toggle.setAttribute("aria-checked", "false");
-    let text = Object.assign(document2.createElement("span"), {
-      className: `${SWITCH_CLASS}-text`,
-      textContent: label
-    });
-    return toggle.append(createPill(document2), text), toggle;
-  }
-  function showSwitchOn(toggle, isOn2) {
-    toggle.getAttribute("aria-checked") !== String(isOn2) && toggle.setAttribute("aria-checked", String(isOn2));
-  }
-
-  // azure-devops/src/features/run-page-tabs/run-tab-toggle.ts
-  var TABBAR_SELECTOR3 = ".run-details-page > .bolt-tabbar", SELECTED_TAB_SELECTOR = '[role=tablist] [role=tab][aria-selected="true"]', TOGGLE_CLASS3 = "fix-ado-run-tab-toggle", LABEL2 = "Show this tab in pull requests", FAILED_TITLE = "Could not read this run's pipeline. Reload to try again.";
-  function selectedRunTabOf(tabbar, lookup) {
-    let selected = tabbar.querySelector(SELECTED_TAB_SELECTOR), view = selected === null ? null : runTabViewOf(selected);
-    if (selected === null || view === null || lookup.kind !== "known")
-      return null;
-    let label = selected.querySelector(".bolt-tab-text")?.textContent.trim() ?? view, { id, name } = lookup.pipeline;
-    return { label, pipelineId: id, pipelineName: name, view };
-  }
-  function createToggle(document2) {
-    let toggle = createSwitch(document2, LABEL2);
-    return toggle.classList.add(TOGGLE_CLASS3), toggle;
-  }
-  function flip(state, tabbar) {
-    let tab = selectedRunTabOf(tabbar, state.lookup);
-    if (tab === null)
-      return;
-    let { storage } = state.options, saved = storage.load(), others = saved.filter((other) => !isSameRunTab(other, tab));
-    storage.save(others.length === saved.length ? [...saved, tab] : others);
-  }
-  function toggleIn(state, tabbar) {
-    let existing = tabbar.querySelector(`:scope > .${TOGGLE_CLASS3}`);
-    if (existing !== null)
-      return existing;
-    let toggle = createToggle(state.options.document);
-    return toggle.addEventListener("click", () => {
-      flip(state, tabbar), showToggleState(state, tabbar, toggle);
-    }), tabbar.append(toggle), toggle;
-  }
-  function showToggleState(state, tabbar, toggle) {
-    let tab = selectedRunTabOf(tabbar, state.lookup), isOn2 = tab !== null && state.options.storage.load().some((other) => isSameRunTab(other, tab));
-    showSwitchOn(toggle, isOn2), toggle.disabled !== (tab === null) && (toggle.disabled = tab === null);
-    let title = state.lookup.kind === "failed" ? FAILED_TITLE : "";
-    toggle.title !== title && (toggle.title = title);
-  }
-  function lookUpPipeline(state, sync4) {
-    let { document: document2, getBuildPipeline: getBuildPipeline2 } = state.options, run = parsePipelineRunLocation(document2.location), project = decodeURIComponent(
-      document2.location.pathname.split("/_build/")[0]?.split("/").pop() ?? ""
-    );
-    state.lookup.kind !== "idle" || run === null || project === "" || (state.lookup = { kind: "reading" }, getBuildPipeline2(project, run.buildId).then(
-      (pipeline) => {
-        state.lookup = { kind: "known", pipeline }, sync4();
-      },
-      () => {
-        state.lookup = { kind: "failed" }, sync4();
-      }
-    ));
-  }
-  function createRunTabToggle(options) {
-    let state = { lookup: { kind: "idle" }, options }, sync4 = () => {
-      let tabbar = options.document.querySelector(TABBAR_SELECTOR3);
-      tabbar === null || tabbar.querySelector(SELECTED_TAB_SELECTOR) === null || (lookUpPipeline(state, sync4), showToggleState(state, tabbar, toggleIn(state, tabbar)));
-    };
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/run-page-tabs/style.css
-  var style_default13 = `/* Run page tabs in pull requests. pull-request-run-tabs.ts sets the attribute while one is open. */
-.repos-pr-details-page[data-fix-ado-run-tab-open]
-  > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-run-tab-panel) {
-  display: none !important;
-}
-
-/* The panel takes what the header and tabs leave, so the tab's content reaches the bottom. */
-.fix-ado-run-tab-panel {
-  display: grid;
-  flex: 1 0 0;
-  min-height: 400px;
-  padding-top: 16px;
-}
-
-.fix-ado-run-tab-frame,
-.fix-ado-run-tab-missing {
-  grid-area: 1 / 1;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
-  border-radius: 4px;
-}
-
-.fix-ado-run-tab-frame[hidden],
-.fix-ado-run-tab-missing[hidden] {
-  display: none;
-}
-
-/* In place of a run page tab the run does not have: a page icon over a line of text. */
-.fix-ado-run-tab-missing {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-
-  &::before {
-    content: "";
-    width: 48px;
-    height: 48px;
-    background-color: currentColor;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 1h5.5L13 4.5V15H3V1h1zm0 1v12h8V5H9V2H4zm6 .7V4h1.3L10 2.7zM5 7h6v1H5V7zm0 2h6v1H5V9zm0 2h4v1H5v-1z'/%3E%3C/svg%3E")
-      center / contain no-repeat;
-    forced-color-adjust: none;
-  }
-}
-
-/* A tab whose pipeline has no run on the pull request yet: greyed, and it does nothing. */
-.fix-ado-run-tab-disabled,
-.fix-ado-run-tab-disabled .bolt-tab-text {
-  color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
-  cursor: default;
-}
-
-/* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */
-.fix-ado-run-tab:focus:not(:focus-visible) {
-  outline: none;
-}
-
-/* The run page in a run page tab's frame. run-tab-frame.ts marks it; only the tab's content stays. */
-html[data-fix-ado-run-tab-frame] .project-header,
-html[data-fix-ado-run-tab-frame] .navigation-container,
-html[data-fix-ado-run-tab-frame] .region-content-header,
-html[data-fix-ado-run-tab-frame] .region-content-footer,
-html[data-fix-ado-run-tab-frame] .region-footer,
-html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-content) {
-  display: none !important;
-}
-
-/* "Show this tab in pull requests" at the right end of a run page's tab bar. core/switch.css
-   styles the switch. */
-.fix-ado-run-tab-toggle {
-  margin: 0 20px 0 8px;
-}
-`;
-
-  // azure-devops/src/core/switch.css
-  var switch_default = `/* A switch like Azure DevOps's own. switch.ts builds it. Its own classes, as no capture
-   holds the site's switch. Where it sits is up to the feature that adds it. */
-.fix-ado-switch {
-  display: flex;
-  flex: none;
-  gap: 8px;
-  align-items: center;
-  padding: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-
-  &:disabled {
-    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
-    cursor: default;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--communication-background, rgb(0, 120, 212));
-    outline-offset: 1px;
-  }
-}
-
-.fix-ado-switch-pill {
-  display: flex;
-  flex: none;
-  align-items: center;
-  width: 40px;
-  height: 20px;
-  padding: 0 3px;
-  border: 1px solid var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  border-radius: 10px;
-}
-
-.fix-ado-switch-knob {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  transition: translate 0.1s;
-}
-
-.fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
-  border-color: var(--communication-background, rgb(0, 120, 212));
-  background: var(--communication-background, rgb(0, 120, 212));
-}
-
-.fix-ado-switch[aria-checked="true"] .fix-ado-switch-knob {
-  background: #fff;
-  translate: 20px 0;
-}
-
-.fix-ado-switch:disabled .fix-ado-switch-pill {
-  border-color: currentColor;
-}
-
-.fix-ado-switch:disabled .fix-ado-switch-knob {
-  background: currentColor;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fix-ado-switch-knob {
-    transition: none;
-  }
-}
-
-/* Forced colors drop backgrounds, so the knob and the on state keep a border. */
-@media (forced-colors: active) {
-  .fix-ado-switch-knob {
-    border: 1px solid CanvasText;
-  }
-
-  .fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
-    border-color: Highlight;
-  }
-}
-`;
-
-  // azure-devops/src/features/run-page-tabs/index.ts
-  var RUN_TABS_KEY = "run-page-tabs", runTabStorage = {
-    load: () => GM_getValue(RUN_TABS_KEY, []),
-    save: (tabs) => {
-      GM_setValue(RUN_TABS_KEY, tabs);
-    }
-  }, runPageTabs = {
-    change: { kind: "new", version: "1.20.0" },
-    description: "A switch on each tab of a pipeline run page, such as Code Coverage, that shows that tab of the pipeline's latest run as a tab on its pull requests.",
-    id: "run-page-tabs",
-    name: "Run page tabs in pull requests",
-    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
-      if (isInFrame2) {
-        let frame = createRunTabFrame(document2);
-        return frame === null ? null : { sync: frame.sync };
-      }
-      let toggle = createRunTabToggle({
-        document: document2,
-        getBuildPipeline: async (project, buildId) => client.getBuildPipeline(project, buildId),
-        storage: runTabStorage
-      }), tabs = createPullRequestRunTabs({
-        apiBasePath: basePath2,
-        document: document2,
-        getEvaluations: async (pullRequest) => {
-          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
-          return evaluations;
-        },
-        getPullRequestBuilds: async (project, pullRequestId) => {
-          let { builds } = await client.getPullRequestBuilds(project, pullRequestId);
-          return builds;
-        },
-        loadRunTabs: runTabStorage.load,
-        now
-      });
-      return {
-        sync({ isTabActive: isTabActive2, page }) {
-          toggle.sync(), tabs.sync(pullRequestOf(page), isTabActive2);
-        }
-      };
-    },
-    styles: [switch_default, style_default13]
+    styles: [style_default4]
   };
 
   // azure-devops/src/features/starred-reviewers/starred-reviewers-markup.ts
-  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE6 = "http://www.w3.org/2000/svg";
+  var STARRED_SECTION_CLASS = "fix-ado-starred-reviewers", STAR_BUTTON_CLASS = "fix-ado-star", STAR_PATH = "M8 1.6l1.95 4.02 4.43.58-3.24 3.07.82 4.4L8 11.53l-3.96 2.14.82-4.4L1.62 6.2l4.43-.58z", REQUIRED_RING_PATH = "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5z", PLUS_PATH = "M8 5v6M5 8h6", SVG_NAMESPACE = "http://www.w3.org/2000/svg";
   function element2(document2, tag, { className, text, attributes = {}, children = [] } = {}) {
     let created = document2.createElement(tag);
     className !== void 0 && (created.className = className), text !== void 0 && (created.textContent = text);
@@ -15145,7 +11601,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     });
   }
   function svgIcon(document2, className, pathData) {
-    let svg = document2.createElementNS(SVG_NAMESPACE6, "svg"), attributes = {
+    let svg = document2.createElementNS(SVG_NAMESPACE, "svg"), attributes = {
       "aria-hidden": "true",
       class: className,
       height: "16",
@@ -15155,7 +11611,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     for (let [name, value] of Object.entries(attributes))
       svg.setAttribute(name, value);
     for (let data of pathData) {
-      let path = document2.createElementNS(SVG_NAMESPACE6, "path");
+      let path = document2.createElementNS(SVG_NAMESPACE, "path");
       path.setAttribute("d", data), svg.append(path);
     }
     return svg;
@@ -15517,7 +11973,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let id = closestHtmlElement(event.target, `.${STARRED_CHIP_CLASS}`)?.dataset.fixAdoIdentity, identity = state.options.store.list().find((starred) => starred.id === id);
     identity !== void 0 && addThroughField(state, field, identity);
   }
-  function createChip3(state, identity) {
+  function createChip(state, identity) {
     let { document: document2, imageUrlOf } = state.options, chip = createStarredChip(document2, identity, imageUrlOf(identity));
     return state.activePick !== null && (chip.setAttribute("disabled", ""), chip.classList.remove("clickable")), state.activePick?.identityId === identity.id && showChipSpinner(document2, chip), state.notFoundIds.has(identity.id) && markNotFound(chip), chip;
   }
@@ -15536,7 +11992,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       state.activePick?.identityId,
       shown.map(({ id }) => [id, state.notFoundIds.has(id)])
     ]);
-    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip3(state, identity))));
+    list !== null && list.dataset.fixAdoSignature !== signature && (list.dataset.fixAdoSignature = signature, list.replaceChildren(...shown.map((identity) => createChip(state, identity))));
   }
   function removeChipRows(document2) {
     for (let row of document2.querySelectorAll(`.${STARRED_CHIP_ROW_CLASS}`))
@@ -15606,6 +12062,252 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       });
       updateStarButton(star, store.findByName(nameOfRow(row)) !== null);
     }
+  }
+
+  // azure-devops/src/pipeline/pipeline-issue-box-collapse.ts
+  var COLLAPSE_ICONS = { collapsed: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
+  function setCollapsed(box, button2, isCollapsed) {
+    box.toggleAttribute("data-collapsed", isCollapsed), button2.setAttribute("aria-expanded", String(!isCollapsed));
+    let icon = button2.querySelector(".fabric-icon");
+    icon?.classList.toggle(COLLAPSE_ICONS.collapsed, isCollapsed), icon?.classList.toggle(COLLAPSE_ICONS.open, !isCollapsed);
+  }
+  function createChevron(document2) {
+    let iconFont = document2.createElement("span");
+    iconFont.className = "fluent-icons-enabled";
+    let icon = document2.createElement("span");
+    return icon.className = "left-icon flex-noshrink fabric-icon small", icon.setAttribute("aria-hidden", "true"), iconFont.append(icon), iconFont;
+  }
+  function createCollapseButton(document2) {
+    let button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = "bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment fix-ado-issue-box-collapse", button2.setAttribute("aria-label", "Errors and warnings"), button2.append(createChevron(document2)), button2;
+  }
+  function addCollapseButton(box, header, collapse) {
+    let button2 = createCollapseButton(box.ownerDocument);
+    button2.addEventListener("click", () => {
+      let isCollapsed = !Object.hasOwn(box.dataset, "collapsed");
+      setCollapsed(box, button2, isCollapsed), collapse.onToggle(isCollapsed);
+    }), header.prepend(button2), setCollapsed(box, button2, collapse.isCollapsed);
+  }
+
+  // azure-devops/src/pipeline/pipeline-issues.ts
+  var NO_ISSUES = { errorCount: 0, warningCount: 0 }, COUNT_FIELDS = { error: "errorCount", warning: "warningCount" };
+  function isIssueKind(type) {
+    return type === "error" || type === "warning";
+  }
+  function issueKey(issue) {
+    return `${issue.type}
+${issue.message ?? ""}`;
+  }
+  function childrenByParentOf(records) {
+    let children = /* @__PURE__ */ new Map();
+    for (let record of records)
+      record.parentId !== null && children.set(record.parentId, [...children.get(record.parentId) ?? [], record]);
+    return children;
+  }
+  function descendantsOf(record, childrenByParent) {
+    let descendants = [];
+    for (let child of childrenByParent.get(record.id) ?? [])
+      descendants.push(child, ...descendantsOf(child, childrenByParent));
+    return descendants;
+  }
+  function ownIssuesOf(records) {
+    let childrenByParent = childrenByParentOf(records);
+    return new Map(
+      records.map((record) => {
+        let below = new Set(
+          descendantsOf(record, childrenByParent).flatMap(
+            (descendant) => (descendant.issues ?? []).map((issue) => issueKey(issue))
+          )
+        ), own = (record.issues ?? []).filter(
+          (issue) => isIssueKind(issue.type) && !below.has(issueKey(issue))
+        );
+        return [record.id, own];
+      })
+    );
+  }
+  function ownCountOf(record, own, kind) {
+    let listed = (record.issues ?? []).filter((issue) => issue.type === kind).length, repeated = listed - own.filter((issue) => issue.type === kind).length;
+    return Math.max(0, Math.max(record[COUNT_FIELDS[kind]] ?? 0, listed) - repeated);
+  }
+  function issueCountsOf(records) {
+    let childrenByParent = childrenByParentOf(records), ownIssues = ownIssuesOf(records), ownCounts = new Map(
+      records.map((record) => {
+        let own = ownIssues.get(record.id) ?? [];
+        return [
+          record.id,
+          {
+            errorCount: ownCountOf(record, own, "error"),
+            warningCount: ownCountOf(record, own, "warning")
+          }
+        ];
+      })
+    );
+    return new Map(
+      records.map((record) => [
+        record.id,
+        sumIssueCounts(
+          [record, ...descendantsOf(record, childrenByParent)].map(
+            ({ id }) => ownCounts.get(id) ?? NO_ISSUES
+          )
+        )
+      ])
+    );
+  }
+  function sumIssueCounts(counts) {
+    let total = { ...NO_ISSUES };
+    for (let count of counts)
+      total.errorCount += count.errorCount, total.warningCount += count.warningCount;
+    return total;
+  }
+  function runIssueOf(issue, spot) {
+    let place2 = (spot.job === null ? [spot.stage.name] : [spot.job.name, spot.step?.name]).filter((name) => name != null), lineNumber = Number(issue.data?.logFileLineNumber ?? Number.NaN);
+    return {
+      jobId: spot.job?.id ?? null,
+      kind: issue.type,
+      lineNumber: Number.isInteger(lineNumber) ? lineNumber : null,
+      message: issue.message ?? "",
+      place: place2,
+      stageId: spot.stage.id,
+      stepId: spot.step?.id ?? null
+    };
+  }
+  function runIssuesAt(spot, issues) {
+    return issues.flatMap(
+      (issue) => isIssueKind(issue.type) ? [runIssueOf({ ...issue, type: issue.type }, spot)] : []
+    );
+  }
+  function runIssuesOf(stages) {
+    let issues = stages.flatMap((stage) => stage.issues);
+    return [
+      ...issues.filter((issue) => issue.kind === "error"),
+      ...issues.filter((issue) => issue.kind === "warning")
+    ];
+  }
+
+  // azure-devops/src/pipeline/pipeline-issue-list.ts
+  var SVG_NAMESPACE2 = "http://www.w3.org/2000/svg", ICON_SIZES = {
+    large: { className: " margin-4", drawing: 32, pixels: 24 },
+    small: { className: "", drawing: 16, pixels: 16 }
+  }, ICON_MARKS = {
+    error: {
+      large: "M21.99 9.99a1.5 1.5 0 0 0-2.122 0L16 13.856 12.132 9.99a1.5 1.5 0 0 0-2.121 2.122l3.868 3.868-3.89 3.889a1.5 1.5 0 0 0 2.122 2.121L16 18.1l3.89 3.89a1.5 1.5 0 0 0 2.12-2.122l-3.889-3.89 3.868-3.867a1.5 1.5 0 0 0 0-2.122z",
+      small: "M10.984 5.004a.9.9 0 0 1 0 1.272L9.27 7.99l1.74 1.741a.9.9 0 1 1-1.272 1.273l-1.74-1.741-1.742 1.74a.9.9 0 1 1-1.272-1.272l1.74-1.74-1.713-1.714a.9.9 0 0 1 1.273-1.273l1.713 1.713 1.714-1.713a.9.9 0 0 1 1.273 0z"
+    },
+    warning: {
+      large: "M16 7a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 16 7zm-1.5 16a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0z",
+      small: "M8.91 3.9a.9.9 0 0 0-1.8 0v4.7a.9.9 0 1 0 1.8 0V3.9zm-.95 8.65a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8z"
+    }
+  }, KIND_STATUSES = { error: "failed", warning: "warning" }, KIND_LABELS = { error: "Error", warning: "Warning" }, LIST_ROW_WRAPPERS = [
+    { className: "bolt-list-cell-content flex-row", tag: "div" },
+    { className: "bolt-list-cell", tag: "td" },
+    { className: "bolt-list-row first-row", role: "listitem", tag: "tr" },
+    { className: "relative", tag: "tbody" },
+    {
+      className: "preview-check-list bolt-list body-m relative scroll-hidden",
+      role: "list",
+      tag: "table"
+    },
+    { className: "status-details-container fix-ado-issue-box", tag: "div" }
+  ];
+  function countText(count, kind) {
+    return `${count} ${kind}${count === 1 ? "" : "s"}`;
+  }
+  function issueSummary(parts) {
+    let { errorCount, warningCount } = sumIssueCounts(parts);
+    return [
+      ...errorCount > 0 ? [countText(errorCount, "error")] : [],
+      ...warningCount > 0 ? [countText(warningCount, "warning")] : []
+    ].join(", ");
+  }
+  function worstKindOf(issues) {
+    return issues.some((issue) => issue.kind === "error") ? "error" : "warning";
+  }
+  function createElement(document2, { className, role, tag, text }) {
+    let created = document2.createElement(tag);
+    return created.className = className, text !== void 0 && (created.textContent = text), role !== void 0 && created.setAttribute("role", role), created;
+  }
+  function wrapIn(document2, content, wrappers) {
+    let wrapped = content;
+    for (let wrapper of wrappers) {
+      let outer = createElement(document2, wrapper);
+      outer.append(wrapped), wrapped = outer;
+    }
+    return wrapped;
+  }
+  function setAttributes(element4, attributes) {
+    for (let [name, value] of Object.entries(attributes))
+      element4.setAttribute(name, value);
+  }
+  function createKindIcon(document2, kind, size) {
+    let { className, drawing, pixels: pixels2 } = ICON_SIZES[size], icon = document2.createElementNS(SVG_NAMESPACE2, "svg");
+    setAttributes(icon, {
+      "aria-label": KIND_LABELS[kind],
+      class: `bolt-status flex-noshrink ${KIND_STATUSES[kind]}${className} fix-ado-kind-icon`,
+      "data-kind": kind,
+      height: String(pixels2),
+      role: "img",
+      viewBox: `0 0 ${drawing} ${drawing}`,
+      width: String(pixels2)
+    });
+    let circle = document2.createElementNS(SVG_NAMESPACE2, "circle"), middle = String(drawing / 2);
+    setAttributes(circle, { cx: middle, cy: middle, r: middle });
+    let mark = document2.createElementNS(SVG_NAMESPACE2, "path");
+    return setAttributes(mark, { d: ICON_MARKS[kind][size], fill: "#fff" }), icon.append(circle, mark), icon;
+  }
+  function createIssueCounts(document2, counts) {
+    return ["error", "warning"].flatMap((kind) => {
+      let count = kind === "error" ? counts.errorCount : counts.warningCount;
+      if (count === 0)
+        return [];
+      let text = String(count), badge = createElement(document2, { className: "fix-ado-issue-count", tag: "span", text });
+      return badge.dataset.kind = kind, badge.setAttribute("role", "img"), badge.setAttribute("aria-label", countText(count, kind)), badge.title = countText(count, kind), [badge];
+    });
+  }
+  function createOutputLine(document2, issue) {
+    let line2 = createElement(document2, {
+      className: "flex-row monospaced-m dark-build-output fix-ado-issue-output",
+      tag: "div"
+    });
+    issue.lineNumber !== null && line2.append(createElement(document2, { className: "line-number padding-horizontal-16", tag: "div", text: String(issue.lineNumber) }));
+    let className = `${issue.kind === "error" ? "error-text" : "fix-ado-warning-text"} word-break fix-ado-issue-message`;
+    return line2.append(createElement(document2, { className, tag: "div", text: issue.message })), line2;
+  }
+  function fillIssueLink(link, issue) {
+    let { ownerDocument: document2 } = link;
+    link.className = "bolt-table-link full-width-link-no-padding no-underline-link bolt-link fix-ado-issue", link.dataset.kind = issue.kind;
+    let place2 = createElement(document2, {
+      className: "padding-horizontal-16 padding-vertical-8 text-ellipsis separator-line-top secondary-text body-s fix-ado-issue-place",
+      tag: "div",
+      text: issue.place.join(" / ")
+    }), output = createElement(document2, { className: "flex-column", tag: "div" });
+    return output.append(createOutputLine(document2, issue)), link.append(place2, output), link;
+  }
+  function createBoxHeader(document2, box) {
+    let text = createElement(document2, {
+      className: "pr-completion-status-header flex-row flex-center flex-grow rhythm-horizontal-8 text-ellipsis",
+      tag: "div"
+    }), { title } = box;
+    text.append(
+      createElement(document2, {
+        className: "text-ellipsis fix-ado-issue-box-title",
+        tag: "span",
+        text: title
+      })
+    ), box.details !== null && text.append(createElement(document2, { className: "secondary-text fix-ado-issue-box-details", tag: "span", text: box.details }));
+    let header = createElement(document2, {
+      className: "flex-row flex-grow flex-center padding-horizontal-16 rhythm-horizontal-8 fix-ado-issue-box-header",
+      tag: "div"
+    });
+    return header.append(createKindIcon(document2, worstKindOf(box.issues), "small"), text), header;
+  }
+  function createIssueBox(document2, box) {
+    let content = createElement(document2, {
+      className: "flex-column flex-grow text-ellipsis",
+      tag: "div"
+    }), links = box.issues.map((issue) => box.createLink(issue)), header = createBoxHeader(document2, box);
+    content.append(header, ...links);
+    let wrapped = wrapIn(document2, content, LIST_ROW_WRAPPERS);
+    return box.collapse !== void 0 && addCollapseButton(wrapped, header, box.collapse), wrapped;
   }
 
   // azure-devops/src/features/starred-reviewers/star-picker.ts
@@ -15905,7 +12607,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/starred-reviewers/style.css
-  var style_default14 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
+  var style_default5 = `/* Starred reviewers: a star on each reviewer row, shown on hover or when starred.
    Hidden by opacity, not visibility, so the keyboard can still reach it. */
 .repos-reviewer > .fix-ado-star {
   opacity: 0;
@@ -16050,7 +12752,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
   var starredReviewers = {
     change: { kind: "updated", version: "1.9.0" },
-    description: "Star reviewers, then add a starred one as optional or required reviewer in one click, also on a new pull request.",
+    description: "Add a starred reviewer in one click, also on a new pull request.",
     id: "starred-reviewers",
     name: "Starred reviewers",
     start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2 }) {
@@ -16083,7 +12785,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default14]
+    styles: [style_default5]
   };
 
   // azure-devops/src/features/viewed-files/tree-ticks.ts
@@ -16142,7 +12844,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/viewed-files/viewed-toggles.ts
-  var FILE_CARD_SELECTOR2 = ".repos-summary-header", CARD_PATH_SELECTOR = ":scope > div:first-child .secondary-text.text-ellipsis", CARD_ACTIONS_SELECTOR = ":scope > div:first-child .justify-end", CARD_EXPAND_SELECTOR = ".bolt-card-expand-button", FILE_BAR_SELECTOR = ".repos-compare-toolbar", FOLDER_VIEW_SELECTOR = ".repos-changes-viewer.is-folder", BAR_PATH_SELECTOR = ".secondary-text.text-ellipsis", BAR_LAYOUT_SELECTOR = ".bolt-split-button", BAR_COMMANDS_SELECTOR = ":scope > div > .repos-compare-header-commandbar", TOGGLE_CLASS4 = "fix-ado-viewed-toggle", PATH_ATTRIBUTE = "data-fix-ado-viewed-path", LABEL3 = "Viewed";
+  var FILE_CARD_SELECTOR2 = ".repos-summary-header", CARD_PATH_SELECTOR = ":scope > div:first-child .secondary-text.text-ellipsis", CARD_ACTIONS_SELECTOR = ":scope > div:first-child .justify-end", CARD_EXPAND_SELECTOR = ".bolt-card-expand-button", FILE_BAR_SELECTOR = ".repos-compare-toolbar", FOLDER_VIEW_SELECTOR = ".repos-changes-viewer.is-folder", BAR_PATH_SELECTOR = ".secondary-text.text-ellipsis", BAR_LAYOUT_SELECTOR = ".bolt-split-button", BAR_COMMANDS_SELECTOR = ":scope > div > .repos-compare-header-commandbar", TOGGLE_CLASS2 = "fix-ado-viewed-toggle", PATH_ATTRIBUTE = "data-fix-ado-viewed-path", LABEL = "Viewed";
   function asTreePath(shown) {
     return shown.startsWith("/") ? shown : `/${shown}`;
   }
@@ -16157,15 +12859,15 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
   function createToggle2(document2) {
     let label = document2.createElement("label");
-    label.className = `${TOGGLE_CLASS4} body-m`;
+    label.className = `${TOGGLE_CLASS2} body-m`;
     let input = document2.createElement("input");
     return input.type = "checkbox", input.addEventListener("change", () => {
       let state = stateByDocument.get(document2), header = headerOf(label), isViewed = header.path !== label.getAttribute(PATH_ATTRIBUTE) ? state?.isViewed(header.path) !== !0 : input.checked;
       input.checked = isViewed, label.setAttribute(PATH_ATTRIBUTE, header.path), state?.onToggle(header, isViewed);
-    }), label.append(input, LABEL3), label;
+    }), label.append(input, LABEL), label;
   }
-  function toggleIn2(container, place2, { path, state }) {
-    let toggle = container.querySelector(`:scope .${TOGGLE_CLASS4}`) ?? createToggle2(container.ownerDocument);
+  function toggleIn(container, place2, { path, state }) {
+    let toggle = container.querySelector(`:scope .${TOGGLE_CLASS2}`) ?? createToggle2(container.ownerDocument);
     toggle.isConnected || place2(toggle), toggle.setAttribute(PATH_ATTRIBUTE, path);
     let input = toggle.querySelector("input"), isViewed = state.isViewed(path);
     input !== null && input.checked !== isViewed && (input.checked = isViewed);
@@ -16176,7 +12878,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   function syncCardToggles(document2, state) {
     for (let { card, path } of fileCards(document2)) {
       let actions = card.querySelector(CARD_ACTIONS_SELECTOR);
-      actions !== null && toggleIn2(
+      actions !== null && toggleIn(
         actions,
         (toggle) => {
           actions.prepend(toggle);
@@ -16190,11 +12892,11 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
   function syncBarToggle(document2, state) {
     if (isFolderView(document2)) {
-      document2.querySelector(`${FILE_BAR_SELECTOR} .${TOGGLE_CLASS4}`)?.remove();
+      document2.querySelector(`${FILE_BAR_SELECTOR} .${TOGGLE_CLASS2}`)?.remove();
       return;
     }
     let bar = document2.querySelector(FILE_BAR_SELECTOR), path = bar === null ? "" : shownPath(bar, BAR_PATH_SELECTOR), next = bar?.querySelector(BAR_LAYOUT_SELECTOR) ?? bar?.querySelector(BAR_COMMANDS_SELECTOR);
-    bar !== null && next !== null && next !== void 0 && path !== "" && toggleIn2(
+    bar !== null && next !== null && next !== void 0 && path !== "" && toggleIn(
       bar,
       (toggle) => {
         next.before(toggle);
@@ -16230,12 +12932,12 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/viewed-files/tree-walk.ts
-  var TREE_SELECTOR4 = ".repos-changes-explorer-tree", ROW_SELECTOR4 = "tr.bolt-tree-row", SLACK_PX = 0.5, SCROLLER_SELECTOR3 = ".v-scroll-auto", STEP_OF_VIEW = 0.8, LOADING_CLASS = "fix-ado-viewed-tree-loading";
-  function scrollerOf2(document2) {
-    return document2.querySelector(TREE_SELECTOR4)?.closest(SCROLLER_SELECTOR3) ?? null;
+  var TREE_SELECTOR3 = ".repos-changes-explorer-tree", ROW_SELECTOR = "tr.bolt-tree-row", SLACK_PX = 0.5, SCROLLER_SELECTOR2 = ".v-scroll-auto", STEP_OF_VIEW = 0.8, LOADING_CLASS = "fix-ado-viewed-tree-loading";
+  function scrollerOf(document2) {
+    return document2.querySelector(TREE_SELECTOR3)?.closest(SCROLLER_SELECTOR2) ?? null;
   }
   async function nextTreeDraw({ document: document2, drawTimeoutMs }) {
-    let scroller = scrollerOf2(document2), view = document2.defaultView;
+    let scroller = scrollerOf(document2), view = document2.defaultView;
     scroller === null || view === null || await new Promise((resolve) => {
       let observer = new view.MutationObserver(() => {
         done();
@@ -16258,7 +12960,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     return isDone || log("Viewed files: a wait for the tree hit its cap", { viewedFilesTiming: { timeoutMs } }), isDone;
   }
   function isViewDrawn(document2) {
-    let tree = document2.querySelector(TREE_SELECTOR4), rows = [...tree?.querySelectorAll(ROW_SELECTOR4) ?? []], view = scrollerOf2(document2)?.getBoundingClientRect(), whole = tree?.getBoundingClientRect(), first = rows.at(0)?.getBoundingClientRect(), last = rows.at(-1)?.getBoundingClientRect();
+    let tree = document2.querySelector(TREE_SELECTOR3), rows = [...tree?.querySelectorAll(ROW_SELECTOR) ?? []], view = scrollerOf(document2)?.getBoundingClientRect(), whole = tree?.getBoundingClientRect(), first = rows.at(0)?.getBoundingClientRect(), last = rows.at(-1)?.getBoundingClientRect();
     return view === void 0 || whole === void 0 || first === void 0 || last === void 0 ? !1 : first.top <= Math.max(view.top, whole.top) + SLACK_PX && last.bottom >= Math.min(view.bottom, whole.bottom) - SLACK_PX;
   }
   function showSkeleton(scroller) {
@@ -16268,11 +12970,11 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     scroller.classList.remove(LOADING_CLASS), scroller.removeAttribute("aria-busy");
   }
   function setSkeleton(document2, isShown) {
-    let scroller = scrollerOf2(document2);
+    let scroller = scrollerOf(document2);
     scroller !== null && (isShown ? showSkeleton : hideSkeleton)(scroller);
   }
   async function keepingScroll(walk, run) {
-    let scroller = scrollerOf2(walk.document);
+    let scroller = scrollerOf(walk.document);
     if (scroller === null)
       return;
     let top = scroller.scrollTop;
@@ -16298,7 +13000,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     return isFound;
   }
   async function walkTree(walk, visit) {
-    let scroller = scrollerOf2(walk.document);
+    let scroller = scrollerOf(walk.document);
     if (scroller === null || await visit())
       return scroller !== null;
     showSkeleton(scroller);
@@ -16318,7 +13020,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/viewed-files/owner-clicks.ts
-  var TREE_SELECTOR5 = ".repos-changes-explorer-tree", TICK_SELECTOR2 = ".bolt-checkbox", FOLD_KEYS = /* @__PURE__ */ new Set(["ArrowLeft", "ArrowRight", "Enter"]), watchedTrees = /* @__PURE__ */ new WeakSet(), isScriptClick = !1;
+  var TREE_SELECTOR4 = ".repos-changes-explorer-tree", TICK_SELECTOR2 = ".bolt-checkbox", FOLD_KEYS = /* @__PURE__ */ new Set(["ArrowLeft", "ArrowRight", "Enter"]), watchedTrees = /* @__PURE__ */ new WeakSet(), isScriptClick = !1;
   function clickForScript(element4) {
     isScriptClick = !0;
     try {
@@ -16331,7 +13033,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     return event instanceof view.KeyboardEvent ? FOLD_KEYS.has(event.key) : event.target instanceof view.Element && event.target.closest(TICK_SELECTOR2) === null;
   }
   function watchOwnerFolds(document2, onOwnerFold) {
-    let tree = document2.querySelector(TREE_SELECTOR5), view = document2.defaultView;
+    let tree = document2.querySelector(TREE_SELECTOR4), view = document2.defaultView;
     if (tree === null || view === null || watchedTrees.has(tree))
       return;
     watchedTrees.add(tree);
@@ -16474,11 +13176,11 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/viewed-files/toolbar-buttons.ts
-  var FILTER_SELECTOR4 = ".repos-compare-filter", BOX_CLASS = "fix-ado-viewed-toolbar-buttons", TOOLBAR_BUTTONS = [
+  var FILTER_SELECTOR = ".repos-compare-filter", BOX_CLASS = "fix-ado-viewed-toolbar-buttons", TOOLBAR_BUTTONS = [
     { action: "expand-all", label: "Expand all" },
     { action: "collapse-viewed", label: "Collapse viewed" }
   ], onClickByDocument = /* @__PURE__ */ new WeakMap();
-  function createButton5(document2, { action, label }) {
+  function createButton(document2, { action, label }) {
     let text = Object.assign(document2.createElement("span"), {
       className: "bolt-button-text body-m",
       textContent: label
@@ -16491,11 +13193,11 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let box = Object.assign(document2.createElement("div"), {
       className: `${BOX_CLASS} inline-flex-row rhythm-horizontal-8`
     });
-    return box.append(...TOOLBAR_BUTTONS.map((toolbarButton) => createButton5(document2, toolbarButton))), box;
+    return box.append(...TOOLBAR_BUTTONS.map((toolbarButton) => createButton(document2, toolbarButton))), box;
   }
   function syncToolbarButtons(document2, onClick3) {
     onClickByDocument.set(document2, onClick3);
-    let filter = document2.querySelector(FILTER_SELECTOR4);
+    let filter = document2.querySelector(FILTER_SELECTOR);
     filter !== null && filter.nextElementSibling?.classList.contains(BOX_CLASS) !== !0 && (document2.querySelector(`.${BOX_CLASS}`)?.remove(), filter.after(createBox(document2)), log("Viewed files: toolbar buttons added"));
   }
   function removeToolbarButtons(document2) {
@@ -16509,7 +13211,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/viewed-files/viewed-files.ts
-  var TREE_SELECTOR6 = ".repos-changes-explorer-tree";
+  var TREE_SELECTOR5 = ".repos-changes-explorer-tree";
   function keyOf({ project, pullRequestId, repository }) {
     return `${project}/${repository}/${String(pullRequestId)}`;
   }
@@ -16548,7 +13250,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
           folds,
           ms: Date.now() - started
         }
-      }), render5(state);
+      }), render2(state);
     });
   }
   function setViewed(state, header, isViewed) {
@@ -16562,7 +13264,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         await unfoldAbove(walk, header.path), await withDrawnRow(walk, header.path, async (row) => {
           isTicked(row) !== isViewed && (row.querySelector(TICK_SELECTOR)?.click(), await untilTreeShows(walk, () => isTickShown(walk, header.path, isViewed), tickTimeoutMs));
         }), noteTicks(document2, shown), await foldFolders(walk, foldersToCollapse(document2, shown));
-      }), header.card !== null && shown.fileTicks.get(header.path) === !0 !== isViewed && setCardOpen(header.card, isViewed), render5(state);
+      }), header.card !== null && shown.fileTicks.get(header.path) === !0 !== isViewed && setCardOpen(header.card, isViewed), render2(state);
     });
   }
   function runToolbarAction(state, action) {
@@ -16574,10 +13276,10 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       let walk = walkOf(state, shown);
       await keepingScroll(walk, async () => {
         await (isExpand ? openEveryFolder(walk) : foldViewedFolders(walk));
-      }), render5(state);
+      }), render2(state);
     });
   }
-  function render5(state) {
+  function render2(state) {
     let { shown } = state, { document: document2 } = state.options;
     shown !== null && (setAskedCards(document2, shown), foldViewedCards(document2, shown)), syncToolbarButtons(document2, (action) => {
       runToolbarAction(state, action);
@@ -16625,17 +13327,17 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
           await state.work;
       },
       sync(pullRequest) {
-        if (pullRequest === null || options.document.querySelector(TREE_SELECTOR6) === null) {
+        if (pullRequest === null || options.document.querySelector(TREE_SELECTOR5) === null) {
           removeToolbarButtons(options.document);
           return;
         }
-        stopOnOwnerFolds(options.document, () => state.shown), syncTreeTicks(state, show2(state, pullRequest)), render5(state);
+        stopOnOwnerFolds(options.document, () => state.shown), syncTreeTicks(state, show2(state, pullRequest)), render2(state);
       }
     };
   }
 
   // azure-devops/src/features/viewed-files/style.css
-  var style_default15 = `/* The Viewed toggle in a file's header: Azure DevOps's own checkbox, in its blue. */
+  var style_default6 = `/* The Viewed toggle in a file's header: Azure DevOps's own checkbox, in its blue. */
 .fix-ado-viewed-toggle {
   display: inline-flex;
   flex-shrink: 0;
@@ -16708,9 +13410,9 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   // azure-devops/src/features/viewed-files/index.ts
   var DRAW_TIMEOUT_MS = 2e3, TICK_TIMEOUT_MS = 1e4, viewedFiles = {
     change: { kind: "updated", version: "1.23.0" },
-    description: "A Viewed checkbox on each file in the Files tab ticks the file in the tree on the left, as on GitHub, and collapses its diff. A viewed file's diff starts collapsed. A folder whose files are all ticked collapses in the tree, also when the page opens. While it reads the tree, the tree shows placeholder rows. Expand all and Collapse viewed after the Filter button open every diff and folder, or collapse the viewed ones.",
+    description: "Tick a file as viewed, as on GitHub. Viewed files and folders collapse.",
     id: "viewed-files",
-    name: "Viewed files",
+    name: "Viewed checkbox on files",
     start({ client, document: document2, isInFrame: isInFrame2 }) {
       if (isInFrame2)
         return null;
@@ -16726,17 +13428,2154 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default15]
+    styles: [style_default6]
   };
 
-  // azure-devops/src/features/pull-request-features.ts
-  var PULL_REQUEST_FEATURES = [
-    pipelineTab,
-    runPageTabs,
-    starredReviewers,
-    review,
-    viewedFiles
+  // azure-devops/src/features/settings-sections/code-review.ts
+  var codeReviewSection = {
+    description: "Reviewing files and adding reviewers.",
+    groups: [{ features: [review, viewedFiles, starredReviewers] }],
+    name: "Code review"
+  };
+
+  // azure-devops/src/features/activity-order/activity-order.ts
+  var FEED_SELECTOR = ".activity-feed-list", FILTER_SELECTOR2 = ".repos-activity-filter-dropdown", BUTTON_CLASS3 = "fix-ado-activity-order", TEXT_CLASS = "bolt-button-text", SVG_NAMESPACE3 = "http://www.w3.org/2000/svg", SORT_ICON_PATHS = ["M5 13V3M2.5 5.5L5 3l2.5 2.5", "M11 3v10M8.5 10.5L11 13l2.5-2.5"], DEFAULT_ORDER = "oldest-first", LABELS = {
+    "newest-first": "Newest first",
+    "oldest-first": "Oldest first"
+  }, flipped = (order) => order === "oldest-first" ? "newest-first" : "oldest-first";
+  function sortIcon(document2) {
+    let svg = document2.createElementNS(SVG_NAMESPACE3, "svg");
+    svg.setAttribute("aria-hidden", "true"), svg.setAttribute("class", "fix-ado-activity-order-icon"), svg.setAttribute("viewBox", "0 0 16 16");
+    for (let data of SORT_ICON_PATHS) {
+      let path = document2.createElementNS(SVG_NAMESPACE3, "path");
+      path.setAttribute("d", data), svg.append(path);
+    }
+    return svg;
+  }
+  function createButton2(document2, onClick3) {
+    let button2 = document2.createElement("button");
+    button2.type = "button", button2.className = `${BUTTON_CLASS3} bolt-button enabled bolt-focus-treatment`;
+    let text = document2.createElement("span");
+    return text.className = TEXT_CLASS, button2.append(sortIcon(document2), text), button2.addEventListener("click", onClick3), button2;
+  }
+  function spacingBox(button2) {
+    let box = button2.ownerDocument.createElement("div");
+    return box.className = "margin-bottom-16 margin-right-8 inline-flex-row", box.append(button2), box;
+  }
+  function findOrAddButton(document2, onClick3) {
+    let existing = document2.querySelector(`.${BUTTON_CLASS3}`);
+    if (existing !== null)
+      return existing;
+    let filters = document2.querySelector(FILTER_SELECTOR2)?.parentElement;
+    if (filters == null)
+      return null;
+    let button2 = createButton2(document2, onClick3);
+    return filters.prepend(spacingBox(button2)), button2;
+  }
+  function renderAllRows(document2) {
+    let view = document2.defaultView;
+    view !== null && document2.dispatchEvent(
+      new view.KeyboardEvent("keydown", { altKey: !0, bubbles: !0, ctrlKey: !0, key: "v" })
+    );
+  }
+  function showOrder(feed, button2, order) {
+    feed.dataset.fixAdoActivityOrder !== order && (feed.dataset.fixAdoActivityOrder = order);
+    let text = button2?.querySelector(`.${TEXT_CLASS}`);
+    button2 !== null && text !== null && text !== void 0 && text.textContent !== LABELS[order] && (text.textContent = LABELS[order], button2.title = `Show ${LABELS[flipped(order)].toLowerCase()}`);
+  }
+  function createActivityOrder(options) {
+    let { document: document2, storage } = options, order = storage.load() ?? DEFAULT_ORDER, fullyRenderedFeeds = /* @__PURE__ */ new WeakSet();
+    function flip2() {
+      order = flipped(order), storage.save(order), sync4();
+    }
+    function sync4() {
+      let feed = document2.querySelector(FEED_SELECTOR);
+      feed !== null && (order === "oldest-first" && !fullyRenderedFeeds.has(feed) && (fullyRenderedFeeds.add(feed), renderAllRows(document2)), showOrder(feed, findOrAddButton(document2, flip2), order));
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/activity-order/style.css
+  var style_default7 = `/* The activity feed on a pull request's Overview, oldest first. Azure DevOps renders the rows
+   newest first and keeps them that way in the DOM; the feed lays them out bottom to top. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] {
+  display: block;
+}
+
+/* Tab and screen reader order follow the rows as shown, where reading-flow is supported. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody {
+  display: flex;
+  flex-direction: column-reverse;
+  reading-flow: flex-visual;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"] > tbody > tr {
+  display: block;
+}
+
+/* The timeline line ends at the row that is now on top, and at the one now at the bottom. */
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-prefix,
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-last-row
+  .bolt-timeline-icon-suffix {
+  visibility: visible;
+}
+
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-suffix,
+.activity-feed-list[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-last-row
+  .bolt-timeline-icon-prefix {
+  visibility: hidden;
+}
+
+/* The dashed piece of the line leads to the comment box, which is now the bottom row. */
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-row:nth-child(4)
+  .bolt-timeline-icon-prefix {
+  border-left-style: solid;
+}
+
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  .bolt-timeline-icon-prefix,
+.activity-feed-list.can-add-comments[data-fix-ado-activity-order="oldest-first"]
+  .bolt-timeline-first-row
+  + .bolt-timeline-row
+  .bolt-timeline-icon-suffix {
+  border-left-style: dashed;
+}
+
+/* The sort button's icon, drawn like Azure DevOps's line icons. */
+.fix-ado-activity-order-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+`;
+
+  // azure-devops/src/features/activity-order/index.ts
+  var ORDER_KEY = "activity-order", activityOrder = {
+    change: { kind: "new", version: "1.11.0" },
+    description: "Comments and updates run from old to new. A button flips the order.",
+    id: "activity-order",
+    name: "Oldest first",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let order = createActivityOrder({
+        document: document2,
+        storage: {
+          load: () => GM_getValue(ORDER_KEY, null),
+          save: (picked) => {
+            GM_setValue(ORDER_KEY, picked);
+          }
+        }
+      });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && order.sync();
+        }
+      };
+    },
+    styles: [style_default7]
+  };
+
+  // azure-devops/src/core/fold-toggle.ts
+  var CHEVRONS = { folded: "ms-Icon--ChevronRightMed", open: "ms-Icon--ChevronDownMed" };
+  function createChevron2(document2) {
+    let iconFont = document2.createElement("span");
+    iconFont.className = "fluent-icons-enabled";
+    let chevron = document2.createElement("span");
+    return chevron.className = "left-icon flex-noshrink fabric-icon small", chevron.setAttribute("aria-hidden", "true"), iconFont.append(chevron), iconFont;
+  }
+  function createFoldToggle(document2, className) {
+    let toggle = document2.createElement("button");
+    return toggle.type = "button", toggle.className = `${className} bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment`, toggle.append(createChevron2(document2)), toggle;
+  }
+  function showFoldToggleState(toggle, isOpen, labels) {
+    let expanded = String(isOpen);
+    if (toggle.getAttribute("aria-expanded") === expanded)
+      return;
+    toggle.setAttribute("aria-expanded", expanded), toggle.title = isOpen ? labels.open : labels.folded, toggle.setAttribute("aria-label", labels.name);
+    let chevron = toggle.querySelector(".fabric-icon");
+    chevron?.classList.toggle(CHEVRONS.open, isOpen), chevron?.classList.toggle(CHEVRONS.folded, !isOpen);
+  }
+
+  // azure-devops/src/features/collapsible-threads/bulk-buttons.ts
+  var FILTER_SELECTOR3 = ".repos-activity-filter-dropdown", BULK_BOX_CLASS = "fix-ado-thread-bulk-buttons", BULK_BUTTONS = [
+    {
+      className: "fix-ado-all-threads-button",
+      group: "all",
+      labels: { collapse: "Collapse all threads", expand: "Expand all threads" }
+    },
+    {
+      className: "fix-ado-done-threads-button",
+      group: "done",
+      labels: { collapse: "Collapse done threads", expand: "Expand done threads" }
+    }
+  ], isEveryCollapsed = (feedThreads) => feedThreads.length > 0 && feedThreads.every((feedThread) => feedThread.thread.dataset.fixAdoThread === "collapsed"), doneThreadsOf = (feedThreads) => feedThreads.filter((feedThread) => feedThread.isDone);
+  function groupStatesAfter(group2, feedThreads, current) {
+    if (group2 === "all") {
+      let state = isEveryCollapsed(feedThreads) ? "open" : "collapsed";
+      return { done: state, other: state };
+    }
+    return isEveryCollapsed(doneThreadsOf(feedThreads)) ? { ...current, done: "open" } : { done: "collapsed", other: "open" };
+  }
+  function createBulkButton(document2, { className, group: group2, labels }, onClick3) {
+    let text = Object.assign(document2.createElement("span"), {
+      className: "bolt-button-text",
+      textContent: labels.collapse
+    }), button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = `${className} bolt-button enabled bolt-focus-treatment`, button2.append(text), button2.addEventListener("click", () => {
+      onClick3(group2);
+    }), button2;
+  }
+  function createBulkBox(document2, onClick3) {
+    let box = Object.assign(document2.createElement("div"), {
+      className: `${BULK_BOX_CLASS} margin-bottom-16 inline-flex-row`
+    });
+    return box.append(...BULK_BUTTONS.map((bulkButton) => createBulkButton(document2, bulkButton, onClick3))), box;
+  }
+  function findOrAddBulkBox(document2, onClick3) {
+    let bar = document2.querySelector(FILTER_SELECTOR3)?.parentElement;
+    if (bar == null)
+      return null;
+    let existing = bar.querySelector(`.${BULK_BOX_CLASS}`);
+    if (existing !== null)
+      return existing;
+    let box = createBulkBox(document2, onClick3);
+    return bar.prepend(box), box;
+  }
+  function setHidden(element4, hidden) {
+    element4.hidden !== hidden && (element4.hidden = hidden);
+  }
+  function setLabel(button2, label) {
+    let text = button2.querySelector(".bolt-button-text");
+    text !== null && text.textContent !== label && (text.textContent = label);
+  }
+  function showBulkButtons(box, feedThreads) {
+    for (let { className, group: group2, labels } of BULK_BUTTONS) {
+      let button2 = box.querySelector(`.${className}`), groupThreads = group2 === "all" ? feedThreads : doneThreadsOf(feedThreads);
+      button2 !== null && (setLabel(button2, isEveryCollapsed(groupThreads) ? labels.expand : labels.collapse), setHidden(button2, group2 === "done" && groupThreads.length === 0));
+    }
+  }
+
+  // azure-devops/src/pull-requests/feed-threads.ts
+  var FEED_THREAD_SELECTOR = ".activity-feed-list .repos-discussion-thread", HEADER_SELECTOR2 = ".repos-discussion-comment-header", STATUS_SELECTOR = ".bolt-dropdown-expandable .bolt-dropdown-expandable-button-label", RESOLVED_STATUS = "Resolved", UNREAD_COMMENT_MARKER_SELECTOR = ".repos-unread-comment-marker", UNRESOLVED_STATUSES = /* @__PURE__ */ new Set(["Active", "Pending"]);
+  function timeBoxOf(header) {
+    let nameAndTime = header.firstElementChild;
+    return nameAndTime === null ? null : nameAndTime.querySelector(":scope > :has(time)") ?? nameAndTime;
+  }
+  function feedThreadOf(thread) {
+    let header = thread.querySelector(HEADER_SELECTOR2), timeBox = header === null ? null : timeBoxOf(header);
+    if (header === null || timeBox === null)
+      return null;
+    let status = header.querySelector(STATUS_SELECTOR)?.textContent.trim() ?? "", isUnresolved = UNRESOLVED_STATUSES.has(status);
+    return {
+      hasUnreadComment: thread.querySelector(UNREAD_COMMENT_MARKER_SELECTOR) !== null,
+      header,
+      isDone: status !== "" && !isUnresolved,
+      isResolved: status === RESOLVED_STATUS,
+      isUnresolved,
+      status,
+      thread,
+      timeBox
+    };
+  }
+  var feedThreadElements = (document2) => [
+    ...document2.querySelectorAll(FEED_THREAD_SELECTOR)
   ];
+
+  // azure-devops/src/features/collapsible-threads/collapsible-threads.ts
+  var TOGGLE_CLASS3 = "fix-ado-thread-toggle", TOGGLE_LABELS = { folded: "Expand thread", name: "Thread", open: "Collapse thread" }, THREAD_ID_PATTERN = /\bthreadId-(?<id>\d+)\b/u, FILE_HEADER_SELECTOR = ".comment-file-header", FILE_TITLE_SELECTOR = ".comment-file-header-title", AUTHOR_COLUMN_SELECTOR = ".repos-comment-editor-fit";
+  function threadIdOf(thread, knownIds) {
+    let field = thread.querySelector(".repos-discussion-thread-reply input"), id = THREAD_ID_PATTERN.exec(field?.className ?? "")?.groups?.id;
+    return id !== void 0 && knownIds.set(thread, id), id ?? knownIds.get(thread) ?? null;
+  }
+  function fileHeaderOf(thread) {
+    let before = thread.previousElementSibling;
+    return before?.matches(FILE_HEADER_SELECTOR) === !0 ? before : null;
+  }
+  function findOrCreateToggle({ header, thread }, onClick3) {
+    let existing = thread.querySelector(`.${TOGGLE_CLASS3}`) ?? fileHeaderOf(thread)?.querySelector(`.${TOGGLE_CLASS3}`);
+    if (existing != null)
+      return existing;
+    let toggle = createFoldToggle(header.ownerDocument, TOGGLE_CLASS3);
+    return toggle.addEventListener("click", () => {
+      onClick3(thread);
+    }), toggle;
+  }
+  function toggleBoxOf({ header, thread }, state) {
+    let fileTitle = fileHeaderOf(thread)?.querySelector(FILE_TITLE_SELECTOR) ?? null;
+    return state === "open" && fileTitle !== null ? fileTitle : header.closest(AUTHOR_COLUMN_SELECTOR)?.parentElement ?? header;
+  }
+  function placeToggle(toggle, box) {
+    box.firstElementChild !== toggle && box.prepend(toggle);
+  }
+  function unpickedStateOf(feedThread, groupStates) {
+    return (feedThread.isDone ? groupStates.done : groupStates.other) ?? (feedThread.isDone && !feedThread.hasUnreadComment ? "collapsed" : "open");
+  }
+  function dropPicks({
+    feedThreads,
+    group: group2,
+    knownIds,
+    pickedStates
+  }) {
+    let doneThreads = doneThreadsOf(feedThreads);
+    if (group2 !== "done" || !isEveryCollapsed(doneThreads)) {
+      pickedStates.clear();
+      return;
+    }
+    for (let { thread } of doneThreads)
+      pickedStates.delete(threadIdOf(thread, knownIds) ?? "");
+  }
+  var loadedFeedThreads = (document2) => feedThreadElements(document2).map((thread) => feedThreadOf(thread)).filter((feedThread) => feedThread !== null);
+  function createCollapsibleThreads({ document: document2 }) {
+    let pickedStates = /* @__PURE__ */ new Map(), knownIds = /* @__PURE__ */ new WeakMap(), groupStates = { done: null, other: null };
+    function stateOf(feedThread) {
+      return pickedStates.get(threadIdOf(feedThread.thread, knownIds) ?? "") ?? unpickedStateOf(feedThread, groupStates);
+    }
+    function applyBulk(group2) {
+      let feedThreads = loadedFeedThreads(document2);
+      dropPicks({ feedThreads, group: group2, knownIds, pickedStates }), groupStates = groupStatesAfter(group2, feedThreads, groupStates), sync4();
+    }
+    function flip2(thread) {
+      let threadId = threadIdOf(thread, knownIds);
+      threadId !== null && (pickedStates.set(threadId, thread.dataset.fixAdoThread === "open" ? "collapsed" : "open"), sync4());
+    }
+    function syncThread2(feedThread) {
+      let state = stateOf(feedThread);
+      feedThread.thread.dataset.fixAdoThread !== state && (feedThread.thread.dataset.fixAdoThread = state);
+      let toggle = findOrCreateToggle(feedThread, flip2);
+      placeToggle(toggle, toggleBoxOf(feedThread, state)), showFoldToggleState(toggle, state === "open", TOGGLE_LABELS);
+    }
+    function sync4() {
+      let box = findOrAddBulkBox(document2, applyBulk), feedThreads = loadedFeedThreads(document2);
+      for (let feedThread of feedThreads)
+        syncThread2(feedThread);
+      box !== null && showBulkButtons(box, feedThreads);
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/collapsible-threads/style.css
+  var style_default8 = `/* The toggle sits before the author of the first comment, level with the avatar, or before the
+   file's icon on an open thread on a file. The box it is in gives up some room on the left. */
+.fix-ado-thread-toggle {
+  flex: none;
+  align-self: flex-start;
+  margin-right: 4px;
+}
+
+.comment-file-header-title > .fix-ado-thread-toggle {
+  align-self: center;
+}
+
+.repos-discussion-comment:has(> .flex-column > .flex-row > .fix-ado-thread-toggle),
+.comment-file-header-title:has(> .fix-ado-thread-toggle) {
+  padding-left: 8px;
+}
+
+/* Before the author, the toggle keeps the offset it has before a file's icon: the comment's own
+   box sits 16px further in (a 4px margin and 12px padding). */
+.repos-discussion-comment .fix-ado-thread-toggle {
+  margin-left: -16px;
+}
+
+/* A collapsed thread shows the header of its first comment: who wrote it, when, and the
+   thread's Resolved or Unresolved chip. Its text, the other comments and the reply box hide. */
+[data-fix-ado-thread="collapsed"] .repos-comment-viewer:not(:first-child),
+[data-fix-ado-thread="collapsed"] .repos-discussion-thread-reply,
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header ~ * {
+  display: none;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header {
+  margin-bottom: 0;
+}
+
+/* The actions at the end of the header hide too. The status dropdown among them stays in
+   the page, where the script reads the thread's status. */
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header > :not(:first-child) {
+  display: none;
+}
+
+/* The card stays, with little room around the one line that is left. */
+[data-fix-ado-thread="collapsed"] .repos-comment-viewer {
+  padding: 0 12px;
+}
+
+/* Azure DevOps gives a first comment with replies its own border and bottom padding, in a rule
+   as specific as the plain one. The second selector outranks it. */
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment,
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment.has-replies {
+  padding: 4px 20px;
+  border-bottom: 0;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment > .flex-column > .flex-row {
+  align-items: center;
+}
+
+[data-fix-ado-thread="collapsed"] .fix-ado-thread-toggle {
+  align-self: center;
+}
+
+/* One line, also in a narrow window, where Azure DevOps puts the time under the name. */
+[data-fix-ado-thread="collapsed"] .repos-discussion-comment-header > :first-child {
+  flex-direction: row;
+  align-items: center;
+}
+
+[data-fix-ado-thread="collapsed"] .repos-comment-header-persona {
+  margin-top: 0;
+}
+
+/* A collapsed thread on a file hides the file's name and code too. */
+.comment-file-header:has(+ [data-fix-ado-thread="collapsed"]) {
+  display: none;
+}
+
+/* Azure DevOps keeps the height a thread had when it loaded, as a min-height on its row. A
+   collapsed thread drops it. */
+.activity-feed-list [style*="min-height"]:has([data-fix-ado-thread="collapsed"]) {
+  min-height: 0 !important;
+}
+
+/* Collapse all threads and Collapse done threads sit on the left of the bar above the feed.
+   The bar puts its filters on the right. */
+.fix-ado-thread-bulk-buttons {
+  order: -1;
+  gap: 8px;
+  margin-right: auto;
+}
+
+/* A hidden bulk button leaves no gap. Azure DevOps's button classes would show it. */
+.fix-ado-thread-bulk-buttons > [hidden] {
+  display: none !important;
+}
+`;
+
+  // azure-devops/src/features/collapsible-threads/index.ts
+  var collapsibleThreads = {
+    change: { kind: "updated", version: "1.22.0" },
+    description: "Done threads start collapsed, unless a comment is unread. Buttons collapse or expand them all.",
+    id: "collapsible-threads",
+    name: "Collapsible threads",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let threads = createCollapsibleThreads({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && threads.sync();
+        }
+      };
+    },
+    styles: [style_default8]
+  };
+
+  // azure-devops/src/features/folded-pushes/folded-pushes.ts
+  var HEADER_SELECTOR3 = ".activity-feed-list .iteration-card-header", TITLE_SELECTOR = ".iteration-header .font-weight-semibold", COMMITS_SELECTOR = ".bolt-table-container", TOGGLE_CLASS4 = "fix-ado-push-toggle", TOGGLE_LABELS2 = { folded: "Show commits", name: "Commits", open: "Hide commits" };
+  function pushOf(header) {
+    let card = header.closest(".bolt-card");
+    if (card === null)
+      return null;
+    let pushedAt = header.querySelector("time")?.getAttribute("datetime") ?? null;
+    return { card, header, pushedAt };
+  }
+  function findOrAddToggle2({ header }, onClick3) {
+    let existing = header.querySelector(`.${TOGGLE_CLASS4}`);
+    if (existing !== null)
+      return existing;
+    let title = header.querySelector(TITLE_SELECTOR);
+    if (title === null)
+      return null;
+    let toggle = createFoldToggle(header.ownerDocument, TOGGLE_CLASS4);
+    return toggle.addEventListener("click", (event) => {
+      event.preventDefault(), event.stopPropagation(), onClick3(header);
+    }), title.after(toggle), toggle;
+  }
+  function createFoldedPushes({ document: document2 }) {
+    let openPushes = /* @__PURE__ */ new Set();
+    function flip2(header) {
+      let pushedAt = pushOf(header)?.pushedAt ?? null;
+      pushedAt !== null && (openPushes.delete(pushedAt) || openPushes.add(pushedAt), sync4());
+    }
+    function syncPush(push) {
+      let hasCommits = push.card.querySelector(COMMITS_SELECTOR) !== null, state = hasCommits && push.pushedAt !== null && openPushes.has(push.pushedAt) ? "open" : "folded";
+      if (push.card.dataset.fixAdoPush !== state && (push.card.dataset.fixAdoPush = state), hasCommits) {
+        let toggle = findOrAddToggle2(push, flip2);
+        toggle !== null && showFoldToggleState(toggle, state === "open", TOGGLE_LABELS2);
+      } else
+        push.header.querySelector(`.${TOGGLE_CLASS4}`)?.remove();
+    }
+    function sync4() {
+      for (let header of document2.querySelectorAll(HEADER_SELECTOR3)) {
+        let push = pushOf(header);
+        push !== null && syncPush(push);
+      }
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/folded-pushes/style.css
+  var style_default9 = `/* A push in the activity feed of a pull request's Overview. Its header is one line, like the
+   feed's other updates: avatar, title, toggle, and the time at the right. */
+[data-fix-ado-push] .iteration-header {
+  align-items: center;
+  padding: 6px 20px;
+}
+
+[data-fix-ado-push] .iteration-header > .flex-column {
+  flex-direction: row;
+  align-items: center;
+}
+
+[data-fix-ado-push] .iteration-header .font-weight-semibold {
+  font-weight: normal;
+}
+
+[data-fix-ado-push] .iteration-header .bolt-coin {
+  margin-top: 0;
+}
+
+[data-fix-ado-push] .iteration-header .secondary-text {
+  flex: none;
+  margin-left: auto;
+  padding-left: 4px;
+  line-height: 32px;
+}
+
+.fix-ado-push-toggle {
+  flex: none;
+  margin: 0 4px;
+}
+
+/* Folded: no card around it, no commits under it. */
+[data-fix-ado-push="folded"] {
+  margin: 0 20px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-fix-ado-push="folded"] .iteration-card-header,
+[data-fix-ado-push="folded"] .iteration-card-header:hover {
+  margin: 0;
+  background: transparent;
+}
+
+[data-fix-ado-push="folded"] .iteration-header {
+  padding: 2px 0;
+  border-bottom: 0;
+}
+
+/* The push number in the timeline needs more room than a dot. A folded push gives it less
+   line above and below, so the row is as tall as the feed's other updates and the number
+   sits level with the avatar. */
+.bolt-timeline-row:has([data-fix-ado-push="folded"])
+  .activity-feed-sequence
+  .bolt-timeline-icon-prefix {
+  min-height: 3px;
+}
+
+.bolt-timeline-row:has([data-fix-ado-push="folded"])
+  .activity-feed-sequence
+  .bolt-timeline-icon-suffix {
+  min-height: 0;
+}
+
+[data-fix-ado-push="folded"] .iteration-card-header ~ * {
+  display: none;
+}
+
+/* Azure DevOps keeps the height a push had when it loaded, as a min-height on its row. A
+   folded push drops it. */
+.activity-feed-list [style*="min-height"]:has([data-fix-ado-push="folded"]) {
+  min-height: 0 !important;
+}
+`;
+
+  // azure-devops/src/features/folded-pushes/index.ts
+  var foldedPushes = {
+    change: { kind: "new", version: "1.12.0" },
+    description: "Each push on one line, with a button that shows its commits.",
+    id: "folded-pushes",
+    name: "Fold pushes",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let pushes = createFoldedPushes({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && pushes.sync();
+        }
+      };
+    },
+    styles: [style_default9]
+  };
+
+  // azure-devops/src/features/joined-reviewer-lines/joined-reviewer-lines.ts
+  var ROW_SELECTOR2 = ".activity-feed-list > tbody > .bolt-timeline-row", JOINED_CLASS = "fix-ado-joined-line", LINE_SELECTOR2 = `.activity-card-subtle:not(.${JOINED_CLASS})`, PERSON_LINE_PART_COUNT = 6, isBlank = (node) => node.nodeType === node.TEXT_NODE && (node.textContent ?? "").trim() === "", isText = (node) => node?.nodeType === node?.TEXT_NODE;
+  function avatarNamesOf(line2) {
+    let names = [...line2.querySelectorAll(".bolt-coin")].map(
+      (avatar) => avatar.getAttribute("aria-label") ?? ""
+    ), [actorName, personName] = names;
+    return names.length === 2 && actorName !== void 0 && personName !== void 0 ? [actorName, personName] : null;
+  }
+  function personLineOf(row) {
+    let line2 = row.querySelector(LINE_SELECTOR2);
+    if (line2 === null)
+      return null;
+    let parts = [...line2.childNodes].filter((node) => !isBlank(node)), [actorAvatar, actorLabel, words, avatar, label, ending] = parts, names = avatarNamesOf(line2);
+    return names === null || parts.length !== PERSON_LINE_PART_COUNT || actorAvatar === void 0 || actorLabel === void 0 || avatar === void 0 || label === void 0 || !isText(words) || !isText(ending) ? null : {
+      actor: [actorAvatar, actorLabel],
+      actorName: names[0],
+      ending: ending.textContent ?? "",
+      line: line2,
+      person: [avatar, label],
+      personName: names[1],
+      row,
+      words: words.textContent ?? ""
+    };
+  }
+  var continuesRun = (run, next) => run[0]?.actorName === next.actorName && run[0].words.trim() === next.words.trim();
+  function runsOf2(rows) {
+    let runs = [], current = [];
+    for (let row of rows) {
+      let personLine = personLineOf(row);
+      personLine !== null && continuesRun(current, personLine) ? current.push(personLine) : (current = personLine === null ? [] : [personLine], personLine !== null && runs.push(current));
+    }
+    return runs.filter((run) => run.length > 1);
+  }
+  function groupsOf(run) {
+    let groups = /* @__PURE__ */ new Map();
+    for (let personLine of run.toReversed()) {
+      let key = personLine.ending.trim();
+      groups.set(key, [...groups.get(key) ?? [], personLine]);
+    }
+    return [...groups.values()];
+  }
+  var signatureOf = (run) => JSON.stringify(
+    run.map(({ actorName, ending, personName, words }) => [actorName, words, personName, ending])
+  ), clonesOf = (nodes) => nodes.map((node) => node.cloneNode(!0));
+  function groupParts(group2) {
+    let parts = [];
+    for (let [index, personLine] of group2.entries())
+      index > 0 && parts.push(", "), parts.push(...clonesOf(personLine.person));
+    return parts.push(group2[0]?.ending ?? ""), parts;
+  }
+  function joinedParts(newest, run) {
+    let parts = [...clonesOf(newest.actor), newest.words];
+    for (let [index, group2] of groupsOf(run).entries())
+      index > 0 && parts.push(", "), parts.push(...groupParts(group2));
+    return parts;
+  }
+  function createJoinedLine(newest, run, signature) {
+    let joined = newest.line.cloneNode(!1);
+    return joined.classList.add(JOINED_CLASS), joined.dataset.fixAdoJoinedFrom = signature, joined.append(...joinedParts(newest, run)), joined;
+  }
+  function showJoined(run) {
+    let [newest] = run;
+    if (newest === void 0)
+      return;
+    let signature = signatureOf(run), existing = newest.row.querySelector(`.${JOINED_CLASS}`);
+    existing?.dataset.fixAdoJoinedFrom !== signature && (existing?.remove(), newest.line.after(createJoinedLine(newest, run, signature)));
+  }
+  function markRow(row, mark) {
+    row.dataset.fixAdoJoined !== mark && (row.dataset.fixAdoJoined = mark), mark === "hidden" && row.querySelector(`.${JOINED_CLASS}`)?.remove();
+  }
+  function unmarkRow(row) {
+    delete row.dataset.fixAdoJoined, row.querySelector(`.${JOINED_CLASS}`)?.remove();
+  }
+  function createJoinedReviewerLines({ document: document2 }) {
+    function sync4() {
+      let runs = runsOf2([...document2.querySelectorAll(ROW_SELECTOR2)]), joinedRows = new Set(runs.flat().map(({ row }) => row));
+      for (let row of document2.querySelectorAll("[data-fix-ado-joined]"))
+        joinedRows.has(row) || unmarkRow(row);
+      for (let run of runs) {
+        for (let [index, { row }] of run.entries())
+          markRow(row, index === 0 ? "line" : "hidden");
+        showJoined(run);
+      }
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/joined-reviewer-lines/style.css
+  var style_default10 = `/* Lines that add a reviewer, joined to one. The newest row of a run shows the joined line in
+   place of Azure DevOps's own; the other rows hide. */
+[data-fix-ado-joined="hidden"] {
+  /* The sort order of the feed sets a display on its rows. */
+  display: none !important;
+}
+
+[data-fix-ado-joined="line"] .activity-card-subtle:not(.fix-ado-joined-line) {
+  display: none;
+}
+`;
+
+  // azure-devops/src/features/joined-reviewer-lines/index.ts
+  var joinedReviewerLines = {
+    change: { kind: "new", version: "1.12.0" },
+    description: "Lines that add reviewers become one line.",
+    id: "joined-reviewer-lines",
+    name: "Join reviewer lines",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let lines = createJoinedReviewerLines({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && lines.sync();
+        }
+      };
+    },
+    styles: [style_default10]
+  };
+
+  // azure-devops/src/features/new-activity-chips/new-activity-chips.ts
+  var ROW_SELECTOR3 = ".activity-feed-list .bolt-timeline-row", FLAGGED_ROW_SELECTOR = ".activity-feed-sequence.new", THREAD_SELECTOR2 = ".repos-discussion-thread", CHIP_CLASS = "fix-ado-new-chip";
+  function createChip2(document2) {
+    let chip = document2.createElement("div");
+    chip.className = `${CHIP_CLASS} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
+    let content = document2.createElement("div");
+    return content.className = "bolt-pill-content text-ellipsis", content.textContent = "New", chip.append(content), chip;
+  }
+  function isNewRow(row, time, lastVisit) {
+    if (row.querySelector(THREAD_SELECTOR2) !== null)
+      return !1;
+    let happenedAt = Date.parse(time.dateTime);
+    return lastVisit !== null && happenedAt > lastVisit || row.querySelector(FLAGGED_ROW_SELECTOR) !== null;
+  }
+  function syncRow(row, lastVisit) {
+    let chip = row.querySelector(`.${CHIP_CLASS}`), time = row.querySelector("time"), timeBox = time?.parentElement ?? null;
+    if (time === null || timeBox === null || !isNewRow(row, time, lastVisit)) {
+      chip?.remove();
+      return;
+    }
+    (chip === null || timeBox.nextElementSibling !== chip) && timeBox.after(chip ?? createChip2(row.ownerDocument));
+  }
+  function createNewActivityChips({
+    document: document2,
+    now,
+    visits
+  }) {
+    let shownKey2 = null, lastVisit = null;
+    function leave() {
+      shownKey2 !== null && visits.save(shownKey2, now());
+    }
+    function sync4(pullRequestKey) {
+      if (pullRequestKey !== shownKey2 && (leave(), shownKey2 = pullRequestKey, lastVisit = pullRequestKey === null ? null : visits.lastVisit(pullRequestKey)), pullRequestKey !== null)
+        for (let row of document2.querySelectorAll(ROW_SELECTOR3))
+          syncRow(row, lastVisit);
+    }
+    return { leave, sync: sync4 };
+  }
+
+  // azure-devops/src/features/new-activity-chips/visit-store.ts
+  var KEY_PREFIX2 = "last-visit:", visitedAtOf = (value) => typeof value == "number" && Number.isFinite(value) ? value : null;
+  function createVisitStore(storage) {
+    return {
+      deleteOlderThan(maxAgeMs, now) {
+        for (let key of storage.keys().filter((name) => name.startsWith(KEY_PREFIX2))) {
+          let visitedAt = visitedAtOf(storage.load(key));
+          (visitedAt === null || now - visitedAt > maxAgeMs) && storage.remove(key);
+        }
+      },
+      lastVisit: (pullRequestKey) => visitedAtOf(storage.load(`${KEY_PREFIX2}${pullRequestKey}`)),
+      save(pullRequestKey, visitedAt) {
+        storage.save(`${KEY_PREFIX2}${pullRequestKey}`, visitedAt);
+      }
+    };
+  }
+
+  // azure-devops/src/features/new-activity-chips/style.css
+  var style_default11 = `/* The New chip glows like an unread comment, in Azure DevOps's colour for links and focus. */
+.bolt-pill.fix-ado-new-chip {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  box-shadow: 0 0 6px 2px var(--communication-background, rgb(0, 120, 212));
+  color: var(--communication-foreground, rgb(0, 90, 158));
+  font-weight: 600;
+}
+
+/* A push shows its time in a block under its title: the chip sits on the same line. */
+.fix-ado-new-chip {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+/* Forced colors drop box shadows, so the glow becomes an outline there. */
+@media (forced-colors: active) {
+  .bolt-pill.fix-ado-new-chip {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+}
+`;
+
+  // azure-devops/src/features/new-activity-chips/index.ts
+  var MAX_VISIT_AGE_MS = 2592e6, newActivityChips = {
+    change: { kind: "new", version: "1.18.0" },
+    description: "A glowing New chip on pushes, votes and other updates.",
+    id: "new-activity-chips",
+    name: "Mark what changed since your last visit",
+    start({ basePath: basePath2, document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2)
+        return null;
+      let visits = createVisitStore({
+        keys: () => GM_listValues(),
+        load: (key) => GM_getValue(key, null),
+        remove: (key) => {
+          GM_deleteValue(key);
+        },
+        save: (key, visitedAt) => {
+          GM_setValue(key, visitedAt);
+        }
+      });
+      visits.deleteOlderThan(MAX_VISIT_AGE_MS, now());
+      let chips = createNewActivityChips({ document: document2, now, visits }), keyOf2 = ({ project, pullRequestId, repository }) => `${location.host}${basePath2}/${project}/${repository}/${pullRequestId}`;
+      return globalThis.addEventListener("pagehide", chips.leave), document2.addEventListener("visibilitychange", () => {
+        document2.visibilityState === "hidden" && chips.leave();
+      }), {
+        sync({ page }) {
+          let pullRequest = pullRequestOf(page);
+          chips.sync(pullRequest === null ? null : keyOf2(pullRequest));
+        }
+      };
+    },
+    styles: [style_default11]
+  };
+
+  // azure-devops/src/features/resolved-thread-chips/resolved-thread-chips.ts
+  var CHIP_CLASS2 = "fix-ado-thread-chip";
+  function chipKindOf(feedThread) {
+    if (feedThread === null || feedThread.status === "")
+      return null;
+    let { isResolved, isUnresolved, status } = feedThread;
+    return isResolved ? { className: "fix-ado-resolved-chip", label: status } : {
+      className: isUnresolved ? "fix-ado-unresolved-chip" : "fix-ado-done-chip",
+      label: status
+    };
+  }
+  function createChip3(document2, { className, label }) {
+    let chip = document2.createElement("div");
+    chip.className = `${CHIP_CLASS2} ${className} flex-noshrink margin-left-8 bolt-pill flex-row flex-center outlined compact`;
+    let content = document2.createElement("div");
+    return content.className = "bolt-pill-content text-ellipsis", content.textContent = label, chip.append(content), chip;
+  }
+  function syncThread(thread) {
+    let feedThread = feedThreadOf(thread), kind = chipKindOf(feedThread), chip = thread.querySelector(`.${CHIP_CLASS2}`);
+    kind !== null && chip?.classList.contains(kind.className) === !0 && chip.textContent === kind.label || (chip?.remove(), feedThread !== null && kind !== null && feedThread.timeBox.append(createChip3(thread.ownerDocument, kind)));
+  }
+  function createResolvedThreadChips({ document: document2 }) {
+    function sync4() {
+      for (let thread of feedThreadElements(document2))
+        syncThread(thread);
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/resolved-thread-chips/style.css
+  var style_default12 = `/* The chip on a thread: Azure DevOps's pill. Resolved in its colour for success, Active and
+   Pending in its colour for warnings, another done status in its secondary text colour. */
+.bolt-pill.fix-ado-thread-chip {
+  font-weight: 600;
+}
+
+.bolt-pill.fix-ado-resolved-chip {
+  border-color: var(--component-status-success, rgb(85, 163, 98));
+  color: var(--component-status-success, rgb(85, 163, 98));
+}
+
+.bolt-pill.fix-ado-unresolved-chip {
+  border-color: var(--status-warning-text, rgba(184, 94, 6, 1));
+  color: var(--status-warning-text, rgba(184, 94, 6, 1));
+}
+
+.bolt-pill.fix-ado-done-chip {
+  border-color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+`;
+
+  // azure-devops/src/features/resolved-thread-chips/index.ts
+  var resolvedThreadChips = {
+    change: { kind: "updated", version: "1.22.0" },
+    description: "Green for Resolved, orange for Active, grey for Won't fix and Closed.",
+    id: "resolved-thread-chips",
+    name: "Status chips",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let chips = createResolvedThreadChips({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && chips.sync();
+        }
+      };
+    },
+    styles: [style_default12]
+  };
+
+  // azure-devops/src/core/scroll-behavior.ts
+  function scrollBehaviorOf(document2) {
+    return document2.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? !1 ? "instant" : "smooth";
+  }
+
+  // azure-devops/src/features/scroll-to-bottom/scroll-to-bottom.ts
+  var FEED_SELECTOR2 = ".activity-feed-list", SCROLLER_SELECTOR3 = ".v-scroll-auto", BUTTON_CLASS4 = "fix-ado-scroll-to-bottom", LABEL2 = "Scroll to bottom", BOTTOM_MARGIN = 16, FOLLOW_QUIET_MS = 2e3, SVG_NAMESPACE4 = "http://www.w3.org/2000/svg", ARROW_DOWN_PATH = "M8 3v10M3.5 8.5L8 13l4.5-4.5";
+  function arrowDownIcon(document2) {
+    let svg = document2.createElementNS(SVG_NAMESPACE4, "svg");
+    svg.setAttribute("aria-hidden", "true"), svg.setAttribute("viewBox", "0 0 16 16");
+    let path = document2.createElementNS(SVG_NAMESPACE4, "path");
+    return path.setAttribute("d", ARROW_DOWN_PATH), svg.append(path), svg;
+  }
+  function scrollerOf2(feed) {
+    let box = feed.parentElement?.closest(SCROLLER_SELECTOR3) ?? null;
+    for (; box !== null && box.scrollHeight <= box.clientHeight; )
+      box = box.parentElement?.closest(SCROLLER_SELECTOR3) ?? null;
+    return box;
+  }
+  function createButton3(document2, onClick3, onBlur) {
+    let button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = BUTTON_CLASS4, button2.title = LABEL2, button2.setAttribute("aria-label", LABEL2), button2.append(arrowDownIcon(document2)), button2.addEventListener("click", onClick3), button2.addEventListener("blur", onBlur), button2;
+  }
+  function overviewScrollerOf(document2) {
+    let feed = document2.querySelector(FEED_SELECTOR2);
+    return feed === null ? null : scrollerOf2(feed);
+  }
+  var isAtBottom = (scroller) => scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= BOTTOM_MARGIN;
+  function shouldShowButton(scroller, button2) {
+    let hasFocus = button2 !== null && button2.ownerDocument.activeElement === button2;
+    return scroller !== null && (!isAtBottom(scroller) || hasFocus);
+  }
+  var OWNER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "pointerdown"];
+  function createBottomFollow(now) {
+    let followed = null;
+    function start(scroller) {
+      followed = { height: scroller.scrollHeight, lastActiveAt: now() }, scroller.scrollTo({
+        behavior: scrollBehaviorOf(scroller.ownerDocument),
+        top: scroller.scrollHeight
+      });
+    }
+    function step(scroller, isScrollEvent) {
+      followed !== null && (scroller === null || now() - followed.lastActiveAt > FOLLOW_QUIET_MS ? followed = null : scroller.scrollHeight !== followed.height ? start(scroller) : isScrollEvent && (followed.lastActiveAt = now()));
+    }
+    return {
+      start,
+      step,
+      stop: () => {
+        followed = null;
+      }
+    };
+  }
+  function listen(document2, events) {
+    document2.addEventListener("scroll", events.onScroll, { capture: !0, passive: !0 }), document2.defaultView?.addEventListener("resize", events.onResize);
+    for (let type of OWNER_SCROLL_EVENTS)
+      document2.addEventListener(type, events.onOwnerScroll, { capture: !0, passive: !0 });
+  }
+  function createScrollToBottom(options) {
+    let { document: document2 } = options, follow = createBottomFollow(options.now), button2 = null;
+    function scrollToBottom2() {
+      let scroller = overviewScrollerOf(document2);
+      scroller !== null && follow.start(scroller);
+    }
+    function showOrHideButton(scroller) {
+      let isShown = shouldShowButton(scroller, button2);
+      button2 === null && !isShown || (button2 ??= createButton3(document2, scrollToBottom2, sync4), button2.isConnected || document2.body.append(button2), button2.hidden === isShown && (button2.hidden = !isShown));
+    }
+    function sync4(event) {
+      let scroller = overviewScrollerOf(document2);
+      follow.step(scroller, event?.type === "scroll"), showOrHideButton(scroller);
+    }
+    return listen(document2, {
+      onOwnerScroll: (event) => {
+        event.target !== button2 && follow.stop();
+      },
+      onResize: sync4,
+      onScroll: sync4
+    }), {
+      sync: () => {
+        sync4();
+      }
+    };
+  }
+
+  // azure-devops/src/features/scroll-to-bottom/style.css
+  var style_default13 = `/* The button that scrolls a pull request's Overview to its bottom: round, in the corner of the window. */
+.fix-ado-scroll-to-bottom {
+  position: fixed;
+  right: 32px;
+  bottom: 32px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 50%;
+  background: var(--callout-background-color, rgb(255, 255, 255));
+  box-shadow: 0 3px 8px var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  cursor: pointer;
+}
+
+.fix-ado-scroll-to-bottom[hidden] {
+  display: none;
+}
+
+.fix-ado-scroll-to-bottom:hover {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  color: var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-scroll-to-bottom:focus-visible {
+  outline: 2px solid var(--communication-background, rgb(0, 120, 212));
+  outline-offset: 2px;
+}
+
+/* The arrow, drawn like Azure DevOps's line icons. */
+.fix-ado-scroll-to-bottom svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+`;
+
+  // azure-devops/src/features/scroll-to-bottom/index.ts
+  var scrollToBottom = {
+    change: { kind: "new", version: "1.13.0" },
+    description: "A button in the corner jumps to the latest activity.",
+    id: "scroll-to-bottom",
+    name: "Scroll to bottom button",
+    start({ document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2)
+        return null;
+      let scrollButton = createScrollToBottom({ document: document2, now });
+      return {
+        sync() {
+          scrollButton.sync();
+        }
+      };
+    },
+    styles: [style_default13]
+  };
+
+  // azure-devops/src/features/unread-comments/unread-comments.ts
+  var FEED_SELECTOR3 = ".activity-feed-list", ROW_SELECTOR4 = ".bolt-timeline-row", THREAD_SELECTOR3 = ".repos-discussion-thread", COMMENT_SELECTOR = ".repos-comment-viewer", NEW_ROW_SELECTOR = ".activity-feed-sequence.new", STICKY_TAB_BAR_SELECTOR = ".bolt-tabbar.sticky", FILTER_SELECTOR4 = ".repos-activity-filter-dropdown", FIRST_UNREAD_CLASS = "fix-ado-first-unread", FIRST_UNREAD_LABEL = "Go to first unread", NEXT_UNREAD_CLASS = "fix-ado-next-unread", NEXT_UNREAD_LABEL = "Go to next unread";
+  function rowsAsShown(feed) {
+    let rows = [...feed.querySelectorAll(ROW_SELECTOR4)];
+    return feed.dataset.fixAdoActivityOrder === "oldest-first" ? rows.toReversed() : rows;
+  }
+  function unreadGroupsOf(thread) {
+    let groups = [], group2 = [];
+    for (let comment of thread.querySelectorAll(COMMENT_SELECTOR))
+      comment.querySelector(UNREAD_COMMENT_MARKER_SELECTOR) === null ? group2 = [] : (group2.length === 0 && groups.push(group2), group2.push(comment));
+    return groups;
+  }
+  function markOf(index, size) {
+    return size === 1 ? "only" : index === 0 ? "first" : index === size - 1 ? "last" : "middle";
+  }
+  function markUnreadGroups(document2, groups) {
+    let marked = /* @__PURE__ */ new Set();
+    for (let group2 of groups)
+      for (let [index, comment] of group2.entries()) {
+        let mark = markOf(index, group2.length);
+        comment.dataset.fixAdoUnread !== mark && (comment.dataset.fixAdoUnread = mark), marked.add(comment);
+      }
+    for (let comment of document2.querySelectorAll("[data-fix-ado-unread]"))
+      marked.has(comment) || delete comment.dataset.fixAdoUnread;
+  }
+  function stopOfGroup(comments) {
+    let [first] = comments;
+    return first === void 0 ? [] : [{ comments, target: first }];
+  }
+  function stopsOfRow(row) {
+    let thread = row.querySelector(THREAD_SELECTOR3);
+    return thread === null ? [] : thread.querySelector(HEADER_SELECTOR2) === null ? row.querySelector(NEW_ROW_SELECTOR) === null ? [] : [{ comments: [], target: row }] : unreadGroupsOf(thread).flatMap((comments) => stopOfGroup(comments));
+  }
+  function readStops(document2) {
+    let feed = document2.querySelector(FEED_SELECTOR3);
+    return feed === null ? [] : rowsAsShown(feed).flatMap((row) => stopsOfRow(row));
+  }
+  function createButton4(document2, className, label) {
+    let text = Object.assign(document2.createElement("span"), {
+      className: "bolt-button-text",
+      textContent: label
+    }), button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = `${className} bolt-button enabled bolt-focus-treatment`, button2.append(text), button2;
+  }
+  function createFirstUnreadBox(document2, onClick3) {
+    let button2 = createButton4(document2, FIRST_UNREAD_CLASS, FIRST_UNREAD_LABEL);
+    button2.addEventListener("click", onClick3);
+    let box = Object.assign(document2.createElement("div"), {
+      className: `${FIRST_UNREAD_CLASS}-box margin-bottom-16 margin-right-8 inline-flex-row`
+    });
+    return box.append(button2), box;
+  }
+  function findOrAddFirstUnreadButton(document2, onClick3) {
+    let bar = document2.querySelector(FILTER_SELECTOR4)?.parentElement;
+    return bar == null ? null : (bar.querySelector(`.${FIRST_UNREAD_CLASS}`) === null && bar.prepend(createFirstUnreadBox(document2, onClick3)), bar.querySelector(`.${FIRST_UNREAD_CLASS}`));
+  }
+  var lastCommentOf = ({ comments }) => comments.at(-1) ?? null;
+  function findOrAddNextUnreadButton(comment, onClick3) {
+    let existing = comment.querySelector(`:scope > .${NEXT_UNREAD_CLASS}`), button2 = existing ?? createButton4(comment.ownerDocument, NEXT_UNREAD_CLASS, NEXT_UNREAD_LABEL);
+    return existing === null && button2.addEventListener("click", onClick3), comment.lastElementChild !== button2 && comment.append(button2), button2;
+  }
+  async function scrollIntoViewAndWait(element4, options) {
+    let scrolled = element4.scrollIntoView(options);
+    scrolled instanceof Promise && await scrolled;
+  }
+  function leaveRoomForTabBar(document2) {
+    let height = `${document2.querySelector(STICKY_TAB_BAR_SELECTOR)?.offsetHeight ?? 0}px`, feed = document2.querySelector(FEED_SELECTOR3);
+    feed !== null && feed.style.getPropertyValue("--fix-ado-sticky-height") !== height && feed.style.setProperty("--fix-ado-sticky-height", height);
+  }
+  function shownPartOf(target) {
+    return target.checkVisibility() ? target : target.closest(THREAD_SELECTOR3) ?? target;
+  }
+  function createStopScroller(document2) {
+    let scrollCount = 0;
+    return async (stop) => {
+      if (stop === void 0)
+        return;
+      scrollCount += 1;
+      let scroll = scrollCount, { target } = stop;
+      leaveRoomForTabBar(document2), await scrollIntoViewAndWait(shownPartOf(target), {
+        behavior: scrollBehaviorOf(document2),
+        block: "start"
+      }), scroll === scrollCount && (target.tabIndex = -1, target.focus({ preventScroll: !0 }));
+    };
+  }
+  function removeNextUnreadButtons(document2, kept) {
+    for (let button2 of document2.querySelectorAll(`.${NEXT_UNREAD_CLASS}`))
+      kept.has(button2) || button2.remove();
+  }
+  function createUnreadComments({ document: document2 }) {
+    let goTo = createStopScroller(document2);
+    function goToNextAfter(target) {
+      let stops = readStops(document2), index = stops.findIndex((stop) => stop.target === target);
+      goTo(index === -1 ? void 0 : stops[index + 1]);
+    }
+    function syncNextUnreadButtons(stops) {
+      let kept = /* @__PURE__ */ new Set();
+      for (let stop of stops.slice(0, -1)) {
+        let lastComment = lastCommentOf(stop);
+        lastComment !== null && kept.add(
+          findOrAddNextUnreadButton(lastComment, () => {
+            goToNextAfter(stop.target);
+          })
+        );
+      }
+      removeNextUnreadButtons(document2, kept);
+    }
+    function sync4() {
+      let stops = readStops(document2);
+      markUnreadGroups(
+        document2,
+        stops.map((stop) => stop.comments)
+      ), syncNextUnreadButtons(stops);
+      let firstUnread = findOrAddFirstUnreadButton(document2, () => {
+        goTo(readStops(document2)[0]);
+      });
+      firstUnread !== null && firstUnread.disabled !== (stops.length === 0) && (firstUnread.disabled = stops.length === 0);
+    }
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/unread-comments/style.css
+  var style_default14 = `/* Unread comments glow like a required reviewer, one glow around each group of unread comments
+   that follow each other. The thread clips what spills outside it, so the glow sits inside. Each
+   comment of a group draws its piece: across the 4px gap to a neighbour in the group, and cut off
+   there, so no edge shows between them. */
+[data-fix-ado-unread] {
+  --fix-ado-unread-glow: var(--communication-background, rgb(0, 120, 212));
+  position: relative;
+}
+
+/* A scroll to a stop ends 16px under the tab bar that sticks to the top. The script measures the
+   bar. A stop is a group's first comment, or the row of a thread that is not rendered yet. */
+.activity-feed-list [data-fix-ado-unread],
+.activity-feed-list .bolt-timeline-row {
+  scroll-margin-top: calc(var(--fix-ado-sticky-height, 0px) + 16px);
+}
+
+[data-fix-ado-unread]::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  box-shadow:
+    inset 0 0 0 2px var(--fix-ado-unread-glow),
+    inset 0 0 6px 3px var(--fix-ado-unread-glow);
+  content: "";
+  pointer-events: none;
+}
+
+/* A comment after another of its group reaches 16px up: 4px across the gap, 12px it cuts off. */
+[data-fix-ado-unread="middle"]::after,
+[data-fix-ado-unread="last"]::after {
+  top: -16px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  clip-path: inset(12px 0 0 0);
+}
+
+/* A comment before another of its group reaches 16px down the same way. */
+[data-fix-ado-unread="first"]::after,
+[data-fix-ado-unread="middle"]::after {
+  bottom: -16px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  clip-path: inset(0 0 12px 0);
+}
+
+[data-fix-ado-unread="middle"]::after {
+  clip-path: inset(12px 0);
+}
+
+/* Go to first unread sits left of every other button in the bar above the feed, and glows while
+   there is something unread. */
+.fix-ado-first-unread-box {
+  order: -2;
+}
+
+.fix-ado-first-unread:not(:disabled) {
+  box-shadow:
+    0 0 0 2px var(--communication-background, rgb(0, 120, 212)),
+    0 0 6px 3px var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-first-unread:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Go to next unread spans the bottom of a group's last comment, inside the glow. */
+.fix-ado-next-unread {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin: 8px 0 12px;
+}
+
+/* Forced colors drop box shadows, so the glows become outlines there. */
+@media (forced-colors: active) {
+  [data-fix-ado-unread]::after {
+    border-inline: 2px solid Highlight;
+    box-shadow: none;
+  }
+
+  [data-fix-ado-unread="only"]::after,
+  [data-fix-ado-unread="first"]::after {
+    border-top: 2px solid Highlight;
+  }
+
+  [data-fix-ado-unread="only"]::after,
+  [data-fix-ado-unread="last"]::after {
+    border-bottom: 2px solid Highlight;
+  }
+
+  .fix-ado-first-unread:not(:disabled) {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+
+  .fix-ado-first-unread:disabled {
+    border-color: GrayText;
+    color: GrayText;
+    opacity: 1;
+  }
+}
+`;
+
+  // azure-devops/src/features/unread-comments/index.ts
+  var unreadComments = {
+    change: { kind: "new", version: "1.17.0" },
+    description: "Unread comments glow, with buttons to the first and next one.",
+    id: "unread-comments",
+    name: "Highlight unread comments",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let comments = createUnreadComments({ document: document2 });
+      return {
+        sync({ page }) {
+          page.kind === "pull-request" && comments.sync();
+        }
+      };
+    },
+    styles: [style_default14]
+  };
+
+  // azure-devops/src/features/settings-sections/comments-and-activity.ts
+  var commentsAndActivitySection = {
+    description: "The comments and updates on a pull request's Overview.",
+    groups: [
+      {
+        features: [
+          activityOrder,
+          foldedPushes,
+          joinedReviewerLines,
+          newActivityChips,
+          scrollToBottom
+        ],
+        name: "Activity"
+      },
+      { features: [resolvedThreadChips, collapsibleThreads, unreadComments], name: "Threads" }
+    ],
+    name: "Comments and activity"
+  };
+
+  // azure-devops/src/features/reload-on-changes/page-reloader.ts
+  var PAGE_CHECK_INTERVAL_MS = 3e4, FAILED_PAGE_CHECK_RETRY_MS = 6e4, MS_PER_SECOND = 1e3;
+  function isCheckDue2(state, page, immediately) {
+    return state.loadedSnapshots.has(page.key) ? !state.options.isTabActive() || state.options.now() < state.pausedUntil ? !1 : immediately || state.options.now() >= state.nextCheckAt : !0;
+  }
+  function pauseFor(state, retryAfterSeconds) {
+    retryAfterSeconds !== null && (state.pausedUntil = state.options.now() + retryAfterSeconds * MS_PER_SECOND);
+  }
+  function compareWithLoaded(state, { page, hasLoadedSnapshot }, snapshot) {
+    hasLoadedSnapshot ? page.hasChanged(state.loadedSnapshots.get(page.key), snapshot) ? state.options.reload() : page.extendLoaded && state.loadedSnapshots.set(
+      page.key,
+      page.extendLoaded(state.loadedSnapshots.get(page.key), snapshot)
+    ) : state.loadedSnapshots.set(page.key, snapshot);
+  }
+  function recordFailure(state, error) {
+    error instanceof AdoRequestError && pauseFor(state, error.retryAfterSeconds), state.nextCheckAt = state.options.now() + FAILED_PAGE_CHECK_RETRY_MS;
+  }
+  async function runCheck(state, page) {
+    let checkedPage = { hasLoadedSnapshot: state.loadedSnapshots.has(page.key), page };
+    state.isChecking = !0;
+    try {
+      let { snapshot, retryAfterSeconds } = await page.fetchSnapshot();
+      pauseFor(state, retryAfterSeconds), state.nextCheckAt = state.options.now() + PAGE_CHECK_INTERVAL_MS, compareWithLoaded(state, checkedPage, snapshot);
+    } catch (error) {
+      recordFailure(state, error);
+    } finally {
+      state.isChecking = !1;
+    }
+  }
+  function createPageReloader(options) {
+    let state = {
+      isChecking: !1,
+      loadedSnapshots: /* @__PURE__ */ new Map(),
+      nextCheckAt: 0,
+      options,
+      pausedUntil: 0
+    };
+    return {
+      async check({ immediately = !1 } = {}) {
+        let page = options.currentPage();
+        !page || state.isChecking || !isCheckDue2(state, page, immediately) || await runCheck(state, page);
+      }
+    };
+  }
+
+  // azure-devops/src/pipeline/pipeline-status-icon.ts
+  var PIPELINE_STATUS_ICON_CLASS = "fix-ado-pipeline-status", SVG_NAMESPACE5 = "http://www.w3.org/2000/svg", LABELS2 = {
+    cancelling: "Pipeline cancelling",
+    expired: "Pipeline result expired",
+    failed: "Pipeline failed",
+    loading: "Pipeline status loading",
+    none: "No pipeline status",
+    notStarted: "Pipeline not started",
+    queued: "Pipeline queued",
+    running: "Pipeline running",
+    succeeded: "Pipeline succeeded"
+  }, DISC = ["circle", { cx: "8", cy: "8", fill: "currentColor", r: "8" }], RING = [
+    "circle",
+    { cx: "8", cy: "8", fill: "none", r: "7", stroke: "currentColor", "stroke-width": "2" }
+  ], SPINNER = [
+    "circle",
+    {
+      cx: "8",
+      cy: "8",
+      fill: "none",
+      r: "6.5",
+      stroke: "currentColor",
+      "stroke-dasharray": "28 13",
+      "stroke-linecap": "round",
+      "stroke-width": "2.5"
+    }
+  ];
+  function line(pathData, stroke) {
+    return ["path", { d: pathData, ...{
+      fill: "none",
+      stroke,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      "stroke-width": "1.75"
+    } }];
+  }
+  var SHAPES = {
+    cancelling: [RING, line("M5 11l6-6", "currentColor")],
+    expired: [DISC, line("M8 4v5M8 11.9v.1", "#fff")],
+    failed: [DISC, line("M5.5 5.5l5 5M10.5 5.5l-5 5", "#fff")],
+    loading: [DISC],
+    none: [DISC],
+    notStarted: [RING],
+    queued: [RING, line("M8 4.5V8l2.5 1.5", "currentColor")],
+    running: [SPINNER],
+    succeeded: [DISC, line("M4.5 8.3l2.3 2.3 4.7-5", "#fff")]
+  };
+  function setAttributes2(element4, attributes) {
+    for (let [name, value] of Object.entries(attributes))
+      element4.setAttribute(name, value);
+  }
+  function createShape(document2, [tag, attributes]) {
+    let shape = document2.createElementNS(SVG_NAMESPACE5, tag);
+    return setAttributes2(shape, attributes), shape;
+  }
+  function createStatusIcon(document2, status, label = LABELS2[status]) {
+    let icon = document2.createElementNS(SVG_NAMESPACE5, "svg");
+    setAttributes2(icon, {
+      "aria-label": label,
+      class: PIPELINE_STATUS_ICON_CLASS,
+      height: "16",
+      role: "img",
+      viewBox: "0 0 16 16",
+      width: "16"
+    }), icon.dataset.status = status;
+    let title = document2.createElementNS(SVG_NAMESPACE5, "title");
+    return title.textContent = label, icon.append(title, ...SHAPES[status].map((shape) => createShape(document2, shape))), icon;
+  }
+  function createPipelineStatusIcon(document2, status, pullRequestId) {
+    let icon = createStatusIcon(document2, status);
+    return icon.dataset.pullRequestId = String(pullRequestId), icon;
+  }
+
+  // azure-devops/src/core/tooltip.ts
+  var TOOLTIP_ATTRIBUTE = "data-fix-ado-tooltip", TOOLTIP_ID = "fix-ado-tooltip";
+  function createTooltip(document2, text) {
+    let portal = Object.assign(document2.createElement("div"), {
+      className: "bolt-portal absolute-fill"
+    });
+    portal.innerHTML = '<div class="bolt-callout absolute bolt-tooltip" role="tooltip"><div class="bolt-callout-content"><div class="bolt-tooltip-content body-m"></div></div></div>';
+    let callout = portal.querySelector(".bolt-callout"), content = portal.querySelector(".bolt-tooltip-content");
+    return callout !== null && content !== null && (callout.id = TOOLTIP_ID, content.textContent = text), portal;
+  }
+  function place(tooltip, trigger) {
+    let callout = tooltip.querySelector(".bolt-callout"), view = trigger.ownerDocument.defaultView;
+    if (callout === null || view === null)
+      return;
+    let box = trigger.getBoundingClientRect(), width = callout.offsetWidth, left = Math.min(
+      Math.max(8, box.left + box.width / 2 - width / 2),
+      view.innerWidth - width - 8
+    );
+    Object.assign(callout.style, {
+      left: `${left}px`,
+      position: "fixed",
+      top: `${box.bottom + 8}px`
+    });
+  }
+  function createShower(document2) {
+    let shown = null;
+    function hide() {
+      shown?.tooltip.remove(), shown?.trigger.removeAttribute("aria-describedby"), shown = null;
+    }
+    return {
+      hide,
+      show(trigger) {
+        hide();
+        let tooltip = createTooltip(document2, trigger.getAttribute(TOOLTIP_ATTRIBUTE) ?? "");
+        (document2.querySelector(".bolt-portal-host") ?? document2.body).append(tooltip), place(tooltip, trigger), trigger.setAttribute("aria-describedby", TOOLTIP_ID), shown = { tooltip, trigger };
+      }
+    };
+  }
+  function triggerOf(view, event) {
+    return view !== null && event.target instanceof view.Element ? event.target.closest(`[${TOOLTIP_ATTRIBUTE}]`) : null;
+  }
+  function isLeaving(trigger, event) {
+    let view = trigger.ownerDocument.defaultView, next = "relatedTarget" in event ? event.relatedTarget : null;
+    return !(view !== null && next instanceof view.Node && trigger.contains(next));
+  }
+  function createHover(view, shower, hoverDelayMs) {
+    let timer = null, hovered = null, hide = () => {
+      timer !== null && clearTimeout(timer), hovered = null, shower.hide();
+    };
+    return {
+      hide,
+      onPointerOver(event) {
+        let trigger = triggerOf(view, event);
+        trigger !== null && trigger !== hovered && (hide(), hovered = trigger, timer = setTimeout(() => {
+          shower.show(trigger);
+        }, hoverDelayMs));
+      }
+    };
+  }
+  function createListeners(document2, hoverDelayMs) {
+    let shower = createShower(document2), view = document2.defaultView, { hide, onPointerOver } = createHover(view, shower, hoverDelayMs), onLeave = (event) => {
+      let trigger = triggerOf(view, event);
+      trigger !== null && isLeaving(trigger, event) && hide();
+    };
+    return { hide, listeners: [
+      ["pointerover", onPointerOver],
+      ["pointerout", onLeave],
+      ["focusin", (event) => {
+        let trigger = triggerOf(view, event);
+        trigger !== null && shower.show(trigger);
+      }],
+      ["focusout", onLeave],
+      ["keydown", (event) => {
+        "key" in event && event.key === "Escape" && hide();
+      }]
+    ] };
+  }
+  var startedDocuments = /* @__PURE__ */ new WeakSet();
+  function startTooltips(document2, options = {}) {
+    if (startedDocuments.has(document2))
+      return () => {
+      };
+    startedDocuments.add(document2);
+    let { hide, listeners } = createListeners(document2, options.hoverDelayMs ?? 500);
+    for (let [type, listener] of listeners)
+      document2.addEventListener(type, listener);
+    return () => {
+      startedDocuments.delete(document2), hide();
+      for (let [type, listener] of listeners)
+        document2.removeEventListener(type, listener);
+    };
+  }
+  function showTooltip(element4, text) {
+    startTooltips(element4.ownerDocument), text === null ? element4.removeAttribute(TOOLTIP_ATTRIBUTE) : element4.getAttribute(TOOLTIP_ATTRIBUTE) !== text && element4.setAttribute(TOOLTIP_ATTRIBUTE, text);
+  }
+
+  // azure-devops/src/pull-requests/pr-list.ts
+  var PULL_REQUEST_ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]', TITLE_LINE_SELECTOR = ".bolt-table-two-line-cell-item";
+  function findPullRequestRows(root, apiBasePath2) {
+    let rows = [];
+    for (let row of root.querySelectorAll(PULL_REQUEST_ROW_SELECTOR)) {
+      let pullRequest = parsePullRequestHref(row.getAttribute("href") ?? "", apiBasePath2);
+      pullRequest && rows.push({ pullRequest, row });
+    }
+    return rows;
+  }
+  function showPipelineStatus(row, pullRequestId, status) {
+    let shownIcon = row.querySelector(`.${PIPELINE_STATUS_ICON_CLASS}`);
+    if (shownIcon?.dataset.status === status && shownIcon.dataset.pullRequestId === String(pullRequestId))
+      return;
+    shownIcon?.remove(), row.querySelector(TITLE_LINE_SELECTOR)?.firstElementChild?.after(createPipelineStatusIcon(row.ownerDocument, status, pullRequestId));
+  }
+  var DRAFT_PILL_SELECTOR = ".repos-pr-list-draft-pill", UPDATE_TIME_SELECTOR = "time.bolt-time-item", PUBLISHED_SINCE_CLASS = "fix-ado-published-since", TOO_LONG_AGO_CLASS = "fix-ado-published-since-too-long";
+  function isDraftRow(row) {
+    return row.querySelector(DRAFT_PILL_SELECTOR) !== null;
+  }
+  function publishedSinceLine(row) {
+    let shown = row.querySelector(`.${PUBLISHED_SINCE_CLASS}`);
+    if (shown)
+      return shown;
+    let updateLine = row.querySelector(UPDATE_TIME_SELECTOR)?.closest(".bolt-table-cell-content > *");
+    if (!updateLine)
+      return null;
+    let line2 = row.ownerDocument.createElement("div");
+    return line2.className = PUBLISHED_SINCE_CLASS, updateLine.after(line2), line2;
+  }
+  function showPublishedSince(row, shown) {
+    if (shown === null) {
+      row.querySelector(`.${PUBLISHED_SINCE_CLASS}`)?.remove();
+      return;
+    }
+    let line2 = publishedSinceLine(row);
+    line2 && (line2.textContent !== shown.text && (line2.textContent = shown.text), line2.classList.contains(TOO_LONG_AGO_CLASS) !== shown.isTooLongAgo && line2.classList.toggle(TOO_LONG_AGO_CLASS, shown.isTooLongAgo));
+  }
+  var LINE_UNDER_TITLE_SELECTOR = `${TITLE_LINE_SELECTOR}:nth-child(2) .secondary-text`, LINKED_WORK_ITEM_CLASS = "fix-ado-linked-work-item";
+  function linkedWorkItemElement(row) {
+    let shown = row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`), lineUnderTitle = row.querySelector(LINE_UNDER_TITLE_SELECTOR);
+    if (shown !== null || lineUnderTitle === null)
+      return shown;
+    let label = row.ownerDocument.createElement("span");
+    return label.className = LINKED_WORK_ITEM_CLASS, lineUnderTitle.append(label), label;
+  }
+  function showLinkedWorkItem(row, shown) {
+    if (shown === null) {
+      row.querySelector(`.${LINKED_WORK_ITEM_CLASS}`)?.remove();
+      return;
+    }
+    let label = linkedWorkItemElement(row);
+    label !== null && (label.textContent !== shown.text && (label.textContent = shown.text), showTooltip(label, shown.tooltip));
+  }
+  var REVIEWER_SELECTOR = ".pr-reviewer";
+  function markRequiredReviewers(row, reviewers) {
+    for (let reviewerElement of row.querySelectorAll(REVIEWER_SELECTOR)) {
+      let avatar = reviewerElement.querySelector(AVATAR_SELECTOR), reviewer = avatar ? findReviewerByLabel(avatarName(avatar), reviewers) : null;
+      reviewerElement.toggleAttribute("data-fix-ado-required", reviewer?.isRequired ?? !1), reviewerElement.parentElement?.toggleAttribute("data-fix-ado-reviewers", !0);
+    }
+  }
+
+  // azure-devops/src/features/reload-on-changes/pr-list-changes.ts
+  function snapshotOf(pullRequests) {
+    return new Map(
+      pullRequests.map((pullRequest) => [
+        pullRequest.pullRequestId,
+        JSON.stringify([
+          pullRequest.title,
+          pullRequest.isDraft,
+          pullRequest.status,
+          pullRequest.targetRefName,
+          pullRequest.lastMergeSourceCommit?.commitId,
+          pullRequest.autoCompleteSetBy?.id,
+          (pullRequest.reviewers ?? []).map((reviewer) => `${reviewer.id}:${reviewer.vote}:${reviewer.isRequired ?? !1}`).toSorted()
+        ])
+      ])
+    );
+  }
+  function hasListChanged(before, after, onScreenPullRequestIds) {
+    if (before.size !== after.size)
+      return !0;
+    for (let pullRequestId of before.keys())
+      if (!after.has(pullRequestId))
+        return !0;
+    for (let pullRequestId of onScreenPullRequestIds)
+      if (before.has(pullRequestId) && before.get(pullRequestId) !== after.get(pullRequestId))
+        return !0;
+    return !1;
+  }
+
+  // azure-devops/src/features/reload-on-changes/pr-list-watch.ts
+  function watchPullRequestList(client, listPage, onScreenPullRequestIds) {
+    return {
+      async fetchSnapshot() {
+        let { pullRequests, retryAfterSeconds } = await client.getPullRequests(listPage);
+        return { retryAfterSeconds, snapshot: snapshotOf(pullRequests) };
+      },
+      hasChanged: (loaded, current) => hasListChanged(loaded, current, onScreenPullRequestIds()),
+      key: `pull-request-list:${JSON.stringify(listPage)}`
+    };
+  }
+
+  // azure-devops/src/features/reload-on-changes/index.ts
+  var reloadOnChanges = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Pull request lists and boards reload when their content changes on the server. Waits while you type.",
+    id: "reload-on-changes",
+    name: "Reload lists and boards when they change",
+    start({ basePath: basePath2, client, document: document2, now, reloadWhenIdle: reloadWhenIdle2 }) {
+      let shownPage = { kind: "other" };
+      function watchedPage() {
+        if (shownPage.kind === "pull-request-list")
+          return watchPullRequestList(
+            client,
+            shownPage.listPage,
+            () => findPullRequestRows(document2, basePath2).map(
+              ({ pullRequest }) => pullRequest.pullRequestId
+            )
+          );
+        if (shownPage.kind === "board") {
+          let cardIds = findBoardCardIds(document2);
+          return cardIds.length > 0 ? watchBoard(client, location, cardIds) : null;
+        }
+        return null;
+      }
+      let isTabActive2 = !1, reloader = createPageReloader({
+        currentPage: watchedPage,
+        isTabActive: () => isTabActive2,
+        now,
+        reload: reloadWhenIdle2
+      });
+      return {
+        sync(tick) {
+          shownPage = tick.page, { isTabActive: isTabActive2 } = tick, reloader.check({ immediately: tick.reason === "tab-shown" });
+        }
+      };
+    },
+    styles: []
+  };
+
+  // azure-devops/src/features/settings-sections/general.ts
+  var generalSection = {
+    description: "How the script behaves on every page.",
+    groups: [{ features: [reloadOnChanges] }],
+    name: "General"
+  };
+
+  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues-card.ts
+  var OVERVIEW_ISSUES_CLASS = "fix-ado-overview-issues";
+  function runLinkOf({ apiBasePath: apiBasePath2, project }, buildId, { jobId, stepId }) {
+    return jobId !== null && stepId !== null ? pipelineLogPath(apiBasePath2, project, { buildId, jobId, stepId }) : pipelineRunPath(apiBasePath2, project, buildId);
+  }
+  function createCheckIssueBox(document2, content, { check: check2, counts, issues }) {
+    return createIssueBox(document2, {
+      createLink: (issue) => {
+        let link = document2.createElement("a");
+        return link.href = runLinkOf(content, check2.buildId, issue), fillIssueLink(link, issue);
+      },
+      details: issueSummary([counts]),
+      issues,
+      title: check2.name
+    });
+  }
+  function headingOf(checks) {
+    let runs = checks.length === 1 ? "the latest run" : "the latest runs";
+    return `${issueSummary(checks.map(({ counts }) => counts))} in ${runs}`;
+  }
+  var CARD_WRAPPERS = [
+    { className: "flex-column flex-grow scroll-hidden", tag: "div" },
+    { className: "bolt-card-content flex-row flex-grow bolt-default-horizontal-spacing", tag: "div" },
+    {
+      className: `bolt-table-card bolt-card flex-column depth-8 bolt-card-white ${OVERVIEW_ISSUES_CLASS}`,
+      role: "region",
+      tag: "section"
+    }
+  ];
+  function createHeading(document2, checks) {
+    let heading = createElement(document2, {
+      className: "fix-ado-overview-issues-heading",
+      tag: "span",
+      text: headingOf(checks)
+    }), text = wrapIn(document2, heading, [
+      { className: "flex-column flex-grow scroll-hidden", tag: "div" }
+    ]), row = createElement(document2, {
+      className: "flex-row flex-center rhythm-horizontal-8 fix-ado-overview-issues-heading-row",
+      tag: "div"
+    }), kind = worstKindOf(checks.flatMap(({ issues }) => issues));
+    return row.append(createKindIcon(document2, kind, "large"), text), row;
+  }
+  function createIssuesCard(document2, content) {
+    let { checks } = content, rows = createElement(document2, {
+      className: "padding-vertical-16 padding-horizontal-20 rhythm-vertical-16",
+      tag: "div"
+    }), heading = createHeading(document2, checks);
+    rows.append(
+      heading,
+      ...checks.map((checkIssues) => createCheckIssueBox(document2, content, checkIssues))
+    );
+    let block = wrapIn(document2, rows, CARD_WRAPPERS);
+    return addCollapseButton(block, heading, content.collapse), block.setAttribute("aria-label", "Pipeline warnings and errors"), block.dataset.fixAdoRendered = JSON.stringify(checks), block;
+  }
+
+  // azure-devops/src/pipeline/pipeline-status.ts
+  var BUILD_POLICY_TYPE_ID = "0609b952-1397-4640-95ec-e00a01b2c241";
+  function hasStatus(evaluations, status) {
+    return evaluations.some((evaluation) => evaluation.status === status);
+  }
+  var STATUS_RULES = [
+    [
+      "failed",
+      (evaluations) => hasStatus(evaluations, "rejected") || hasStatus(evaluations, "broken")
+    ],
+    ["running", (evaluations) => hasStatus(evaluations, "running")],
+    [
+      "expired",
+      (evaluations) => evaluations.some((evaluation) => !!evaluation.context?.isExpired)
+    ],
+    [
+      "queued",
+      (evaluations) => evaluations.some(
+        (evaluation) => evaluation.status === "queued" && (evaluation.context?.buildId ?? null) !== null
+      )
+    ],
+    ["notStarted", (evaluations) => hasStatus(evaluations, "queued")],
+    ["succeeded", (evaluations) => hasStatus(evaluations, "approved")]
+  ];
+  function pipelineStatusOf(evaluations) {
+    let buildEvaluations = evaluations.filter(
+      (evaluation) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID
+    ), requiredBuildEvaluations = buildEvaluations.filter(
+      (evaluation) => evaluation.configuration.isBlocking
+    ), decisiveEvaluations = requiredBuildEvaluations.length > 0 ? requiredBuildEvaluations : buildEvaluations;
+    return STATUS_RULES.find(([, matches]) => matches(decisiveEvaluations))?.[0] ?? null;
+  }
+  function isInProgress(status) {
+    return status === "running" || status === "queued";
+  }
+
+  // azure-devops/src/pipeline/pipeline-checks.ts
+  function checkNameOf(evaluation, fallback) {
+    return evaluation.configuration.settings?.displayName ?? evaluation.context?.buildDefinitionName ?? fallback;
+  }
+  function pipelineCheckOf(evaluation) {
+    let buildId = evaluation.context?.buildId ?? 0;
+    return evaluation.configuration.type.id !== BUILD_POLICY_TYPE_ID || buildId <= 0 ? null : {
+      buildId,
+      isRequired: evaluation.configuration.isBlocking,
+      name: checkNameOf(evaluation, `Run ${buildId}`),
+      startedAt: evaluation.context?.buildStartedUtc ?? null,
+      status: pipelineStatusOf([evaluation])
+    };
+  }
+  function startedAtMs(check2) {
+    return check2.startedAt === null ? 0 : Date.parse(check2.startedAt);
+  }
+  function pipelineChecksOf(evaluations) {
+    return evaluations.map((evaluation) => pipelineCheckOf(evaluation)).filter((check2) => check2 !== null).toSorted((first, second) => startedAtMs(second) - startedAtMs(first));
+  }
+  function startableChecksOf(evaluations) {
+    return evaluations.flatMap(
+      ({ evaluationId, ...evaluation }) => evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && evaluationId !== void 0 ? [
+        {
+          evaluationId,
+          isRequired: evaluation.configuration.isBlocking,
+          name: checkNameOf(evaluation, "Build check")
+        }
+      ] : []
+    );
+  }
+
+  // azure-devops/src/pipeline/pipeline-timeline.ts
+  var RESULT_STATUSES = {
+    abandoned: { label: "Canceled", status: "notStarted" },
+    canceled: { label: "Canceled", status: "notStarted" },
+    failed: { label: "Failed", status: "failed" },
+    skipped: { label: "Skipped", status: "notStarted" },
+    succeeded: { label: "Succeeded", status: "succeeded" },
+    succeededWithIssues: { label: "Succeeded with warnings", status: "expired" }
+  };
+  function recordStatusOf({ result, state }) {
+    return state === "inProgress" ? { label: "Running", status: "running" } : (result === null ? void 0 : RESULT_STATUSES[result]) ?? { label: "Not started", status: "notStarted" };
+  }
+  var NO_STAGE_ID = "", DEFAULT_STAGE_NAME = "__default";
+  function inRunOrder(records) {
+    return records.toSorted((first, second) => (first.order ?? 0) - (second.order ?? 0));
+  }
+  function stageIdOf(record, byId) {
+    let parent = record.parentId === null ? void 0 : byId.get(record.parentId);
+    for (; parent !== void 0 && parent.type !== "Stage"; )
+      parent = parent.parentId === null ? void 0 : byId.get(parent.parentId);
+    return parent?.id ?? NO_STAGE_ID;
+  }
+  function countsOf(index, id) {
+    return index.counts.get(id) ?? NO_ISSUES;
+  }
+  function jobOf(job, index) {
+    let steps = inRunOrder(
+      index.records.filter((record) => record.type === "Task" && record.parentId === job.id)
+    ).map(({ id, name, result, state }) => {
+      let { errorCount, warningCount } = countsOf(index, id);
+      return { errorCount, id, jobId: job.id, name, result, state, warningCount };
+    });
+    return {
+      id: job.id,
+      name: job.name,
+      result: job.result,
+      state: job.state,
+      steps,
+      ...countsOf(index, job.id)
+    };
+  }
+  function stageIssuesOf(stage, jobs, index) {
+    let ownOf = (id) => index.ownIssues.get(id) ?? [], stageSpot = {
+      job: null,
+      stage: {
+        id: stage.id,
+        name: stage.id === NO_STAGE_ID || stage.name === DEFAULT_STAGE_NAME ? null : stage.name
+      },
+      step: null
+    };
+    return [
+      ...index.records.filter(
+        (record) => record.type !== "Job" && record.type !== "Task" && (record.id === stage.id || stageIdOf(record, index.byId) === stage.id)
+      ).flatMap((record) => runIssuesAt(stageSpot, ownOf(record.id))),
+      ...jobs.flatMap((job) => {
+        let jobSpot = { ...stageSpot, job };
+        return [
+          ...runIssuesAt(jobSpot, ownOf(job.id)),
+          ...job.steps.flatMap((step) => runIssuesAt({ ...jobSpot, step }, ownOf(step.id)))
+        ];
+      })
+    ];
+  }
+  function stagesOf(records) {
+    let index = {
+      byId: new Map(records.map((record) => [record.id, record])),
+      counts: issueCountsOf(records),
+      ownIssues: ownIssuesOf(records),
+      records
+    }, jobs = inRunOrder(records.filter((record) => record.type === "Job")), stages = inRunOrder(records.filter((record) => record.type === "Stage"));
+    return (stages.length > 0 || jobs.length === 0 ? stages : [{ id: NO_STAGE_ID, name: "Jobs", result: null, state: "" }]).map((stage) => {
+      let stageJobs = jobs.filter((job) => stageIdOf(job, index.byId) === stage.id).map((job) => jobOf(job, index)), { errorCount, warningCount } = stage.id === NO_STAGE_ID ? sumIssueCounts(stageJobs) : countsOf(index, stage.id);
+      return {
+        errorCount,
+        id: stage.id,
+        issues: stageIssuesOf(stage, stageJobs, index),
+        jobs: stageJobs,
+        name: stage.name,
+        result: stage.result,
+        state: stage.state,
+        warningCount
+      };
+    });
+  }
+  function defaultStepOf(stages) {
+    let steps = stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps));
+    return steps.find((step) => step.state === "inProgress") ?? steps.find((step) => step.result === "failed") ?? steps[0] ?? null;
+  }
+
+  // azure-devops/src/features/overview-pipeline-issues/overview-pipeline-issues.ts
+  var REFRESH_MS = 3e4, DESCRIPTION_SELECTOR = ".repos-pr-description-card", CHECKS_AREA_ERROR_SELECTOR = ".dark-build-output .error-text", RUN_LINK_SELECTOR = 'a[href*="/_build/results?"]';
+  function isBusy(check2) {
+    return check2.status === "running" || check2.status === "queued";
+  }
+  function isTimelineDue(data, check2, now) {
+    let loaded = data.timelines.get(check2.buildId);
+    return loaded === void 0 || loaded.checkStatus !== check2.status || isBusy(check2) && now - loaded.loadedAt >= REFRESH_MS;
+  }
+  function checksAreaErrorsOf(document2) {
+    let errors = /* @__PURE__ */ new Map();
+    for (let line2 of document2.querySelectorAll(CHECKS_AREA_ERROR_SELECTOR)) {
+      let href = line2.closest(RUN_LINK_SELECTOR)?.getAttribute("href"), run = href == null || line2.closest(`.${OVERVIEW_ISSUES_CLASS}`) !== null ? null : parsePipelineRunLocation(new URL(href, document2.baseURI));
+      run !== null && errors.set(run.buildId, (errors.get(run.buildId) ?? /* @__PURE__ */ new Set()).add(line2.textContent.trim()));
+    }
+    return errors;
+  }
+  function checkIssuesOf(check2, stages, shownErrors) {
+    let all = runIssuesOf(stages), issues = all.filter(
+      (issue) => issue.kind !== "error" || !shownErrors.has(issue.message.trim())
+    ), { errorCount, warningCount } = sumIssueCounts(stages), hiddenCount = all.length - issues.length;
+    return {
+      check: check2,
+      counts: { errorCount: Math.max(0, errorCount - hiddenCount), warningCount },
+      issues
+    };
+  }
+  function checksWithIssues(data, document2) {
+    let checksAreaErrors = checksAreaErrorsOf(document2);
+    return data.checks.flatMap((check2) => {
+      let stages = data.timelines.get(check2.buildId)?.stages ?? [], shownErrors = checksAreaErrors.get(check2.buildId) ?? /* @__PURE__ */ new Set(), checkIssues = checkIssuesOf(check2, stages, shownErrors);
+      return checkIssues.issues.length > 0 ? [checkIssues] : [];
+    });
+  }
+  function isBlockShown(block, checks, description) {
+    return block?.dataset.fixAdoRendered === JSON.stringify(checks) && block.nextElementSibling === description;
+  }
+  function render3(state) {
+    let { data, options } = state, description = options.document.querySelector(DESCRIPTION_SELECTOR), existing = options.document.querySelector(`.${OVERVIEW_ISSUES_CLASS}`), checks = data === null ? [] : checksWithIssues(data, options.document);
+    if (description === null || data === null || checks.length === 0) {
+      existing?.remove();
+      return;
+    }
+    isBlockShown(existing, checks, description) || (existing?.remove(), description.before(createCard2(options, data, checks)));
+  }
+  function createCard2({ apiBasePath: apiBasePath2, document: document2 }, data, checks) {
+    let collapse = {
+      isCollapsed: data.isCollapsed,
+      onToggle: (isCollapsed) => {
+        data.isCollapsed = isCollapsed;
+      }
+    };
+    return createIssuesCard(document2, {
+      apiBasePath: apiBasePath2,
+      checks,
+      collapse,
+      project: data.pullRequest.project
+    });
+  }
+  function showIfCurrent(state, data) {
+    state.data === data && render3(state);
+  }
+  async function loadTimeline(state, data, check2) {
+    let { options } = state, loaded = {
+      checkStatus: check2.status,
+      loadedAt: options.now(),
+      stages: data.timelines.get(check2.buildId)?.stages ?? null
+    };
+    data.timelines.set(check2.buildId, loaded);
+    try {
+      loaded.stages = stagesOf(await options.getTimeline(data.pullRequest.project, check2.buildId));
+    } catch {
+    }
+    showIfCurrent(state, data);
+  }
+  async function loadChecks(state, data) {
+    let { options } = state;
+    data.checksLoadedAt = options.now();
+    try {
+      data.checks = pipelineChecksOf(await options.getEvaluations(data.pullRequest));
+    } catch {
+      return;
+    }
+    let now = options.now();
+    for (let check2 of data.checks.filter((candidate) => isTimelineDue(data, candidate, now)))
+      loadTimeline(state, data, check2);
+    showIfCurrent(state, data);
+  }
+  function syncOverview(state, pullRequest, canFetch) {
+    JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest) && (state.data = pullRequest === null ? null : {
+      checks: [],
+      checksLoadedAt: Number.NEGATIVE_INFINITY,
+      isCollapsed: !1,
+      pullRequest,
+      timelines: /* @__PURE__ */ new Map()
+    }), render3(state);
+    let { data, options } = state, isOnOverview = options.document.querySelector(DESCRIPTION_SELECTOR) !== null;
+    data !== null && canFetch && isOnOverview && options.now() - data.checksLoadedAt >= REFRESH_MS && loadChecks(state, data);
+  }
+  function createOverviewPipelineIssues(options) {
+    let state = { data: null, options };
+    return {
+      sync: (pullRequest, canFetch) => {
+        syncOverview(state, pullRequest, canFetch);
+      }
+    };
+  }
+
+  // azure-devops/src/pipeline/pipeline-issue-list.css
+  var pipeline_issue_list_default = `/* A run's warnings and errors, in a box like Azure DevOps's check list on a pull
+   request's Overview. Azure DevOps's own classes on it style it there; these rules keep
+   the look where they do not reach, such as the Pipeline tab. */
+.fix-ado-issue-box {
+  border: 1px solid rgba(var(--palette-neutral-8, 234, 234, 234), 1);
+  border-radius: 4px;
+  background: rgba(var(--palette-neutral-2, 248, 248, 248), 1);
+}
+
+.fix-ado-issue-box > table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fix-ado-issue-box td {
+  padding: 0;
+  border: 0;
+}
+
+.fix-ado-issue-box-header {
+  min-height: 48px;
+}
+
+/* A collapsed box keeps its header row; a collapsed Overview card keeps its heading. */
+.fix-ado-issue-box[data-collapsed] .fix-ado-issue,
+.fix-ado-overview-issues[data-collapsed] .fix-ado-issue-box {
+  display: none;
+}
+
+.fix-ado-issue-box-collapse {
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+
+.fix-ado-issue {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fix-ado-issue:hover {
+  background: var(--component-grid-row-hover-color, rgba(0, 0, 0, 0.02));
+}
+
+.fix-ado-issue-output {
+  padding: 8px 0;
+  background: rgb(30, 30, 30);
+  color: rgb(212, 212, 212);
+}
+
+.fix-ado-issue-output > .line-number {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* A long message wraps, and keeps its own line breaks. */
+.fix-ado-issue-message {
+  min-width: 0;
+  padding-right: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Without a line number, the message keeps the line number's left padding. */
+.fix-ado-issue-message:first-child {
+  padding-left: 16px;
+}
+
+.fix-ado-issue-output > .error-text {
+  color: rgb(241, 112, 112);
+}
+
+.fix-ado-warning-text {
+  color: rgb(240, 190, 90);
+}
+
+.fix-ado-kind-icon[data-kind="error"] {
+  fill: var(--component-status-error, rgb(205, 74, 69));
+}
+
+.fix-ado-kind-icon[data-kind="warning"] {
+  fill: var(--component-status-warning, rgb(214, 127, 60));
+}
+
+/* The counts of warnings and errors on a stage, job or step in the run tree. */
+.fix-ado-issue-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.fix-ado-issue-count + .fix-ado-issue-count {
+  margin-left: 0;
+}
+
+.fix-ado-issue-count[data-kind="error"] {
+  background: var(--component-status-error, rgb(205, 74, 69));
+}
+
+/* Dark text: white on the warning orange is about 3:1. */
+.fix-ado-issue-count[data-kind="warning"] {
+  background: var(--component-status-warning, rgb(214, 119, 48));
+  color: rgba(0, 0, 0, 0.9);
+}
+
+/* Forced colors turn the disc into the text colour, which can be white; the mark takes the
+   background colour. */
+@media (forced-colors: active) {
+  .fix-ado-kind-icon path[fill="#fff"] {
+    fill: Canvas;
+  }
+}
+`;
+
+  // azure-devops/src/features/overview-pipeline-issues/index.ts
+  var overviewPipelineIssues = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Each check's warnings and errors above the description.",
+    id: "overview-pipeline-issues",
+    name: "Warnings and errors on the Overview",
+    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2)
+        return null;
+      let issues = createOverviewPipelineIssues({
+        apiBasePath: basePath2,
+        document: document2,
+        getEvaluations: async (pullRequest) => {
+          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
+          return evaluations;
+        },
+        getTimeline: async (project, buildId) => {
+          let { records } = await client.getTimeline(project, buildId);
+          return records;
+        },
+        now
+      });
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          issues.sync(pullRequestOf(page), isTabActive2);
+        }
+      };
+    },
+    styles: [pipeline_issue_list_default]
+  };
 
   // azure-devops/src/features/pipeline-status/pipeline-status-poller.ts
   var IN_PROGRESS_POLL_INTERVAL_MS = 2e4, SETTLED_POLL_INTERVAL_MS = 18e4, FAILED_REQUEST_RETRY_MS = 6e4, MS_PER_SECOND2 = 1e3;
@@ -16806,6 +15645,1590 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       }
     };
   }
+
+  // azure-devops/src/pipeline/pipeline-status-icon.css
+  var pipeline_status_icon_default = `.fix-ado-pipeline-status {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: 8px;
+}
+
+.fix-ado-pipeline-status[data-status="succeeded"] {
+  color: var(--component-status-success, rgb(85, 163, 98));
+}
+.fix-ado-pipeline-status[data-status="failed"] {
+  color: var(--component-status-error, rgb(205, 74, 69));
+}
+.fix-ado-pipeline-status[data-status="expired"],
+.fix-ado-pipeline-status[data-status="cancelling"] {
+  color: var(--component-status-warning, rgb(214, 119, 48));
+}
+.fix-ado-pipeline-status[data-status="running"] {
+  color: var(--component-status-info, rgb(0, 120, 212));
+}
+.fix-ado-pipeline-status[data-status="queued"],
+.fix-ado-pipeline-status[data-status="notStarted"] {
+  color: var(--component-status-neutral, rgb(102, 102, 102));
+}
+
+.fix-ado-pipeline-status[data-status="running"] {
+  animation: fix-ado-spin 1.5s linear infinite;
+}
+
+/* A grey circle that holds the icon's place while the status loads, or when there is none. */
+.fix-ado-pipeline-status[data-status="loading"],
+.fix-ado-pipeline-status[data-status="none"] {
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  opacity: 0.25;
+}
+
+@keyframes fix-ado-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Slower, not stopped, so a running pipeline still looks busy. */
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-pipeline-status[data-status="running"] {
+    animation-duration: 6s;
+  }
+}
+
+/* Forced colors turn the disc into the text colour, which can be white; the marks take the
+   background colour, so succeeded, failed and expired stay apart. */
+@media (forced-colors: active) {
+  .fix-ado-pipeline-status path[stroke="#fff"] {
+    stroke: Canvas;
+  }
+}
+`;
+
+  // azure-devops/src/features/pipeline-status/index.ts
+  var pipelineStatusOnPullRequests = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "A pipeline status icon on each pull request.",
+    id: "pipeline-status",
+    name: "Pipeline status",
+    start({ basePath: basePath2, client, document: document2, now }) {
+      let poller = createPipelineStatusPoller({
+        client,
+        findRows: () => findPullRequestRows(document2, basePath2),
+        now,
+        showStatus: showPipelineStatus
+      });
+      return {
+        sync({ isTabActive: isTabActive2 }) {
+          isTabActive2 && poller.sync();
+        }
+      };
+    },
+    styles: [pipeline_status_icon_default]
+  };
+
+  // azure-devops/src/features/pipeline-tab/pipeline-run-frame.ts
+  function createPipelineRunFrame(document2) {
+    return parsePipelineRunLocation(document2.location) === null ? null : {
+      sync: () => {
+        document2.documentElement.dataset.fixAdoRunFrame = "";
+      }
+    };
+  }
+
+  // azure-devops/src/features/pipeline-tab/pipeline-tab-element.ts
+  var TAB_CLASS = "fix-ado-pipeline-tab", TAB_LABEL = "Pipeline", TAB_ID = "fix-ado-pipeline-tab", TAB_CLASSES = `bolt-tab focus-treatment flex-noshrink ${TAB_CLASS}`, OWN_TAB_ATTRIBUTE = "data-fix-ado-own-tab";
+  function createTab(document2) {
+    let text = Object.assign(document2.createElement("span"), {
+      className: "bolt-tab-text",
+      textContent: TAB_LABEL
+    });
+    text.dataset.content = TAB_LABEL;
+    let container = Object.assign(document2.createElement("span"), {
+      className: "bolt-tab-inner-container"
+    });
+    container.append(text);
+    let tab = Object.assign(document2.createElement("a"), {
+      className: TAB_CLASSES,
+      href: "#",
+      id: TAB_ID
+    });
+    return tab.setAttribute("role", "tab"), tab.dataset.fixAdoOwnTab = "", tab.append(container), tab.setAttribute("aria-selected", "false"), tab;
+  }
+
+  // azure-devops/src/features/pipeline-tab/pipeline-tab-tree.ts
+  var DATE_FORMAT = { dateStyle: "short", timeStyle: "short" }, NAME_CLASS = "fix-ado-pipeline-item-name";
+  function textElement(document2, className, text) {
+    let element4 = document2.createElement("span");
+    return element4.className = className, element4.textContent = text, element4;
+  }
+  function createItemText(document2, item) {
+    let text = textElement(document2, "fix-ado-pipeline-item-text", "");
+    return text.append(textElement(document2, NAME_CLASS, item.name)), item.details !== void 0 && text.append(textElement(document2, "fix-ado-pipeline-item-details", item.details)), text;
+  }
+  function createItemParts(document2, item) {
+    let icon = item.status === null ? [] : [createStatusIcon(document2, item.status.status, item.status.label)], counts = item.issueCounts === void 0 ? [] : createIssueCounts(document2, item.issueCounts);
+    return [...icon, createItemText(document2, item), ...counts];
+  }
+  function foldPick(context, level) {
+    let { pick } = context;
+    return { ...pick, folded: pick.folded === level ? null : level };
+  }
+  function markItem(context, button2, item) {
+    button2.setAttribute("aria-current", String(item.isCurrent)), item.isCurrent && item.level !== null && button2.setAttribute("aria-expanded", String(context.pick.folded !== item.level));
+    let { buildId, jobId, stageId, stepId } = item.pick;
+    button2.dataset.fixAdoFocusKey = [buildId, stageId, jobId, stepId].join("/");
+  }
+  function createItem2(context, item) {
+    let { document: document2 } = context, button2 = document2.createElement("button");
+    return button2.type = "button", button2.className = `fix-ado-pipeline-item ${item.className}`, markItem(context, button2, item), button2.append(...createItemParts(document2, item)), button2.addEventListener("click", () => {
+      let { level } = item;
+      context.onPick(item.isCurrent && level !== null ? foldPick(context, level) : item.pick);
+    }), button2;
+  }
+  function requiredLabel(isRequired) {
+    return isRequired ? "Required" : "Optional";
+  }
+  function runDetails(run) {
+    let kind = run.isRequired === null ? `#${run.buildNumber ?? run.buildId}` : requiredLabel(run.isRequired), started = run.startedAt === null ? [] : [new Date(run.startedAt).toLocaleString([], DATE_FORMAT)];
+    return [...run.status?.status === "cancelling" ? ["Cancelling"] : [], kind, ...started].join(" · ");
+  }
+  function group(document2, className, children) {
+    let element4 = document2.createElement("div");
+    return element4.className = className, element4.append(...children), element4;
+  }
+  function createJobSteps(context, job) {
+    let { run, stage, step } = context.shown, steps = job.steps.map(
+      (candidate) => createItem2(context, {
+        className: "fix-ado-pipeline-step",
+        isCurrent: candidate.id === step?.id,
+        issueCounts: candidate,
+        level: null,
+        name: candidate.name,
+        pick: {
+          buildId: run.buildId,
+          folded: null,
+          jobId: candidate.jobId,
+          stageId: stage?.id ?? null,
+          stepId: candidate.id
+        },
+        status: recordStatusOf(candidate)
+      })
+    );
+    return group(context.document, "fix-ado-pipeline-steps", steps);
+  }
+  function createJob(context, job) {
+    let { shown } = context, isCurrent2 = shown.step?.jobId === job.id, item = createItem2(context, {
+      className: "fix-ado-pipeline-job",
+      isCurrent: isCurrent2,
+      issueCounts: job,
+      level: "job",
+      name: job.name,
+      pick: {
+        buildId: shown.run.buildId,
+        folded: null,
+        jobId: job.id,
+        stageId: shown.stage?.id ?? null,
+        stepId: null
+      },
+      status: recordStatusOf(job)
+    });
+    return isCurrent2 && context.pick.folded === "job" ? [item] : [item, createJobSteps(context, job)];
+  }
+  function createJobs(context) {
+    let items = (context.shown.stage?.jobs ?? []).flatMap((job) => createJob(context, job));
+    return group(context.document, "fix-ado-pipeline-jobs", items);
+  }
+  function stageName(stage) {
+    return stage.name === DEFAULT_STAGE_NAME ? "Jobs" : stage.name;
+  }
+  function createStage(context, stage) {
+    let { shown } = context, isCurrent2 = stage.id === shown.stage?.id, item = createItem2(context, {
+      className: "fix-ado-pipeline-stage",
+      isCurrent: isCurrent2,
+      issueCounts: stage,
+      level: "stage",
+      name: stageName(stage),
+      pick: {
+        buildId: shown.run.buildId,
+        folded: null,
+        jobId: null,
+        stageId: stage.id,
+        stepId: null
+      },
+      status: recordStatusOf(stage)
+    });
+    return isCurrent2 && context.pick.folded !== "stage" ? [item, createJobs(context)] : [item];
+  }
+  function createStages(context) {
+    let { document: document2, shown } = context;
+    if (shown.stages === null)
+      return textElement(document2, "fix-ado-pipeline-note", "Loading stages…");
+    if (shown.stages.length === 0)
+      return textElement(document2, "fix-ado-pipeline-note", "No stages yet.");
+    let items = shown.stages.flatMap((stage) => createStage(context, stage));
+    return group(document2, "fix-ado-pipeline-stages", items);
+  }
+  var SVG_NAMESPACE6 = "http://www.w3.org/2000/svg", OPEN_ICON_PATH = "M9 2h5v5h-1V3.7L7.35 9.35l-.7-.7L12.3 3H9V2zM3 4h4v1H4v8h8V9h1v5H3V4z";
+  function createOpenIcon(document2) {
+    let icon = document2.createElementNS(SVG_NAMESPACE6, "svg");
+    icon.setAttribute("viewBox", "0 0 16 16"), icon.setAttribute("width", "16"), icon.setAttribute("height", "16"), icon.setAttribute("aria-hidden", "true");
+    let path = document2.createElementNS(SVG_NAMESPACE6, "path");
+    return path.setAttribute("d", OPEN_ICON_PATH), path.setAttribute("fill", "currentColor"), icon.append(path), icon;
+  }
+  function createOpenRunLink(context, run) {
+    let { document: document2 } = context, link = document2.createElement("a");
+    return link.className = "fix-ado-pipeline-open-run", link.href = context.runPathOf(run.buildId), link.target = "_blank", link.rel = "noopener", link.setAttribute("aria-label", "Open run in new tab"), link.title = "Open run in new tab", link.append(createOpenIcon(document2)), link;
+  }
+  function createRunRow(context, item, run) {
+    let link = createOpenRunLink(context, run);
+    return group(context.document, "fix-ado-pipeline-run-row", [item, link]);
+  }
+  function createRun(context, run) {
+    let isCurrent2 = run.buildId === context.shown.run.buildId, item = createItem2(context, {
+      className: "fix-ado-pipeline-run",
+      details: runDetails(run),
+      isCurrent: isCurrent2,
+      level: "run",
+      name: run.name,
+      pick: { buildId: run.buildId, folded: null, jobId: null, stageId: null, stepId: null },
+      status: run.status
+    }), row = createRunRow(context, item, run);
+    return isCurrent2 && context.pick.folded !== "run" ? [row, createStages(context)] : [row];
+  }
+  function showCutOffNames(tree) {
+    tree.addEventListener("mouseover", (event) => {
+      let row = closestElement(event.target, ".fix-ado-pipeline-item"), name = row?.querySelector(`.${NAME_CLASS}`);
+      row === null || name === null || name === void 0 || (name.scrollWidth > name.clientWidth ? row.setAttribute("title", name.textContent) : row.removeAttribute("title"));
+    });
+  }
+  function createRunTree(context) {
+    let items = context.runs.flatMap((run) => createRun(context, run)), tree = group(context.document, "fix-ado-pipeline-tree", items);
+    return tree.setAttribute("role", "group"), tree.setAttribute("aria-label", "Pipeline runs"), showCutOffNames(tree), tree;
+  }
+
+  // azure-devops/src/features/pipeline-tab/pipeline-tab-run-action.ts
+  var LABELS3 = {
+    cancel: {
+      failed: "Could not cancel the run.",
+      idle: "Cancel current run",
+      waiting: "Cancelling…"
+    },
+    start: { failed: "Could not start the run.", idle: "Start new run", waiting: "Starting…" }
+  }, LOOKS = { cancel: "danger", start: "primary" };
+  function textElement2(document2, className, text) {
+    let element4 = document2.createElement("span");
+    return element4.className = className, element4.textContent = text, element4;
+  }
+  function createChoice(context, choice) {
+    let { document: document2 } = context, row = document2.createElement("button");
+    row.type = "button", row.className = "fix-ado-pipeline-item fix-ado-pipeline-run-action-choice", row.dataset.fixAdoFocusKey = `run-action/${choice.key}`;
+    let text = textElement2(document2, "fix-ado-pipeline-item-text", "");
+    return text.append(
+      textElement2(document2, "fix-ado-pipeline-item-name", choice.name),
+      textElement2(document2, "fix-ado-pipeline-item-details", choice.details)
+    ), row.append(text), row.addEventListener("click", () => {
+      context.onPick(context.action, choice.key);
+    }), row;
+  }
+  function createChoices(context) {
+    let list = context.document.createElement("div");
+    return list.className = "fix-ado-pipeline-run-action-choices", list.append(...context.choices.map((choice) => createChoice(context, choice))), list;
+  }
+  function onButtonClick({ action, choices, onPick, onToggleList, state }) {
+    let [onlyChoice] = choices;
+    choices.length === 1 && onlyChoice !== void 0 ? onPick(action, onlyChoice.key) : onToggleList(state !== "choosing");
+  }
+  function createButton5(context) {
+    let { action, choices, document: document2, state } = context, isWaiting = state === "waiting", button2 = Object.assign(document2.createElement("button"), {
+      className: `bolt-button ${LOOKS[action]} bolt-focus-treatment ${isWaiting ? "disabled" : "enabled"} fix-ado-pipeline-run-action`,
+      disabled: isWaiting,
+      type: "button"
+    });
+    button2.dataset.fixAdoFocusKey = "run-action";
+    let label = LABELS3[action][isWaiting ? "waiting" : "idle"];
+    return button2.append(textElement2(document2, "bolt-button-text body-m", label)), choices.length > 1 && button2.setAttribute("aria-expanded", String(state === "choosing")), button2.addEventListener("click", () => {
+      onButtonClick(context);
+    }), button2;
+  }
+  function failedNote(document2, action) {
+    let note = textElement2(document2, "fix-ado-pipeline-note", LABELS3[action].failed);
+    return note.setAttribute("role", "alert"), note;
+  }
+  function createRunAction(context) {
+    let { action, choices, document: document2, state } = context;
+    if (choices.length === 0)
+      return null;
+    let button2 = createButton5(context);
+    return state === "choosing" ? [button2, createChoices(context)] : state === "failed" ? [button2, failedNote(document2, action)] : [button2];
+  }
+
+  // azure-devops/src/features/pipeline-tab/pipeline-log-frame.ts
+  var LOG_TITLE_SELECTOR = ".logs-view .log-header .job-header .title-m", TREE_ROW_SELECTOR3 = ".run-logs-tree .bolt-tree-row", ROW_NAME_SELECTOR = ".job-name-area [role=button]";
+  function load(frame, log2) {
+    frame.setAttribute("src", log2.path);
+  }
+  function shownStepName(frame) {
+    return frame.contentDocument?.querySelector(LOG_TITLE_SELECTOR)?.textContent.trim() ?? null;
+  }
+  function showsStep(frame, stepName) {
+    return shownStepName(frame) === stepName;
+  }
+  function stepInTree(document2, log2) {
+    let names = [...document2.querySelectorAll(TREE_ROW_SELECTOR3)].map((row) => row.querySelector(ROW_NAME_SELECTOR)).filter((name) => name !== null), jobIndex = names.findIndex((name) => name.textContent.trim() === log2.jobName), isStep = (name) => name.textContent.trim() === log2.stepName;
+    return names.slice(jobIndex + 1).find((name) => isStep(name)) ?? names.find((name) => isStep(name)) ?? null;
+  }
+  function waitForSwitch(frame, log2, schedule2) {
+    let checksLeft = 15, check2 = () => {
+      frame.dataset.fixAdoLogPath !== log2.path || showsStep(frame, log2.stepName) || (checksLeft -= 1, checksLeft > 0 ? schedule2(check2, 100) : load(frame, log2));
+    };
+    schedule2(check2, 100);
+  }
+  function stepInFrame(frame, log2) {
+    let isSameRun = frame.dataset.fixAdoBuildId === String(log2.buildId), document2 = frame.contentDocument;
+    return isSameRun && document2 !== null ? stepInTree(document2, log2) : null;
+  }
+  function showStepLog(frame, log2, schedule2 = setTimeout) {
+    if (frame.dataset.fixAdoLogPath === log2.path)
+      return;
+    let step = stepInFrame(frame, log2);
+    if (frame.dataset.fixAdoLogPath = log2.path, frame.dataset.fixAdoBuildId = String(log2.buildId), step === null) {
+      load(frame, log2);
+      return;
+    }
+    step.click(), waitForSwitch(frame, log2, schedule2);
+  }
+  function watchShownStep(frame, onStep) {
+    if (frame.dataset.fixAdoWatched !== void 0)
+      return;
+    frame.dataset.fixAdoWatched = "";
+    let lastStepName = null, report = () => {
+      let stepName = shownStepName(frame);
+      stepName !== null && stepName !== lastStepName && (lastStepName = stepName, onStep(stepName));
+    }, watchPage = () => {
+      let view = frame.contentDocument?.defaultView;
+      if (frame.contentDocument !== null && view !== null && view !== void 0) {
+        let options = { characterData: !0, childList: !0, subtree: !0 };
+        new view.MutationObserver(report).observe(frame.contentDocument, options);
+      }
+    };
+    frame.addEventListener("load", watchPage), watchPage();
+  }
+
+  // azure-devops/src/features/pipeline-tab/pipeline-tab-panel.ts
+  var PANEL_CLASS = "fix-ado-pipeline-panel", TREE_SELECTOR6 = ":scope > .fix-ado-pipeline-tree", FRAME_SELECTOR = ":scope > .fix-ado-pipeline-frame", LOG_NOTE_SELECTOR = ":scope > .fix-ado-pipeline-log-note", ISSUES_SELECTOR = ":scope > .fix-ado-issue-box", ISSUES_COLLAPSED_ATTRIBUTE = "data-fix-ado-issues-collapsed";
+  function message(panel, text, isError = !1) {
+    let note = panel.ownerDocument.createElement("p");
+    note.className = "fix-ado-pipeline-message", note.textContent = text, isError && note.setAttribute("role", "alert"), panel.replaceChildren(note);
+  }
+  function frameOf(panel) {
+    let existing = panel.querySelector(FRAME_SELECTOR);
+    if (existing !== null)
+      return existing;
+    let frame = panel.ownerDocument.createElement("iframe");
+    return frame.className = "fix-ado-pipeline-frame", frame.title = "Step log", panel.append(frame), frame;
+  }
+  function showLogNote(panel, text) {
+    let note = panel.querySelector(LOG_NOTE_SELECTOR);
+    if (text === null) {
+      note?.remove();
+      return;
+    }
+    note === null && (note = panel.ownerDocument.createElement("p"), note.className = "fix-ado-pipeline-log-note", panel.append(note)), note.textContent = text;
+  }
+  function stepLogOf(shown, step, content) {
+    let { buildId } = shown.run, jobName = shown.stage?.jobs.find((job) => job.id === step.jobId)?.name ?? "";
+    return { buildId, jobName, path: content.logPathOf(buildId, step), stepName: step.name };
+  }
+  function showLog(panel, shown, content) {
+    let { step } = shown;
+    if (step === null) {
+      panel.querySelector(FRAME_SELECTOR)?.setAttribute("hidden", ""), showLogNote(panel, shown.stages === null ? "Loading steps…" : "This run has no steps yet.");
+      return;
+    }
+    showLogNote(panel, null);
+    let frame = frameOf(panel);
+    frame.removeAttribute("hidden"), showStepLog(frame, stepLogOf(shown, step, content));
+  }
+  function stepOf(stages, stepId) {
+    return stages.flatMap((stage) => stage.jobs.flatMap((job) => job.steps)).find((step) => step.id === stepId);
+  }
+  function createIssueLink({ document: document2, shown }, issue, content) {
+    let { buildId } = shown.run, link = document2.createElement("a"), step = stepOf(shown.stages ?? [], issue.stepId);
+    return link.href = step === void 0 ? "#" : content.logPathOf(buildId, step), link.addEventListener("click", (event) => {
+      event.preventDefault();
+      let { jobId, stageId, stepId } = issue;
+      content.onPick({ buildId, folded: null, jobId, stageId, stepId });
+    }), fillIssueLink(link, issue);
+  }
+  function showIssues(panel, tree, content) {
+    panel.querySelector(ISSUES_SELECTOR)?.remove();
+    let { shown } = content, stages = shown?.stages ?? [], issues = runIssuesOf(stages);
+    if (shown === null || issues.length === 0)
+      return;
+    let context = { document: panel.ownerDocument, shown }, box = createIssueBox(context.document, {
+      collapse: {
+        isCollapsed: panel.hasAttribute(ISSUES_COLLAPSED_ATTRIBUTE),
+        onToggle: (isCollapsed) => {
+          panel.toggleAttribute(ISSUES_COLLAPSED_ATTRIBUTE, isCollapsed);
+        }
+      },
+      createLink: (issue) => createIssueLink(context, issue, content),
+      details: null,
+      issues,
+      title: issueSummary(stages)
+    });
+    tree.after(box);
+  }
+  function focusedKey(oldTree) {
+    let focused = oldTree?.ownerDocument.activeElement ?? null;
+    return focused !== null && oldTree?.contains(focused) === !0 ? focused.closest("[data-fix-ado-focus-key]")?.dataset.fixAdoFocusKey ?? null : null;
+  }
+  function placeTree(panel, tree) {
+    panel.querySelector(":scope > .fix-ado-pipeline-message")?.remove();
+    let oldTree = panel.querySelector(TREE_SELECTOR6), key = focusedKey(oldTree);
+    oldTree === null ? panel.prepend(tree) : oldTree.replaceWith(tree), key !== null && (tree.querySelector(`[data-fix-ado-focus-key="${key}"]`) ?? tree.querySelector('[aria-current="true"]'))?.focus();
+  }
+  function runActionOf(runs, checks) {
+    let busyRuns = runs.filter((run) => run.isBusy);
+    return busyRuns.length > 0 ? {
+      action: "cancel",
+      choices: busyRuns.map((run) => ({
+        details: runDetails(run),
+        key: String(run.buildId),
+        name: run.name
+      }))
+    } : {
+      action: "start",
+      choices: checks.map((check2) => ({
+        details: check2.isRequired ? "Required" : "Optional",
+        key: check2.evaluationId,
+        name: check2.name
+      }))
+    };
+  }
+  function runActionElements(panel, { runs, startableChecks }, content) {
+    return createRunAction({
+      ...runActionOf(runs, startableChecks),
+      document: panel.ownerDocument,
+      onPick: content.onRunAction,
+      onToggleList: content.onRunActionListToggle,
+      state: content.runActionState
+    }) ?? [];
+  }
+  function showRun(panel, loaded, content) {
+    let { shown } = content;
+    if (shown === null) {
+      message(panel, "This pull request has no pipeline runs."), panel.prepend(...runActionElements(panel, loaded, content));
+      return;
+    }
+    let tree = createRunTree({
+      document: panel.ownerDocument,
+      onPick: content.onPick,
+      pick: content.pick,
+      runPathOf: content.runPathOf,
+      runs: loaded.runs,
+      shown
+    });
+    tree.prepend(...runActionElements(panel, loaded, content)), placeTree(panel, tree), showIssues(panel, tree, content), showLog(panel, shown, content);
+  }
+  function renderKey({ pick, runActionState, runs, shown }) {
+    return JSON.stringify([runs, shown, pick, runActionState]);
+  }
+  function renderPanel(panel, content) {
+    let key = renderKey(content);
+    panel.dataset.fixAdoRendered !== key && (panel.dataset.fixAdoRendered = key, content.runs.kind === "loading" ? message(panel, "Loading pipeline runs…") : content.runs.kind === "failed" ? message(panel, "Could not load the pipeline runs.", !0) : showRun(panel, content.runs, content));
+  }
+  function createPanel(document2) {
+    let panel = document2.createElement("div");
+    return panel.className = PANEL_CLASS, panel.setAttribute("role", "tabpanel"), panel.setAttribute("aria-labelledby", TAB_ID), panel;
+  }
+
+  // azure-devops/src/pipeline/pipeline-runs.ts
+  var RESULT_STATUSES2 = {
+    canceled: { label: "Canceled", status: "notStarted" },
+    failed: { label: "Failed", status: "failed" },
+    partiallySucceeded: { label: "Partly succeeded", status: "expired" },
+    succeeded: { label: "Succeeded", status: "succeeded" }
+  }, PROGRESS_STATUSES = {
+    cancelling: { label: "Cancelling", status: "cancelling" },
+    inProgress: { label: "Running", status: "running" },
+    notStarted: { label: "Queued", status: "queued" },
+    postponed: { label: "Queued", status: "queued" }
+  }, BUSY_BUILD_STATUSES = /* @__PURE__ */ new Set(["inProgress", "notStarted", "postponed"]);
+  function buildStatusOf(build) {
+    return (build.result === void 0 ? void 0 : RESULT_STATUSES2[build.result]) ?? PROGRESS_STATUSES[build.status] ?? null;
+  }
+  function runStatusOf(build, check2) {
+    let isCancelling = build.status === "cancelling";
+    return check2?.status === null || check2 === void 0 || isCancelling ? buildStatusOf(build) : { status: check2.status };
+  }
+  function runOfBuild(build, check2) {
+    return {
+      buildId: build.id,
+      buildNumber: build.buildNumber,
+      isBusy: BUSY_BUILD_STATUSES.has(build.status),
+      isRequired: check2?.isRequired ?? null,
+      name: check2?.name ?? build.definition?.name ?? `Run ${build.buildNumber}`,
+      startedAt: build.startTime ?? build.queueTime ?? check2?.startedAt ?? null,
+      status: runStatusOf(build, check2)
+    };
+  }
+  function runOfCheck(check2) {
+    let status = check2.status === null ? null : { status: check2.status }, isBusy2 = check2.status === "running" || check2.status === "queued";
+    return { ...check2, buildNumber: null, isBusy: isBusy2, status };
+  }
+  function pipelineRunsOf(checks, builds) {
+    let listed = new Set(builds.map((build) => build.id));
+    return [
+      ...checks.filter((check2) => !listed.has(check2.buildId)).map((check2) => runOfCheck(check2)),
+      ...builds.map(
+        (build) => runOfBuild(
+          build,
+          checks.find((check2) => check2.buildId === build.id)
+        )
+      )
+    ];
+  }
+
+  // azure-devops/src/features/pipeline-tab/pipeline-tab-selection.ts
+  function stageWithStep(stages, stepId) {
+    return stages.find(
+      (stage) => stage.jobs.some((job) => job.steps.some((step) => step.id === stepId))
+    );
+  }
+  function pickedScope(stages, pick) {
+    let pickedStage = stages.find((stage) => stage.id === pick.stageId), pickedJob = (pickedStage?.jobs ?? []).find((job) => job.id === pick.jobId);
+    return pickedStage !== void 0 && pickedJob !== void 0 ? [{ ...pickedStage, jobs: [pickedJob] }] : pickedStage === void 0 ? stages : [pickedStage];
+  }
+  function shownStepOf(stages, pick) {
+    let scope = pickedScope(stages, pick);
+    return scope.flatMap((stage) => stage.jobs.flatMap((job) => job.steps)).find((step) => step.id === pick.stepId) ?? defaultStepOf(scope);
+  }
+  function shownRunOf(runs, stagesByBuildId, pick) {
+    let run = runs.find((candidate) => candidate.buildId === pick.buildId) ?? runs[0];
+    if (run === void 0)
+      return null;
+    let stages = stagesByBuildId.get(run.buildId) ?? null;
+    if (stages === null)
+      return { run, stage: null, stages, step: null };
+    let step = shownStepOf(stages, pick), stage = (step === null ? void 0 : stageWithStep(stages, step.id)) ?? stages.find((candidate) => candidate.id === pick.stageId) ?? stages[0] ?? null;
+    return { run, stage, stages, step };
+  }
+
+  // azure-devops/src/features/pipeline-tab/pipeline-tab-data.ts
+  var RUNS_REFRESH_MS = 3e4, ACTED_RUNS_REFRESH_MS = 5e3, ACTED_RUNS_REFRESH_WINDOW_MS = 6e4, RUNNING_TIMELINE_REFRESH_MS = 5e3, NO_PICK = {
+    buildId: null,
+    folded: null,
+    jobId: null,
+    stageId: null,
+    stepId: null
+  };
+  function createTabData(pullRequest) {
+    return {
+      fastRunsRefreshUntil: Number.NEGATIVE_INFINITY,
+      pick: NO_PICK,
+      pullRequest,
+      runActionState: "idle",
+      runs: { kind: "loading" },
+      runsLoadedAt: Number.NEGATIVE_INFINITY,
+      stagesByBuildId: /* @__PURE__ */ new Map(),
+      timelineLoadedAt: /* @__PURE__ */ new Map()
+    };
+  }
+  function shownRunOfData(data) {
+    return data.runs.kind === "loaded" ? shownRunOf(data.runs.runs, data.stagesByBuildId, data.pick) : null;
+  }
+  function logRunListFailure(error) {
+    return error instanceof AdoRequestError ? log("Pipeline tab: Azure DevOps refused the run list", { httpStatus: error.httpStatus }) : log("Pipeline tab: the run list request failed without an answer"), [];
+  }
+  async function loadRuns({ data, onChange, sources }) {
+    data.runsLoadedAt = sources.now();
+    try {
+      let [evaluations, builds] = await Promise.all([
+        sources.getEvaluations(data.pullRequest),
+        sources.getPullRequestBuilds(data.pullRequest).catch(logRunListFailure)
+      ]), checks = pipelineChecksOf(evaluations);
+      log("Pipeline tab: runs loaded", { checkCount: checks.length, runCount: builds.length }), data.runs = {
+        kind: "loaded",
+        runs: pipelineRunsOf(checks, builds),
+        startableChecks: startableChecksOf(evaluations)
+      };
+    } catch {
+      data.runs = data.runs.kind === "loaded" ? data.runs : { kind: "failed" };
+    }
+    onChange();
+  }
+  async function loadTimeline2(loader, buildId) {
+    let { data, onChange, sources } = loader;
+    data.timelineLoadedAt.set(buildId, sources.now());
+    try {
+      let records = await sources.getTimeline(data.pullRequest.project, buildId);
+      data.stagesByBuildId.set(buildId, stagesOf(records));
+    } catch {
+    }
+    onChange();
+  }
+  function isTimelineDue2(data, shown, now) {
+    let loadedAt = data.timelineLoadedAt.get(shown.run.buildId);
+    if (loadedAt === void 0)
+      return !0;
+    let status = shown.run.status?.status;
+    return (status === "running" || status === "queued" || (shown.stages ?? []).some((stage) => stage.state !== "completed") || shown.stages === null) && now - loadedAt >= RUNNING_TIMELINE_REFRESH_MS;
+  }
+  function loadWhatIsDue(loader) {
+    let { data, sources } = loader, now = sources.now(), runsRefreshMs = now < data.fastRunsRefreshUntil ? ACTED_RUNS_REFRESH_MS : RUNS_REFRESH_MS;
+    now - data.runsLoadedAt >= runsRefreshMs && loadRuns(loader);
+    let shown = shownRunOfData(data);
+    shown !== null && isTimelineDue2(data, shown, now) && loadTimeline2(loader, shown.run.buildId);
+  }
+  async function sendRunAction(loader, action, key) {
+    let { data, sources } = loader;
+    try {
+      return await (action === "start" ? sources.requeueCheck(data.pullRequest, key) : sources.cancelRun(data.pullRequest.project, Number(key))), data.runsLoadedAt = Number.NEGATIVE_INFINITY, data.fastRunsRefreshUntil = sources.now() + ACTED_RUNS_REFRESH_WINDOW_MS, log(
+        `Pipeline tab: run action ${action} sent`,
+        action === "cancel" ? { buildId: Number(key) } : {}
+      ), "idle";
+    } catch (error) {
+      return log(`Pipeline tab: Azure DevOps refused run action ${action}`, {
+        httpStatus: error instanceof AdoRequestError ? error.httpStatus : null
+      }), "failed";
+    }
+  }
+  async function performRunAction(loader, action, key) {
+    loader.data.runActionState = "waiting", loader.onChange(), loader.data.runActionState = await sendRunAction(loader, action, key), loader.onChange();
+  }
+  function expireTimeline(data, buildId) {
+    data.timelineLoadedAt.delete(buildId);
+  }
+
+  // azure-devops/src/features/pipeline-tab/pipeline-tab.ts
+  var OPEN_ATTRIBUTE = "data-fix-ado-pipeline-tab-open", PAGE_SELECTOR = ".repos-pr-details-page", TABBAR_SELECTOR2 = ".repos-pr-details-page-tabbar", CHECKS_PANEL_SELECTOR = ".bolt-panel", RUN_LINK = 'a[href*="/_build/results?"]', RUN_LINK_SELECTOR2 = `${PAGE_SELECTOR} ${RUN_LINK}, ${CHECKS_PANEL_SELECTOR} ${RUN_LINK}`;
+  function setSelected(tab, isSelected) {
+    tab.classList.toggle("selected", isSelected), tab.setAttribute("aria-selected", String(isSelected));
+  }
+  function isSamePullRequest(data, pullRequest) {
+    return JSON.stringify(data?.pullRequest ?? null) === JSON.stringify(pullRequest);
+  }
+  function panelOf(state, page) {
+    let existing = page.querySelector(`.${PANEL_CLASS}`), tabbar = page.querySelector(TABBAR_SELECTOR2);
+    if (existing !== null || tabbar === null)
+      return existing;
+    let panel = createPanel(state.options.document);
+    return tabbar.after(panel), panel;
+  }
+  function render4(state) {
+    let { data } = state, page = state.options.document.querySelector(PAGE_SELECTOR), panel = page === null ? null : panelOf(state, page);
+    if (!state.isOpen || data === null || page === null || panel === null)
+      return;
+    page.setAttribute(OPEN_ATTRIBUTE, "");
+    let { apiBasePath: apiBasePath2 } = state.options, { project } = data.pullRequest;
+    renderPanel(panel, {
+      logPathOf: (buildId, step) => pipelineLogPath(apiBasePath2, project, { buildId, jobId: step.jobId, stepId: step.id }),
+      onPick: (pick) => {
+        data.pick = pick, update(state);
+      },
+      onRunAction: (action, key) => {
+        performRunAction(loaderOf(state, data), action, key);
+      },
+      onRunActionListToggle: (isOpen) => {
+        data.runActionState = isOpen ? "choosing" : "idle", update(state);
+      },
+      pick: data.pick,
+      runActionState: data.runActionState,
+      runPathOf: (buildId) => pipelineRunPath(apiBasePath2, project, buildId),
+      runs: data.runs,
+      shown: shownRunOfData(data)
+    }), watchLog(state, panel);
+  }
+  function onLogStep(state, stepName) {
+    let { data } = state, shown = data === null ? null : shownRunOfData(data);
+    data === null || shown === null || data.pick.stepId !== null || shown.step?.name === stepName || (expireTimeline(data, shown.run.buildId), update(state));
+  }
+  function watchLog(state, panel) {
+    let frame = panel.querySelector(".fix-ado-pipeline-frame");
+    frame !== null && watchShownStep(frame, (stepName) => {
+      onLogStep(state, stepName);
+    });
+  }
+  function loaderOf(state, data) {
+    return {
+      data,
+      onChange: () => {
+        state.data === data && update(state);
+      },
+      sources: state.options
+    };
+  }
+  function update(state) {
+    let { data } = state;
+    !state.isOpen || data === null || (render4(state), loadWhatIsDue(loaderOf(state, data)));
+  }
+  function selectTab(state) {
+    let { document: document2 } = state.options, tab = document2.querySelector(`.${TAB_CLASS}`);
+    for (let other of document2.querySelectorAll("[role=tablist] [role=tab].selected"))
+      other !== tab && (other.hasAttribute(OWN_TAB_ATTRIBUTE) || (state.replacedTab = other), setSelected(other, !1));
+    tab !== null && setSelected(tab, !0);
+  }
+  function openTab(state, run) {
+    if (state.isOpen = !0, run !== null && state.data !== null) {
+      let { buildId, jobId, stepId } = run;
+      state.data.pick = { buildId, folded: null, jobId, stageId: null, stepId };
+    }
+    selectTab(state), update(state);
+  }
+  function closeTab(state) {
+    let { document: document2 } = state.options;
+    state.isOpen = !1;
+    let page = document2.querySelector(PAGE_SELECTOR);
+    page?.removeAttribute(OPEN_ATTRIBUTE), page?.querySelector(`.${PANEL_CLASS}`)?.remove();
+    for (let tab of document2.querySelectorAll(`.${TAB_CLASS}`))
+      setSelected(tab, !1);
+    state.replacedTab !== null && (setSelected(state.replacedTab, !0), state.replacedTab = null);
+  }
+  function closeChecksPanel(target) {
+    closestElement(target, CHECKS_PANEL_SELECTOR)?.querySelector(".bolt-panel-header .ms-Icon--Clear")?.closest("button")?.click();
+  }
+  function clickedRun(event, document2) {
+    let link = closestElement(event.target, RUN_LINK_SELECTOR2), isPlainClick = event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey, button2 = closestElement(event.target, "button, [role=button]"), isOnButtonInLink = button2 !== null && link?.contains(button2) === !0;
+    if (link === null || !isPlainClick || isOnButtonInLink || closestElement(event.target, `.${PANEL_CLASS}`) !== null)
+      return null;
+    let url = new URL(link.getAttribute("href") ?? "", document2.location.href);
+    return parsePipelineRunLocation(url);
+  }
+  function onClick(state, event) {
+    if (state.data === null)
+      return;
+    let isPipelineTab = closestElement(event.target, `.${TAB_CLASS}`) !== null, run = clickedRun(event, state.options.document);
+    isPipelineTab || run !== null ? (event.preventDefault(), event.stopPropagation(), openTab(state, run), closeChecksPanel(event.target)) : state.isOpen && closestElement(event.target, "[role=tablist] [role=tab]") !== null && closeTab(state);
+  }
+  function addTab(document2) {
+    let tablist = document2.querySelector(`${TABBAR_SELECTOR2} [role=tablist]`);
+    return tablist === null ? !1 : (tablist.querySelector(`.${TAB_CLASS}`) === null && tablist.append(createTab(document2)), !0);
+  }
+  function syncTab(state, pullRequest) {
+    isSamePullRequest(state.data, pullRequest) || (closeTab(state), state.data = pullRequest === null ? null : createTabData(pullRequest)), state.data !== null && addTab(state.options.document) && state.isOpen && (selectTab(state), update(state));
+  }
+  function createPipelineTab(options) {
+    let state = { data: null, isOpen: !1, options, replacedTab: null };
+    return options.document.addEventListener(
+      "click",
+      (event) => {
+        onClick(state, event);
+      },
+      { capture: !0 }
+    ), {
+      sync: (pullRequest) => {
+        syncTab(state, pullRequest);
+      }
+    };
+  }
+
+  // azure-devops/src/features/pipeline-tab/style.css
+  var style_default15 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+.repos-pr-details-page[data-fix-ado-pipeline-tab-open]
+  > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
+  display: none !important;
+}
+
+/* The pull request page is a column that fills the window; the panel takes what the
+   header and tabs leave, so the log reaches the bottom. */
+.fix-ado-pipeline-panel {
+  display: grid;
+  flex: 1 0 0;
+  grid-template-columns: 400px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  min-height: 400px;
+  padding-top: 16px;
+}
+
+/* The tree runs down the left. The warnings and errors sit above the log on the right. */
+.fix-ado-pipeline-panel > .fix-ado-pipeline-message {
+  grid-column: 1 / -1;
+}
+
+.fix-ado-pipeline-panel > .fix-ado-issue-box {
+  grid-column: 2;
+  grid-row: 1;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.fix-ado-pipeline-panel > .fix-ado-pipeline-frame,
+.fix-ado-pipeline-panel > .fix-ado-pipeline-log-note {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.fix-ado-pipeline-tree {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.fix-ado-pipeline-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0 4px 4px 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fix-ado-pipeline-item:hover {
+  background: var(--palette-black-alpha-4, rgba(0, 0, 0, 0.04));
+}
+
+/* The picked run, stage, job and step get a bar on the left, as in Azure DevOps's own lists. */
+.fix-ado-pipeline-item[aria-current="true"] {
+  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+  box-shadow: inset 3px 0 0 var(--communication-background, rgb(0, 120, 212));
+}
+
+/* Forced colors drop box shadows and backgrounds, so the bar becomes a border there. */
+@media (forced-colors: active) {
+  .fix-ado-pipeline-item[aria-current="true"] {
+    border-inline-start: 3px solid Highlight;
+  }
+}
+
+.fix-ado-pipeline-item:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.fix-ado-pipeline-item .fix-ado-pipeline-status {
+  margin-left: 0;
+}
+
+.fix-ado-pipeline-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fix-ado-pipeline-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fix-ado-pipeline-run .fix-ado-pipeline-item-name {
+  font-weight: 600;
+}
+
+.fix-ado-pipeline-item-details {
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-size: 12px;
+}
+
+/* Stages sit under their run, jobs under their stage, steps under their job. */
+.fix-ado-pipeline-stages,
+.fix-ado-pipeline-jobs,
+.fix-ado-pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+}
+
+/* A run's row holds its item and, at the right end, the link to its page. */
+.fix-ado-pipeline-run-row {
+  position: relative;
+}
+
+.fix-ado-pipeline-run-row > .fix-ado-pipeline-run {
+  padding-inline-end: 48px;
+}
+
+/* Open run in new tab: a subtle icon button beside the run's name, its icon's right edge
+   in line with the count badges of the rows below. */
+.fix-ado-pipeline-open-run {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+
+.fix-ado-pipeline-open-run:hover {
+  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+}
+
+.fix-ado-pipeline-open-run:focus-visible {
+  outline: 2px solid var(--communication-background, rgb(0, 120, 212));
+  outline-offset: -2px;
+}
+
+/* A line above each run but the first, so the runs stand apart. The run keeps the same
+   padding above and below, as the rows under it. */
+.fix-ado-pipeline-run-row:not(:first-child) {
+  margin-top: 8px;
+  border-top: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+
+  & > .fix-ado-pipeline-run {
+    border-radius: 0;
+  }
+}
+
+/* "Start new run" or "Cancel current run" above the runs. Azure DevOps's button
+   classes give its look. */
+.fix-ado-pipeline-run-action {
+  align-self: flex-start;
+  margin: 0 0 4px 12px;
+}
+
+/* Red, in case the page has no style for Azure DevOps's danger button. */
+.fix-ado-pipeline-run-action.danger {
+  background: var(--component-status-error, rgb(205, 74, 69));
+  border-color: var(--component-status-error, rgb(205, 74, 69));
+  color: #fff;
+}
+
+.fix-ado-pipeline-run-action-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+}
+
+.fix-ado-pipeline-note {
+  padding: 6px 10px 2px;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  font-size: 12px;
+}
+
+.fix-ado-pipeline-log-note {
+  flex: 1 1 auto;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+}
+
+.fix-ado-pipeline-frame[hidden] {
+  display: none;
+}
+
+.fix-ado-pipeline-frame {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+}
+
+/* The run page inside the Pipeline tab. pipeline-run-frame.ts marks it; only the log stays. */
+html[data-fix-ado-run-frame] .project-header,
+html[data-fix-ado-run-frame] .navigation-container,
+html[data-fix-ado-run-frame] .region-content-header,
+html[data-fix-ado-run-frame] .region-content-footer,
+html[data-fix-ado-run-frame] .region-footer,
+html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
+  display: none !important;
+}
+
+/* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */
+.fix-ado-pipeline-tab:focus:not(:focus-visible) {
+  outline: none;
+}
+`;
+
+  // azure-devops/src/features/pipeline-tab/index.ts
+  var pipelineTab = {
+    change: { kind: "new", version: "1.7.2" },
+    description: "Runs, stages, steps and logs, with buttons to start or cancel a run.",
+    id: "pipeline-tab",
+    name: "Pipeline tab",
+    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2) {
+        let runFrame = createPipelineRunFrame(document2);
+        return runFrame ? {
+          sync() {
+            runFrame.sync();
+          }
+        } : null;
+      }
+      let tab = createPipelineTab({
+        apiBasePath: basePath2,
+        cancelRun: async (project, buildId) => {
+          await client.cancelBuild(project, buildId);
+        },
+        document: document2,
+        getEvaluations: async (pullRequest) => {
+          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
+          return evaluations;
+        },
+        getPullRequestBuilds: async ({ project, pullRequestId }) => {
+          let { builds } = await client.getPullRequestBuilds(project, pullRequestId);
+          return builds;
+        },
+        getTimeline: async (project, buildId) => {
+          let { records } = await client.getTimeline(project, buildId);
+          return records;
+        },
+        now,
+        requeueCheck: async ({ project }, evaluationId) => {
+          await client.requeuePolicyEvaluation(project, evaluationId);
+        }
+      });
+      return {
+        sync({ page }) {
+          tab.sync(pullRequestOf(page));
+        }
+      };
+    },
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default15]
+  };
+
+  // azure-devops/src/features/run-page-tabs/run-tab-store.ts
+  var RUN_TAB_ID_PREFIX = "__bolt-tab-";
+  function runTabViewOf(tab) {
+    return tab.id.startsWith(RUN_TAB_ID_PREFIX) ? tab.id.slice(RUN_TAB_ID_PREFIX.length) : null;
+  }
+  function runTabViewsIn(document2) {
+    return [...document2.querySelectorAll(
+      ".run-details-page .bolt-tabbar [role=tablist] [role=tab]"
+    )].map((tab) => runTabViewOf(tab)).filter((view) => view !== null);
+  }
+  function runTabPath(runPath, view) {
+    return `${runPath}&view=${encodeURIComponent(view)}`;
+  }
+  function isSameRunTab(first, second) {
+    return first.pipelineId === second.pipelineId && first.view === second.view;
+  }
+
+  // azure-devops/src/features/run-page-tabs/run-tab-frame.ts
+  var RUN_TAB_FRAME_CLASS = "fix-ado-run-tab-frame", TAB_CONTENT_LINK_SELECTOR = ".run-details-tab-content a[href]";
+  function frameElementOf(document2) {
+    let element4 = document2.defaultView?.frameElement ?? null;
+    return element4?.classList.contains(RUN_TAB_FRAME_CLASS) === !0 && "dataset" in element4 ? (
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- an HTML element of the parent window
+      element4
+    ) : null;
+  }
+  function reportMissingTab(document2, frame, view) {
+    let views = runTabViewsIn(document2);
+    if (views.length === 0)
+      return;
+    let isMissing = !views.includes(view);
+    isMissing && frame.dataset.fixAdoMissingTab !== view ? frame.dataset.fixAdoMissingTab = view : !isMissing && frame.dataset.fixAdoMissingTab !== void 0 && delete frame.dataset.fixAdoMissingTab;
+  }
+  function openTabLinksApart(document2) {
+    document2.addEventListener(
+      "click",
+      (event) => {
+        let link = closestElement(event.target, TAB_CONTENT_LINK_SELECTOR);
+        link?.setAttribute("target", "_blank"), link?.setAttribute("rel", "noopener");
+      },
+      { capture: !0 }
+    );
+  }
+  function createRunTabFrame(document2, frame = frameElementOf(document2)) {
+    let view = pipelineRunTabViewOf(document2.location);
+    return frame === null || view === null || parsePipelineRunLocation(document2.location) === null ? null : (openTabLinksApart(document2), {
+      sync: () => {
+        document2.documentElement.dataset.fixAdoRunTabFrame = "", reportMissingTab(document2, frame, view);
+      }
+    });
+  }
+
+  // azure-devops/src/features/run-page-tabs/run-tab-elements.ts
+  var TAB_CLASS2 = "fix-ado-run-tab", PANEL_CLASS2 = "fix-ado-run-tab-panel", MISSING_CLASS = "fix-ado-run-tab-missing";
+  function setSelected2(tab, isSelected) {
+    tab.classList.toggle("selected", isSelected), tab.setAttribute("aria-selected", String(isSelected));
+  }
+  function setAttribute(element4, name, value) {
+    value === null ? element4.removeAttribute(name) : element4.getAttribute(name) !== value && element4.setAttribute(name, value);
+  }
+  function createTab2(document2, key) {
+    let container = Object.assign(document2.createElement("span"), {
+      className: "bolt-tab-inner-container"
+    });
+    container.append(Object.assign(document2.createElement("span"), { className: "bolt-tab-text" }));
+    let tab = Object.assign(document2.createElement("a"), {
+      className: `bolt-tab focus-treatment flex-noshrink ${TAB_CLASS2}`,
+      href: "#",
+      id: `fix-ado-run-tab-${key.replaceAll(/[^\w-]/gu, "-")}`
+    });
+    return tab.setAttribute("role", "tab"), tab.dataset.fixAdoOwnTab = "", tab.dataset.fixAdoRunTab = key, setSelected2(tab, !1), tab.append(container), tab;
+  }
+  function showTab(tab, { buildId, name, tab: runTab }) {
+    let text = tab.querySelector(".bolt-tab-text");
+    text !== null && text.textContent !== name && (text.textContent = name, text.dataset.content = name);
+    let isDisabled = buildId === null;
+    setAttribute(tab, "aria-disabled", isDisabled ? "true" : null), setAttribute(tab, "title", isDisabled ? `No run of ${runTab.pipelineName} yet` : null), tab.classList.toggle("fix-ado-run-tab-disabled", isDisabled);
+  }
+  function tabsFor(tablist, runTabs) {
+    let existing = new Map(
+      [...tablist.querySelectorAll(`.${TAB_CLASS2}`)].map((tab) => [
+        tab.dataset.fixAdoRunTab ?? "",
+        tab
+      ])
+    );
+    for (let [key, tab] of existing)
+      runTabs.some((runTab) => runTab.key === key) || tab.remove();
+    return runTabs.map(
+      (runTab) => existing.get(runTab.key) ?? createTab2(tablist.ownerDocument, runTab.key)
+    );
+  }
+  function showTabs(tablist, runTabs) {
+    let tabs = tabsFor(tablist, runTabs), tail = [...tablist.children].slice(-tabs.length);
+    tabs.some((tab, index) => tail[index] !== tab) && tablist.append(...tabs);
+    for (let [index, tab] of tabs.entries()) {
+      let runTab = runTabs[index];
+      runTab !== void 0 && showTab(tab, runTab);
+    }
+    return tabs;
+  }
+  function createPanel2(document2, tab) {
+    let panel = Object.assign(document2.createElement("div"), { className: PANEL_CLASS2 });
+    panel.setAttribute("role", "tabpanel"), panel.setAttribute("aria-labelledby", tab.id);
+    let frame = Object.assign(document2.createElement("iframe"), { className: RUN_TAB_FRAME_CLASS }), note = Object.assign(document2.createElement("p"), {
+      className: MISSING_CLASS,
+      hidden: !0
+    });
+    return note.setAttribute("role", "status"), panel.append(frame, note), { frame, note, panel };
+  }
+  function panelPartsIn(page, tab) {
+    let existing = page.querySelector(`:scope > .${PANEL_CLASS2}`), frame = existing?.querySelector(`.${RUN_TAB_FRAME_CLASS}`) ?? null, note = existing?.querySelector(`.${MISSING_CLASS}`) ?? null;
+    if (existing !== null && frame !== null && note !== null)
+      return setAttribute(existing, "aria-labelledby", tab.id), { frame, note };
+    existing?.remove();
+    let created = createPanel2(page.ownerDocument, tab);
+    return page.querySelector(".repos-pr-details-page-tabbar")?.after(created.panel), created;
+  }
+  function showMissingNote({ frame, note }, runTab) {
+    let isMissing = frame.dataset.fixAdoMissingTab === runTab.tab.view;
+    frame.hidden = isMissing, note.hidden = !isMissing;
+    let text = `This run has no ${runTab.tab.label} tab.`;
+    note.textContent !== text && (note.textContent = text);
+  }
+  function showPanel(page, tab, { path, runTab }) {
+    let { frame, note } = panelPartsIn(page, tab);
+    setAttribute(frame, "title", runTab.name), frame.getAttribute("src") !== path && (delete frame.dataset.fixAdoMissingTab, frame.setAttribute("src", path)), showMissingNote({ frame, note }, runTab);
+  }
+
+  // azure-devops/src/features/run-page-tabs/pull-request-run-tabs-data.ts
+  function pipelineIdOf(evaluation) {
+    return evaluation.configuration.settings?.buildDefinitionId ?? evaluation.context?.buildDefinitionId ?? null;
+  }
+  function checkRunsByPipeline(evaluations) {
+    let runs = /* @__PURE__ */ new Map();
+    for (let evaluation of evaluations) {
+      let pipelineId = pipelineIdOf(evaluation);
+      if (evaluation.configuration.type.id === BUILD_POLICY_TYPE_ID && pipelineId !== null) {
+        let buildId = evaluation.context?.buildId ?? 0;
+        runs.set(pipelineId, buildId > 0 ? buildId : runs.get(pipelineId) ?? null);
+      }
+    }
+    return runs;
+  }
+  function latestBuildId(pipelineId, checkRun, builds) {
+    let ids = builds.filter((build) => build.definition?.id === pipelineId).map(({ id }) => id), all = checkRun === null ? ids : [...ids, checkRun];
+    return all.length === 0 ? null : Math.max(...all);
+  }
+  function pullRequestRunTabsOf(tabs, evaluations, builds) {
+    let checkRuns = checkRunsByPipeline(evaluations), shown = tabs.filter((tab) => checkRuns.has(tab.pipelineId));
+    return shown.map((tab) => {
+      let isLabelShared = shown.some((other) => other !== tab && other.label === tab.label);
+      return {
+        buildId: latestBuildId(tab.pipelineId, checkRuns.get(tab.pipelineId) ?? null, builds),
+        key: `${tab.pipelineId}/${tab.view}`,
+        name: isLabelShared ? `${tab.label} (${tab.pipelineName})` : tab.label,
+        tab
+      };
+    });
+  }
+
+  // azure-devops/src/features/run-page-tabs/pull-request-run-tabs.ts
+  var REFRESH_MS2 = 3e4, PAGE_SELECTOR2 = ".repos-pr-details-page", TABLIST_SELECTOR = ".repos-pr-details-page-tabbar [role=tablist]", OPEN_ATTRIBUTE2 = "data-fix-ado-run-tab-open";
+  function runTabsOf({ data, options }) {
+    return data?.evaluations === null || data === null ? [] : pullRequestRunTabsOf(options.loadRunTabs(), data.evaluations, data.builds);
+  }
+  function closeTab2(state) {
+    let { document: document2 } = state.options;
+    state.openKey = null;
+    let page = document2.querySelector(PAGE_SELECTOR2);
+    page?.removeAttribute(OPEN_ATTRIBUTE2), page?.querySelector(`:scope > .${PANEL_CLASS2}`)?.remove();
+    for (let tab of document2.querySelectorAll(`.${TAB_CLASS2}[aria-selected="true"]`))
+      setSelected2(tab, !1);
+  }
+  function showOpenTab(state, page, shown) {
+    let index = shown.runTabs.findIndex(({ key }) => key === state.openKey), [runTab, tab] = [shown.runTabs[index], shown.tabs[index]], buildId = runTab?.buildId ?? null;
+    if (state.data === null || runTab === void 0 || tab === void 0 || buildId === null) {
+      closeTab2(state);
+      return;
+    }
+    let { apiBasePath: apiBasePath2 } = state.options, runPath = pipelineRunPath(apiBasePath2, state.data.pullRequest.project, buildId);
+    page.setAttribute(OPEN_ATTRIBUTE2, ""), showPanel(page, tab, { path: runTabPath(runPath, runTab.tab.view), runTab });
+  }
+  function render5(state) {
+    let { document: document2 } = state.options, tablist = document2.querySelector(TABLIST_SELECTOR), page = document2.querySelector(PAGE_SELECTOR2);
+    if (tablist === null || page === null || state.data === null)
+      return;
+    let runTabs = runTabsOf(state), tabs = showTabs(tablist, runTabs);
+    state.openKey !== null && showOpenTab(state, page, { runTabs, tabs });
+  }
+  function openTab2(state, tab) {
+    let { document: document2 } = state.options, selector = `${TABLIST_SELECTOR} [role=tab][aria-selected="true"]`;
+    for (let other of document2.querySelectorAll(selector))
+      setSelected2(other, !1);
+    setSelected2(tab, !0), state.openKey = tab.dataset.fixAdoRunTab ?? null, render5(state);
+  }
+  function closeForOtherTab(state, other) {
+    closeTab2(state), other.hasAttribute(OWN_TAB_ATTRIBUTE) || setSelected2(other, !0);
+  }
+  function onClick2(state, event) {
+    let tab = closestHtmlElement(event.target, `.${TAB_CLASS2}`), other = closestElement(event.target, `${TABLIST_SELECTOR} [role=tab]`);
+    if (tab === null) {
+      state.openKey !== null && other !== null && closeForOtherTab(state, other);
+      return;
+    }
+    event.preventDefault(), event.stopPropagation(), tab.getAttribute("aria-disabled") !== "true" && openTab2(state, tab);
+  }
+  async function loadChecksAndRuns(state, data) {
+    let { options } = state;
+    data.loadedAt = options.now();
+    let { project, pullRequestId } = data.pullRequest;
+    try {
+      let [evaluations, builds] = await Promise.all([
+        options.getEvaluations(data.pullRequest),
+        options.getPullRequestBuilds(project, pullRequestId)
+      ]);
+      data.evaluations = evaluations, data.builds = builds;
+    } catch {
+    }
+    state.data === data && render5(state);
+  }
+  function syncRunTabs(state, pullRequest, canFetch) {
+    JSON.stringify(state.data?.pullRequest ?? null) !== JSON.stringify(pullRequest) && (closeTab2(state), state.data = pullRequest === null ? null : { builds: [], evaluations: null, loadedAt: Number.NEGATIVE_INFINITY, pullRequest });
+    let { data, options } = state;
+    if (data === null)
+      return;
+    let isDue = options.now() - data.loadedAt >= REFRESH_MS2;
+    canFetch && isDue && options.loadRunTabs().length > 0 && loadChecksAndRuns(state, data), render5(state);
+  }
+  function createPullRequestRunTabs(options) {
+    let state = { data: null, openKey: null, options };
+    return options.document.addEventListener(
+      "click",
+      (event) => {
+        onClick2(state, event);
+      },
+      { capture: !0 }
+    ), {
+      sync: (pullRequest, canFetch) => {
+        syncRunTabs(state, pullRequest, canFetch);
+      }
+    };
+  }
+
+  // azure-devops/src/core/switch.ts
+  var SWITCH_CLASS = "fix-ado-switch";
+  function createPill(document2) {
+    let pill = Object.assign(document2.createElement("span"), {
+      className: `${SWITCH_CLASS}-pill`
+    });
+    return pill.setAttribute("aria-hidden", "true"), pill.append(Object.assign(document2.createElement("span"), { className: `${SWITCH_CLASS}-knob` })), pill;
+  }
+  function createSwitch(document2, label) {
+    let toggle = Object.assign(document2.createElement("button"), {
+      className: SWITCH_CLASS,
+      type: "button"
+    });
+    toggle.setAttribute("role", "switch"), toggle.setAttribute("aria-checked", "false");
+    let text = Object.assign(document2.createElement("span"), {
+      className: `${SWITCH_CLASS}-text`,
+      textContent: label
+    });
+    return toggle.append(createPill(document2), text), toggle;
+  }
+  function showSwitchOn(toggle, isOn2) {
+    toggle.getAttribute("aria-checked") !== String(isOn2) && toggle.setAttribute("aria-checked", String(isOn2));
+  }
+
+  // azure-devops/src/features/run-page-tabs/run-tab-toggle.ts
+  var TABBAR_SELECTOR3 = ".run-details-page > .bolt-tabbar", SELECTED_TAB_SELECTOR = '[role=tablist] [role=tab][aria-selected="true"]', TOGGLE_CLASS5 = "fix-ado-run-tab-toggle", LABEL3 = "Show this tab in pull requests", FAILED_TITLE = "Could not read this run's pipeline. Reload to try again.";
+  function selectedRunTabOf(tabbar, lookup) {
+    let selected = tabbar.querySelector(SELECTED_TAB_SELECTOR), view = selected === null ? null : runTabViewOf(selected);
+    if (selected === null || view === null || lookup.kind !== "known")
+      return null;
+    let label = selected.querySelector(".bolt-tab-text")?.textContent.trim() ?? view, { id, name } = lookup.pipeline;
+    return { label, pipelineId: id, pipelineName: name, view };
+  }
+  function createToggle3(document2) {
+    let toggle = createSwitch(document2, LABEL3);
+    return toggle.classList.add(TOGGLE_CLASS5), toggle;
+  }
+  function flip(state, tabbar) {
+    let tab = selectedRunTabOf(tabbar, state.lookup);
+    if (tab === null)
+      return;
+    let { storage } = state.options, saved = storage.load(), others = saved.filter((other) => !isSameRunTab(other, tab));
+    storage.save(others.length === saved.length ? [...saved, tab] : others);
+  }
+  function toggleIn2(state, tabbar) {
+    let existing = tabbar.querySelector(`:scope > .${TOGGLE_CLASS5}`);
+    if (existing !== null)
+      return existing;
+    let toggle = createToggle3(state.options.document);
+    return toggle.addEventListener("click", () => {
+      flip(state, tabbar), showToggleState(state, tabbar, toggle);
+    }), tabbar.append(toggle), toggle;
+  }
+  function showToggleState(state, tabbar, toggle) {
+    let tab = selectedRunTabOf(tabbar, state.lookup), isOn2 = tab !== null && state.options.storage.load().some((other) => isSameRunTab(other, tab));
+    showSwitchOn(toggle, isOn2), toggle.disabled !== (tab === null) && (toggle.disabled = tab === null);
+    let title = state.lookup.kind === "failed" ? FAILED_TITLE : "";
+    toggle.title !== title && (toggle.title = title);
+  }
+  function lookUpPipeline(state, sync4) {
+    let { document: document2, getBuildPipeline: getBuildPipeline2 } = state.options, run = parsePipelineRunLocation(document2.location), project = decodeURIComponent(
+      document2.location.pathname.split("/_build/")[0]?.split("/").pop() ?? ""
+    );
+    state.lookup.kind !== "idle" || run === null || project === "" || (state.lookup = { kind: "reading" }, getBuildPipeline2(project, run.buildId).then(
+      (pipeline) => {
+        state.lookup = { kind: "known", pipeline }, sync4();
+      },
+      () => {
+        state.lookup = { kind: "failed" }, sync4();
+      }
+    ));
+  }
+  function createRunTabToggle(options) {
+    let state = { lookup: { kind: "idle" }, options }, sync4 = () => {
+      let tabbar = options.document.querySelector(TABBAR_SELECTOR3);
+      tabbar === null || tabbar.querySelector(SELECTED_TAB_SELECTOR) === null || (lookUpPipeline(state, sync4), showToggleState(state, tabbar, toggleIn2(state, tabbar)));
+    };
+    return { sync: sync4 };
+  }
+
+  // azure-devops/src/features/run-page-tabs/style.css
+  var style_default16 = `/* Run page tabs in pull requests. pull-request-run-tabs.ts sets the attribute while one is open. */
+.repos-pr-details-page[data-fix-ado-run-tab-open]
+  > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-run-tab-panel) {
+  display: none !important;
+}
+
+/* The panel takes what the header and tabs leave, so the tab's content reaches the bottom. */
+.fix-ado-run-tab-panel {
+  display: grid;
+  flex: 1 0 0;
+  min-height: 400px;
+  padding-top: 16px;
+}
+
+.fix-ado-run-tab-frame,
+.fix-ado-run-tab-missing {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 1px solid var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+}
+
+.fix-ado-run-tab-frame[hidden],
+.fix-ado-run-tab-missing[hidden] {
+  display: none;
+}
+
+/* In place of a run page tab the run does not have: a page icon over a line of text. */
+.fix-ado-run-tab-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+
+  &::before {
+    content: "";
+    width: 48px;
+    height: 48px;
+    background-color: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 1h5.5L13 4.5V15H3V1h1zm0 1v12h8V5H9V2H4zm6 .7V4h1.3L10 2.7zM5 7h6v1H5V7zm0 2h6v1H5V9zm0 2h4v1H5v-1z'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    forced-color-adjust: none;
+  }
+}
+
+/* A tab whose pipeline has no run on the pull request yet: greyed, and it does nothing. */
+.fix-ado-run-tab-disabled,
+.fix-ado-run-tab-disabled .bolt-tab-text {
+  color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+  cursor: default;
+}
+
+/* Azure DevOps shows a focus ring on its tabs only for keyboard focus. */
+.fix-ado-run-tab:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* The run page in a run page tab's frame. run-tab-frame.ts marks it; only the tab's content stays. */
+html[data-fix-ado-run-tab-frame] .project-header,
+html[data-fix-ado-run-tab-frame] .navigation-container,
+html[data-fix-ado-run-tab-frame] .region-content-header,
+html[data-fix-ado-run-tab-frame] .region-content-footer,
+html[data-fix-ado-run-tab-frame] .region-footer,
+html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-content) {
+  display: none !important;
+}
+
+/* "Show this tab in pull requests" at the right end of a run page's tab bar. core/switch.css
+   styles the switch. */
+.fix-ado-run-tab-toggle {
+  margin: 0 20px 0 8px;
+}
+`;
+
+  // azure-devops/src/core/switch.css
+  var switch_default = `/* A switch like Azure DevOps's own. switch.ts builds it. Its own classes, as no capture
+   holds the site's switch. Where it sits is up to the feature that adds it. */
+.fix-ado-switch {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+
+  &:disabled {
+    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--communication-background, rgb(0, 120, 212));
+    outline-offset: 1px;
+  }
+}
+
+.fix-ado-switch-pill {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 40px;
+  height: 20px;
+  padding: 0 3px;
+  border: 1px solid var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  border-radius: 10px;
+}
+
+.fix-ado-switch-knob {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  transition: translate 0.1s;
+}
+
+.fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
+  border-color: var(--communication-background, rgb(0, 120, 212));
+  background: var(--communication-background, rgb(0, 120, 212));
+}
+
+.fix-ado-switch[aria-checked="true"] .fix-ado-switch-knob {
+  background: #fff;
+  translate: 20px 0;
+}
+
+.fix-ado-switch:disabled .fix-ado-switch-pill {
+  border-color: currentColor;
+}
+
+.fix-ado-switch:disabled .fix-ado-switch-knob {
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-ado-switch-knob {
+    transition: none;
+  }
+}
+
+/* Forced colors drop backgrounds, so the knob and the on state keep a border. */
+@media (forced-colors: active) {
+  .fix-ado-switch-knob {
+    border: 1px solid CanvasText;
+  }
+
+  .fix-ado-switch[aria-checked="true"] .fix-ado-switch-pill {
+    border-color: Highlight;
+  }
+}
+`;
+
+  // azure-devops/src/features/run-page-tabs/index.ts
+  var RUN_TABS_KEY = "run-page-tabs", runTabStorage = {
+    load: () => GM_getValue(RUN_TABS_KEY, []),
+    save: (tabs) => {
+      GM_setValue(RUN_TABS_KEY, tabs);
+    }
+  }, runPageTabs = {
+    change: { kind: "new", version: "1.20.0" },
+    description: "Tabs such as Code Coverage on the pull request. Pick them on the run page.",
+    id: "run-page-tabs",
+    name: "Run page tabs",
+    start({ basePath: basePath2, client, document: document2, isInFrame: isInFrame2, now }) {
+      if (isInFrame2) {
+        let frame = createRunTabFrame(document2);
+        return frame === null ? null : { sync: frame.sync };
+      }
+      let toggle = createRunTabToggle({
+        document: document2,
+        getBuildPipeline: async (project, buildId) => client.getBuildPipeline(project, buildId),
+        storage: runTabStorage
+      }), tabs = createPullRequestRunTabs({
+        apiBasePath: basePath2,
+        document: document2,
+        getEvaluations: async (pullRequest) => {
+          let { evaluations } = await client.getPolicyEvaluations(pullRequest);
+          return evaluations;
+        },
+        getPullRequestBuilds: async (project, pullRequestId) => {
+          let { builds } = await client.getPullRequestBuilds(project, pullRequestId);
+          return builds;
+        },
+        loadRunTabs: runTabStorage.load,
+        now
+      });
+      return {
+        sync({ isTabActive: isTabActive2, page }) {
+          toggle.sync(), tabs.sync(pullRequestOf(page), isTabActive2);
+        }
+      };
+    },
+    styles: [switch_default, style_default16]
+  };
+
+  // azure-devops/src/features/settings-sections/pipelines.ts
+  var pipelinesSection = {
+    description: "Pipeline runs, wherever they show.",
+    groups: [
+      { features: [pipelineStatusOnPullRequests], name: "Pull request lists" },
+      { features: [overviewPipelineIssues, pipelineTab, runPageTabs], name: "Pull request" }
+    ],
+    name: "Pipelines"
+  };
 
   // azure-devops/src/features/assigned-to-me-stacked/relative-time.ts
   var SECONDS_PER_UNIT = [
@@ -16950,9 +17373,9 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/assigned-to-me-stacked/assigned-card.ts
-  var CARD_SELECTOR2 = ".repos-pr-section-card", TAB_SELECTOR = '.repos-pr-section-tabs [role="tab"]', TABLE_CONTAINER_SELECTOR = ".bolt-table-container", NO_RESULTS_CLASS = "repos-pr-section-no-results-message", NO_RESULTS_TEXT = "No pull requests for current view", ROW_SELECTOR5 = 'a.bolt-table-row[href*="/pullrequest/"]', STACKED_CLASS = "fix-ado-assigned-stacked", BUILT_CARD_CLASS = "fix-ado-assigned-card", PEEKING_CLASS = "fix-ado-assigned-peeking", CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis", TAB_NAME_CLASS = "fix-ado-assigned-tab-name";
+  var CARD_SELECTOR3 = ".repos-pr-section-card", TAB_SELECTOR = '.repos-pr-section-tabs [role="tab"]', TABLE_CONTAINER_SELECTOR = ".bolt-table-container", NO_RESULTS_CLASS = "repos-pr-section-no-results-message", NO_RESULTS_TEXT = "No pull requests for current view", ROW_SELECTOR5 = 'a.bolt-table-row[href*="/pullrequest/"]', STACKED_CLASS = "fix-ado-assigned-stacked", BUILT_CARD_CLASS = "fix-ado-assigned-card", PEEKING_CLASS = "fix-ado-assigned-peeking", CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis", TAB_NAME_CLASS = "fix-ado-assigned-tab-name";
   function findAssignedCard(document2) {
-    let card = document2.querySelector(`#${ACTIVE_TAB_ID}`)?.closest(CARD_SELECTOR2), table = card?.querySelector(TABLE_CONTAINER_SELECTOR);
+    let card = document2.querySelector(`#${ACTIVE_TAB_ID}`)?.closest(CARD_SELECTOR3), table = card?.querySelector(TABLE_CONTAINER_SELECTOR);
     if (!card || !table)
       return null;
     let tabs = [...card.querySelectorAll(TAB_SELECTOR)].map((tab) => ({
@@ -17006,7 +17429,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
   function createRows(found, pullRequests, context) {
     let template = found.table.querySelector(ROW_SELECTOR5) ?? found.card.ownerDocument.querySelector(
-      `${CARD_SELECTOR2}:not(.${BUILT_CARD_CLASS}) ${ROW_SELECTOR5}`
+      `${CARD_SELECTOR3}:not(.${BUILT_CARD_CLASS}) ${ROW_SELECTOR5}`
     );
     return pullRequests.flatMap((pullRequest, index) => {
       let row = template ? buildAssignedRow(template, pullRequest, context) : null;
@@ -17040,7 +17463,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   var FOLD_BUTTON_SELECTOR = ".repos-pr-section-expand-button", CARD_CONTENT_SELECTOR = ".bolt-card-content", PEEK_DEADLINE_MS = 5e3, titleOf = (card) => card.querySelector(CARD_TITLE_SELECTOR)?.textContent ?? "";
   function foldedCardTitled(document2, title) {
     return [...document2.querySelectorAll(
-      `${CARD_SELECTOR2}:not(.${BUILT_CARD_CLASS})`
+      `${CARD_SELECTOR3}:not(.${BUILT_CARD_CLASS})`
     )].find(
       (card) => title !== "" && titleOf(card) === title && card.querySelector(CARD_CONTENT_SELECTOR) === null
     ) ?? null;
@@ -17173,7 +17596,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/assigned-to-me-stacked/style.css
-  var style_default16 = `/* The "Assigned to me" card, one card per tab. stacked-tabs.ts marks Azure DevOps's card and
+  var style_default17 = `/* The "Assigned to me" card, one card per tab. stacked-tabs.ts marks Azure DevOps's card and
    builds the others; each card's title names its tab, so the tab bars have no job left. */
 .fix-ado-assigned-stacked .repos-pr-section-tabs,
 .fix-ado-assigned-card .repos-pr-section-tabs {
@@ -17250,9 +17673,9 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
   var assignedToMeStacked = {
     change: { kind: "new", version: "1.25.0" },
-    description: "The tabs of the Assigned to me card as cards of their own, under each other, each titled with its tab, so you scroll through them all.",
+    description: "Each tab as its own card, so you scroll through them all.",
     id: "assigned-to-me-stacked",
-    name: "Assigned to me tabs under each other",
+    name: "Stack the Assigned to me tabs",
     start({ basePath: basePath2, client, document: document2, now }) {
       let assigned = null, nextFetchAt = 0, isFetching = !1, shownScope = null, folding = createCardFolding(() => {
         show3(shownScope);
@@ -17288,7 +17711,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default16]
+    styles: [style_default17]
   };
 
   // azure-devops/src/features/linked-work-item/work-item-group-rows.ts
@@ -17480,7 +17903,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
 `;
 
   // azure-devops/src/core/list-switch.ts
-  var BAR_CLASS = "fix-ado-list-switch-bar", TABBAR_SELECTOR4 = ".bolt-tabbar:has(> .bolt-tabbar-tabs)", PAGE_CONTENT_SELECTOR = ".page-content", onToggleBySwitch = /* @__PURE__ */ new WeakMap();
+  var BAR_CLASS2 = "fix-ado-list-switch-bar", TABBAR_SELECTOR4 = ".bolt-tabbar:has(> .bolt-tabbar-tabs)", PAGE_CONTENT_SELECTOR = ".page-content", onToggleBySwitch = /* @__PURE__ */ new WeakMap();
   function createListSwitch(document2, { className, label }) {
     let toggle = createSwitch(document2, label);
     return toggle.classList.add(className), toggle.addEventListener("click", () => {
@@ -17497,7 +17920,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     return buttons === null ? tabbar.append(toggle) : buttons.before(toggle), !0;
   }
   function barAboveLists(content) {
-    let bar = content.querySelector(`:scope > .${BAR_CLASS}`) ?? Object.assign(content.ownerDocument.createElement("div"), { className: BAR_CLASS });
+    let bar = content.querySelector(`:scope > .${BAR_CLASS2}`) ?? Object.assign(content.ownerDocument.createElement("div"), { className: BAR_CLASS2 });
     return content.firstElementChild !== bar && content.prepend(bar), bar;
   }
   function placeAboveLists(document2, toggle) {
@@ -17511,7 +17934,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
   function removeListSwitch(document2, { className }) {
     document2.querySelector(`.${className}`)?.remove();
-    let bar = document2.querySelector(`.${BAR_CLASS}`);
+    let bar = document2.querySelector(`.${BAR_CLASS2}`);
     bar !== null && bar.childElementCount === 0 && bar.remove();
   }
   function showListSwitch(document2, listSwitch, state) {
@@ -17524,7 +17947,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/linked-work-item/style.css
-  var style_default17 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
+  var style_default18 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
 .fix-ado-linked-work-item::before {
   content: "·";
   margin-inline: 0.5em;
@@ -17635,7 +18058,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
   var linkedWorkItem = {
     change: { kind: "updated", version: "1.28.0" },
-    description: "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. Pull requests of the same work item share a colour bar at the front, and that colour on the id. A switch groups the lists by work item, each under its work item's id and title on a grey row, with a placeholder while the work items load.",
+    description: "The work item id under the title, in a colour its pull requests share, and a switch that groups the lists by work item.",
     id: "linked-work-item",
     name: "Linked work item",
     start({ basePath: basePath2, client, document: document2, now }) {
@@ -17669,29 +18092,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
         }
       };
     },
-    styles: [switch_default, list_switch_default, style_default17]
-  };
-
-  // azure-devops/src/features/pipeline-status/index.ts
-  var pipelineStatusOnPullRequests = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "A pipeline status icon on each pull request in a list.",
-    id: "pipeline-status",
-    name: "Pipeline status on pull requests",
-    start({ basePath: basePath2, client, document: document2, now }) {
-      let poller = createPipelineStatusPoller({
-        client,
-        findRows: () => findPullRequestRows(document2, basePath2),
-        now,
-        showStatus: showPipelineStatus
-      });
-      return {
-        sync({ isTabActive: isTabActive2 }) {
-          isTabActive2 && poller.sync();
-        }
-      };
-    },
-    styles: [pipeline_status_icon_default]
+    styles: [switch_default, list_switch_default, style_default18]
   };
 
   // azure-devops/src/core/elapsed-time.ts
@@ -17776,7 +18177,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default18 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+  var style_default19 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
 .bolt-table-cell-content:has(> .fix-ado-published-since) {
   flex-direction: column;
   align-items: flex-start;
@@ -17795,9 +18196,9 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   // azure-devops/src/features/published-since/index.ts
   var publishedSince = {
     change: { kind: "updated", version: "1.17.1" },
-    description: "How long ago each active pull request in a list left draft, under its update time. Red after two weekdays.",
+    description: "How long ago a pull request left draft. Red after two weekdays.",
     id: "published-since",
-    name: "Published since",
+    name: "Time since published",
     start({ basePath: basePath2, client, document: document2, now }) {
       let findRows = () => findPullRequestRows(document2, basePath2).map(({ row, pullRequest }) => ({
         isDraft: isDraftRow(row),
@@ -17825,7 +18226,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
         }
       };
     },
-    styles: [style_default18]
+    styles: [style_default19]
   };
 
   // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
@@ -17894,7 +18295,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default19 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default20 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -17925,7 +18326,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   // azure-devops/src/features/required-reviewers/index.ts
   var requiredReviewers = {
     change: { kind: "new", version: "1.7.2" },
-    description: "Required reviewers come first in pull request lists, with a glow.",
+    description: "Required reviewers come first, with a glow.",
     id: "required-reviewers",
     name: "Required reviewers first",
     start({ basePath: basePath2, client, document: document2, now }) {
@@ -17941,7 +18342,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
         }
       };
     },
-    styles: [style_default19]
+    styles: [style_default20]
   };
 
   // azure-devops/src/features/table-rows/table-age.ts
@@ -18047,7 +18448,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
 
   // azure-devops/src/features/table-rows/table-rows.ts
-  var TABLE_ATTRIBUTE = "data-fix-ado-table", HEAD_CLASS = "fix-ado-table-head", CREATED_BY_ME_ATTRIBUTE = "data-fix-ado-created-by-me", CREATED_BY_ME_TITLE = "Created by me", CARD_SELECTOR3 = ".repos-pr-section-card", CARD_TITLE_SELECTOR2 = ".repos-pr-section-header-title > .text-ellipsis", AUTHOR_CELL_SELECTOR = '[aria-colindex="1"]', ID_CLASS = "fix-ado-table-id", REPOSITORY_CLASS = "fix-ado-table-repository", HAS_REPOSITORY_ATTRIBUTE = "data-fix-ado-has-repository", TARGET_CLASS = "fix-ado-table-target", BRANCH_CLASS = "fix-ado-table-branch", WORK_ITEM_CLASS = "fix-ado-table-work-item", WORK_ITEM_LABEL_CLASS = "fix-ado-linked-work-item", LIST_SELECTOR2 = "table.repos-pr-list", ROW_SELECTOR6 = ':scope > tbody > a.bolt-table-row[href*="/pullrequest/"]', LINE_UNDER_TITLE_SELECTOR2 = ".bolt-table-two-line-cell-item:nth-child(2) .secondary-text", COLUMNS = [
+  var TABLE_ATTRIBUTE = "data-fix-ado-table", HEAD_CLASS = "fix-ado-table-head", CREATED_BY_ME_ATTRIBUTE = "data-fix-ado-created-by-me", CREATED_BY_ME_TITLE = "Created by me", CARD_SELECTOR4 = ".repos-pr-section-card", CARD_TITLE_SELECTOR2 = ".repos-pr-section-header-title > .text-ellipsis", AUTHOR_CELL_SELECTOR = '[aria-colindex="1"]', ID_CLASS = "fix-ado-table-id", REPOSITORY_CLASS = "fix-ado-table-repository", HAS_REPOSITORY_ATTRIBUTE = "data-fix-ado-has-repository", TARGET_CLASS = "fix-ado-table-target", BRANCH_CLASS = "fix-ado-table-branch", WORK_ITEM_CLASS = "fix-ado-table-work-item", WORK_ITEM_LABEL_CLASS = "fix-ado-linked-work-item", LIST_SELECTOR2 = "table.repos-pr-list", ROW_SELECTOR6 = ':scope > tbody > a.bolt-table-row[href*="/pullrequest/"]', LINE_UNDER_TITLE_SELECTOR2 = ".bolt-table-two-line-cell-item:nth-child(2) .secondary-text", COLUMNS = [
     ["pipeline", ""],
     ["title", "Pull request"],
     ["author", "Author"],
@@ -18070,7 +18471,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     return row.append(...COLUMNS.map(([column, label]) => createHeadCell(document2, column, label))), head.append(row), head;
   }
   function isCreatedByMe(list) {
-    return list.closest(CARD_SELECTOR3)?.querySelector(CARD_TITLE_SELECTOR2)?.textContent?.trim() === CREATED_BY_ME_TITLE;
+    return list.closest(CARD_SELECTOR4)?.querySelector(CARD_TITLE_SELECTOR2)?.textContent?.trim() === CREATED_BY_ME_TITLE;
   }
   function markHasRepository(list, isTable) {
     let hasRepository = isTable && [...list.querySelectorAll(`:scope > tbody > a > .${REPOSITORY_CLASS}`)].some(
@@ -18197,7 +18598,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
 
   // azure-devops/src/features/table-rows/style.css
-  var style_default20 = `/* The pull request lists as a table, as design B of the inbox redesigns. table-rows.ts marks
+  var style_default21 = `/* The pull request lists as a table, as design B of the inbox redesigns. table-rows.ts marks
    <html> on a list page while the Table switch is on, and adds the header and the cells Azure
    DevOps has no column for. Each row becomes a grid on the same columns, so the site's cells can
    take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
@@ -18944,7 +19345,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   // azure-devops/src/features/table-rows/index.ts
   var IS_TABLE_KEY = "table-rows-on", TABLE_SWITCH = { className: "fix-ado-table-switch", label: "Table" }, tableRows = {
     change: { kind: "new", version: "1.28.0" },
-    description: "The pull request lists as a table: a column each for the title, author, id, repository on the inbox, target, reviewers, comments and age, under a header, one 36px row per pull request. The age column shows when each pull request was created, updated and published. On by default; a Table switch on the lists flips between the table and Azure DevOps's two lines. Not in Windows 98 mode.",
+    description: "A column per field and one row per pull request. A Table switch on the lists flips it. Not in Windows 98 mode.",
     id: "table-rows",
     name: "Pull requests as a table",
     start({ basePath: basePath2, client, document: document2, now }) {
@@ -18969,303 +19370,423 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
         }
       };
     },
-    styles: [switch_default, list_switch_default, style_default20]
+    styles: [switch_default, list_switch_default, style_default21]
   };
 
-  // azure-devops/src/features/pull-request-list-features.ts
-  var PULL_REQUEST_LIST_FEATURES = [
-    pipelineStatusOnPullRequests,
-    requiredReviewers,
-    publishedSince,
-    linkedWorkItem,
-    assignedToMeStacked,
-    tableRows
-  ];
-
-  // azure-devops/src/features/days-in-column/days-in-column.ts
-  var CARD_SELECTOR4 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS2 = "fix-ado-days-in-column";
-  function columnEnteredAt(updates) {
-    for (let update2 of updates.toReversed()) {
-      let columnChange = update2.fields?.["System.BoardColumn"];
-      if (columnChange !== void 0 && columnChange.newValue !== columnChange.oldValue) {
-        let changedDate = update2.fields?.["System.ChangedDate"]?.newValue;
-        return typeof changedDate == "string" ? changedDate : null;
+  // azure-devops/src/features/settings-sections/pull-request-lists.ts
+  var pullRequestListsSection = {
+    description: "The lists of pull requests and the Assigned to me card.",
+    groups: [
+      {
+        features: [requiredReviewers, publishedSince, linkedWorkItem, assignedToMeStacked, tableRows]
       }
-    }
-    return null;
-  }
-  function daysSince(enteredAt, now) {
-    return Math.max(0, Math.floor((now - Date.parse(enteredAt)) / 864e5));
-  }
-  function dotAge(day) {
-    return day <= 7 ? "fresh" : day <= 14 ? "aging" : "old";
-  }
-  var LOADING_DOT_COUNT = 3;
-  function dotsFor(document2, days) {
-    return (days === null ? Array.from({ length: LOADING_DOT_COUNT }, () => "loading") : Array.from({ length: Math.min(days, 30) }, (_entry, index) => dotAge(index + 1))).map((age) => {
-      let dot = document2.createElement("span");
-      return dot.dataset.age = age, dot;
-    });
-  }
-  function captionFor(days) {
-    return days === null ? "" : days === 0 ? "Less than a day in this column" : `${days} ${days === 1 ? "day" : "days"} in this column`;
-  }
-  function createDotBar(document2, days) {
-    let bar = document2.createElement("div");
-    return bar.className = BAR_CLASS2, bar.dataset.days = String(days), bar.title = captionFor(days), days === null ? bar.setAttribute("aria-hidden", "true") : (bar.setAttribute("aria-label", bar.title), bar.setAttribute("role", "img")), bar.append(...dotsFor(document2, days)), bar;
-  }
-  function showDaysInColumn(card, days) {
-    let existing = card.querySelector(`.${BAR_CLASS2}`);
-    existing?.dataset.days !== String(days) && (existing?.remove(), (card.querySelector(".card-content") ?? card).append(createDotBar(card.ownerDocument, days)));
-  }
-  function findCards(document2) {
-    let cards = /* @__PURE__ */ new Map();
-    for (let card of document2.querySelectorAll(CARD_SELECTOR4)) {
-      let id = Number(card.dataset.itemid);
-      Number.isInteger(id) && id > 0 && cards.set(id, [...cards.get(id) ?? [], card]);
-    }
-    return cards;
-  }
-  function columnIdOf(card) {
-    return card.closest(COLUMN_SELECTOR)?.dataset.column ?? null;
-  }
-  function noteMoves(tracker, cards) {
-    for (let [id, [element4]] of cards) {
-      let columnId = columnIdOf(element4), lastColumnId = tracker.columnIds.get(id), entry = tracker.entries.get(id);
-      lastColumnId !== void 0 && lastColumnId !== columnId && entry !== void 0 && (entry.enteredAt = new Date(tracker.now()).toISOString()), tracker.columnIds.set(id, columnId);
-    }
-  }
-  function showBars(tracker, cards) {
-    noteMoves(tracker, cards);
-    for (let [id, elements] of cards) {
-      let entry = tracker.entries.get(id), enteredAt = entry?.enteredAt ?? null, days = null;
-      entry !== void 0 && (days = enteredAt === null ? 0 : daysSince(enteredAt, tracker.now()));
-      for (let element4 of elements)
-        showDaysInColumn(element4, days);
-    }
-  }
-  function pauseIfAsked(tracker, retryAfterSeconds) {
-    return retryAfterSeconds === null ? !1 : (tracker.pausedUntil = tracker.now() + retryAfterSeconds * 1e3, !0);
-  }
-  async function fetchChangedCards(tracker, ids) {
-    let { workItems, retryAfterSeconds } = await tracker.client.getWorkItems(ids);
-    if (pauseIfAsked(tracker, retryAfterSeconds))
-      return;
-    let changed = workItems.filter(({ id, rev }) => tracker.entries.get(id)?.rev !== rev);
-    for (let { id, rev } of changed) {
-      let response = await tracker.client.getWorkItemUpdates(id);
-      if (tracker.entries.set(id, { enteredAt: columnEnteredAt(response.updates), rev }), pauseIfAsked(tracker, response.retryAfterSeconds))
-        return;
-    }
-  }
-  function isCheckDue2(tracker, ids) {
-    let now = tracker.now(), isDue = ids.some((id) => !tracker.entries.has(id)) || now - tracker.lastCheckAt >= 6e4;
-    return !tracker.isChecking && ids.length > 0 && isDue && now >= tracker.pausedUntil;
-  }
-  async function check(tracker, ids) {
-    tracker.isChecking = !0, tracker.lastCheckAt = tracker.now();
-    try {
-      await fetchChangedCards(tracker, ids);
-    } catch {
-      tracker.pausedUntil = tracker.now() + 6e4;
-    } finally {
-      tracker.isChecking = !1;
-    }
-  }
-  function createDaysInColumn(options) {
-    let tracker = {
-      client: options.client,
-      columnIds: /* @__PURE__ */ new Map(),
-      entries: /* @__PURE__ */ new Map(),
-      isChecking: !1,
-      lastCheckAt: Number.NEGATIVE_INFINITY,
-      now: options.now,
-      pausedUntil: Number.NEGATIVE_INFINITY
-    };
-    return {
-      async sync() {
-        let cards = findCards(options.document);
-        showBars(tracker, cards);
-        let ids = [...cards.keys()];
-        isCheckDue2(tracker, ids) && (await check(tracker, ids), showBars(tracker, findCards(options.document)));
-      }
-    };
-  }
-
-  // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
-  var HEADER_SELECTOR3 = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS5 = "fix-ado-days-toggle";
-  function showColumnState(column, toggle, isHidden) {
-    Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
-    let pressed = String(!isHidden);
-    toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", "Days in column"));
-  }
-  function createToggle3(document2, onClick3) {
-    let toggle = document2.createElement("button");
-    return toggle.type = "button", toggle.className = TOGGLE_CLASS5, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
-      event.preventDefault(), event.stopPropagation(), onClick3();
-    }), toggle;
-  }
-  function findOrAddToggle2(header, onClick3) {
-    let existing = header.querySelector(`.${TOGGLE_CLASS5}`);
-    if (existing !== null)
-      return existing;
-    let toggle = createToggle3(header.ownerDocument, onClick3);
-    return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
-  }
-  function createDaysInColumnToggles(options) {
-    let { document: document2, storage } = options, hiddenColumnIds = new Set(storage.load());
-    function flip2(columnId) {
-      hiddenColumnIds.delete(columnId) || hiddenColumnIds.add(columnId), storage.save([...hiddenColumnIds]), sync4();
-    }
-    function sync4() {
-      let headers = [...document2.querySelectorAll(HEADER_SELECTOR3)], columns = [...document2.querySelectorAll(COLUMN_SELECTOR2)];
-      if (headers.length === columns.length)
-        for (let [index, header] of headers.entries()) {
-          let column = columns[index], columnId = column?.dataset.column;
-          if (column !== void 0 && columnId !== void 0) {
-            let toggle = findOrAddToggle2(header, () => {
-              flip2(columnId);
-            });
-            showColumnState(column, toggle, hiddenColumnIds.has(columnId));
-          }
-        }
-    }
-    return { sync: sync4 };
-  }
-
-  // azure-devops/src/features/days-in-column/style.css
-  var style_default21 = `/* Days in column on board cards: a dot per day, grey, then orange, then red. */
-.fix-ado-days-in-column {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  /* One row of dots, also when empty, so a card keeps its height. */
-  min-height: 5px;
-  margin-top: 6px;
-}
-
-.fix-ado-days-in-column > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  /* Azure DevOps keeps its palette as bare "r, g, b" values, so it follows the theme. */
-  background: rgb(var(--palette-neutral-20, 200, 200, 200));
-}
-
-.fix-ado-days-in-column > span[data-age="aging"] {
-  background: var(--component-status-warning, rgb(214, 119, 48));
-}
-
-.fix-ado-days-in-column > span[data-age="old"] {
-  background: var(--component-status-error, rgb(205, 74, 69));
-}
-
-/* Skeleton while the day count loads: three grey dots that pulse one after another. */
-.fix-ado-days-in-column > span[data-age="loading"] {
-  animation: fix-ado-pulse 1.2s ease-in-out infinite;
-}
-.fix-ado-days-in-column > span[data-age="loading"]:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.fix-ado-days-in-column > span[data-age="loading"]:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes fix-ado-pulse {
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fix-ado-days-in-column > span[data-age="loading"] {
-    animation: none;
-    opacity: 0.6;
-  }
-}
-
-.kanban-board-column[data-fix-ado-days-hidden] .fix-ado-days-in-column {
-  display: none;
-}
-
-/* The days-in-column toggle in a column header. It shows while the header is hovered, or
-   while something in it has keyboard focus. A click also focuses the toggle; that focus must
-   not keep it showing once the pointer leaves. */
-.fix-ado-days-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 6px;
-  padding: 3px 4px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  opacity: 0;
-}
-
-.kanban-board-column-header:is(:hover, :has(:focus-visible)) .fix-ado-days-toggle {
-  opacity: 1;
-}
-
-.fix-ado-days-toggle:hover {
-  background: rgba(var(--palette-black-alpha-6, 0, 0, 0, 0.06));
-}
-
-.fix-ado-days-toggle > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--component-status-warning, rgb(214, 119, 48));
-}
-
-/* Off: hollow dots. */
-.fix-ado-days-toggle[aria-pressed="false"] > span {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px rgb(var(--palette-neutral-60, 102, 102, 102));
-}
-`;
-
-  // azure-devops/src/features/days-in-column/index.ts
-  var HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns", daysInColumn = {
-    change: { kind: "new", version: "1.7.2" },
-    description: "A dot per day a card has been in its board column, with a toggle per column.",
-    id: "days-in-column",
-    name: "Days in column",
-    start({ client, document: document2, now }) {
-      let days = createDaysInColumn({ client, document: document2, now }), toggles = createDaysInColumnToggles({
-        document: document2,
-        storage: {
-          load: () => GM_getValue(HIDDEN_COLUMNS_KEY, []),
-          save: (columnIds) => {
-            GM_setValue(HIDDEN_COLUMNS_KEY, columnIds);
-          }
-        }
-      });
-      return {
-        sync({ page, isTabActive: isTabActive2 }) {
-          page.kind === "board" && (toggles.sync(), isTabActive2 && days.sync());
-        }
-      };
-    },
-    styles: [style_default21]
+    ],
+    name: "Pull request lists"
   };
 
   // azure-devops/src/features/index.ts
-  var FEATURES_BY_CATEGORY = {
-    Boards: [daysInColumn],
-    Everywhere: EVERYWHERE_FEATURES,
-    "Pull request": PULL_REQUEST_FEATURES,
-    "Pull request Overview": OVERVIEW_FEATURES,
-    "Pull request lists": PULL_REQUEST_LIST_FEATURES
-  }, FEATURE_CATEGORIES = CATEGORY_NAMES.map((name) => ({
-    features: FEATURES_BY_CATEGORY[name],
-    name
-  })), FEATURES = FEATURE_CATEGORIES.flatMap((category) => category.features);
+  var SECTIONS_BY_NAME = {
+    Appearance: appearanceSection,
+    Boards: boardsSection,
+    "Code review": codeReviewSection,
+    "Comments and activity": commentsAndActivitySection,
+    General: generalSection,
+    Pipelines: pipelinesSection,
+    "Pull request lists": pullRequestListsSection
+  }, SETTINGS_SECTIONS = SECTION_NAMES.map((name) => SECTIONS_BY_NAME[name]), START_ORDER = [
+    "pipeline-status",
+    "required-reviewers",
+    "published-since",
+    "linked-work-item",
+    "assigned-to-me-stacked",
+    "table-rows",
+    "pipeline-tab",
+    "run-page-tabs",
+    "starred-reviewers",
+    "review",
+    "viewed-files",
+    "overview-pipeline-issues",
+    "activity-order",
+    "scroll-to-bottom",
+    "folded-pushes",
+    "joined-reviewer-lines",
+    "resolved-thread-chips",
+    "collapsible-threads",
+    "unread-comments",
+    "new-activity-chips",
+    "days-in-column",
+    "avatar-initials",
+    "follow-system-theme",
+    "reload-on-changes",
+    "windows-98-mode"
+  ], startRank = ({ id }) => {
+    let rank = START_ORDER.indexOf(id);
+    return rank === -1 ? START_ORDER.length : rank;
+  }, FEATURES = SETTINGS_SECTIONS.flatMap(
+    (section) => section.groups.flatMap((group2) => group2.features)
+  ).toSorted((first, second) => startRank(first) - startRank(second));
+
+  // azure-devops/src/core/settings-panel.css
+  var settings_panel_default = `/* The settings button in Azure DevOps's top bar: a puzzle piece outline in the text colour,
+   like Azure DevOps's own line icons next to it. */
+.fix-ado-settings-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+/* The number of feature changes the owner has not seen, on the button's top right corner. */
+.fix-ado-settings-button {
+  position: relative;
+}
+
+.fix-ado-settings-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background: var(--communication-background, rgb(0, 120, 212));
+  color: var(--text-on-communication-background, rgb(255, 255, 255));
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* The settings panel: a dialog over the page, in Azure DevOps's own theme colours. A side bar
+   of sections on the left, the shown section on the right, and the buttons along the bottom. */
+.fix-ado-settings {
+  --fix-ado-settings-accent: var(--communication-background, rgb(0, 120, 212));
+  --fix-ado-settings-muted: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  --fix-ado-settings-line: var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  --fix-ado-settings-hover: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+
+  flex-direction: column;
+  width: min(960px, calc(100vw - 32px));
+  height: min(680px, calc(100vh - 64px));
+  box-sizing: border-box;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--callout-background-color, rgb(255, 255, 255));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  box-shadow:
+    0 25.6px 57.6px rgba(0, 0, 0, 0.22),
+    0 4.8px 14.4px rgba(0, 0, 0, 0.18);
+}
+
+.fix-ado-settings[open] {
+  display: flex;
+}
+
+/* Scrolling in the panel or over the backdrop stops there, and leaves the page behind it. */
+.fix-ado-settings:modal {
+  overscroll-behavior: contain;
+}
+
+.fix-ado-settings::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.fix-ado-settings [hidden] {
+  display: none;
+}
+
+.fix-ado-settings-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fix-ado-settings-body {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+/* The side bar: the title, search, a button per section, and the issue link at the bottom. */
+.fix-ado-settings-nav {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 260px;
+  box-sizing: border-box;
+  padding: 20px 12px;
+  border-right: 1px solid var(--fix-ado-settings-line);
+  overflow-y: auto;
+}
+
+.fix-ado-settings-title {
+  margin: 0 10px 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.fix-ado-settings-search {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.fix-ado-settings-search-field {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+
+  &::placeholder {
+    color: var(--fix-ado-settings-muted);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fix-ado-settings-accent);
+    outline-offset: -1px;
+  }
+}
+
+.fix-ado-settings-nav-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 16px;
+}
+
+.fix-ado-settings-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--fix-ado-settings-hover);
+  }
+
+  &[aria-current="page"] {
+    background: color-mix(in srgb, var(--fix-ado-settings-accent) 14%, transparent);
+    font-weight: 600;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fix-ado-settings-accent);
+    outline-offset: -2px;
+  }
+}
+
+.fix-ado-settings-nav-count {
+  min-width: 18px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--fix-ado-settings-accent);
+  color: var(--text-on-communication-background, rgb(255, 255, 255));
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* The shown section, which scrolls on its own. */
+.fix-ado-settings-pane {
+  flex-grow: 1;
+  min-width: 0;
+  padding: 20px 28px 28px;
+  overflow-y: auto;
+}
+
+.fix-ado-settings-view-note,
+.fix-ado-settings-no-match {
+  margin: 0 0 20px;
+  color: var(--fix-ado-settings-muted);
+}
+
+/* Space above each section and group that shows after another one. Hidden ones are skipped. */
+.fix-ado-settings-section:not([hidden]) ~ .fix-ado-settings-section {
+  margin-top: 24px;
+}
+
+.fix-ado-settings-section-name {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.fix-ado-settings-section-description {
+  margin: 0 0 20px;
+  color: var(--fix-ado-settings-muted);
+}
+
+/* What's new and search results list several sections: their names as small headings. */
+.fix-ado-settings-pane-filtered {
+  .fix-ado-settings-section-name {
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .fix-ado-settings-section-description {
+    display: none;
+  }
+}
+
+.fix-ado-settings-group:not([hidden]) ~ .fix-ado-settings-group {
+  margin-top: 20px;
+}
+
+.fix-ado-settings-group-name {
+  margin: 0 0 8px;
+  color: var(--fix-ado-settings-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* A group's features: rows in one box, a line between each. */
+.fix-ado-settings-features {
+  border: 1px solid var(--fix-ado-settings-line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* A row is a switch (core/switch.css) that fills it: the name and description, then the pill
+   on the right. */
+.fix-ado-settings-feature.fix-ado-switch {
+  width: 100%;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 0;
+  font-size: inherit;
+  text-align: start;
+
+  &:hover {
+    background: var(--fix-ado-settings-hover);
+  }
+
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .fix-ado-switch-pill {
+    order: 1;
+  }
+}
+
+/* A line above each row that shows after another one, also while search hides some. */
+.fix-ado-settings-feature:not([hidden]) ~ .fix-ado-settings-feature {
+  border-top: 1px solid var(--fix-ado-settings-line);
+}
+
+.fix-ado-settings-feature .fix-ado-switch-text {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fix-ado-settings-feature-name {
+  font-weight: 600;
+}
+
+.fix-ado-settings-feature-description {
+  color: var(--fix-ado-settings-muted);
+}
+
+.fix-ado-settings-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+
+.fix-ado-settings-chip-new {
+  background: var(--fix-ado-settings-accent);
+  color: var(--text-on-communication-background, rgb(255, 255, 255));
+}
+
+.fix-ado-settings-chip-updated {
+  background: var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+}
+
+.fix-ado-settings-chip-tag {
+  border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
+  color: var(--fix-ado-settings-muted);
+}
+
+/* The footer: the issue link on the left, the number of changes and the buttons on the right. */
+.fix-ado-settings-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--fix-ado-settings-line);
+}
+
+.fix-ado-settings-issue-link {
+  margin-right: auto;
+  color: var(--communication-foreground, rgb(0, 90, 158));
+}
+
+.fix-ado-settings-change-count {
+  color: var(--fix-ado-settings-muted);
+}
+
+.fix-ado-settings-buttons .bolt-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* A narrow window: the side bar above the section, its entries in a wrapping row. */
+@media (max-width: 700px) {
+  .fix-ado-settings-body {
+    flex-direction: column;
+  }
+
+  .fix-ado-settings-nav {
+    width: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--fix-ado-settings-line);
+    overflow-y: visible;
+  }
+
+  .fix-ado-settings-nav-items {
+    flex-flow: row wrap;
+  }
+}
+`;
+
+  // azure-devops/src/core/settings-panel-style.ts
+  var SETTINGS_PANEL_STYLE = `${switch_default}
+${settings_panel_default}`;
 
   // azure-devops/src/core/feature-runner.ts
   function addStyles(features, addStyle) {
@@ -19354,19 +19875,56 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     ), settingsButton.append(puzzleIcon(document2)), unseenCount > 0 && settingsButton.append(unseenCountBadge(document2, unseenCount)), item.append(settingsButton), item;
   }
 
-  // azure-devops/src/core/settings-panel.ts
-  var ISSUE_LINK_TEXT = "Found a bug or have a suggestion?", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new", TOP_BAR_SELECTOR2 = ".region-header-menubar", DIALOG_CLASS2 = "fix-ado-settings", TITLE_ID3 = "fix-ado-settings-title", CHIP_TEXT = { new: "New", updated: "Updated" };
-  function allFeatures({ categories }) {
-    return categories.flatMap((category) => category.features);
+  // azure-devops/src/core/settings-panel-nav.ts
+  var SEARCH_TEXT = "Search settings", WHATS_NEW = "What’s new";
+  function searchField(document2) {
+    let search2 = element3(document2, "search", { className: "fix-ado-settings-search" }), label = element3(document2, "label", { className: "fix-ado-settings-search-label" }), field = element3(document2, "input", { className: "fix-ado-settings-search-field" });
+    return Object.assign(field, {
+      autocomplete: "off",
+      placeholder: SEARCH_TEXT,
+      spellcheck: !1,
+      type: "search"
+    }), field.setAttribute("autocapitalize", "none"), field.setAttribute("autocorrect", "off"), label.append(
+      element3(document2, "span", { className: "fix-ado-settings-visually-hidden", text: SEARCH_TEXT }),
+      field
+    ), search2.append(label), { field, search: search2 };
   }
-  function featuresWithUnseenChange(options) {
-    return allFeatures(options).filter(
-      (feature) => feature.change !== void 0 && options.seenChangeVersion(feature) !== feature.change.version
-    );
+  function navButton(document2, name, count) {
+    let item = element3(document2, "button", { className: "fix-ado-settings-nav-item" });
+    return item.type = "button", item.append(element3(document2, "span", { className: "fix-ado-settings-nav-name", text: name })), count > 0 && item.append(
+      element3(document2, "span", { className: "fix-ado-settings-nav-count", text: String(count) })
+    ), item;
   }
-  function chipKind(feature, options) {
-    return options.seenChangeVersion(feature) === null ? "new" : feature.change?.kind ?? "new";
+  function navItems({ document: document2, sections, unseenCount }) {
+    let items = sections.map((section, index) => ({
+      element: navButton(document2, section.name, 0),
+      view: index
+    }));
+    return unseenCount > 0 && items.unshift({ element: navButton(document2, WHATS_NEW, unseenCount), view: "whats-new" }), items;
   }
+  function markCurrent(items, view, query) {
+    for (let item of items)
+      query === "" && item.view === view ? item.element.setAttribute("aria-current", "page") : item.element.removeAttribute("aria-current");
+  }
+  function navElement(options, search2, items) {
+    let { document: document2 } = options, list = element3(document2, "div", { className: "fix-ado-settings-nav-items" });
+    list.append(...items.map((item) => item.element));
+    let nav = element3(document2, "nav", { className: "fix-ado-settings-nav" });
+    return nav.setAttribute("aria-label", "Settings sections"), nav.append(options.title, search2, list), nav;
+  }
+  function createNav(options) {
+    let { search: search2, field } = searchField(options.document), items = navItems(options), state = { view: items[0]?.view ?? 0 }, query = () => field.value.trim().toLowerCase(), show3 = () => {
+      markCurrent(items, state.view, query()), options.onChange();
+    };
+    for (let item of items)
+      item.element.addEventListener("click", () => {
+        state.view = item.view, field.value = "", show3();
+      });
+    return field.addEventListener("input", show3), markCurrent(items, state.view, ""), { element: navElement(options, search2, items), query, view: () => state.view };
+  }
+
+  // azure-devops/src/core/settings-panel-row.ts
+  var CHIP_TEXT = { new: "New", updated: "Updated" };
   function chipElement(document2, text, kind) {
     return element3(document2, "span", {
       className: `fix-ado-settings-chip fix-ado-settings-chip-${kind}`,
@@ -19380,37 +19938,132 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     });
     return chip && name.append(chipElement(document2, CHIP_TEXT[chip], chip)), feature.tag !== void 0 && name.append(chipElement(document2, feature.tag, "tag")), name;
   }
+  function featureDescription(document2, feature) {
+    let description = element3(document2, "span", {
+      className: "fix-ado-settings-feature-description",
+      text: feature.description
+    });
+    return description.id = `fix-ado-settings-description-${feature.id}`, description.setAttribute("aria-hidden", "true"), description;
+  }
   function featureRow(document2, { feature, isOn: isOn2, chip }) {
-    let row = element3(document2, "label", { className: "fix-ado-settings-feature" }), checkbox = element3(document2, "input", { className: "fix-ado-settings-checkbox" });
-    checkbox.type = "checkbox", checkbox.checked = isOn2, checkbox.dataset.featureId = feature.id;
-    let text = element3(document2, "span", { className: "fix-ado-settings-feature-text" });
-    return text.append(
-      featureName(document2, feature, chip),
-      element3(document2, "span", {
-        className: "fix-ado-settings-feature-description",
-        text: feature.description
-      })
-    ), row.append(checkbox, text), row;
+    let row = createSwitch(document2, "");
+    row.classList.add("fix-ado-settings-feature"), row.dataset.featureId = feature.id, showSwitchOn(row, isOn2);
+    let description = featureDescription(document2, feature);
+    return row.setAttribute("aria-describedby", description.id), row.querySelector(".fix-ado-switch-text")?.replaceChildren(featureName(document2, feature, chip), description), row.addEventListener("click", () => {
+      showSwitchOn(row, row.getAttribute("aria-checked") !== "true");
+    }), row;
+  }
+  function isRowOn(row) {
+    return row.getAttribute("aria-checked") === "true";
+  }
+
+  // azure-devops/src/core/settings-panel-pane.ts
+  var WHATS_NEW_NOTE = "Added or changed since you last opened this panel.";
+  function rowEntry(section, group2, options) {
+    return (feature) => ({
+      element: featureRow(options.document, {
+        chip: options.chip(feature),
+        feature,
+        isOn: options.isOn(feature)
+      }),
+      feature,
+      searchText: [feature.name, feature.description, section.name, group2.name ?? ""].join(" ").toLowerCase()
+    });
+  }
+  function groupEntry(section, options) {
+    return (group2) => {
+      let { document: document2 } = options, container = element3(document2, "div", { className: "fix-ado-settings-group" });
+      group2.name !== void 0 && container.append(
+        element3(document2, "h4", { className: "fix-ado-settings-group-name", text: group2.name })
+      );
+      let rows = group2.features.map(rowEntry(section, group2, options)), list = element3(document2, "div", { className: "fix-ado-settings-features" });
+      return list.append(...rows.map((row) => row.element)), container.append(list), { element: container, rows };
+    };
+  }
+  function sectionEntry(options) {
+    return (section) => {
+      let { document: document2 } = options, container = element3(document2, "section", { className: "fix-ado-settings-section" }), groups = section.groups.map(groupEntry(section, options));
+      return container.append(
+        element3(document2, "h3", { className: "fix-ado-settings-section-name", text: section.name }),
+        element3(document2, "p", {
+          className: "fix-ado-settings-section-description",
+          text: section.description
+        }),
+        ...groups.map((group2) => group2.element)
+      ), { element: container, groups };
+    };
+  }
+  function showMatchingRows(section, isMatch) {
+    let shown = 0;
+    for (let group2 of section.groups) {
+      let groupShown = 0;
+      for (let row of group2.rows)
+        row.element.hidden = isMatch !== null && !isMatch(row), groupShown += row.element.hidden ? 0 : 1;
+      group2.element.hidden = groupShown === 0, shown += groupShown;
+    }
+    return shown;
+  }
+  function rowMatchFor(view, query, options) {
+    return query !== "" ? (row) => row.searchText.includes(query) : view === "whats-new" ? (row) => options.chip(row.feature) !== null : null;
+  }
+  function showNotes({ note, noMatch }, query, shown) {
+    note.textContent = query === "" ? WHATS_NEW_NOTE : `${shown} ${shown === 1 ? "setting" : "settings"}`, note.hidden = query !== "" && shown === 0, noMatch.textContent = `No setting matches “${query}”.`, noMatch.hidden = query === "" || shown > 0;
+  }
+  function showSections(sections, view, isMatch) {
+    let shown = 0;
+    for (let [index, section] of sections.entries()) {
+      let sectionShown = showMatchingRows(section, isMatch);
+      section.element.hidden = isMatch ? sectionShown === 0 : index !== view, shown += sectionShown;
+    }
+    return shown;
+  }
+  function createPane(options) {
+    let { document: document2 } = options, pane = element3(document2, "div", { className: "fix-ado-settings-pane" }), notes = {
+      noMatch: element3(document2, "p", { className: "fix-ado-settings-no-match" }),
+      note: element3(document2, "p", { className: "fix-ado-settings-view-note" })
+    }, sections = options.sections.map(sectionEntry(options));
+    return pane.append(notes.note, notes.noMatch, ...sections.map((section) => section.element)), {
+      element: pane,
+      show(view, query) {
+        let isMatch = rowMatchFor(view, query, options), shown = showSections(sections, view, isMatch);
+        pane.classList.toggle("fix-ado-settings-pane-filtered", isMatch !== null), showNotes(notes, query, shown), isMatch === null && (notes.note.hidden = !0), pane.scrollTop = 0;
+      }
+    };
+  }
+
+  // azure-devops/src/core/settings-panel.ts
+  var TOP_BAR_SELECTOR2 = ".region-header-menubar", DIALOG_CLASS2 = "fix-ado-settings", TITLE_ID3 = "fix-ado-settings-title", ISSUE_LINK_TEXT = "Report a bug or suggest a feature", NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new";
+  function allFeatures({ sections }) {
+    return sections.flatMap((section) => section.groups.flatMap((group2) => group2.features));
+  }
+  function featuresWithUnseenChange(options) {
+    return allFeatures(options).filter(
+      (feature) => feature.change !== void 0 && options.seenChangeVersion(feature) !== feature.change.version
+    );
+  }
+  function chipKind(feature, options) {
+    return options.seenChangeVersion(feature) === null ? "new" : feature.change?.kind ?? "new";
   }
   function changedChoices(dialog, options) {
     let changed = /* @__PURE__ */ new Map();
     for (let feature of allFeatures(options)) {
-      let checkbox = dialog.querySelector(
-        `input[data-feature-id="${feature.id}"]`
-      );
-      checkbox && checkbox.checked !== options.isOn(feature) && changed.set(feature.id, checkbox.checked);
+      let row = dialog.querySelector(`[data-feature-id="${feature.id}"]`);
+      row && isRowOn(row) !== options.isOn(feature) && changed.set(feature.id, isRowOn(row));
     }
     return changed;
+  }
+  function changeCountText(count) {
+    return count === 0 ? "" : count === 1 ? "1 change" : `${count} changes`;
   }
   function issueLink(document2) {
     let link = element3(document2, "a", {
       className: "fix-ado-settings-issue-link",
       text: ISSUE_LINK_TEXT
     });
-    return link.href = NEW_ISSUE_URL, link.target = "_blank", link.rel = "noopener noreferrer", link;
+    return Object.assign(link, { href: NEW_ISSUE_URL, rel: "noopener noreferrer", target: "_blank" }), link;
   }
-  function createButtons2(dialog, options) {
-    let { document: document2 } = options, cancel = button(
+  function createFooter(dialog, options) {
+    let { document: document2 } = options, count = element3(document2, "span", { className: "fix-ado-settings-change-count" }), cancel = button(
       document2,
       { className: "bolt-button enabled bolt-focus-treatment", text: "Cancel" },
       () => {
@@ -19424,38 +20077,42 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
       }
     );
     save.disabled = !0;
-    let buttons = element3(document2, "div", { className: "fix-ado-settings-buttons" });
-    return buttons.append(issueLink(document2), cancel, save), { buttons, save };
+    let footer = element3(document2, "div", { className: "fix-ado-settings-buttons" });
+    return footer.append(issueLink(document2), count, cancel, save), {
+      footer,
+      showChanges() {
+        let changed = changedChoices(dialog, options).size;
+        count.textContent = changeCountText(changed), save.disabled = changed === 0;
+      }
+    };
   }
-  function categorySection(category, options, unseen) {
-    let { document: document2 } = options, section = element3(document2, "section", { className: "fix-ado-settings-category" }), cards = element3(document2, "div", { className: "fix-ado-settings-features" });
-    return cards.append(
-      ...category.features.map(
-        (feature) => featureRow(document2, {
-          chip: unseen.includes(feature) ? chipKind(feature, options) : null,
-          feature,
-          isOn: options.isOn(feature)
-        })
-      )
-    ), section.append(
-      element3(document2, "h3", { className: "fix-ado-settings-category-name", text: category.name }),
-      cards
-    ), section;
-  }
-  function createDialog2(options, unseen) {
-    let { document: document2 } = options, dialog = element3(document2, "dialog", { className: DIALOG_CLASS2 });
-    dialog.setAttribute("aria-labelledby", TITLE_ID3);
-    let { buttons, save } = createButtons2(dialog, options), title = element3(document2, "h2", {
+  function panelTitle(document2) {
+    let title = element3(document2, "h2", {
       className: "fix-ado-settings-title",
       text: SETTINGS_TITLE
     });
-    return title.id = TITLE_ID3, dialog.addEventListener("change", () => {
-      save.disabled = changedChoices(dialog, options).size === 0;
-    }), dialog.append(
-      title,
-      ...options.categories.map((category) => categorySection(category, options, unseen)),
-      buttons
-    ), dialog;
+    return title.id = TITLE_ID3, title;
+  }
+  function fillDialog(dialog, { nav, pane, footer }) {
+    let { ownerDocument } = dialog, body = element3(ownerDocument, "div", { className: "fix-ado-settings-body" });
+    body.append(nav, pane), dialog.setAttribute("aria-labelledby", TITLE_ID3), dialog.append(body, footer);
+  }
+  function createDialog2(options, unseen) {
+    let { document: document2 } = options, dialog = element3(document2, "dialog", { className: DIALOG_CLASS2 }), pane = createPane({
+      chip: (feature) => unseen.includes(feature) ? chipKind(feature, options) : null,
+      document: document2,
+      isOn: options.isOn,
+      sections: options.sections
+    }), nav = createNav({
+      document: document2,
+      onChange: () => {
+        pane.show(nav.view(), nav.query());
+      },
+      sections: options.sections,
+      title: panelTitle(document2),
+      unseenCount: unseen.length
+    }), { footer, showChanges } = createFooter(dialog, options);
+    return dialog.addEventListener("click", showChanges), fillDialog(dialog, { footer, nav: nav.element, pane: pane.element }), pane.show(nav.view(), ""), dialog;
   }
   function createSettingsPanel(options) {
     let { document: document2 } = options;
@@ -19508,191 +20165,8 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     !isOwnerBusy(document2) && claimReload() && location.reload();
   }
 
-  // azure-devops/src/core/settings-panel.css
-  var settings_panel_default = `/* The settings button in Azure DevOps's top bar: a puzzle piece outline in the text colour,
-   like Azure DevOps's own line icons next to it. */
-.fix-ado-settings-icon {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.1;
-  stroke-linejoin: round;
-}
-
-/* The number of feature changes the owner has not seen, on the button's top right corner. */
-.fix-ado-settings-button {
-  position: relative;
-}
-
-.fix-ado-settings-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  box-sizing: border-box;
-  border-radius: 7px;
-  background: var(--communication-background, rgb(0, 120, 212));
-  color: var(--text-on-communication-background, rgb(255, 255, 255));
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 14px;
-  text-align: center;
-  pointer-events: none;
-}
-
-/* The settings panel: a dialog over the page, in Azure DevOps's own theme colours. */
-.fix-ado-settings {
-  width: min(1080px, calc(100vw - 32px));
-  max-height: calc(100vh - 64px);
-  padding: 24px;
-  border: none;
-  border-radius: 8px;
-  background: var(--callout-background-color, rgb(255, 255, 255));
-  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
-  box-shadow:
-    0 25.6px 57.6px rgba(0, 0, 0, 0.22),
-    0 4.8px 14.4px rgba(0, 0, 0, 0.18);
-}
-
-/* Scrolling in the panel or over the backdrop stops there, and leaves the page behind it. */
-.fix-ado-settings:modal {
-  overscroll-behavior: contain;
-}
-
-.fix-ado-settings::backdrop {
-  background: rgba(0, 0, 0, 0.4);
-  overflow: hidden;
-  overscroll-behavior: contain;
-}
-
-.fix-ado-settings-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 16px;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-/* A heading per category, above its cards. */
-.fix-ado-settings-category + .fix-ado-settings-category {
-  margin-top: 20px;
-}
-
-.fix-ado-settings-category-name {
-  margin: 0 0 8px;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  font-size: 14px;
-  font-weight: 600;
-}
-
-/* A card per feature, three next to each other. A narrow window gets two, then one. */
-.fix-ado-settings-features {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 900px) {
-  .fix-ado-settings-features {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 600px) {
-  .fix-ado-settings-features {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.fix-ado-settings-feature {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.fix-ado-settings-feature:hover {
-  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
-}
-
-.fix-ado-settings-checkbox {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin: 2px 0 0;
-  accent-color: var(--communication-background, rgb(0, 120, 212));
-}
-
-.fix-ado-settings-feature-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.fix-ado-settings-feature-name {
-  font-weight: 600;
-}
-
-.fix-ado-settings-chip {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 0 6px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-  vertical-align: 1px;
-}
-
-.fix-ado-settings-chip-new {
-  background: var(--communication-background, rgb(0, 120, 212));
-  color: var(--text-on-communication-background, rgb(255, 255, 255));
-}
-
-.fix-ado-settings-chip-updated {
-  background: var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
-  color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
-}
-
-.fix-ado-settings-chip-tag {
-  border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-}
-
-.fix-ado-settings-feature-description {
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-}
-
-.fix-ado-settings-buttons {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 20px;
-}
-
-/* The issue link sits left of the buttons, on the same row. */
-.fix-ado-settings-issue-link {
-  margin-right: auto;
-  color: var(--communication-foreground, rgb(0, 90, 158));
-}
-
-.fix-ado-settings-buttons .bolt-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-`;
-
   // azure-devops/src/main.ts
   var TIMER_INTERVAL_MS = 5e3, basePath = apiBasePath(location), isTabActive = () => document.visibilityState === "visible", isInFrame = globalThis.top !== globalThis.self, isOn = (feature) => isFeatureOn(feature, GM_getValue), seenChangeKey = ({ id }) => `${id}-seen-change`, settingsPanel = isInFrame ? null : createSettingsPanel({
-    categories: FEATURE_CATEGORIES,
     document,
     isOn,
     markChangesSeen: (features) => {
@@ -19706,9 +20180,10 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
       for (let [id, isChosenOn] of choices)
         GM_setValue(id, isChosenOn);
     },
+    sections: SETTINGS_SECTIONS,
     seenChangeVersion: (feature) => GM_getValue(seenChangeKey(feature), null)
   });
-  settingsPanel && (GM_addStyle(settings_panel_default), GM_registerMenuCommand("Settings", settingsPanel.open));
+  settingsPanel && (GM_addStyle(SETTINGS_PANEL_STYLE), GM_registerMenuCommand("Settings", settingsPanel.open));
   var runner = createFeatureRunner({
     addStyle: (css) => {
       GM_addStyle(css);

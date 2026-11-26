@@ -8,50 +8,56 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 ### Fix Azure DevOps
 
-[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.28.1
+[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.29.0
 
 Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones.
 
+**General**
+
+- Pull request lists and boards that reload on changes
+
+**Appearance**
+
+- Light or Dark to match the system
+- Avatar initials
+- A Windows 98 mode, a work in progress and off by default
+
 **Pull request lists**
 
-- Pipeline status on each pull request
 - Required reviewers first
 - How long ago each active pull request was published, in red after two weekdays
 - The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item
 - The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all
 - The lists as a table, with a column per field under a header, on by default with a Table switch
 
-**Pull request**
+**Comments and activity**
 
-- A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run
-- A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request
-- Starred reviewers to add in one click, also on a new pull request
-- Reviews that post your pending comments in one go, with your vote
-- A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them
-
-**Pull request Overview**
-
-- Each check's warnings and errors above the description, in a box that collapses
 - Oldest first, with a button to flip the order
-- A button that scrolls to the bottom
 - Pushes folded to one line, with a button that shows their commits
 - Lines that add reviewers joined to one
+- A New chip that glows on pushes and other changes you have not seen
+- A button that scrolls to the bottom
 - A chip with each thread's status
 - Threads that collapse, with buttons that collapse or expand all of them, or only the done ones
 - Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread
 - Unread comments that glow, with buttons to the first and next unread
-- A New chip that glows on pushes and other changes you have not seen
+
+**Code review**
+
+- Reviews that post your pending comments in one go, with your vote
+- A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them
+- Starred reviewers to add in one click, also on a new pull request
+
+**Pipelines**
+
+- Pipeline status on each pull request in the lists
+- Each check's warnings and errors above the description, in a box that collapses
+- A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run
+- A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request
 
 **Boards**
 
 - Days in column dots on cards, with a toggle per column
-
-**Everywhere**
-
-- Avatar initials
-- Light or Dark to match the system
-- Pull request lists and boards that reload on changes
-- A Windows 98 mode, a work in progress and off by default
 
 ### Fix Tweakers
 
