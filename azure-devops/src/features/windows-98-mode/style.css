@@ -2984,6 +2984,18 @@ html[data-fix-ado-win98] body .navigation-container .project-navigation.collapse
     padding: 2px 0;
     background: #fff;
     box-shadow: var(--win98-sunken);
+
+    /* The parent on top, as the well's header: the face grey, with an etched line under it. */
+    & > .hub-group:not(:hover, :focus) {
+      background: var(--win98-face);
+    }
+
+    & > .hub-group {
+      margin: 0 2px 3px;
+      box-shadow:
+        0 1px var(--win98-shadow),
+        0 2px #fff;
+    }
   }
 }
 
