@@ -1,6 +1,6 @@
 // The organization panel: the side panel on the pages outside a project, the inbox, Work
-// and the organization's home. A button in its footer collapses it to its icons, as a
-// project's side panel does. style.css draws the collapsed panel from a mark on <html>, so
+// and the organization's home. A button next to Organization settings collapses it to its
+// icons, as the one next to Project settings does on a project. style.css draws the collapsed panel from a mark on <html>, so
 // Azure DevOps redrawing the panel does not undo it.
 
 const PANEL_FOOTER_SELECTOR = ".top-level-navigation .navigation-footer";
@@ -41,7 +41,7 @@ function showToggle(toggle: HTMLButtonElement, isCollapsed: boolean): void {
 
 function createToggle(document: Document, onClick: () => void): HTMLButtonElement {
   const toggle = Object.assign(document.createElement("button"), {
-    className: `${TOGGLE_CLASS} top-navigation-item focus-treatment`,
+    className: `${TOGGLE_CLASS} alt-hover-effect focus-treatment`,
     type: "button",
   });
   const wrapper = Object.assign(document.createElement("span"), {

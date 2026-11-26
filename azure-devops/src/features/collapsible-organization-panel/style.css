@@ -1,14 +1,39 @@
-/* The organization panel's collapse button, last in its footer: a double chevron in line with
-   the Organization settings icon above it. organization-panel.ts adds it. */
+/* The bottom row, as on a project's side panel: a line above it, then Organization settings and
+   the collapse button next to it. Collapsed, the two stack. The line is drawn here, so Azure
+   DevOps's own elements stay where they are. */
+.top-level-navigation .navigation-footer:has(.fix-ado-organization-panel-toggle) {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  padding-top: 4px;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 10px;
+    left: 10px;
+    height: 1px;
+    background-color: var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  }
+
+  & > :not(.fix-ado-organization-panel-toggle) {
+    flex-grow: 1;
+    min-width: 0;
+  }
+}
+
+/* The collapse button: a double chevron only, that glows blue on hover as on a project. */
 .fix-ado-organization-panel-toggle {
   display: flex;
+  flex: none;
   align-items: center;
-  width: 100%;
   box-sizing: border-box;
-  padding: 10px 8px 10px 12px;
+  padding: 10px 12px;
   border: 0;
   background: transparent;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  color: inherit;
   font: inherit;
   line-height: 20px;
   cursor: pointer;
@@ -20,7 +45,7 @@
 }
 
 /* Collapsed: 48px wide, as Azure DevOps draws a project's side panel without "expanded". Only
-   the organizations' pictures and the icons show. */
+   the organizations' pictures and the icons show, and the bottom row stacks. */
 :root[data-fix-ado-organization-panel-collapsed] .top-level-navigation.region-navigation {
   width: 48px;
 
@@ -32,5 +57,9 @@
 
   & .host-link .project-persona {
     margin-right: 0;
+  }
+
+  & .navigation-footer:has(.fix-ado-organization-panel-toggle) {
+    flex-direction: column;
   }
 }
