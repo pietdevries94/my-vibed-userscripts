@@ -23,7 +23,10 @@ interface ThreadContext {
 interface PullRequestThread {
   id: number;
   isDeleted?: boolean;
-  comments?: { content?: string }[];
+  /** Such as `active`, `pending` or `fixed`. A system thread has none. */
+  status?: string;
+  /** `commentType` is `text` for a person's comment and `system` for Azure DevOps's. */
+  comments?: { content?: string; commentType?: string }[];
   threadContext?: ThreadContext | null;
   /** When the thread was created. */
   publishedDate?: string;

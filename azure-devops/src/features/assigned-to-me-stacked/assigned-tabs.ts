@@ -1,4 +1,5 @@
 // Which of the pull requests assigned to me each tab of the "Assigned to me" card holds: it goes by my vote.
+import type { CommentCount } from "./comment-count.ts";
 import type { ListedPullRequest } from "../reload-on-changes/pr-list-changes.ts";
 import type { Reviewer } from "../../pull-requests/reviewers.ts";
 
@@ -23,6 +24,8 @@ interface AssignedPullRequest extends ListedPullRequest {
   createdBy?: Person;
   repository?: { name?: string; project?: { name?: string } };
   reviewers?: (Reviewer & Person)[];
+  /** From the pull request's threads, which the script fetches after the list. */
+  comments?: CommentCount;
 }
 
 function isVoteOnTab(vote: number, tabId: string): boolean {

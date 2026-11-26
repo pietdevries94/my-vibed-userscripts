@@ -7,6 +7,7 @@ import type { Page } from "../../core/page.ts";
 import { createCardPeek } from "./card-peek.ts";
 import { showStackedTabs } from "./stacked-tabs.ts";
 import style from "./style.css";
+import { withComments } from "./comment-count.ts";
 
 /** The tab ids of the built cards the owner folded. */
 const FOLDED_TABS_KEY = "assigned-to-me-folded-tabs";
@@ -43,6 +44,7 @@ function shownKeyOf({ pullRequests }: AssignedToMe): string {
       pullRequest.isDraft,
       pullRequest.mergeStatus,
       pullRequest.reviewers?.map(({ id, vote, isRequired }) => [id, vote, isRequired]),
+      pullRequest.comments,
     ]),
   );
 }
@@ -83,7 +85,10 @@ const assignedToMeStacked: Feature = {
         const reviewerId = await client.getAuthenticatedUserId();
         if (reviewerId !== null) {
           const { pullRequests } = await client.getPullRequestsAssignedTo(reviewerId, repository);
-          assigned = { scope, value: { pullRequests, reviewerId } };
+          assigned = {
+            scope,
+            value: { pullRequests: await withComments(client, pullRequests), reviewerId },
+          };
         }
         nextFetchAt = now() + ASSIGNED_REFRESH_INTERVAL_MS;
       } catch {

@@ -4,6 +4,7 @@ import type { AssignedPullRequest, Person } from "./assigned-tabs.ts";
 import type { Reviewer } from "../../pull-requests/reviewers.ts";
 import { avatarName } from "../../pull-requests/avatars.ts";
 import { relativeTime } from "./relative-time.ts";
+import { showCommentCount } from "./comment-count.ts";
 
 const AUTHOR_AVATAR_SELECTOR = '[aria-colindex="1"] .bolt-coin';
 const TITLE_SELECTOR = ".bolt-table-two-line-cell-item .body-l";
@@ -236,6 +237,13 @@ function showCreated(row: HTMLElement, pullRequest: AssignedPullRequest, now: nu
   time.parentElement?.setAttribute("aria-label", new Date(created).toLocaleString());
 }
 
+/** The columns after the title: reviewers, comments and when it was created. */
+function showColumns(row: HTMLElement, pullRequest: AssignedPullRequest, now: number): void {
+  showReviewers(row, pullRequest);
+  showCommentCount(row.querySelector(COMMENTS_CELL_SELECTOR), pullRequest.comments);
+  showCreated(row, pullRequest, now);
+}
+
 /** Takes the other features' attributes off the row and its cells, and Azure DevOps's mark of
  *  something new, which belongs to the template's own pull request. */
 function removeMarks(row: HTMLElement): void {
@@ -279,8 +287,7 @@ function buildAssignedRow(
   showAvatar(row.querySelector(AUTHOR_AVATAR_SELECTOR), pullRequest.createdBy);
   showTitle(row, pullRequest, reviewerId);
   showSubtitle(row, template, pullRequest);
-  showReviewers(row, pullRequest);
-  showCreated(row, pullRequest, now);
+  showColumns(row, pullRequest, now);
   return row;
 }
 

@@ -70,3 +70,19 @@ test("each reviewer shows their own vote, as the site's icon", () => {
     "repos-pr-reviewer-vote absolute rejected flex-noshrink fabric-icon ms-Icon--StatusErrorFull",
   ]);
 });
+
+test("the comments cell shows the pull request's own count, not the template's", () => {
+  const template = siteRow();
+  template.insertAdjacentHTML(
+    "beforeend",
+    `<div aria-colindex="4"><div class="bolt-table-cell-content"><span class="repos-pr-list-comment-count">9</span></div></div>`,
+  );
+
+  const row = buildAssignedRow(
+    template,
+    { comments: { active: 1, total: 4 }, pullRequestId: 34 },
+    { basePath: "/my-org", now: 0, reviewerId: "kestrel" },
+  );
+
+  assert.equal(row?.querySelector('[aria-colindex="4"]')?.textContent, "1/4");
+});
