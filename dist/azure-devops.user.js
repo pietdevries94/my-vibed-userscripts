@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.32.0
+// @version      1.32.1
 // @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. General: Pull request lists and boards that reload on changes; A button that collapses the side panel of the inbox, Work and the organization home, as on a project. Appearance: Light or Dark to match the system; Avatar initials; A Windows 98 mode, a work in progress and off by default. Pull request lists: Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Comments and activity: Oldest first, with a button to flip the order; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A New chip that glows on pushes and other changes you have not seen; A button that scrolls to the bottom; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread. Code review: Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them; Starred reviewers to add in one click, also on a new pull request. Pipelines: Pipeline status on each pull request in the lists; Each check's warnings and errors above the description, in a box that collapses; A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request. Boards: Days in column dots on cards, with a toggle per column.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -18139,8 +18139,57 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     return format.format(0, "second");
   }
 
+  // azure-devops/src/features/assigned-to-me-stacked/comment-count.ts
+  var TEXT_COMMENT_TYPE2 = "text", ACTIVE_STATUSES = /* @__PURE__ */ new Set(["active", "pending"]);
+  function countComments(threads) {
+    let commentThreads = threads.filter(
+      ({ comments, isDeleted }) => isDeleted !== !0 && (comments ?? []).some(({ commentType }) => commentType === TEXT_COMMENT_TYPE2)
+    );
+    return { active: commentThreads.filter(({ status }) => ACTIVE_STATUSES.has(status ?? "")).length, total: commentThreads.length };
+  }
+  function createCommentIcon(document2, hasActive) {
+    let wrapper = Object.assign(document2.createElement("span"), {
+      className: "fluent-icons-enabled"
+    }), icon = Object.assign(document2.createElement("span"), {
+      className: hasActive ? "repos-pr-active-comment-icon flex-noshrink fabric-icon ms-Icon--ChatWarning" : "flex-noshrink fabric-icon ms-Icon--ActivityFeed"
+    });
+    return icon.setAttribute("aria-hidden", "true"), wrapper.append(icon), wrapper;
+  }
+  function createCommentCount(document2, { active, total }) {
+    if (total === 0)
+      return null;
+    let hasActive = active > 0, group2 = Object.assign(document2.createElement("div"), {
+      className: hasActive ? "flex-row flex-center" : "flex-row flex-center secondary-text"
+    });
+    group2.setAttribute("role", "group"), group2.setAttribute(
+      "aria-label",
+      hasActive ? `${active} of ${total} comments active` : `${total} comments`
+    );
+    let count = Object.assign(document2.createElement("span"), {
+      className: hasActive ? "repos-pr-list-comment-count has-active-comments" : "repos-pr-list-comment-count",
+      textContent: hasActive ? `${active}/${total}` : String(total)
+    });
+    return count.setAttribute("aria-hidden", "true"), group2.append(createCommentIcon(document2, hasActive), count), group2;
+  }
+  function showCommentCount(cell2, count) {
+    let shown = count === void 0 || cell2 === null ? null : createCommentCount(cell2.ownerDocument, count);
+    shown !== null && cell2?.append(shown);
+  }
+  async function withComments(client, pullRequests) {
+    return Promise.all(
+      pullRequests.map(async (pullRequest) => {
+        let ref = {
+          project: pullRequest.repository?.project?.name ?? "",
+          pullRequestId: pullRequest.pullRequestId,
+          repository: pullRequest.repository?.name ?? ""
+        }, threads = await client.getPullRequestThreads(ref).catch(() => null);
+        return threads === null ? pullRequest : { ...pullRequest, comments: countComments(threads) };
+      })
+    );
+  }
+
   // azure-devops/src/features/assigned-to-me-stacked/assigned-row.ts
-  var AUTHOR_AVATAR_SELECTOR = '[aria-colindex="1"] .bolt-coin', TITLE_SELECTOR2 = ".bolt-table-two-line-cell-item .body-l", TITLE_PILL_SELECTOR = ".bolt-table-two-line-cell-item .bolt-pill", DRAFT_PILL_SELECTOR2 = ".repos-pr-list-draft-pill", CONFLICTS_PILL_SELECTOR = ".repos-pr-list-conflicts-pill", REQUIRED_PILL_SELECTOR = ".repos-pr-list-required-pill", CONFLICTS_MERGE_STATUS = "conflicts", SUBTITLE_SELECTOR = ".bolt-table-two-line-cell-item .secondary-text > span", BRANCH_SELECTOR = ".monospaced-xs", REPOSITORY_SELECTOR = ":scope > .padding-horizontal-4:not(.monospaced-xs)", REVIEWER_SELECTOR2 = ".pr-reviewer", VOTE_ICON_SELECTOR = ".fluent-icons-enabled:has(> .repos-pr-reviewer-vote)", APPROVED_VOTE = 10, APPROVED_WITH_SUGGESTIONS_VOTE = 5, WAITING_FOR_AUTHOR_VOTE = -5, REJECTED_VOTE = -10, VOTE_ICONS = /* @__PURE__ */ new Map([
+  var AUTHOR_AVATAR_SELECTOR = '[aria-colindex="1"] .bolt-coin', TITLE_SELECTOR2 = ".bolt-table-two-line-cell-item .body-l", TITLE_PILL_SELECTOR = ".bolt-table-two-line-cell-item .bolt-pill", DRAFT_PILL_SELECTOR2 = ".repos-pr-list-draft-pill", CONFLICTS_PILL_SELECTOR = ".repos-pr-list-conflicts-pill", REQUIRED_PILL_SELECTOR = ".repos-pr-list-required-pill", CONFLICTS_MERGE_STATUS = "conflicts", SUBTITLE_SELECTOR = ".bolt-table-two-line-cell-item .secondary-text > span", BRANCH_SELECTOR = ".monospaced-xs", REPOSITORY_SELECTOR = ":scope > .padding-horizontal-4:not(.monospaced-xs)", REVIEWER_SELECTOR2 = ".pr-reviewer", REVIEWERS_CELL_SELECTOR = '[aria-colindex="3"] .bolt-table-cell-content', REVIEWER_GROUP_SELECTOR = `a.bolt-table-row:not(.fix-ado-assigned-card *) ${REVIEWERS_CELL_SELECTOR} > :has(> ${REVIEWER_SELECTOR2})`, VOTE_ICON_SELECTOR = ".fluent-icons-enabled:has(> .repos-pr-reviewer-vote)", APPROVED_VOTE = 10, APPROVED_WITH_SUGGESTIONS_VOTE = 5, WAITING_FOR_AUTHOR_VOTE = -5, REJECTED_VOTE = -10, VOTE_ICONS = /* @__PURE__ */ new Map([
     [APPROVED_VOTE, ["approved", "ms-Icon--CompletedSolid"]],
     [APPROVED_WITH_SUGGESTIONS_VOTE, ["approved", "ms-Icon--CompletedSolid"]],
     [WAITING_FOR_AUTHOR_VOTE, ["waiting", "ms-Icon--AwayStatus"]],
@@ -18216,7 +18265,12 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let voteIcon = createVoteIcon(avatar.ownerDocument, reviewer.vote);
     return voteIcon && avatar.append(voteIcon), avatar;
   }
+  function addReviewerGroup(row) {
+    let cell2 = row.querySelector(REVIEWERS_CELL_SELECTOR), group2 = row.ownerDocument.querySelector(REVIEWER_GROUP_SELECTOR), copy = group2 ? copyOf(group2) : null;
+    cell2 !== null && copy !== null && row.querySelector(REVIEWER_SELECTOR2) === null && cell2.replaceChildren(copy);
+  }
   function showReviewers(row, pullRequest) {
+    addReviewerGroup(row);
     let shown = [...row.querySelectorAll(REVIEWER_SELECTOR2)], [first] = shown, parent = first?.parentElement;
     if (first === void 0 || !parent)
       return;
@@ -18234,6 +18288,9 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       row.ownerDocument.documentElement.lang || void 0
     ), time.parentElement?.setAttribute("aria-label", new Date(created).toLocaleString()));
   }
+  function showColumns(row, pullRequest, now) {
+    showReviewers(row, pullRequest), showCommentCount(row.querySelector(COMMENTS_CELL_SELECTOR), pullRequest.comments), showCreated(row, pullRequest, now);
+  }
   function removeMarks(row) {
     for (let element4 of [row, ...row.querySelectorAll("*")])
       for (let name of element4.getAttributeNames())
@@ -18248,7 +18305,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
   function buildAssignedRow(template, pullRequest, { basePath: basePath2, now, reviewerId }) {
     let row = emptyCopy(template);
-    return row === null ? null : (row.setAttribute("href", pullRequestHref(basePath2, pullRequest)), showAvatar(row.querySelector(AUTHOR_AVATAR_SELECTOR), pullRequest.createdBy), showTitle(row, pullRequest, reviewerId), showSubtitle(row, template, pullRequest), showReviewers(row, pullRequest), showCreated(row, pullRequest, now), row);
+    return row === null ? null : (row.setAttribute("href", pullRequestHref(basePath2, pullRequest)), showAvatar(row.querySelector(AUTHOR_AVATAR_SELECTOR), pullRequest.createdBy), showTitle(row, pullRequest, reviewerId), showSubtitle(row, template, pullRequest), showColumns(row, pullRequest, now), row);
   }
 
   // azure-devops/src/features/assigned-to-me-stacked/assigned-tabs.ts
@@ -18550,7 +18607,8 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         pullRequest.title,
         pullRequest.isDraft,
         pullRequest.mergeStatus,
-        pullRequest.reviewers?.map(({ id, vote, isRequired }) => [id, vote, isRequired])
+        pullRequest.reviewers?.map(({ id, vote, isRequired }) => [id, vote, isRequired]),
+        pullRequest.comments
       ])
     );
   }
@@ -18578,7 +18636,10 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
           let reviewerId = await client.getAuthenticatedUserId();
           if (reviewerId !== null) {
             let { pullRequests } = await client.getPullRequestsAssignedTo(reviewerId, repository);
-            assigned = { scope, value: { pullRequests, reviewerId } };
+            assigned = {
+              scope,
+              value: { pullRequests: await withComments(client, pullRequests), reviewerId }
+            };
           }
           nextFetchAt = now() + ASSIGNED_REFRESH_INTERVAL_MS;
         } catch {
