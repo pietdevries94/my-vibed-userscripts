@@ -20,6 +20,7 @@
   --win98-maroon: #800000;
   --win98-green: #008000;
   --win98-teal: #008080;
+  --win98-purple: #800080;
   --win98-title: linear-gradient(90deg, var(--win98-navy), var(--win98-title-end));
   --win98-title-inactive: linear-gradient(90deg, #808080, #b5b5b5);
 

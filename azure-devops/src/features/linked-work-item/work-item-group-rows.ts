@@ -162,6 +162,10 @@ function showGroupsLoading(list: HTMLElement, isLoading: boolean): void {
 
 const HUE_ATTRIBUTE = "data-fix-ado-work-item-hue";
 const HUE_PROPERTY = "--fix-ado-work-item-hue";
+/** Windows 98 mode colours a work item from its palette instead of the hue: one of five colours,
+ *  in the order of the work items' ids, so the same work items always get the same colours. */
+const PALETTE_COLOR_ATTRIBUTE = "data-fix-ado-work-item-palette-color";
+const PALETTE_COLORS = 5;
 const FULL_TURN = 360;
 /** The hue of Azure DevOps's blue, of its links and its marks. The work items' hues dodge it. */
 const BLUE_HUE = 250;
@@ -172,6 +176,25 @@ interface ColoredList {
   list: HTMLElement;
   rows: { row: HTMLElement; linked: LinkedWorkItems | null }[];
   isGrouped: boolean;
+}
+
+/** A work item's colour: its hue, and its place among Windows 98 mode's palette colours. */
+interface WorkItemColor {
+  hue: number;
+  paletteColor: number;
+}
+
+/** Gives the element its palette colour, or takes it away for null. Only writes on a change. */
+function showPaletteColor(element: HTMLElement, paletteColor: number | null): void {
+  const shown = paletteColor === null ? null : String(paletteColor);
+  if (element.getAttribute(PALETTE_COLOR_ATTRIBUTE) === shown) {
+    return;
+  }
+  if (shown === null) {
+    element.removeAttribute(PALETTE_COLOR_ATTRIBUTE);
+  } else {
+    element.setAttribute(PALETTE_COLOR_ATTRIBUTE, shown);
+  }
 }
 
 /** Gives the element a hue, or takes it away for null. Only writes on a change. */
@@ -187,6 +210,12 @@ function showHue(element: HTMLElement, hue: number | null): void {
     element.setAttribute(HUE_ATTRIBUTE, shown);
     element.style.setProperty(HUE_PROPERTY, shown);
   }
+}
+
+/** Gives the element a colour, or takes it away for null. */
+function showColor(element: HTMLElement, color: WorkItemColor | null): void {
+  showHue(element, color?.hue ?? null);
+  showPaletteColor(element, color?.paletteColor ?? null);
 }
 
 /** The row's one work item, or null for none, several or not fetched yet. */
@@ -212,11 +241,19 @@ function coloredWorkItems({ rows, isGrouped }: ColoredList): Set<number> {
  * can be, from each other and from the blue. The same work items always get the same hues.
  */
 function workItemHues(workItemIds: Iterable<number>): Map<number, number> {
+  return new Map([...workItemColors(workItemIds)].map(([id, { hue }]) => [id, hue]));
+}
+
+/** Each work item's hue, as workItemHues, and its palette colour, in the same order. */
+function workItemColors(workItemIds: Iterable<number>): Map<number, WorkItemColor> {
   const ids = [...new Set(workItemIds)].toSorted((first, second) => first - second);
   return new Map(
     ids.map((id, index) => [
       id,
-      Math.floor(BLUE_HUE + ((index + 1) * FULL_TURN) / (ids.length + 1)) % FULL_TURN,
+      {
+        hue: Math.floor(BLUE_HUE + ((index + 1) * FULL_TURN) / (ids.length + 1)) % FULL_TURN,
+        paletteColor: index % PALETTE_COLORS,
+      },
     ]),
   );
 }
@@ -224,16 +261,16 @@ function workItemHues(workItemIds: Iterable<number>): Map<number, number> {
 function showListColors(
   { list, rows, isGrouped }: ColoredList,
   colored: Set<number>,
-  hues: Map<number, number>,
+  colors: Map<number, WorkItemColor>,
 ): void {
-  const hueOf = (id: number | null): number | null =>
-    id !== null && colored.has(id) ? (hues.get(id) ?? null) : null;
+  const colorOf = (id: number | null): WorkItemColor | null =>
+    id !== null && colored.has(id) ? (colors.get(id) ?? null) : null;
   for (const { row, linked } of rows) {
-    showHue(row, hueOf(singleWorkItem(linked)));
+    showColor(row, colorOf(singleWorkItem(linked)));
   }
   for (const groupRow of list.querySelectorAll<HTMLElement>(GROUP_ROW_SELECTOR)) {
     const id = Number(groupRow.dataset.fixAdoWorkItemGroup);
-    showHue(groupRow, isGrouped && Number.isInteger(id) ? hueOf(id) : null);
+    showColor(groupRow, isGrouped && Number.isInteger(id) ? colorOf(id) : null);
   }
 }
 
@@ -244,9 +281,9 @@ function showListColors(
  */
 function showWorkItemColors(lists: ColoredList[]): void {
   const colored = lists.map((list) => coloredWorkItems(list));
-  const hues = workItemHues(colored.flatMap((ids) => [...ids]));
+  const colors = workItemColors(colored.flatMap((ids) => [...ids]));
   for (const [index, list] of lists.entries()) {
-    showListColors(list, colored[index] ?? new Set(), hues);
+    showListColors(list, colored[index] ?? new Set(), colors);
   }
 }
 

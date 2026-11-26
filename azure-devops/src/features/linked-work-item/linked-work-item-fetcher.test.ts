@@ -108,3 +108,14 @@ test("a failed fetch keeps what was known and retries after the retry delay", as
   await fetcher.sync();
   assert.equal(list.requests.length, 3);
 });
+
+test("loads a pull request's work items until its first answer, also when that fails", async () => {
+  const { fetcher, list } = fetcherOnFakeList([ref(1), ref(2)]);
+  list.linkedIds.set(1, [77]);
+  assert.equal(fetcher.isLoading(1), true);
+  list.failNext = true;
+  await fetcher.sync();
+  assert.equal(fetcher.isLoading(1), false);
+  assert.equal(fetcher.isLoading(2), false);
+  assert.equal(fetcher.linkedWorkItems(1), null);
+});

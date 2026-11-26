@@ -1,10 +1,10 @@
-import { isWindows98Mode, showTableRows } from "./table-rows.ts";
 import type { Feature } from "../../core/feature.ts";
 import { createCreationDates } from "./creation-dates.ts";
 import { findPullRequestRows } from "../../pull-requests/pr-list.ts";
 import listSwitchStyle from "../../core/list-switch.css";
 import { needsCreationDate } from "./table-age.ts";
 import { showListSwitch } from "../../core/list-switch.ts";
+import { showTableRows } from "./table-rows.ts";
 import style from "./style.css";
 import switchStyle from "../../core/switch.css";
 
@@ -13,9 +13,9 @@ const IS_TABLE_KEY = "table-rows-on";
 const TABLE_SWITCH = { className: "fix-ado-table-switch", label: "Table" };
 
 const tableRows: Feature = {
-  change: { kind: "new", version: "1.28.0" },
+  change: { kind: "updated", version: "1.31.0" },
   description:
-    "A column per field and one row per pull request. A Table switch on the lists flips it. Not in Windows 98 mode.",
+    "A column per field and one row per pull request. A Table switch on the lists flips it.",
   id: "table-rows",
   name: "Pull requests as a table",
   start({ basePath, client, document, now }) {
@@ -39,10 +39,7 @@ const tableRows: Feature = {
 
     return {
       sync({ page, isTabActive }) {
-        // Windows 98 mode lays the rows out itself, so there the switch does not show.
-        isList =
-          (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") &&
-          !isWindows98Mode(document);
+        isList = page.kind === "pull-request-list" || page.kind === "pull-request-inbox";
         show();
         if (isList && isTable && isTabActive) {
           const undated = findPullRequestRows(document, basePath).filter(({ row }) =>

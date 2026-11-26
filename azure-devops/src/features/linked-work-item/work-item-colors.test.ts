@@ -116,3 +116,33 @@ test("takes the colour away from a row that no longer shares its work item", () 
   assert.equal(hueOf(first), undefined);
   assert.equal(first.style.getPropertyValue("--fix-ado-work-item-hue"), "");
 });
+
+const paletteColorOf = (element: HTMLElement | undefined): string | undefined =>
+  element?.dataset.fixAdoWorkItemPaletteColor;
+
+test("gives each work item one of Windows 98 mode's five palette colours, in id order, starting over after the fifth", () => {
+  const lists = [77, 78, 79, 80, 81, 82].map((id) => {
+    const { list, rows } = createList();
+    const [row] = rows;
+    assert.ok(row !== undefined);
+    return { isGrouped: true, list, row, rows: [{ linked: linked(id), row }] };
+  });
+  showWorkItemColors(lists.toReversed());
+  assert.deepEqual(
+    lists.map(({ row }) => paletteColorOf(row)),
+    ["0", "1", "2", "3", "4", "0"],
+  );
+});
+
+test("takes the palette colour away with the hue", () => {
+  const { list, rows } = createList();
+  const [first, second] = rows;
+  assert.ok(first !== undefined && second !== undefined);
+  const firstRow = { linked: linked(77), row: first };
+  showWorkItemColors([
+    { isGrouped: false, list, rows: [firstRow, { linked: linked(77), row: second }] },
+  ]);
+  assert.equal(paletteColorOf(first), "0");
+  showWorkItemColors([{ isGrouped: false, list, rows: [firstRow] }]);
+  assert.equal(paletteColorOf(first), undefined);
+});

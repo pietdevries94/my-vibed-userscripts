@@ -2692,7 +2692,9 @@ html[data-fix-ado-win98]:is(
       box-shadow: var(--win98-thin);
     }
 
-    &:has(.repos-pr-section-tabs) > .flex-row:first-child:not(.bolt-card-content) {
+    /* A stacked Assigned to me card hides its sub-tabs and names its tab in the title. */
+    &:has(.repos-pr-section-tabs):not(:has(.fix-ado-assigned-tab-name))
+      > .flex-row:first-child:not(.bolt-card-content) {
       height: 46px;
       align-items: flex-end;
       padding-bottom: 4px;
@@ -2829,6 +2831,420 @@ html[data-fix-ado-win98]:is(
     overflow: hidden;
     text-overflow: ellipsis;
     color: #404040;
+  }
+}
+
+/* A work item's colour, as in the PullRequestsTable artboard: one of five palette colours, which
+   Linked work item gives in the order of the work items' ids, shown as a 9px swatch in a black
+   frame at the front of each of its rows and its group row. */
+html[data-fix-ado-win98] {
+  [data-fix-ado-work-item-palette-color="0"] {
+    --fix-ado-work-item-color: var(--win98-teal);
+  }
+
+  [data-fix-ado-work-item-palette-color="1"] {
+    --fix-ado-work-item-color: var(--win98-purple);
+  }
+
+  [data-fix-ado-work-item-palette-color="2"] {
+    --fix-ado-work-item-color: var(--win98-olive);
+  }
+
+  [data-fix-ado-work-item-palette-color="3"] {
+    --fix-ado-work-item-color: var(--win98-green);
+  }
+
+  [data-fix-ado-work-item-palette-color="4"] {
+    --fix-ado-work-item-color: var(--win98-maroon);
+  }
+}
+
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body {
+  .bolt-tabbar > .fix-ado-table-switch {
+    align-self: center;
+  }
+
+  /* The card list: a list with coloured rows gives every row a column for the swatch, so the
+     avatars stay lined up. */
+  html:not([data-fix-ado-table])
+    &
+    .repos-pr-list:has(> tbody > [data-fix-ado-work-item-palette-color])
+    > tbody
+    > a.bolt-table-row {
+    grid-template-columns: 9px 32px minmax(0, 1fr) 120px 70px 160px;
+
+    &::before {
+      content: "";
+      height: 9px;
+    }
+  }
+
+  a.bolt-table-row[data-fix-ado-work-item-palette-color]::before,
+  a.bolt-table-row[data-fix-ado-work-item-palette-color] > [aria-colindex="2"]::before,
+  .fix-ado-work-item-group[data-fix-ado-work-item-palette-color] > td::before {
+    background: var(--fix-ado-work-item-color);
+    box-shadow: 0 0 0 1px var(--win98-text);
+  }
+
+  /* The work item's number in its swatch's colour. */
+  .fix-ado-work-item-group[data-fix-ado-work-item-palette-color] > td > a,
+  a.bolt-table-row[data-fix-ado-work-item-palette-color] .fix-ado-linked-work-item {
+    color: var(--fix-ado-work-item-color);
+  }
+
+  .fix-ado-work-item-group[data-fix-ado-work-item-palette-color] > td::before {
+    content: "";
+    order: -1;
+    flex: none;
+    width: 9px;
+    height: 9px;
+  }
+}
+
+/* An empty card's message in a table, in line with the card's title: after the header's 10px,
+   the 13px +/- box and its 8px. */
+html[data-fix-ado-win98][data-fix-ado-table]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body
+  .repos-pr-section-no-results-message {
+  margin: 0;
+  padding: 6px 0 6px calc(10px + 13px + 8px);
+}
+
+/* Pull requests as a table, as in the PullRequestsTable artboard: Explorer's Details view. Each
+   card's list is white, under a row of raised column headers, with a 20px line per pull request.
+   As in the normal table, the list is one grid and the header and each row are subgrids of it,
+   so Repository, Target and Work item are as wide as their longest text; text that does not fit
+   ends in an ellipsis. */
+html[data-fix-ado-win98][data-fix-ado-table]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body
+  table.repos-pr-list {
+  --fix-ado-table-author-width: 46px;
+  --fix-ado-table-repository-width: 0px;
+  --fix-ado-table-work-item-width: minmax(0, max-content);
+
+  display: grid;
+  grid-template-columns:
+    [pipeline] 36px [title] minmax(240px, 1fr) [author] var(--fix-ado-table-author-width)
+    [id] max-content [repository] var(--fix-ado-table-repository-width)
+    [target] minmax(0, max-content) [work-item] var(--fix-ado-table-work-item-width)
+    [reviewers] max-content [comments] max-content [age] max-content;
+
+  &[data-fix-ado-has-repository] {
+    --fix-ado-table-repository-width: minmax(0, max-content);
+  }
+
+  &[data-fix-ado-created-by-me] {
+    --fix-ado-table-author-width: 0px;
+  }
+
+  /* Grouped lists name the work item in their group rows, also while Linked work item loads the
+     groups. */
+  &:is(:has(.fix-ado-work-item-group), [data-fix-ado-groups-loading]) {
+    --fix-ado-table-work-item-width: 0px;
+  }
+
+  &:is(:has(.fix-ado-work-item-group), [data-fix-ado-groups-loading])
+    :is(.fix-ado-table-head-work-item, a.bolt-table-row > .fix-ado-table-work-item),
+  &:not([data-fix-ado-has-repository])
+    :is(.fix-ado-table-head-repository, a.bolt-table-row > .fix-ado-table-repository),
+  &[data-fix-ado-created-by-me]
+    :is(.fix-ado-table-head-author, a.bolt-table-row > [aria-colindex="1"]) {
+    display: none;
+  }
+
+  & > :is(.fix-ado-table-head, tbody) {
+    display: contents;
+  }
+
+  & > tbody > * {
+    grid-column: 1 / -1;
+  }
+
+  & > .fix-ado-table-head > tr,
+  & > tbody > a.bolt-table-row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    gap: 0;
+    padding: 0;
+  }
+
+  /* Azure DevOps skips drawing rows out of view, which contains each row's layout. A subgrid
+     cannot be contained, so every row is drawn. */
+  & > tbody > a.bolt-table-row {
+    content-visibility: visible;
+  }
+
+  & > .fix-ado-table-head th {
+    display: block;
+    grid-row: 1;
+    height: 18px;
+    padding: 0 6px;
+    overflow: hidden;
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
+    font-weight: 400;
+    line-height: 18px;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fix-ado-table-head-pipeline {
+    grid-column: pipeline;
+  }
+
+  .fix-ado-table-head-title {
+    grid-column: title;
+  }
+
+  .fix-ado-table-head-author {
+    grid-column: author;
+  }
+
+  .fix-ado-table-head-id {
+    grid-column: id;
+  }
+
+  .fix-ado-table-head-repository {
+    grid-column: repository;
+  }
+
+  .fix-ado-table-head-target {
+    grid-column: target;
+  }
+
+  .fix-ado-table-head-work-item {
+    grid-column: work-item;
+  }
+
+  .fix-ado-table-head-reviewers {
+    grid-column: reviewers;
+  }
+
+  .fix-ado-table-head-comments {
+    grid-column: comments;
+  }
+
+  .fix-ado-table-head-age {
+    grid-column: age;
+  }
+
+  /* Each age centred in its slot and the dots between them; the header's c, u and p sit in the
+     same slots, right above the ages they name. */
+  :is(.fix-ado-table-age, .fix-ado-table-age-legend) {
+    display: grid;
+    grid-template-columns: 30px 10px 30px 10px 30px;
+    text-align: center;
+  }
+
+  & > tbody > a.bolt-table-row {
+    height: 20px;
+
+    & > td {
+      display: flex;
+      grid-row: 1;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      height: 20px;
+      padding: 0 6px;
+      /* Azure DevOps's line between rows, which would centre the cells half a pixel low. */
+      border: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    & > :is(.bolt-table-spacer-cell, .bolt-table-cell-side-action) {
+      display: none;
+    }
+
+    .bolt-table-cell-content {
+      min-width: 0;
+      padding: 0;
+    }
+
+    /* The swatch, the pipeline status and the title with its pills, on the first two columns. */
+    & > [aria-colindex="2"] {
+      grid-column: pipeline / span 2;
+      padding-left: 5px;
+
+      &::before {
+        content: "";
+        flex: none;
+        width: 9px;
+        height: 9px;
+      }
+
+      .bolt-table-cell-content {
+        flex-direction: row;
+      }
+    }
+
+    .bolt-table-two-line-cell-item:first-child {
+      gap: 4px;
+      min-width: 0;
+      overflow: hidden;
+
+      .fix-ado-pipeline-status {
+        order: -1;
+        margin-right: 6px;
+      }
+
+      .body-l {
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+
+    .bolt-table-two-line-cell-item:nth-child(2) {
+      display: none;
+    }
+
+    & > [aria-colindex="1"] {
+      grid-column: author;
+    }
+
+    & > .fix-ado-table-id {
+      grid-column: id;
+    }
+
+    & > .fix-ado-table-repository {
+      grid-column: repository;
+    }
+
+    & > .fix-ado-table-target {
+      grid-column: target;
+    }
+
+    .fix-ado-table-branch {
+      font-family: var(--win98-mono);
+    }
+
+    & > .fix-ado-table-work-item {
+      grid-column: work-item;
+
+      &[data-fix-ado-is-id] {
+        color: var(--win98-link);
+      }
+    }
+
+    /* While Linked work item loads the row's work items: a grey bar that pulses. */
+    &[data-fix-ado-work-item-loading] > .fix-ado-table-work-item::after {
+      content: "";
+      flex: none;
+      width: 48px;
+      height: 8px;
+      background: var(--win98-face);
+      animation: fix-ado-table-skeleton 1.2s ease-in-out infinite alternate;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    }
+
+    /* The label has its own column: no separator from the line under the title. */
+    .fix-ado-linked-work-item::before {
+      content: none;
+    }
+
+    & > :is(.fix-ado-table-repository, .fix-ado-table-target, .fix-ado-table-work-item) > *,
+    & > .fix-ado-table-target {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    & > [aria-colindex="3"] {
+      grid-column: reviewers;
+
+      .rhythm-horizontal-8 {
+        gap: 2px;
+      }
+
+      /* Required reviewers spaces each reviewer with an !important margin, and puts the required
+         ones first by order: 2px apart instead, and 6px after a required one, clear of its
+         frame. */
+      .pr-reviewer {
+        margin: 0 !important;
+      }
+
+      .pr-reviewer[data-fix-ado-required] {
+        margin-right: 6px !important;
+      }
+
+      /* A reviewer's vote: a 9px badge on the avatar's corner, so it does not cover the 16px
+         avatar. */
+      .repos-pr-reviewer-vote {
+        inset: auto -2px -2px auto;
+        display: grid;
+        place-items: center;
+        box-sizing: border-box;
+        width: 9px;
+        height: 9px;
+        border: 1px solid var(--win98-field-face);
+        border-radius: 50%;
+        font-size: 6px;
+        line-height: 1;
+      }
+    }
+
+    & > [aria-colindex="4"] {
+      grid-column: comments;
+    }
+
+    /* Only the ages: the site's times and Published since are the table's Age column. */
+    & > [aria-colindex="5"] {
+      grid-column: age;
+
+      /* Kept for screen readers, out of sight. */
+      & > .bolt-table-cell-content {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+    }
+
+    .fix-ado-table-age-published[data-fix-ado-is-stale] {
+      color: var(--win98-maroon);
+      font-weight: 700;
+    }
+
+    /* Avatars 16px, initials too. */
+    .bolt-coin,
+    .bolt-coin-content {
+      width: 16px;
+      height: 16px;
+      font-size: 8px;
+    }
+
+    [data-fix-ado-initials]::after {
+      font-size: 8px;
+    }
+  }
+
+  /* A group row's swatch in line with its rows' swatches. */
+  & > tbody > .fix-ado-work-item-group > td {
+    padding-left: 5px;
+  }
+
+  /* Something new since the last visit: the title in bold, as Outlook Express shows unread mail. */
+  .bolt-list-row-marked .bolt-table-two-line-cell-item .body-l {
+    font-weight: 700;
   }
 }
 
@@ -3067,6 +3483,11 @@ html[data-fix-ado-win98]:is(
     .repos-pr-section-header-title {
       align-items: center;
       gap: 8px;
+
+      /* A stacked Assigned to me card names its tab after the title, a space apart. */
+      &:has(> .fix-ado-assigned-tab-name) {
+        gap: 0;
+      }
     }
 
     .bolt-pill {
@@ -3273,7 +3694,7 @@ html[data-fix-ado-win98]:is(
 
   /* A section header with sub-tabs: the +/- box at the bottom, the title 14px high and 3px
      above the tabs. */
-  .repos-pr-section-card:has(.repos-pr-section-tabs) {
+  .repos-pr-section-card:has(.repos-pr-section-tabs):not(:has(.fix-ado-assigned-tab-name)) {
     .bolt-button.repos-pr-section-expand-button {
       align-self: flex-end;
       margin-bottom: 5px;
@@ -3282,6 +3703,24 @@ html[data-fix-ado-win98]:is(
     .repos-pr-section-header-title {
       height: 14px;
       margin-bottom: 3px;
+    }
+  }
+
+  /* A stacked Assigned to me card's tab name: "· Active" a space after the title, and its count
+     8px after it, as every section's count. */
+  .fix-ado-assigned-tab-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+
+    &::before {
+      content: "\a0";
+      margin-right: -8px;
+    }
+
+    .bolt-pill {
+      margin: 0;
     }
   }
 

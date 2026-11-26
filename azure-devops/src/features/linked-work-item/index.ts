@@ -49,6 +49,9 @@ function withLinkedWorkItems(
   }));
 }
 
+/** Marks a row while its work items load, so the table shows a skeleton in their place. */
+const LOADING_ATTRIBUTE = "data-fix-ado-work-item-loading";
+
 /** Each row's work item id, or nothing in a grouped list, where the group's title has it. */
 function showLinkedWorkItemLabels(
   rows: PullRequestRow[],
@@ -58,11 +61,15 @@ function showLinkedWorkItemLabels(
   for (const { row, pullRequest } of rows) {
     const linked = isGrouped ? null : fetcher.linkedWorkItems(pullRequest.pullRequestId);
     showLinkedWorkItem(row, linked === null ? null : linkedWorkItemLabel(linked));
+    const isLoading = !isGrouped && fetcher.isLoading(pullRequest.pullRequestId);
+    if (row.hasAttribute(LOADING_ATTRIBUTE) !== isLoading) {
+      row.toggleAttribute(LOADING_ATTRIBUTE, isLoading);
+    }
   }
 }
 
 const linkedWorkItem: Feature = {
-  change: { kind: "updated", version: "1.28.0" },
+  change: { kind: "updated", version: "1.31.0" },
   description:
     "The work item id under the title, in a colour its pull requests share, and a switch that groups the lists by work item.",
   id: "linked-work-item",

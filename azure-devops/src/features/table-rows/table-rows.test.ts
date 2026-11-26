@@ -1,7 +1,7 @@
-import { isWindows98Mode, showTableRows } from "./table-rows.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
 import { needsCreationDate } from "./table-age.ts";
+import { showTableRows } from "./table-rows.ts";
 import { test } from "node:test";
 
 /** The test reads the records with takeRecords instead. */
@@ -281,11 +281,4 @@ test("writes nothing when the page already shows the table", () => {
   });
   showTableRows(window.document, true, NO_CREATION_DATES);
   assert.deepEqual(observer.takeRecords(), []);
-});
-
-test("Windows 98 mode is on while it marks the page, also with an empty mark", () => {
-  const { document } = new JSDOM("<!doctype html><body></body>").window;
-  assert.equal(isWindows98Mode(document), false);
-  document.documentElement.dataset.fixAdoWin98 = "";
-  assert.equal(isWindows98Mode(document), true);
 });

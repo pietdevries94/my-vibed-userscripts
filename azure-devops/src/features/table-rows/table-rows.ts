@@ -228,9 +228,4 @@ function showList(list: HTMLTableElement, isTable: boolean, times: AgeTimes): vo
   markHasRepository(list, isTable);
 }
 
-/** True while Windows 98 mode is on: it marks <html> when it starts, and lays the rows out itself. */
-function isWindows98Mode(document: Document): boolean {
-  return Object.hasOwn(document.documentElement.dataset, "fixAdoWin98");
-}
-
-export { isWindows98Mode, showTableRows };
+export { showTableRows };

@@ -2,6 +2,7 @@
 // the audit opens. Run with `npm run restyle:diff azure-devops` and `npm run restyle:audit
 // azure-devops`; see the restyle skill. Dev file only.
 import type { DiffState, RestyleConfig } from "../../shared/dev/restyle/restyle-config.ts";
+import { INBOX, LIST, listStates } from "./lists.ts";
 import {
   LONG_LINE,
   MANY_LINES,
@@ -12,16 +13,11 @@ import {
 } from "./checks.ts";
 import { threadHeaders, threadStates } from "./threads.ts";
 import type { Page } from "playwright";
-import { REPO_ROOT } from "../../build/scripts.ts";
-import fs from "node:fs";
-import path from "node:path";
 import { treeScroll } from "./files.ts";
 
 const PR = "/fake-org/text-15/_git/text-16/pullrequest";
-const LIST = "/fake-org/text-2/_git/text-16/pullrequests";
 const BOARD = "/fake-org/text-2/_boards/board/t/text-3/Stories";
 const RUN = "/fake-org/text-2/_build/results?buildId=1001";
-const FIXTURES = path.join(REPO_ROOT, "azure-devops", "fixtures");
 
 /** Font icons and images: the artboards draw their boxes, not their glyphs. */
 const SITE_MASK =
@@ -48,23 +44,6 @@ async function showTooltip(page: Page): Promise<void> {
   });
 }
 
-/** The Mine tab's filter bar, open: the Active tab's bar and page CSS, as no capture has it open. */
-async function openMineFilter(page: Page): Promise<void> {
-  const active = fs.readFileSync(path.join(FIXTURES, "pr-list-win98-active.html"), "utf8");
-  const start = active.indexOf(
-    '<div class="page-content-left page-content-right page-content-top">',
-  );
-  const bar = active.slice(start, active.indexOf('<div class="page-content ', start));
-  const css = fs.readFileSync(path.join(FIXTURES, "pr-list-win98-active.css"), "utf8");
-  await page.evaluate(
-    ([html, sheet]) => {
-      document.head.prepend(Object.assign(document.createElement("style"), { textContent: sheet }));
-      document.querySelector(".bolt-page > .bolt-tabbar")?.insertAdjacentHTML("afterend", html);
-    },
-    [bar, css],
-  );
-}
-
 async function hoverFilterRow(page: Page): Promise<void> {
   await page.locator(".work-item-filter-dropdown li.bolt-list-row").nth(3).hover();
   await page.waitForTimeout(200);
@@ -89,38 +68,7 @@ async function showLoadedTree(page: Page): Promise<void> {
 }
 
 const states: DiffState[] = [
-  { artboard: "PullRequests", capture: "win98", name: "list", page: "pr-list", path: LIST },
-  {
-    artboard: "PullRequestsActive",
-    capture: "win98-active",
-    name: "list-active",
-    page: "pr-list",
-    path: LIST,
-  },
-  {
-    artboard: "PullRequestsGrouped",
-    capture: "win98",
-    init: 'GM_setValue("linked-work-item-grouped", true);',
-    name: "list-grouped",
-    page: "pr-list",
-    path: LIST,
-  },
-  {
-    act: openMineFilter,
-    artboard: "PullRequestsMineFilter",
-    capture: "win98",
-    name: "list-mine-filter-open",
-    page: "pr-list",
-    path: LIST,
-  },
-  {
-    artboard: "PullRequestsInbox",
-    capture: "win98",
-    clip: { height: 750, width: 220, x: 0, y: 50 },
-    name: "inbox-sidebar",
-    page: "pr-inbox",
-    path: "/fake-org/_pulls",
-  },
+  ...listStates,
   { artboard: "Main", capture: "win98", name: "overview", page: "pr-detail", path: `${PR}/1005` },
   {
     act: issueMessage(LONG_LINE),
@@ -248,7 +196,7 @@ const config: RestyleConfig = {
   auditPages: [
     { capture: "win98", name: "list", page: "pr-list", path: LIST },
     { capture: "win98-active", name: "list-active", page: "pr-list", path: LIST },
-    { capture: "win98", name: "inbox", page: "pr-inbox", path: "/fake-org/_pulls" },
+    { capture: "win98", name: "inbox", page: "pr-inbox", path: INBOX },
     {
       capture: "win98-reviewer-search",
       name: "create",

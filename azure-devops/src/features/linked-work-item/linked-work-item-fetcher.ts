@@ -15,6 +15,8 @@ interface LinkedWorkItemFetcherOptions {
 interface LinkedWorkItemFetcher {
   /** Null until the first fetch of that pull request. */
   linkedWorkItems: (pullRequestId: number) => LinkedWorkItems | null;
+  /** True until the first fetch of that pull request has answered or failed. */
+  isLoading: (pullRequestId: number) => boolean;
   /** Fetches the linked work items that are due. Cheap: call it on DOM changes and on a timer. */
   sync: () => Promise<void>;
 }
@@ -66,6 +68,7 @@ function createLinkedWorkItemFetcher(options: LinkedWorkItemFetcherOptions): Lin
   }
 
   return {
+    isLoading: (pullRequestId) => !fetched.has(pullRequestId),
     linkedWorkItems: (pullRequestId) => fetched.get(pullRequestId)?.linkedWorkItems ?? null,
     async sync() {
       if (isFetching) {

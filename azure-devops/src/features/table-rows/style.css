@@ -1,7 +1,7 @@
 /* The pull request lists as a table, as design B of the inbox redesigns. table-rows.ts marks
    <html> on a list page while the Table switch is on, and adds the header and the cells Azure
    DevOps has no column for. Each row becomes a grid on the same columns, so the site's cells can
-   take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
+   take the design's order. Windows 98 mode styles the table in its own CSS, so it is left alone. */
 :root[data-fix-ado-table]:not([data-fix-ado-win98]) table.repos-pr-list {
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
   /* One grid per table; the header and each row are subgrids of it. A column a list does not have
@@ -247,6 +247,19 @@
 
   & .bolt-list-row-marked .bolt-table-two-line-cell-item .body-l.font-weight-semibold {
     font-weight: 600;
+  }
+
+  /* While Linked work item loads a row's work items, its Work item cell shows a grey bar that
+     pulses, as the skeleton rows do. */
+  & > tbody > a.bolt-table-row[data-fix-ado-work-item-loading] > .fix-ado-table-work-item::after {
+    content: "";
+    display: inline-block;
+    vertical-align: middle;
+    width: 56px;
+    height: 10px;
+    border-radius: 5px;
+    background: var(--fix-ado-table-line);
+    animation: fix-ado-table-skeleton 1.2s ease-in-out infinite alternate;
   }
 
   /* No line under the last row: the card ends there. */
@@ -731,7 +744,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::after,
-  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::before {
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::before,
+  :root[data-fix-ado-table] a.bolt-table-row[data-fix-ado-work-item-loading] td::after {
     animation: none;
   }
 }
