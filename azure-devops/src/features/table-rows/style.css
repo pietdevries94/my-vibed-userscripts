@@ -603,6 +603,13 @@
   }
 }
 
+/* Azure DevOps's "No pull requests for current view" in an empty card, in line with the titles
+   of a table: after its 40px status column and the title's 10px padding. */
+:root[data-fix-ado-table]:not([data-fix-ado-win98]) .repos-pr-section-no-results-message {
+  margin-left: 0;
+  padding-left: 50px;
+}
+
 /* The section cards, as design B draws them: a 1px line and 8px corners instead of a shadow, a
    40px header with its line under it, a 15px semibold title, a 12px chevron and a count pill,
    and 14px between cards. */
