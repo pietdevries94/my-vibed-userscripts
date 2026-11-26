@@ -2954,8 +2954,9 @@ html[data-fix-ado-win98] {
 }
 
 /* The project side bar collapsed, as Azure DevOps draws it without "expanded": every icon in
-   the middle of the 48px bar, sub items too, and the collapse button centred under the settings
-   icon, 6px above the bottom. After the expanded rules above, which it overrides. */
+   the middle of the 48px bar, sub items too, the open group in a sunken well, and the collapse
+   button centred under the settings icon, 6px above the bottom. After the expanded rules above,
+   which it overrides. */
 html[data-fix-ado-win98] body .navigation-container .project-navigation.collapsed {
   .navigation-element,
   .navigation-element.hub:not(.hub-group, .stand-alone) {
@@ -2974,6 +2975,15 @@ html[data-fix-ado-win98] body .navigation-container .project-navigation.collapse
 
   .hub.stand-alone[role="button"] {
     margin-right: 0;
+  }
+
+  /* The open group and its sub items in a sunken well, like a list box set into the bar: the
+     normal look's lighter block with a bar beside it, as Windows 98. */
+  .hub-group-container.expanded-container {
+    margin: 2px 4px;
+    padding: 2px 0;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
   }
 }
 
