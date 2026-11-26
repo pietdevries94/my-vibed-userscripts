@@ -15,7 +15,7 @@
   height: var(--win98-title-height);
   padding: 0 3px;
   background: var(--win98-title);
-  color: var(--win98-highlight);
+  color: var(--win98-title-text);
   font-weight: 700;
   line-height: var(--win98-title-height);
 }
@@ -128,7 +128,7 @@
   &:hover,
   &.is-focused {
     background: var(--win98-navy);
-    color: var(--win98-highlight);
+    color: var(--win98-selected-text);
   }
 }
 
