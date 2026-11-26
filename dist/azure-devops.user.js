@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.29.1
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. General: Pull request lists and boards that reload on changes. Appearance: Light or Dark to match the system; Avatar initials; A Windows 98 mode, a work in progress and off by default. Pull request lists: Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Comments and activity: Oldest first, with a button to flip the order; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A New chip that glows on pushes and other changes you have not seen; A button that scrolls to the bottom; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread. Code review: Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them; Starred reviewers to add in one click, also on a new pull request. Pipelines: Pipeline status on each pull request in the lists; Each check's warnings and errors above the description, in a box that collapses; A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request. Boards: Days in column dots on cards, with a toggle per column.
+// @version      1.30.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. General: Pull request lists and boards that reload on changes; A button that collapses the side panel of the inbox, Work and the organization home, as on a project. Appearance: Light or Dark to match the system; Avatar initials; A Windows 98 mode, a work in progress and off by default. Pull request lists: Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Comments and activity: Oldest first, with a button to flip the order; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A New chip that glows on pushes and other changes you have not seen; A button that scrolls to the bottom; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread. Code review: Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them; Starred reviewers to add in one click, also on a new pull request. Pipelines: Pipeline status on each pull request in the lists; Each check's warnings and errors above the description, in a box that collapses; A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request. Boards: Days in column dots on cards, with a toggle per column.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -14744,6 +14744,170 @@ ${issue.message ?? ""}`;
     name: "Comments and activity"
   };
 
+  // azure-devops/src/features/collapsible-organization-panel/organization-panel.ts
+  var PANEL_FOOTER_SELECTOR = ".top-level-navigation .navigation-footer", TOGGLE_CLASS5 = "fix-ado-organization-panel-toggle", COLLAPSED_ATTRIBUTE = "data-fix-ado-organization-panel-collapsed", ICON_CLASS = "flex-noshrink fabric-icon medium";
+  function setAttributeOnChange(element4, name, value) {
+    element4.getAttribute(name) !== value && element4.setAttribute(name, value);
+  }
+  function showToggle(toggle, isCollapsed) {
+    let label = isCollapsed ? "Expand side panel" : "Collapse side panel";
+    setAttributeOnChange(toggle, "aria-label", label), setAttributeOnChange(toggle, "title", label), setAttributeOnChange(toggle, "aria-expanded", String(!isCollapsed));
+    let icon = toggle.querySelector(".fabric-icon");
+    icon && setAttributeOnChange(icon, "class", `${ICON_CLASS} ms-Icon--${isCollapsed ? "DoubleChevronRight" : "DoubleChevronLeft"}`);
+  }
+  function createToggle3(document2, onClick3) {
+    let toggle = Object.assign(document2.createElement("button"), {
+      className: `${TOGGLE_CLASS5} alt-hover-effect focus-treatment`,
+      type: "button"
+    }), wrapper = Object.assign(document2.createElement("span"), {
+      className: "fluent-icons-enabled"
+    }), icon = Object.assign(document2.createElement("span"), { className: ICON_CLASS });
+    return icon.setAttribute("aria-hidden", "true"), wrapper.append(icon), toggle.append(wrapper), toggle.addEventListener("click", onClick3), toggle;
+  }
+  function createOrganizationPanel({
+    document: document2,
+    load: load2,
+    save
+  }) {
+    let isCollapsed = load2();
+    function show3() {
+      let root = document2.documentElement;
+      root.hasAttribute(COLLAPSED_ATTRIBUTE) !== isCollapsed && root.toggleAttribute(COLLAPSED_ATTRIBUTE, isCollapsed);
+      let toggle = document2.querySelector(`.${TOGGLE_CLASS5}`);
+      toggle && showToggle(toggle, isCollapsed);
+    }
+    function flip2() {
+      isCollapsed = !isCollapsed, save(isCollapsed), show3();
+    }
+    return {
+      sync() {
+        let footer = document2.querySelector(PANEL_FOOTER_SELECTOR);
+        footer && !footer.querySelector(`.${TOGGLE_CLASS5}`) && footer.append(createToggle3(document2, flip2)), show3();
+      }
+    };
+  }
+
+  // azure-devops/src/features/collapsible-organization-panel/style.css
+  var style_default15 = `/* The panel in the side panel grey of a project, as Azure DevOps draws .project-navigation. */
+.top-level-navigation:has(.fix-ado-organization-panel-toggle) {
+  background: var(--nav-vertical-background-color, rgba(0, 0, 0, 0.08));
+}
+
+/* The bottom row, as on a project's side panel: a line above it, then Organization settings and
+   the collapse button next to it. Collapsed, the two stack. Each icon sits in a 47px cell with
+   12px above and below, in a row with 4px more, as a project's .hub.stand-alone does. The line is
+   drawn here, so Azure DevOps's own elements stay where they are. */
+.top-level-navigation .navigation-footer:has(.fix-ado-organization-panel-toggle) {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  margin: 10px 0 0;
+  padding-top: 1px;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 10px;
+    left: 10px;
+    height: 1px;
+    background-color: var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
+  }
+
+  & > a {
+    flex-grow: 1;
+    align-items: center;
+    min-width: 0;
+    padding: 4px 4px 4px 0;
+    line-height: 20px;
+  }
+
+  & > a .fabric-icon,
+  & .fix-ado-organization-panel-toggle .fabric-icon {
+    display: flex;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 47px;
+    height: 40px;
+    margin: 0;
+    padding: 12px 0;
+    line-height: 16px;
+  }
+}
+
+/* The collapse button: a double chevron only, that glows blue on hover as on a project. */
+.fix-ado-organization-panel-toggle {
+  display: flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  /* Azure DevOps's alt-hover-effect, as on a project's collapse button: blue, with a blue glow. */
+  &:hover,
+  &:focus {
+    color: var(--communication-foreground, rgba(0, 90, 158, 1));
+    text-shadow: 0 0 4px rgba(var(--palette-primary, 0, 120, 212), 0.5);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--communication-background, rgb(0, 120, 212));
+    outline-offset: -2px;
+  }
+}
+
+/* Collapsed: 48px wide, as Azure DevOps draws a project's side panel without "expanded". Only
+   the organizations' pictures and the icons show, and the bottom row stacks. */
+:root[data-fix-ado-organization-panel-collapsed] .top-level-navigation.region-navigation {
+  width: 48px;
+
+  & .text-ellipsis,
+  & .action-section,
+  & .announcements-section {
+    display: none;
+  }
+
+  & .host-link .project-persona {
+    margin-right: 0;
+  }
+
+  & .navigation-footer:has(.fix-ado-organization-panel-toggle) {
+    flex-direction: column;
+  }
+}
+`;
+
+  // azure-devops/src/features/collapsible-organization-panel/index.ts
+  var IS_COLLAPSED_KEY = "organization-panel-collapsed", collapsibleOrganizationPanel = {
+    change: { kind: "new", version: "1.30.0" },
+    description: "A button collapses the side panel of the inbox, Work and the organization's home to its icons, as on a project. It stays collapsed.",
+    id: "collapsible-organization-panel",
+    name: "Collapsible organization panel",
+    start({ document: document2, isInFrame: isInFrame2 }) {
+      if (isInFrame2)
+        return null;
+      let panel = createOrganizationPanel({
+        document: document2,
+        load: () => GM_getValue(IS_COLLAPSED_KEY, !1),
+        save: (isCollapsed) => {
+          GM_setValue(IS_COLLAPSED_KEY, isCollapsed);
+        }
+      });
+      return {
+        sync() {
+          panel.sync();
+        }
+      };
+    },
+    styles: [style_default15]
+  };
+
   // azure-devops/src/features/reload-on-changes/page-reloader.ts
   var PAGE_CHECK_INTERVAL_MS = 3e4, FAILED_PAGE_CHECK_RETRY_MS = 6e4, MS_PER_SECOND = 1e3;
   function isCheckDue2(state, page, immediately) {
@@ -15102,7 +15266,7 @@ ${issue.message ?? ""}`;
   // azure-devops/src/features/settings-sections/general.ts
   var generalSection = {
     description: "How the script behaves on every page.",
-    groups: [{ features: [reloadOnChanges] }],
+    groups: [{ features: [reloadOnChanges, collapsibleOrganizationPanel] }],
     name: "General"
   };
 
@@ -16424,7 +16588,7 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/pipeline-tab/style.css
-  var style_default15 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
+  var style_default16 = `/* The Pipeline tab on a pull request. pipeline-tab.ts sets the attribute while it is open. */
 .repos-pr-details-page[data-fix-ado-pipeline-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-pipeline-panel) {
   display: none !important;
@@ -16688,7 +16852,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
         }
       };
     },
-    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default15]
+    styles: [pipeline_issue_list_default, pipeline_status_icon_default, style_default16]
   };
 
   // azure-devops/src/features/run-page-tabs/run-tab-store.ts
@@ -16959,7 +17123,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/features/run-page-tabs/run-tab-toggle.ts
-  var TABBAR_SELECTOR3 = ".run-details-page > .bolt-tabbar", SELECTED_TAB_SELECTOR = '[role=tablist] [role=tab][aria-selected="true"]', TOGGLE_CLASS5 = "fix-ado-run-tab-toggle", LABEL3 = "Show this tab in pull requests", FAILED_TITLE = "Could not read this run's pipeline. Reload to try again.";
+  var TABBAR_SELECTOR3 = ".run-details-page > .bolt-tabbar", SELECTED_TAB_SELECTOR = '[role=tablist] [role=tab][aria-selected="true"]', TOGGLE_CLASS6 = "fix-ado-run-tab-toggle", LABEL3 = "Show this tab in pull requests", FAILED_TITLE = "Could not read this run's pipeline. Reload to try again.";
   function selectedRunTabOf(tabbar, lookup) {
     let selected = tabbar.querySelector(SELECTED_TAB_SELECTOR), view = selected === null ? null : runTabViewOf(selected);
     if (selected === null || view === null || lookup.kind !== "known")
@@ -16967,9 +17131,9 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     let label = selected.querySelector(".bolt-tab-text")?.textContent.trim() ?? view, { id, name } = lookup.pipeline;
     return { label, pipelineId: id, pipelineName: name, view };
   }
-  function createToggle3(document2) {
+  function createToggle4(document2) {
     let toggle = createSwitch(document2, LABEL3);
-    return toggle.classList.add(TOGGLE_CLASS5), toggle;
+    return toggle.classList.add(TOGGLE_CLASS6), toggle;
   }
   function flip(state, tabbar) {
     let tab = selectedRunTabOf(tabbar, state.lookup);
@@ -16979,10 +17143,10 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
     storage.save(others.length === saved.length ? [...saved, tab] : others);
   }
   function toggleIn2(state, tabbar) {
-    let existing = tabbar.querySelector(`:scope > .${TOGGLE_CLASS5}`);
+    let existing = tabbar.querySelector(`:scope > .${TOGGLE_CLASS6}`);
     if (existing !== null)
       return existing;
-    let toggle = createToggle3(state.options.document);
+    let toggle = createToggle4(state.options.document);
     return toggle.addEventListener("click", () => {
       flip(state, tabbar), showToggleState(state, tabbar, toggle);
     }), tabbar.append(toggle), toggle;
@@ -17015,7 +17179,7 @@ html[data-fix-ado-run-frame] .run-logs-view > .bolt-master-panel {
   }
 
   // azure-devops/src/features/run-page-tabs/style.css
-  var style_default16 = `/* Run page tabs in pull requests. pull-request-run-tabs.ts sets the attribute while one is open. */
+  var style_default17 = `/* Run page tabs in pull requests. pull-request-run-tabs.ts sets the attribute while one is open. */
 .repos-pr-details-page[data-fix-ado-run-tab-open]
   > :not(.repos-pr-header, .repos-pr-details-page-tabbar, .fix-ado-run-tab-panel) {
   display: none !important;
@@ -17217,7 +17381,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [switch_default, style_default16]
+    styles: [switch_default, style_default17]
   };
 
   // azure-devops/src/features/settings-sections/pipelines.ts
@@ -17596,7 +17760,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/assigned-to-me-stacked/style.css
-  var style_default17 = `/* The "Assigned to me" card, one card per tab. stacked-tabs.ts marks Azure DevOps's card and
+  var style_default18 = `/* The "Assigned to me" card, one card per tab. stacked-tabs.ts marks Azure DevOps's card and
    builds the others; each card's title names its tab, so the tab bars have no job left. */
 .fix-ado-assigned-stacked .repos-pr-section-tabs,
 .fix-ado-assigned-card .repos-pr-section-tabs {
@@ -17711,7 +17875,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
         }
       };
     },
-    styles: [style_default17]
+    styles: [style_default18]
   };
 
   // azure-devops/src/features/linked-work-item/work-item-group-rows.ts
@@ -17947,7 +18111,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
   }
 
   // azure-devops/src/features/linked-work-item/style.css
-  var style_default18 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
+  var style_default19 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
 .fix-ado-linked-work-item::before {
   content: "·";
   margin-inline: 0.5em;
@@ -18092,7 +18256,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
         }
       };
     },
-    styles: [switch_default, list_switch_default, style_default18]
+    styles: [switch_default, list_switch_default, style_default19]
   };
 
   // azure-devops/src/core/elapsed-time.ts
@@ -18177,7 +18341,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default19 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+  var style_default20 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
 .bolt-table-cell-content:has(> .fix-ado-published-since) {
   flex-direction: column;
   align-items: flex-start;
@@ -18226,7 +18390,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
         }
       };
     },
-    styles: [style_default19]
+    styles: [style_default20]
   };
 
   // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
@@ -18295,7 +18459,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default20 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default21 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -18342,7 +18506,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
         }
       };
     },
-    styles: [style_default20]
+    styles: [style_default21]
   };
 
   // azure-devops/src/features/table-rows/table-age.ts
@@ -18598,7 +18762,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
 
   // azure-devops/src/features/table-rows/style.css
-  var style_default21 = `/* The pull request lists as a table, as design B of the inbox redesigns. table-rows.ts marks
+  var style_default22 = `/* The pull request lists as a table, as design B of the inbox redesigns. table-rows.ts marks
    <html> on a list page while the Table switch is on, and adds the header and the cells Azure
    DevOps has no column for. Each row becomes a grid on the same columns, so the site's cells can
    take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
@@ -19206,11 +19370,11 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
   }
 }
 
-/* Azure DevOps's "No pull requests for current view" in an empty card, in line with the titles
-   of a table: after its 40px status column and the title's 10px padding. */
+/* Azure DevOps's "No pull requests for current view" in an empty card, in line with the card's
+   title: after the header's 16px padding, its 12px chevron and the 10px gap. */
 :root[data-fix-ado-table]:not([data-fix-ado-win98]) .repos-pr-section-no-results-message {
   margin-left: 0;
-  padding-left: 50px;
+  padding-left: calc(16px + 12px + 10px);
 }
 
 /* The section cards, as design B draws them: a 1px line and 8px corners instead of a shadow, a
@@ -19373,7 +19537,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
         }
       };
     },
-    styles: [switch_default, list_switch_default, style_default21]
+    styles: [switch_default, list_switch_default, style_default22]
   };
 
   // azure-devops/src/features/settings-sections/pull-request-lists.ts
@@ -19421,7 +19585,8 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     "avatar-initials",
     "follow-system-theme",
     "reload-on-changes",
-    "windows-98-mode"
+    "windows-98-mode",
+    "collapsible-organization-panel"
   ], startRank = ({ id }) => {
     let rank = START_ORDER.indexOf(id);
     return rank === -1 ? START_ORDER.length : rank;

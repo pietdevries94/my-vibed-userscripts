@@ -8,13 +8,14 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 ### Fix Azure DevOps
 
-[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.29.1
+[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.30.0
 
 Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones.
 
 **General**
 
 - Pull request lists and boards that reload on changes
+- A button that collapses the side panel of the inbox, Work and the organization home, as on a project
 
 **Appearance**
 
