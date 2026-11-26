@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.29.0
+// @version      1.29.1
 // @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. General: Pull request lists and boards that reload on changes. Appearance: Light or Dark to match the system; Avatar initials; A Windows 98 mode, a work in progress and off by default. Pull request lists: Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Comments and activity: Oldest first, with a button to flip the order; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A New chip that glows on pushes and other changes you have not seen; A button that scrolls to the bottom; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread. Code review: Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them; Starred reviewers to add in one click, also on a new pull request. Pipelines: Pipeline status on each pull request in the lists; Each check's warnings and errors above the description, in a box that collapses; A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request. Boards: Days in column dots on cards, with a toggle per column.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -19094,7 +19094,9 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
       0 0 0 3px var(--communication-background, rgb(0, 120, 212));
   }
 
-  /* A reviewer's vote: an 11px badge on the avatar's corner, inside the row's height. */
+  /* A reviewer's vote: an 11px badge on the avatar's corner, inside the row's height. The
+     glyph's line is as tall as the glyph, so the badge centres it: with Azure DevOps's 12px
+     line the Waiting for author clock hung below the badge. */
   & .repos-pr-reviewer-vote {
     inset: auto -3px 0 auto;
     display: grid;
@@ -19105,6 +19107,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     border: 1.5px solid var(--callout-background-color, var(--background-color, #fff));
     border-radius: 50%;
     font-size: 7px;
+    line-height: 1;
   }
 
   /* The +2 after the reviewers: plain text. */
