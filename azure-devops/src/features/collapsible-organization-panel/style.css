@@ -1,12 +1,19 @@
+/* The panel in the side panel grey of a project, as Azure DevOps draws .project-navigation. */
+.top-level-navigation:has(.fix-ado-organization-panel-toggle) {
+  background: var(--nav-vertical-background-color, rgba(0, 0, 0, 0.08));
+}
+
 /* The bottom row, as on a project's side panel: a line above it, then Organization settings and
-   the collapse button next to it. Collapsed, the two stack. The line is drawn here, so Azure
-   DevOps's own elements stay where they are. */
+   the collapse button next to it. Collapsed, the two stack. Each icon sits in a 47px cell with
+   12px above and below, in a row with 4px more, as a project's .hub.stand-alone does. The line is
+   drawn here, so Azure DevOps's own elements stay where they are. */
 .top-level-navigation .navigation-footer:has(.fix-ado-organization-panel-toggle) {
   position: relative;
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  padding-top: 4px;
+  margin: 10px 0 0;
+  padding-top: 1px;
 
   &::before {
     content: "";
@@ -18,9 +25,24 @@
     background-color: var(--palette-black-alpha-10, rgba(0, 0, 0, 0.1));
   }
 
-  & > :not(.fix-ado-organization-panel-toggle) {
+  & > a {
     flex-grow: 1;
+    align-items: center;
     min-width: 0;
+    padding: 4px 4px 4px 0;
+    line-height: 20px;
+  }
+
+  & > a .fabric-icon,
+  & .fix-ado-organization-panel-toggle .fabric-icon {
+    display: flex;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 47px;
+    height: 40px;
+    margin: 0;
+    padding: 12px 0;
+    line-height: 16px;
   }
 }
 
@@ -30,12 +52,11 @@
   flex: none;
   align-items: center;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: 4px 0;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
-  line-height: 20px;
   cursor: pointer;
 
   /* Azure DevOps's alt-hover-effect, as on a project's collapse button: blue, with a blue glow. */
