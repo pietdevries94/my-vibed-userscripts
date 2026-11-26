@@ -4,18 +4,20 @@
    take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
 :root[data-fix-ado-table]:not([data-fix-ado-win98]) table.repos-pr-list {
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
-  /* The same widths in every list, so the columns of the page line up. A column a list does not
-     have is 0px wide, and its cells do not show. The title keeps at least 240px: Repository,
-     Target and Work item shrink first, with their full text on hover. */
+  /* One grid per table; the header and each row are subgrids of it. A column a list does not have
+     is 0px wide, and its cells do not show. The title keeps at least 240px. Repository, Target and
+     Work item are as wide as their longest text in the table, up to 240px, and shrink first, with
+     their full text on hover. */
   --fix-ado-table-author-width: 72px;
   --fix-ado-table-repository-width: 0px;
-  --fix-ado-table-work-item-width: minmax(0, 110px);
+  --fix-ado-table-work-item-width: minmax(0, max-content);
   --fix-ado-table-columns: [pipeline] 36px [title] minmax(240px, 1fr) [author]
     var(--fix-ado-table-author-width) [id] 72px [repository] var(--fix-ado-table-repository-width)
-    [target] minmax(0, 160px) [work-item] var(--fix-ado-table-work-item-width) [reviewers] 100px
-    [comments] 92px [age] 130px [more] 32px;
+    [target] minmax(0, max-content) [work-item] var(--fix-ado-table-work-item-width) [reviewers]
+    100px [comments] 92px [age] 130px [more] 32px;
 
-  display: block;
+  display: grid;
+  grid-template-columns: var(--fix-ado-table-columns);
   font-size: 14px;
   line-height: 20px;
 
@@ -30,7 +32,7 @@
 
   /* Only the inbox names each pull request's repository: there it gets a column. */
   &:has(.fix-ado-table-repository:not(:empty)) {
-    --fix-ado-table-repository-width: minmax(0, 120px);
+    --fix-ado-table-repository-width: minmax(0, max-content);
   }
 
   &:not(:has(.fix-ado-table-repository:not(:empty))) .fix-ado-table-head-repository,
@@ -47,23 +49,21 @@
     display: none;
   }
 
-  & > tbody,
-  & > tbody > tr.bolt-list-row-spacer {
-    display: block;
+  & > :is(.fix-ado-table-head, tbody) {
+    display: contents;
   }
 
-  /* The header and the rows: one grid each, on the same columns. */
-  & > .fix-ado-table-head,
+  & > tbody > * {
+    grid-column: 1 / -1;
+  }
+
+  /* The header and the rows: subgrids of the table, so they share its columns. */
   & > .fix-ado-table-head > tr,
   & > tbody > a.bolt-table-row {
     display: grid;
-    grid-template-columns: var(--fix-ado-table-columns);
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
     border-bottom: 1px solid var(--fix-ado-table-line);
-  }
-
-  & > .fix-ado-table-head {
-    display: block;
-    border-bottom: 0;
   }
 
   & > .fix-ado-table-head > tr > th,
@@ -142,11 +142,11 @@
     grid-column: age;
   }
 
-  /* Azure DevOps skips rows out of view and holds 32px for each. A row here is 36px without
-     its line, so the list keeps its height when it scrolls into view. */
+  /* Azure DevOps skips drawing rows out of view, which contains each row's layout. A subgrid
+     cannot be contained, so every row is drawn. */
   & > tbody > a.bolt-table-row {
     position: relative;
-    contain-intrinsic-size: auto 36px;
+    content-visibility: visible;
   }
 
   /* Something new since the last visit: Azure DevOps's 2px bar, on the row as its first cell is
@@ -314,6 +314,9 @@
     > a.bolt-table-row
     > :is(.fix-ado-table-repository, .fix-ado-table-target, .fix-ado-table-work-item) {
     display: block;
+    box-sizing: border-box;
+    /* As wide as the text, up to 240px: the column takes the widest. */
+    max-width: 240px;
     line-height: 36px;
     overflow: hidden;
     text-overflow: ellipsis;
