@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.30.0
+// @version      1.30.1
 // @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. General: Pull request lists and boards that reload on changes; A button that collapses the side panel of the inbox, Work and the organization home, as on a project. Appearance: Light or Dark to match the system; Avatar initials; A Windows 98 mode, a work in progress and off by default. Pull request lists: Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Comments and activity: Oldest first, with a button to flip the order; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A New chip that glows on pushes and other changes you have not seen; A button that scrolls to the bottom; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread. Code review: Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them; Starred reviewers to add in one click, also on a new pull request. Pipelines: Pipeline status on each pull request in the lists; Each check's warnings and errors above the description, in a box that collapses; A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request. Boards: Days in column dots on cards, with a toggle per column.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -218,7 +218,7 @@
     JSON.stringify(stored[themeId]) !== JSON.stringify(look) && looks.save({ ...stored, [themeId]: look });
   }
   function themeToSwitchTo(options) {
-    let current = currentThemeId(options.document), wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
+    let current = currentThemeId(options.document), wanted = options.prefersDark() && !options.isLightForced() ? DARK_THEME_ID : LIGHT_THEME_ID;
     return isFollowedTheme(current) && current !== wanted ? wanted : null;
   }
   async function trySaveTheme(options, themeId) {
@@ -234,6 +234,7 @@
     let wanted = themeToSwitchTo(options);
     if (log("System theme: checked", {
       current: currentThemeId(options.document) ?? null,
+      isLightForced: options.isLightForced(),
       isPageLoad,
       prefersDark: options.prefersDark(),
       rememberedThemes: Object.keys(options.looks.load())
@@ -270,34 +271,42 @@
     };
   }
 
+  // azure-devops/src/features/system-theme/start-system-theme.ts
+  var THEME_LOOKS_KEY = "system-theme-looks", SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
+  function startSystemTheme({ client, document: document2, reloadWhenIdle: reloadWhenIdle2 }, isLightForced) {
+    let systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY), theme = createSystemTheme({
+      document: document2,
+      isLightForced,
+      looks: {
+        load: () => GM_getValue(THEME_LOOKS_KEY, {}),
+        save: (looks) => {
+          GM_setValue(THEME_LOOKS_KEY, looks);
+        }
+      },
+      onSystemThemeChange: (listener) => {
+        systemDark.addEventListener("change", listener);
+      },
+      prefersDark: () => systemDark.matches,
+      reload: reloadWhenIdle2,
+      saveTheme: async (themeId) => client.saveTheme(themeId)
+    });
+    new MutationObserver(() => {
+      theme.onPageChange();
+    }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), theme.start();
+  }
+
   // azure-devops/src/features/system-theme/index.ts
-  var THEME_LOOKS_KEY = "system-theme-looks", SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)", followSystemTheme = {
+  var WINDOWS_98_MODE_ID = "windows-98-mode", followSystemTheme = {
     change: { kind: "new", version: "1.7.2" },
-    description: "Switches between Light and Dark with your system.",
+    description: "Switches between Light and Dark with your system. Windows 98 mode stays Light.",
     // The key of the earlier menu setting, so the owner's choice stays.
     id: "follow-system-theme",
     name: "Match the system theme",
-    start({ client, document: document2, isInFrame: isInFrame2, reloadWhenIdle: reloadWhenIdle2 }) {
-      if (isInFrame2)
+    start(context) {
+      if (context.isInFrame)
         return null;
-      let systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY), theme = createSystemTheme({
-        document: document2,
-        looks: {
-          load: () => GM_getValue(THEME_LOOKS_KEY, {}),
-          save: (looks) => {
-            GM_setValue(THEME_LOOKS_KEY, looks);
-          }
-        },
-        onSystemThemeChange: (listener) => {
-          systemDark.addEventListener("change", listener);
-        },
-        prefersDark: () => systemDark.matches,
-        reload: reloadWhenIdle2,
-        saveTheme: async (themeId) => client.saveTheme(themeId)
-      });
-      return new MutationObserver(() => {
-        theme.onPageChange();
-      }).observe(document2.body, { attributeFilter: ["class", "data-theme"], attributes: !0 }), theme.start(), null;
+      let isWindows98Mode2 = GM_getValue(WINDOWS_98_MODE_ID, !1);
+      return startSystemTheme(context, () => isWindows98Mode2), null;
     },
     styles: []
   };
@@ -648,11 +657,13 @@ html[data-fix-ado-win98] .navigation-container {
     }
   }
 
-  /* Items 24px and sub items 20px tall, with 16px icons, as in the design. */
+  /* Items 24px and sub items 20px tall, with 16px icons, as in the design. The navy hover
+     comes at once: Win98 has no fades. */
   .navigation-element {
     height: 24px;
     min-height: 0;
     color: #000;
+    transition: none;
 
     &.hub:not(.hub-group, .stand-alone) {
       height: 20px;
@@ -792,6 +803,81 @@ html[data-fix-ado-win98] .top-level-navigation {
 
   .navigation-footer {
     padding: 5px 2px 4px 4px;
+  }
+}
+
+/* The organization side bar with its collapse button (collapsible-organization-panel), as the
+   project side bar has one: a raised 19px button next to Organization settings. */
+html[data-fix-ado-win98] .top-level-navigation {
+  .navigation-footer:has(.fix-ado-organization-panel-toggle) {
+    display: flex;
+    align-items: center;
+
+    & > a {
+      flex-grow: 1;
+      min-width: 0;
+    }
+  }
+
+  .fix-ado-organization-panel-toggle {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 19px;
+    height: 19px;
+    margin-right: 6px;
+    padding: 0;
+    border: 0;
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
+    color: #000;
+    cursor: default;
+
+    &:active {
+      box-shadow: var(--win98-pressed);
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: -4px;
+    }
+  }
+}
+
+/* Collapsed, as the project side bar without "expanded": 48px, without the banner, its
+   organizations' pictures and the icons in the middle, and the button under the settings icon. */
+html[data-fix-ado-win98][data-fix-ado-organization-panel-collapsed] .top-level-navigation {
+  width: 48px;
+  min-width: 48px;
+  padding: 2px;
+
+  &::before,
+  &::after {
+    display: none;
+  }
+
+  .top-level-section {
+    padding: 4px 2px 0;
+  }
+
+  .top-navigation-item.top-navigation-item.top-navigation-item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .navigation-footer:has(.fix-ado-organization-panel-toggle) {
+    flex-direction: column;
+    gap: 4px;
+    padding: 5px 0 4px;
+
+    & > a {
+      align-self: stretch;
+    }
+  }
+
+  .fix-ado-organization-panel-toggle {
+    margin-right: 0;
   }
 }
 
@@ -3217,6 +3303,56 @@ html[data-fix-ado-win98] {
     .navigation-element.displayed,
     .navigation-element.displayed .navigation-text {
       font-weight: 700;
+    }
+  }
+}
+
+/* The project side bar collapsed, as Azure DevOps draws it without "expanded": every icon in
+   the middle of the 48px bar, sub items too, the open group in a sunken well, and the collapse
+   button centred under the settings icon, 6px above the bottom. After the expanded rules above,
+   which it overrides. */
+html[data-fix-ado-win98] body .navigation-container .project-navigation.collapsed {
+  .navigation-element,
+  .navigation-element.hub:not(.hub-group, .stand-alone) {
+    justify-content: center;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .collapsible-section {
+    align-items: center;
+  }
+
+  .collapsible-section:last-child {
+    padding-bottom: 6px;
+  }
+
+  .hub.stand-alone[role="button"] {
+    margin-right: 0;
+  }
+
+  /* The open group and its sub items in a sunken well, like a list box set into the bar: the
+     normal look's lighter block with a bar beside it, as Windows 98. */
+  .hub-group-container.expanded-container {
+    margin: 2px 4px;
+    padding: 2px 0;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
+
+    /* The parent on top, as the well's header: the face grey, with an etched line under it. */
+    & > .hub-group {
+      margin: 0 2px 3px;
+      background: var(--win98-face);
+      box-shadow:
+        0 1px var(--win98-shadow),
+        0 2px #fff;
+    }
+
+    /* Hovered, focused or shown, an item is navy with white, as everywhere in the side bar; the
+       header too. */
+    & .navigation-element:is(:hover, :focus, .displayed.hub) {
+      background: var(--win98-navy);
+      color: #fff;
     }
   }
 }
@@ -5977,8 +6113,9 @@ html[data-fix-ado-win98] .bolt-portal-host {
     box-shadow: none;
   }
 
-  /* Links have no hover fill: Win98 has no hover state. */
-  .bolt-link:hover {
+  /* Links have no hover fill: Win98 has no hover state. Side bar items are menu items, which
+     turn navy on hover. */
+  .bolt-link:not(.navigation-element):hover {
     background-color: transparent;
   }
 
@@ -9117,13 +9254,15 @@ html[data-fix-ado-win98]:is(
 `;
 
   // azure-devops/src/features/windows-98-mode/index.ts
-  var windows98Mode = {
+  var FOLLOW_SYSTEM_THEME_ID = "follow-system-theme", windows98Mode = {
     change: { kind: "new", version: "1.19.0" },
-    description: "Title bars, a Start menu side bar, bevelled buttons and grey windows.",
+    description: "Title bars, a Start menu side bar, bevelled buttons and grey windows. Always Light.",
     id: "windows-98-mode",
     isOffByDefault: !0,
     name: "Windows 98 mode",
-    start({ document: document2 }) {
+    start(context) {
+      let { document: document2 } = context;
+      !context.isInFrame && !GM_getValue(FOLLOW_SYSTEM_THEME_ID, !0) && startSystemTheme(context, () => !0);
       let mode = createWindows98Mode(document2);
       return mode.sync({ kind: "other" }, document2.location), {
         sync({ page }) {
@@ -14788,8 +14927,9 @@ ${issue.message ?? ""}`;
   }
 
   // azure-devops/src/features/collapsible-organization-panel/style.css
-  var style_default15 = `/* The panel in the side panel grey of a project, as Azure DevOps draws .project-navigation. */
-.top-level-navigation:has(.fix-ado-organization-panel-toggle) {
+  var style_default15 = `/* The panel in the side panel grey of a project, as Azure DevOps draws .project-navigation.
+   Windows 98 mode has its own look for the panel, in its style.css. */
+:root:not([data-fix-ado-win98]) .top-level-navigation:has(.fix-ado-organization-panel-toggle) {
   background: var(--nav-vertical-background-color, rgba(0, 0, 0, 0.08));
 }
 
@@ -14797,7 +14937,9 @@ ${issue.message ?? ""}`;
    the collapse button next to it. Collapsed, the two stack. Each icon sits in a 47px cell with
    12px above and below, in a row with 4px more, as a project's .hub.stand-alone does. The line is
    drawn here, so Azure DevOps's own elements stay where they are. */
-.top-level-navigation .navigation-footer:has(.fix-ado-organization-panel-toggle) {
+:root:not([data-fix-ado-win98])
+  .top-level-navigation
+  .navigation-footer:has(.fix-ado-organization-panel-toggle) {
   position: relative;
   display: flex;
   flex-direction: row;
@@ -14836,8 +14978,9 @@ ${issue.message ?? ""}`;
   }
 }
 
-/* The collapse button: a double chevron only, that glows blue on hover as on a project. */
-.fix-ado-organization-panel-toggle {
+/* The collapse button: a double chevron only, that glows blue on hover as on a project.
+   Windows 98 mode draws it as a raised button instead. */
+:root:not([data-fix-ado-win98]) .fix-ado-organization-panel-toggle {
   display: flex;
   flex: none;
   align-items: center;
