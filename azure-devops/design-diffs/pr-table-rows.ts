@@ -42,10 +42,16 @@ type Band = ({ link: string; title: string | null } | { label: string }) & { hue
 
 interface TableSection {
   groups: { band: Band | null; prs: TableRow[] }[];
+  /** The heights Azure DevOps holds for rows it has not drawn, above and below the drawn ones,
+   *  where it draws the rows as the list scrolls. */
+  spacerAbove: number;
+  spacerBelow: number;
 }
 
 /** A section card: its title and count, and its list. */
 interface DesignTable {
+  /** False for a card without a header, as on a repository's Completed tab. */
+  hasHeader: boolean;
   name: string;
   count: string;
   width: number;
@@ -168,6 +174,25 @@ function cardName(card: Element): string {
   return tabLabel === "" ? title : `${title} ${tabLabel}`;
 }
 
+/** How high the spacer rows among these rows are together. */
+function spacerHeight(rows: Element[]): number {
+  return rows
+    .filter((child) => child.classList.contains("bolt-list-row-spacer"))
+    .reduce((sum, spacer) => sum + spacer.getBoundingClientRect().height, 0);
+}
+
+/** The heights of Azure DevOps's spacer rows before the first pull request and after the last. */
+function spacersOf(body: Element | null | undefined): { spacerAbove: number; spacerBelow: number } {
+  const children = [...(body?.children ?? [])];
+  const rows = children.filter((child) => child.matches("a.bolt-table-row"));
+  const first = rows.length === 0 ? children.length : children.indexOf(rows[0] ?? children[0]);
+  const last = rows.length === 0 ? children.length : children.indexOf(rows.at(-1) ?? children[0]);
+  return {
+    spacerAbove: spacerHeight(children.slice(0, first)),
+    spacerBelow: spacerHeight(children.slice(last + 1)),
+  };
+}
+
 function readTable(card: Element): DesignTable {
   const table = card.querySelector<HTMLElement>("table.repos-pr-list");
   const groups: TableSection["groups"] = [];
@@ -186,10 +211,11 @@ function readTable(card: Element): DesignTable {
       card.querySelector(".fix-ado-assigned-tab-name .bolt-pill") ??
         card.querySelector(".repos-pr-section-header-title .bolt-pill"),
     ),
+    hasHeader: card.querySelector(".repos-pr-section-header") !== null,
     isGrouped: groups.some(({ band }) => band !== null),
     isLoading: table !== null && Object.hasOwn(table.dataset, "fixAdoGroupsLoading"),
     name: cardName(card),
-    section: { groups },
+    section: { groups, ...spacersOf(table?.querySelector("tbody")) },
     width: card.getBoundingClientRect().width,
   };
 }
@@ -212,6 +238,8 @@ const HELPERS = [
   readRow,
   readBand,
   cardName,
+  spacerHeight,
+  spacersOf,
   readTable,
   readTables,
 ];

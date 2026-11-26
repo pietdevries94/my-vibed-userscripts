@@ -11,7 +11,7 @@
   --fix-ado-table-author-width: 72px;
   --fix-ado-table-repository-width: 0px;
   --fix-ado-table-work-item-width: minmax(0, max-content);
-  --fix-ado-table-columns: [pipeline] 36px [title] minmax(240px, 1fr) [author]
+  --fix-ado-table-columns: [pipeline] 40px [title] minmax(240px, 1fr) [author]
     var(--fix-ado-table-author-width) [id] 72px [repository] var(--fix-ado-table-repository-width)
     [target] minmax(0, max-content) [work-item] var(--fix-ado-table-work-item-width) [reviewers]
     100px [comments] 92px [age] 130px [more] 32px;
@@ -80,13 +80,14 @@
     /* The pipeline status, then the title, in rows of three lengths. */
     & > tbody > a.bolt-table-row > [aria-colindex="2"]::before {
       top: 10px;
+      left: 14px;
       width: 16px;
       height: 16px;
       border-radius: 50%;
     }
 
     & > tbody > a.bolt-table-row > [aria-colindex="2"]::after {
-      left: 46px;
+      left: 50px;
       width: 320px;
     }
 
@@ -311,9 +312,14 @@
   }
 
   /* The pipeline status and the title: the status sits in the first column. */
+  /* The status 14px in, so it lines up with the card's 12px chevron above it, 16px in. */
   & [aria-colindex="2"] {
     grid-column: pipeline / span 2;
     overflow: hidden;
+  }
+
+  & > tbody > a.bolt-table-row > [aria-colindex="2"] {
+    padding-left: 14px;
   }
 
   & .bolt-table-two-line-cell > .bolt-table-cell-content {
@@ -589,7 +595,8 @@
     margin-top: 14px;
   }
 
-  & > .flex-row:first-child {
+  /* The header. A card without one, as on a repository's Completed tab, starts with its content. */
+  & > .flex-row:first-child:not(.bolt-card-content) {
     box-sizing: border-box;
     align-items: center;
     gap: 10px;
@@ -597,7 +604,7 @@
     padding: 0 16px;
   }
 
-  &:has(> .bolt-card-content) > .flex-row:first-child {
+  &:has(> .bolt-card-content) > .flex-row:first-child:not(.bolt-card-content) {
     border-bottom: 1px solid var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
   }
 

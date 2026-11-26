@@ -95,6 +95,15 @@ const STATES: TableState[] = [
     path: LIST,
   },
   { capture: "assigned-active", isGrouped: false, name: "list-plain", page: "pr-list", path: LIST },
+  // A repository's Completed tab: a card without a header, and a list Azure DevOps draws as it
+  // scrolls, with spacer rows for the rows it has not drawn.
+  {
+    capture: "completed-table",
+    isGrouped: false,
+    name: "list-completed",
+    page: "pr-list",
+    path: LIST,
+  },
   {
     capture: "assigned-active-inbox",
     isGrouped: true,
