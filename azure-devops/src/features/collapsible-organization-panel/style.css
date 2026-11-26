@@ -38,6 +38,13 @@
   line-height: 20px;
   cursor: pointer;
 
+  /* Azure DevOps's alt-hover-effect, as on a project's collapse button: blue, with a blue glow. */
+  &:hover,
+  &:focus {
+    color: var(--communication-foreground, rgba(0, 90, 158, 1));
+    text-shadow: 0 0 4px rgba(var(--palette-primary, 0, 120, 212), 0.5);
+  }
+
   &:focus-visible {
     outline: 2px solid var(--communication-background, rgb(0, 120, 212));
     outline-offset: -2px;
