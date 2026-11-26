@@ -36,3 +36,32 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
 .fix-ado-work-item-group-title {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
 }
+
+/* A work item's colour: a 3px bar on the right of its rows and its group row, over the line
+   under each, so a group's bar runs on. work-item-group-rows.ts sets the hue. Not in Windows 98
+   mode, nor while the table shows its skeleton. */
+:root:not([data-fix-ado-win98])
+  :is(a.bolt-table-row, tr.fix-ado-work-item-group)[data-fix-ado-work-item-hue] {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset-block: 0 -1px;
+    inset-inline-end: 0;
+    width: 3px;
+    background: oklch(0.65 0.15 var(--fix-ado-work-item-hue));
+    pointer-events: none;
+  }
+}
+
+table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
+  display: none;
+}
+
+@media (forced-colors: active) {
+  [data-fix-ado-work-item-hue]::after {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+}

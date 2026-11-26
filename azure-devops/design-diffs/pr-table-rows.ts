@@ -13,6 +13,8 @@ type ChipKind = "draft" | "auto" | "conflicts" | "other";
 interface TableRow {
   /** Azure DevOps marks a row with something new since the last visit. */
   isMarked: boolean;
+  /** The hue of its work item's colour, or null without one. */
+  hue: number | null;
   status: string;
   title: string;
   /** Draft, Auto-complete, Conflicts and the other pills after the title, in order. */
@@ -36,7 +38,7 @@ interface TableRow {
   };
 }
 
-type Band = { link: string; title: string | null } | { label: string };
+type Band = ({ link: string; title: string | null } | { label: string }) & { hue: number | null };
 
 interface TableSection {
   groups: { band: Band | null; prs: TableRow[] }[];
@@ -114,6 +116,12 @@ function timeOf(row: Element): TableRow["time"] {
   };
 }
 
+/** The hue Linked work item gave the row or group row, or null. */
+function hueOf(element: Element): number | null {
+  const hue = element instanceof HTMLElement ? element.dataset.fixAdoWorkItemHue : undefined;
+  return hue === undefined ? null : Number(hue);
+}
+
 function readRow(row: Element): TableRow {
   const count = row.querySelector(".repos-pr-list-comment-count");
   const workItem = row.querySelector(".fix-ado-linked-work-item");
@@ -129,6 +137,7 @@ function readRow(row: Element): TableRow {
       count === null
         ? null
         : { isActive: count.classList.contains("has-active-comments"), text: text(count) },
+    hue: hueOf(row),
     id: Number(/\/pullrequest\/(?<id>\d+)/u.exec(row.getAttribute("href") ?? "")?.groups?.id),
     isMarked: row.classList.contains("bolt-list-row-marked"),
     moreReviewers: text(reviewerCell?.querySelector(".bolt-pill")),
@@ -145,10 +154,10 @@ function readRow(row: Element): TableRow {
 function readBand(row: Element): Band {
   const link = row.querySelector("a");
   if (link === null) {
-    return { label: text(row) };
+    return { hue: hueOf(row), label: text(row) };
   }
   const title = text(row.querySelector(".fix-ado-work-item-group-title"));
-  return { link: text(link), title: title === "" ? null : title };
+  return { hue: hueOf(row), link: text(link), title: title === "" ? null : title };
 }
 
 /** "Assigned to me · Waiting for author": the title, and the stacked card's tab after it. */
@@ -195,6 +204,7 @@ function readTables(): DesignTable[] {
 const HELPERS = [
   text,
   person,
+  hueOf,
   chipKind,
   voteOf,
   reviewersOf,

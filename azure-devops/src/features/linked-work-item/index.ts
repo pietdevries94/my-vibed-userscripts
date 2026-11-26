@@ -1,5 +1,9 @@
 import { findPullRequestRows, showLinkedWorkItem } from "../../pull-requests/pr-list.ts";
-import { showGroupsLoading, showWorkItemGroups } from "./work-item-group-rows.ts";
+import {
+  showGroupsLoading,
+  showWorkItemColors,
+  showWorkItemGroups,
+} from "./work-item-group-rows.ts";
 import type { Feature } from "../../core/feature.ts";
 import type { LinkedWorkItemFetcher } from "./linked-work-item-fetcher.ts";
 import type { LinkedWorkItems } from "./linked-work-item.ts";
@@ -31,6 +35,17 @@ function groupsOf(
     linkedRows.push({ linked, row });
   }
   return groupByWorkItem(linkedRows);
+}
+
+/** Each row with its linked work items, or null while they are not fetched yet. */
+function withLinkedWorkItems(
+  rows: PullRequestRow[],
+  fetcher: LinkedWorkItemFetcher,
+): { row: HTMLElement; linked: LinkedWorkItems | null }[] {
+  return rows.map(({ row, pullRequest }) => ({
+    linked: fetcher.linkedWorkItems(pullRequest.pullRequestId),
+    row,
+  }));
 }
 
 /** Each row's work item id, or nothing in a grouped list, where the group's title has it. */
@@ -68,6 +83,7 @@ const linkedWorkItem: Feature = {
         showWorkItemGroups(list, basePath, groups);
         showGroupsLoading(list, isList && isGrouped && groups === null && rows.length > 0);
         showLinkedWorkItemLabels(rows, fetcher, groups !== null);
+        showWorkItemColors(list, isList ? withLinkedWorkItems(rows, fetcher) : [], groups !== null);
       }
       showListSwitch(
         document,

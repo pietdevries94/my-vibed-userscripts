@@ -1,3 +1,4 @@
+import type { LinkedWorkItems } from "./linked-work-item.ts";
 import type { WorkItemGroup } from "./work-item-groups.ts";
 
 const GROUP_ROW_CLASS = "fix-ado-work-item-group";
@@ -155,4 +156,71 @@ function showGroupsLoading(list: HTMLElement, isLoading: boolean): void {
   }
 }
 
-export { showGroupsLoading, showWorkItemGroups };
+// A colour per work item, so the pull requests of one work item stand out together: a bar on
+// the right of each row that shares its work item with another row, and in a grouped list of
+// every row of a work item's group and its group row. style.css draws the bar from the hue.
+
+const HUE_ATTRIBUTE = "data-fix-ado-work-item-hue";
+const HUE_PROPERTY = "--fix-ado-work-item-hue";
+/** The golden angle: ids next to each other get hues far apart, and no hue comes back soon. */
+const GOLDEN_ANGLE = 137.508;
+const FULL_TURN = 360;
+const GROUP_ROW_SELECTOR = ":scope > tr.fix-ado-work-item-group";
+
+/** The hue of a work item's colour, 0 to 359, the same for the same id on every page. */
+function workItemHue(workItemId: number): number {
+  return Math.floor((workItemId * GOLDEN_ANGLE) % FULL_TURN);
+}
+
+/** Gives the element the work item's colour, or takes it away for null. Only writes on a change. */
+function showHue(element: HTMLElement, workItemId: number | null): void {
+  const hue = workItemId === null ? null : String(workItemHue(workItemId));
+  if (element.getAttribute(HUE_ATTRIBUTE) === hue) {
+    return;
+  }
+  if (hue === null) {
+    element.removeAttribute(HUE_ATTRIBUTE);
+    element.style.removeProperty(HUE_PROPERTY);
+  } else {
+    element.setAttribute(HUE_ATTRIBUTE, hue);
+    element.style.setProperty(HUE_PROPERTY, hue);
+  }
+}
+
+/** The row's one work item, or null for none, several or not fetched yet. */
+const singleWorkItem = (linked: LinkedWorkItems | null): number | null =>
+  linked?.ids.length === 1 ? (linked.ids[0] ?? null) : null;
+
+/** How many rows have each work item as their one work item. */
+function rowsPerWorkItem(rows: { linked: LinkedWorkItems | null }[]): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const { linked } of rows) {
+    const id = singleWorkItem(linked);
+    if (id !== null) {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/**
+ * Colours the rows of one list (a `tbody`) by work item. Grouped: every row with one work item,
+ * and each work item's group row. Not grouped: the rows whose work item another row has too.
+ */
+function showWorkItemColors(
+  list: HTMLElement,
+  rows: { row: HTMLElement; linked: LinkedWorkItems | null }[],
+  isGrouped: boolean,
+): void {
+  const counts = rowsPerWorkItem(rows);
+  for (const { row, linked } of rows) {
+    const id = singleWorkItem(linked);
+    showHue(row, id !== null && (isGrouped || (counts.get(id) ?? 0) > 1) ? id : null);
+  }
+  for (const groupRow of list.querySelectorAll<HTMLElement>(GROUP_ROW_SELECTOR)) {
+    const id = Number(groupRow.dataset.fixAdoWorkItemGroup);
+    showHue(groupRow, isGrouped && Number.isInteger(id) ? id : null);
+  }
+}
+
+export { showGroupsLoading, showWorkItemColors, showWorkItemGroups, workItemHue };
