@@ -4,33 +4,42 @@
    take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
 :root[data-fix-ado-table]:not([data-fix-ado-win98]) table.repos-pr-list {
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
-  /* Fixed widths, so the columns of every list on the page line up. */
-  --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 72px [id] 72px [target]
-    180px [reviewers] 100px [comments] 92px [age] 116px [more] 32px;
+  /* Fixed widths, so the columns of every list on the page line up. A column a list does not
+     have is 0px wide, and its cells do not show. */
+  --fix-ado-table-author-width: 72px;
+  --fix-ado-table-repository-width: 0px;
+  --fix-ado-table-work-item-width: 110px;
+  --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author]
+    var(--fix-ado-table-author-width) [id] 72px [repository] var(--fix-ado-table-repository-width)
+    [target] 160px [work-item] var(--fix-ado-table-work-item-width) [reviewers] 100px [comments]
+    92px [age] 130px [more] 32px;
 
   display: block;
   font-size: 14px;
   line-height: 20px;
 
-  /* Without Group by work item, a Work item column takes the place of the group rows. */
-  &:not(:has(.fix-ado-work-item-group)) {
-    --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 72px [id] 72px [target]
-      180px [work-item] 110px [reviewers] 100px [comments] 92px [age] 116px [more] 32px;
-  }
-
   /* "Created by me" lists only your own pull requests, so it has no Author column. */
   &[data-fix-ado-created-by-me] {
-    --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [id] 72px [target] 180px
-      [reviewers] 100px [comments] 92px [age] 116px [more] 32px;
+    --fix-ado-table-author-width: 0px;
 
     & :is(.fix-ado-table-head-author, a.bolt-table-row > [aria-colindex="1"]) {
       display: none;
     }
   }
 
-  &[data-fix-ado-created-by-me]:not(:has(.fix-ado-work-item-group)) {
-    --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [id] 72px [target] 180px
-      [work-item] 110px [reviewers] 100px [comments] 92px [age] 116px [more] 32px;
+  /* Only the inbox names each pull request's repository: there it gets a column. */
+  &:has(.fix-ado-table-repository:not(:empty)) {
+    --fix-ado-table-repository-width: 120px;
+  }
+
+  &:not(:has(.fix-ado-table-repository:not(:empty))) .fix-ado-table-head-repository,
+  & > tbody > a.bolt-table-row > .fix-ado-table-repository:empty {
+    display: none;
+  }
+
+  /* Grouped lists show the work item in the group rows instead of a column. */
+  &:has(.fix-ado-work-item-group) {
+    --fix-ado-table-work-item-width: 0px;
   }
 
   & > colgroup {
@@ -80,6 +89,47 @@
   & .fix-ado-table-head-comments,
   & .fix-ado-table-head-age {
     justify-content: flex-end;
+  }
+
+  /* Each header cell on its column by name, as some columns are 0px wide. */
+  & .fix-ado-table-head-pipeline {
+    grid-column: pipeline;
+  }
+
+  & .fix-ado-table-head-title {
+    grid-column: title;
+  }
+
+  & .fix-ado-table-head-author {
+    grid-column: author;
+  }
+
+  & .fix-ado-table-head-id {
+    grid-column: id;
+  }
+
+  & .fix-ado-table-head-repository {
+    grid-column: repository;
+  }
+
+  & .fix-ado-table-head-target {
+    grid-column: target;
+  }
+
+  & .fix-ado-table-head-work-item {
+    grid-column: work-item;
+  }
+
+  & .fix-ado-table-head-reviewers {
+    grid-column: reviewers;
+  }
+
+  & .fix-ado-table-head-comments {
+    grid-column: comments;
+  }
+
+  & .fix-ado-table-head-age {
+    grid-column: age;
   }
 
   /* Azure DevOps skips rows out of view and holds 32px for each. A row here is 36px without
@@ -232,7 +282,14 @@
     height: 22px;
   }
 
-  & :is(.fix-ado-table-id, .fix-ado-table-target, .fix-ado-table-work-item, [aria-colindex="4"]) {
+  &
+    :is(
+      .fix-ado-table-id,
+      .fix-ado-table-repository,
+      .fix-ado-table-target,
+      .fix-ado-table-work-item,
+      [aria-colindex="4"]
+    ) {
     font-size: 12px;
     font-variant-numeric: tabular-nums;
     color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
@@ -242,12 +299,19 @@
     grid-column: id;
   }
 
-  & > tbody > a.bolt-table-row > :is(.fix-ado-table-target, .fix-ado-table-work-item) {
+  &
+    > tbody
+    > a.bolt-table-row
+    > :is(.fix-ado-table-repository, .fix-ado-table-target, .fix-ado-table-work-item) {
     display: block;
     line-height: 36px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  & .fix-ado-table-repository {
+    grid-column: repository;
   }
 
   & .fix-ado-table-target {
@@ -272,7 +336,6 @@
     content: none;
   }
 
-  /* Grouped lists show the work item in the group rows. */
   &:has(.fix-ado-work-item-group) > tbody > a.bolt-table-row > .fix-ado-table-work-item,
   &:has(.fix-ado-work-item-group) .fix-ado-table-head-work-item {
     display: none;
@@ -388,13 +451,11 @@
     }
   }
 
-  & .fix-ado-table-age {
+  /* Each age centred in its slot and the dots centred between them; the header's c, u and p
+     sit in the same grid, right above the ages they name. */
+  & :is(.fix-ado-table-age, .fix-ado-table-age-legend) {
     display: grid;
-    grid-template-columns: 24px 12px 24px 12px 24px;
-    text-align: end;
-  }
-
-  & .fix-ado-table-age-dot {
+    grid-template-columns: 30px 10px 30px 10px 30px;
     text-align: center;
   }
 
@@ -403,7 +464,7 @@
   }
 
   & .fix-ado-table-age-legend {
-    margin-left: 4px;
+    font-size: 12px;
     font-weight: 400;
     letter-spacing: 0;
     text-transform: none;

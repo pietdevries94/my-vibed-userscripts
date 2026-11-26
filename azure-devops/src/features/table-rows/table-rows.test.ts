@@ -83,24 +83,26 @@ test("puts a header with the column names above each list", () => {
       "Pull request",
       "Author",
       "Id",
+      "Repository",
       "Target",
       "Work item",
       "Reviewers",
       "Comments",
-      "Age (c · u · p)",
+      "c·u·p",
     ],
   );
   assert.equal(document.querySelector("table > thead + tbody") !== null, true);
 });
 
-test("gives each pull request the author's name as a tooltip, its id, its target and its work item", () => {
+test("gives each pull request the author's name as a tooltip, its id, repository, target branch and work item", () => {
   const { document } = createList().window;
   showTableRows(document, true, NO_CREATION_DATES);
   const row = rowOf(document);
   assert.equal(row.querySelector('[aria-colindex="1"]')?.getAttribute("title"), "Doe, Jane");
   assert.equal(row.querySelector(":scope > td.fix-ado-table-id")?.textContent, "!4021");
+  assert.equal(row.querySelector(":scope > td.fix-ado-table-repository")?.textContent, "Webshop");
   const target = row.querySelector(":scope > td.fix-ado-table-target");
-  assert.equal(target?.textContent, "Webshop → main");
+  assert.equal(target?.textContent, "main");
   assert.equal(target?.querySelector(".fix-ado-table-branch")?.textContent, "main");
   const workItem = row.querySelector(":scope > td.fix-ado-table-work-item");
   assert.equal(workItem?.textContent, "#77");
@@ -150,12 +152,17 @@ test("shows when the pull request was created, updated and published, with the f
   });
 });
 
-test("explains the ages in the Age header, and in full as its tooltip", () => {
+test("heads the ages with c, u and p, one above each, and says what they stand for as the tooltip", () => {
   const { document } = createList().window;
   showTableRows(document, true, NO_CREATION_DATES);
   const head = document.querySelector(".fix-ado-table-head-age");
-  assert.equal(head?.textContent, "Age (c · u · p)");
-  assert.equal(head?.getAttribute("title"), "Created · updated · published");
+  assert.deepEqual(
+    [...(head?.querySelectorAll(".fix-ado-table-age-legend > *") ?? [])].map(
+      (letter) => letter.textContent,
+    ),
+    ["c", "·", "u", "·", "p"],
+  );
+  assert.equal(head?.getAttribute("title"), "Age: created · updated · published");
 });
 
 test("shows a dash for an age that does not apply or is not known yet", () => {
@@ -204,16 +211,16 @@ test("follows a row Azure DevOps reuses for another pull request", () => {
   showTableRows(document, true, NO_CREATION_DATES);
   assert.equal(row.querySelectorAll(".fix-ado-table-id").length, 1);
   assert.equal(row.querySelector(".fix-ado-table-id")?.textContent, "!4022");
-  assert.equal(row.querySelector(".fix-ado-table-target")?.textContent, "Webshop → release");
+  assert.equal(row.querySelector(".fix-ado-table-target")?.textContent, "release");
 });
 
-test("shows the branch alone where Azure DevOps names no repository, as on a repository's own list", () => {
+test("leaves the repository cell empty where Azure DevOps names no repository, as on a repository's own list", () => {
   const { document } = createList().window;
   document.querySelector(".padding-horizontal-4:not(.monospaced-xs)")?.remove();
   showTableRows(document, true, NO_CREATION_DATES);
-  const target = rowOf(document).querySelector(".fix-ado-table-target");
-  assert.equal(target?.textContent, "main");
-  assert.equal(target?.firstElementChild?.className, "fix-ado-table-branch");
+  const row = rowOf(document);
+  assert.equal(row.querySelector(".fix-ado-table-repository")?.textContent, "");
+  assert.equal(row.querySelector(".fix-ado-table-target")?.textContent, "main");
 });
 
 test("takes everything away when turned off, and puts the work item back under the title", () => {

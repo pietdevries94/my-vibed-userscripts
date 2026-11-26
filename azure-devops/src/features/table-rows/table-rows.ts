@@ -1,6 +1,6 @@
 // The pull request lists as a table, as design B of the inbox redesigns. Marks <html>, puts a
 // header above each list and gives each row the cells Azure DevOps has no column for: the id, the
-// target and the work item. The author shows as an avatar, with the name as its cell's tooltip,
+// repository, the target branch and the work item. The author shows as an avatar, with the name as its cell's tooltip,
 // and the age as "3d p", with the full time as its cell's tooltip. style.css lays the rows out
 // from the mark.
 
@@ -17,6 +17,7 @@ const CARD_SELECTOR = ".repos-pr-section-card";
 const CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis";
 const AUTHOR_CELL_SELECTOR = '[aria-colindex="1"]';
 const ID_CLASS = "fix-ado-table-id";
+const REPOSITORY_CLASS = "fix-ado-table-repository";
 const TARGET_CLASS = "fix-ado-table-target";
 const BRANCH_CLASS = "fix-ado-table-branch";
 const WORK_ITEM_CLASS = "fix-ado-table-work-item";
@@ -31,6 +32,7 @@ const COLUMNS = [
   ["title", "Pull request"],
   ["author", "Author"],
   ["id", "Id"],
+  ["repository", "Repository"],
   ["target", "Target"],
   ["work-item", "Work item"],
   ["reviewers", "Reviewers"],
@@ -117,24 +119,30 @@ function showId(row: Element): void {
   showText(cellOf(row, ID_CLASS), `!${id}`);
 }
 
-/** "repository → branch", the branch in Azure DevOps's monospace. */
-function showTarget(row: Element): void {
+/** The repository's name. Only the inbox names it; elsewhere the cell stays empty, and
+ *  style.css leaves out the column. */
+function showRepository(row: Element): void {
   const repository =
     row.querySelector(".secondary-text .padding-horizontal-4:not(.monospaced-xs)")?.textContent ??
     "";
+  showText(cellOf(row, REPOSITORY_CLASS), repository);
+}
+
+/** The target branch, in Azure DevOps's monospace. */
+function showTarget(row: Element): void {
   const branch = row.querySelector(".secondary-text .monospaced-xs")?.textContent ?? "";
-  // A repository's own list names no repository: there the branch shows alone.
-  const prefix = repository === "" ? "" : `${repository} → `;
   const cell = cellOf(row, TARGET_CLASS);
-  const shownBranch = cell.querySelector(`.${BRANCH_CLASS}`);
-  if (cell.textContent === `${prefix}${branch}` && shownBranch?.textContent === branch) {
+  const shownBranch = cell.querySelector(`:scope > .${BRANCH_CLASS}`);
+  if (shownBranch !== null && cell.childNodes.length === 1) {
+    showText(shownBranch, branch);
     return;
   }
-  const branchElement = Object.assign(row.ownerDocument.createElement("span"), {
-    className: BRANCH_CLASS,
-    textContent: branch,
-  });
-  cell.replaceChildren(...(prefix === "" ? [] : [prefix]), branchElement);
+  cell.replaceChildren(
+    Object.assign(row.ownerDocument.createElement("span"), {
+      className: BRANCH_CLASS,
+      textContent: branch,
+    }),
+  );
 }
 
 /** Moves the linked work item's label, which Linked work item keeps up to date, into its cell. */
@@ -158,7 +166,9 @@ function removeCells(row: Element): void {
   }
   row.querySelector(`:scope > ${AUTHOR_CELL_SELECTOR}`)?.removeAttribute("title");
   removeAge(row);
-  for (const added of row.querySelectorAll(`.${ID_CLASS}, .${TARGET_CLASS}, .${WORK_ITEM_CLASS}`)) {
+  for (const added of row.querySelectorAll(
+    `.${ID_CLASS}, .${REPOSITORY_CLASS}, .${TARGET_CLASS}, .${WORK_ITEM_CLASS}`,
+  )) {
     added.remove();
   }
 }
@@ -166,6 +176,7 @@ function removeCells(row: Element): void {
 function showCells(row: Element, times: AgeTimes): void {
   showAuthor(row);
   showId(row);
+  showRepository(row);
   showTarget(row);
   showWorkItem(row);
   showAge(row, times);

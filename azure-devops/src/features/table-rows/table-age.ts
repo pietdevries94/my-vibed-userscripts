@@ -7,10 +7,9 @@ import { MINUTE_MS, largestWholeUnit } from "../../core/elapsed-time.ts";
 const AGE_CELL_SELECTOR = '[aria-colindex="5"]';
 const AGE_CLASS = "fix-ado-table-age";
 const STALE_ATTRIBUTE = "data-fix-ado-is-stale";
-const AGE_LABEL = "Age ";
-const AGE_LEGEND = "(c · u · p)";
-/** The Age header's tooltip, which says what c, u and p stand for. */
-const AGE_TOOLTIP = "Created · updated · published";
+/** The Age header's letters, one above each age, and its tooltip, which says what they stand for. */
+const AGE_LETTERS = ["c", "·", "u", "·", "p"];
+const AGE_TOOLTIP = "Age: created · updated · published";
 const NO_AGE = "–";
 const PUBLISHED_SINCE_CLASS = "fix-ado-published-since";
 const TOO_LONG_AGO_CLASS = "fix-ado-published-since-too-long";
@@ -174,13 +173,18 @@ function showAge(row: Element, times: AgeTimes): void {
   showAttribute(cell, "title", full === "" ? null : full);
 }
 
-/** The Age header's label: "Age (c · u · p)", the letters not in capitals. */
+/** The Age header: c, u and p, in the grid of the ages below them. */
 function showAgeHead(cell: Element): void {
-  const legend = Object.assign(cell.ownerDocument.createElement("span"), {
+  const { ownerDocument } = cell;
+  const legend = Object.assign(ownerDocument.createElement("span"), {
     className: `${AGE_CLASS}-legend`,
-    textContent: AGE_LEGEND,
   });
-  cell.replaceChildren(AGE_LABEL, legend);
+  legend.append(
+    ...AGE_LETTERS.map((letter) =>
+      Object.assign(ownerDocument.createElement("span"), { textContent: letter }),
+    ),
+  );
+  cell.replaceChildren(legend);
   cell.setAttribute("title", AGE_TOOLTIP);
 }
 
