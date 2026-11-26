@@ -26,6 +26,8 @@ interface FakePage {
   stored: ThemeLooks;
   reloads: number;
   saveFails: boolean;
+  /** Windows 98 mode is on: the page wants Light, whatever the system shows. */
+  isLightForced: boolean;
 }
 
 /** A page as Azure DevOps renders it after a switch in its theme panel: with `data-theme`. */
@@ -48,6 +50,7 @@ function pageWithBody(rootStyle: string, bodyAttributes: string): FakePage {
   ).window;
   const page: FakePage = {
     document,
+    isLightForced: false,
     prefersDark: {
       change(matches) {
         page.prefersDark.matches = matches;
@@ -69,6 +72,7 @@ function pageWithBody(rootStyle: string, bodyAttributes: string): FakePage {
 function follow(page: FakePage): ReturnType<typeof createSystemTheme> {
   return createSystemTheme({
     document: page.document,
+    isLightForced: () => page.isLightForced,
     looks: {
       load: () => page.stored,
       save: (looks) => {
