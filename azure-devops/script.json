@@ -8,9 +8,9 @@
         "Pipeline status on each pull request",
         "Required reviewers first",
         "How long ago each active pull request was published, in red after two weekdays",
-        "The linked work item's id on each pull request, with a switch that groups the lists by work item",
+        "The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item",
         "The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all",
-        "A Table switch on the lists that shows them as a table, with a column per field under a header"
+        "The lists as a table, with a column per field under a header, on by default with a Table switch"
       ]
     },
     {
