@@ -1,7 +1,7 @@
-import { findPullRequestRows, isDraftRow } from "../../pull-requests/pr-list.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
 import { buildFixtureDom } from "../../../../shared/dev/fake-site/fixture-dom.ts";
+import { findPullRequestRows } from "../../pull-requests/pr-list.ts";
 import { scriptFixtures } from "../../../../shared/dev/fixtures.ts";
 import { showWorkItemGroups } from "./work-item-group-rows.ts";
 import { test } from "node:test";
@@ -106,34 +106,3 @@ test("grouping again in the same order changes nothing", { skip: fixtures.skip }
   changes.push(...observer.takeRecords());
   assert.deepEqual(changes, []);
 });
-
-test(
-  "pr-list-win98: marks a group whose pull requests are all drafts",
-  { skip: fixtures.skip },
-  () => {
-    const list = listWithRows(capturedPage("pr-list-win98"), 3);
-    const rows = rowsOf(list);
-    const drafts = rows.filter((row) => isDraftRow(row));
-    const others = rows.filter((row) => !isDraftRow(row));
-    assert.ok(drafts.length > 0 && others.length > 0);
-    const draftsOnly = (): string[] =>
-      [
-        ...list.querySelectorAll<HTMLElement>(".fix-ado-work-item-group[data-fix-ado-drafts-only]"),
-      ].map((row) => row.dataset.fixAdoWorkItemGroup ?? "");
-    const grouped = (draftRows: HTMLElement[], mixedRows: HTMLElement[]): void => {
-      showWorkItemGroups(list, "/fake-org", [
-        { key: "1", label: "#1", rows: draftRows, title: null, workItemId: 1 },
-        { key: "2", label: "#2", rows: mixedRows, title: null, workItemId: 2 },
-      ]);
-    };
-
-    grouped(drafts, others);
-    assert.deepEqual(draftsOnly(), ["1"]);
-
-    grouped(drafts.slice(1), [...others, ...drafts.slice(0, 1)]);
-    assert.deepEqual(draftsOnly(), drafts.length > 1 ? ["1"] : []);
-
-    grouped([...drafts, ...others], []);
-    assert.deepEqual(draftsOnly(), []);
-  },
-);

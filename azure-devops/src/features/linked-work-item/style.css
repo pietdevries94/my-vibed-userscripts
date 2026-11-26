@@ -5,7 +5,17 @@
 }
 
 /* A group's title row in a pull request list: its work item's id as a link, then its title.
-   work-item-group-rows.ts adds it. */
+   work-item-group-rows.ts adds it. A slight grey from the theme's text colour, so it works in
+   Light and Dark, and sets it apart from the pull requests under it. */
+.fix-ado-work-item-group {
+  background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.03);
+}
+
+/* Windows 98 mode: the white field with a touch of the light face grey. */
+html[data-fix-ado-win98] .fix-ado-work-item-group {
+  background-color: color-mix(in oklab, var(--win98-light) 30%, var(--win98-field-face));
+}
+
 .fix-ado-work-item-group > td {
   padding: 8px 16px;
   /* A line above each group, stronger than the lines between rows, to divide the groups. */

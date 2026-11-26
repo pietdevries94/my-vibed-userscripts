@@ -1,8 +1,6 @@
 import type { WorkItemGroup } from "./work-item-groups.ts";
-import { isDraftRow } from "../../pull-requests/pr-list.ts";
 
 const GROUP_ROW_CLASS = "fix-ado-work-item-group";
-const DRAFTS_ONLY_ATTRIBUTE = "data-fix-ado-drafts-only";
 const PULL_REQUEST_ROW_SELECTOR = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
 
 /** Moves a node inside the list. `moveBefore` keeps focus in a row; a new node is inserted. */
@@ -90,15 +88,6 @@ function showGroupTitle(
   row.dataset.fixAdoShownTitle = shown;
 }
 
-/** Marks the group's title row when all its pull requests are drafts, for the grey drafts feature. */
-function markDraftsOnly(row: HTMLTableRowElement, group: WorkItemGroup<HTMLElement>): void {
-  const isDraftsOnly =
-    group.rows.length > 0 && group.rows.every((pullRequestRow) => isDraftRow(pullRequestRow));
-  if (row.hasAttribute(DRAFTS_ONLY_ATTRIBUTE) !== isDraftsOnly) {
-    row.toggleAttribute(DRAFTS_ONLY_ATTRIBUTE, isDraftsOnly);
-  }
-}
-
 const rowIndex = (row: Element): number => Number(row.getAttribute("aria-rowindex"));
 
 function orderedNodes(
@@ -114,7 +103,6 @@ function orderedNodes(
   return groups.flatMap((group) => {
     const groupRow = groupRowFor(list, group.key);
     showGroupTitle(groupRow, basePath, group);
-    markDraftsOnly(groupRow, group);
     return [groupRow, ...group.rows];
   });
 }

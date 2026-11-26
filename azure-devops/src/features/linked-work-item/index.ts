@@ -46,9 +46,9 @@ function showLinkedWorkItemLabels(
 }
 
 const linkedWorkItem: Feature = {
-  change: { kind: "new", version: "1.24.0" },
+  change: { kind: "updated", version: "1.27.0" },
   description:
-    "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. A switch groups the lists by work item, each under its work item's id and title.",
+    "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. A switch groups the lists by work item, each under its work item's id and title on a grey row.",
   id: "linked-work-item",
   name: "Linked work item",
   start({ basePath, client, document, now }) {
