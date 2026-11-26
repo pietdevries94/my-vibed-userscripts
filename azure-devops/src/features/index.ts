@@ -50,6 +50,7 @@ const START_ORDER = [
   "follow-system-theme",
   "reload-on-changes",
   "windows-98-mode",
+  "collapsible-organization-panel",
 ];
 
 /** A feature missing from START_ORDER starts last. */

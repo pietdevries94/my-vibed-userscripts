@@ -4,7 +4,10 @@
   "features": [
     {
       "category": "General",
-      "points": ["Pull request lists and boards that reload on changes"]
+      "points": [
+        "Pull request lists and boards that reload on changes",
+        "A button that collapses the side panel of the inbox, Work and the organization home, as on a project"
+      ]
     },
     {
       "category": "Appearance",

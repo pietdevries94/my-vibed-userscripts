@@ -88,6 +88,10 @@ _Avoid_: Clean mode, minimal view
 The script's own dialog on Azure DevOps where the owner turns each feature on or off. Saving reloads the page. Opened from a button the script adds to Azure DevOps's top bar.
 _Avoid_: Options, preferences, config screen
 
+**Organization panel**:
+The side panel on the pages outside a project: the pull request inbox, Work and the organization's home. It lists the organizations, with Organization settings at the bottom. A project's own side panel is not it.
+_Avoid_: Left menu, org menu
+
 **Settings section**:
 A page of the settings panel with the features on one subject, such as "Pipelines" or "Comments and activity". Its side bar lists the sections. Every feature is in one section. script.json lists the features under the section names too.
 _Avoid_: Feature category, tab, page
