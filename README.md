@@ -8,7 +8,7 @@ Userscripts that fix small annoyances on websites I use, one script per website.
 
 ### Fix Azure DevOps
 
-[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.27.0
+[Install](https://raw.githubusercontent.com/pietdevries94/my-vibed-userscripts/main/dist/azure-devops.user.js) · version 1.28.0
 
 Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones.
 
@@ -17,9 +17,9 @@ Adds missing features to Azure DevOps. A settings panel in the top bar turns eac
 - Pipeline status on each pull request
 - Required reviewers first
 - How long ago each active pull request was published, in red after two weekdays
-- The linked work item's id on each pull request, with a switch that groups the lists by work item
+- The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item
 - The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all
-- A One line switch on the lists that puts each pull request on one line
+- The lists as a table, with a column per field under a header, on by default with a Table switch
 
 **Pull request**
 

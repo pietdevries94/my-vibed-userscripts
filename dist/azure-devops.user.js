@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.27.0
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; A One line switch on the lists that puts each pull request on one line. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
+// @version      1.28.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -832,6 +832,102 @@
     return segments.at(-1) === "pullrequestcreate" && segments.at(-3) === "_git";
   }
 
+  // azure-devops/src/core/tooltip.ts
+  var TOOLTIP_ATTRIBUTE = "data-fix-ado-tooltip", TOOLTIP_ID = "fix-ado-tooltip";
+  function createTooltip(document2, text) {
+    let portal = Object.assign(document2.createElement("div"), {
+      className: "bolt-portal absolute-fill"
+    });
+    portal.innerHTML = '<div class="bolt-callout absolute bolt-tooltip" role="tooltip"><div class="bolt-callout-content"><div class="bolt-tooltip-content body-m"></div></div></div>';
+    let callout = portal.querySelector(".bolt-callout"), content = portal.querySelector(".bolt-tooltip-content");
+    return callout !== null && content !== null && (callout.id = TOOLTIP_ID, content.textContent = text), portal;
+  }
+  function place(tooltip, trigger) {
+    let callout = tooltip.querySelector(".bolt-callout"), view = trigger.ownerDocument.defaultView;
+    if (callout === null || view === null)
+      return;
+    let box = trigger.getBoundingClientRect(), width = callout.offsetWidth, left = Math.min(
+      Math.max(8, box.left + box.width / 2 - width / 2),
+      view.innerWidth - width - 8
+    );
+    Object.assign(callout.style, {
+      left: `${left}px`,
+      position: "fixed",
+      top: `${box.bottom + 8}px`
+    });
+  }
+  function createShower(document2) {
+    let shown = null;
+    function hide() {
+      shown?.tooltip.remove(), shown?.trigger.removeAttribute("aria-describedby"), shown = null;
+    }
+    return {
+      hide,
+      show(trigger) {
+        hide();
+        let tooltip = createTooltip(document2, trigger.getAttribute(TOOLTIP_ATTRIBUTE) ?? "");
+        (document2.querySelector(".bolt-portal-host") ?? document2.body).append(tooltip), place(tooltip, trigger), trigger.setAttribute("aria-describedby", TOOLTIP_ID), shown = { tooltip, trigger };
+      }
+    };
+  }
+  function triggerOf(view, event) {
+    return view !== null && event.target instanceof view.Element ? event.target.closest(`[${TOOLTIP_ATTRIBUTE}]`) : null;
+  }
+  function isLeaving(trigger, event) {
+    let view = trigger.ownerDocument.defaultView, next = "relatedTarget" in event ? event.relatedTarget : null;
+    return !(view !== null && next instanceof view.Node && trigger.contains(next));
+  }
+  function createHover(view, shower, hoverDelayMs) {
+    let timer = null, hovered = null, hide = () => {
+      timer !== null && clearTimeout(timer), hovered = null, shower.hide();
+    };
+    return {
+      hide,
+      onPointerOver(event) {
+        let trigger = triggerOf(view, event);
+        trigger !== null && trigger !== hovered && (hide(), hovered = trigger, timer = setTimeout(() => {
+          shower.show(trigger);
+        }, hoverDelayMs));
+      }
+    };
+  }
+  function createListeners(document2, hoverDelayMs) {
+    let shower = createShower(document2), view = document2.defaultView, { hide, onPointerOver } = createHover(view, shower, hoverDelayMs), onLeave = (event) => {
+      let trigger = triggerOf(view, event);
+      trigger !== null && isLeaving(trigger, event) && hide();
+    };
+    return { hide, listeners: [
+      ["pointerover", onPointerOver],
+      ["pointerout", onLeave],
+      ["focusin", (event) => {
+        let trigger = triggerOf(view, event);
+        trigger !== null && shower.show(trigger);
+      }],
+      ["focusout", onLeave],
+      ["keydown", (event) => {
+        "key" in event && event.key === "Escape" && hide();
+      }]
+    ] };
+  }
+  var startedDocuments = /* @__PURE__ */ new WeakSet();
+  function startTooltips(document2, options = {}) {
+    if (startedDocuments.has(document2))
+      return () => {
+      };
+    startedDocuments.add(document2);
+    let { hide, listeners } = createListeners(document2, options.hoverDelayMs ?? 500);
+    for (let [type, listener] of listeners)
+      document2.addEventListener(type, listener);
+    return () => {
+      startedDocuments.delete(document2), hide();
+      for (let [type, listener] of listeners)
+        document2.removeEventListener(type, listener);
+    };
+  }
+  function showTooltip(element4, text) {
+    startTooltips(element4.ownerDocument), text === null ? element4.removeAttribute(TOOLTIP_ATTRIBUTE) : element4.getAttribute(TOOLTIP_ATTRIBUTE) !== text && element4.setAttribute(TOOLTIP_ATTRIBUTE, text);
+  }
+
   // azure-devops/src/pull-requests/pr-list.ts
   var PULL_REQUEST_ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]', TITLE_LINE_SELECTOR = ".bolt-table-two-line-cell-item";
   function findPullRequestRows(root, apiBasePath2) {
@@ -877,9 +973,6 @@
       return shown;
     let label = row.ownerDocument.createElement("span");
     return label.className = LINKED_WORK_ITEM_CLASS, lineUnderTitle.append(label), label;
-  }
-  function showTooltip(element4, tooltip) {
-    tooltip === null ? element4.removeAttribute("title") : element4.getAttribute("title") !== tooltip && element4.setAttribute("title", tooltip);
   }
   function showLinkedWorkItem(row, shown) {
     if (shown === null) {
@@ -10652,13 +10745,13 @@ ${issue.message ?? ""}`;
     return total;
   }
   function runIssueOf(issue, spot) {
-    let place = (spot.job === null ? [spot.stage.name] : [spot.job.name, spot.step?.name]).filter((name) => name != null), lineNumber = Number(issue.data?.logFileLineNumber ?? Number.NaN);
+    let place2 = (spot.job === null ? [spot.stage.name] : [spot.job.name, spot.step?.name]).filter((name) => name != null), lineNumber = Number(issue.data?.logFileLineNumber ?? Number.NaN);
     return {
       jobId: spot.job?.id ?? null,
       kind: issue.type,
       lineNumber: Number.isInteger(lineNumber) ? lineNumber : null,
       message: issue.message ?? "",
-      place,
+      place: place2,
       stageId: spot.stage.id,
       stepId: spot.step?.id ?? null
     };
@@ -10767,12 +10860,12 @@ ${issue.message ?? ""}`;
   function fillIssueLink(link, issue) {
     let { ownerDocument: document2 } = link;
     link.className = "bolt-table-link full-width-link-no-padding no-underline-link bolt-link fix-ado-issue", link.dataset.kind = issue.kind;
-    let place = createElement(document2, {
+    let place2 = createElement(document2, {
       className: "padding-horizontal-16 padding-vertical-8 text-ellipsis separator-line-top secondary-text body-s fix-ado-issue-place",
       tag: "div",
       text: issue.place.join(" / ")
     }), output = createElement(document2, { className: "flex-column", tag: "div" });
-    return output.append(createOutputLine(document2, issue)), link.append(place, output), link;
+    return output.append(createOutputLine(document2, issue)), link.append(place2, output), link;
   }
   function createBoxHeader(document2, box) {
     let text = createElement(document2, {
@@ -13584,13 +13677,13 @@ ${content}`
     return drawn.find((candidate) => isRowOf(candidate, filePath, changedPaths))?.row ?? null;
   }
   function drawnRowOf(path, { changedPaths, drawn, listing }) {
-    let place = listing?.paths.indexOf(path) ?? -1;
-    return listing === null || place === -1 ? fileRowOf(drawn, path, changedPaths) : drawn[listing.placeOfDrawn.indexOf(place)]?.row ?? null;
+    let place2 = listing?.paths.indexOf(path) ?? -1;
+    return listing === null || place2 === -1 ? fileRowOf(drawn, path, changedPaths) : drawn[listing.placeOfDrawn.indexOf(place2)]?.row ?? null;
   }
   function drawnPaths({ drawn, listing }) {
     return drawn.map((_row, index) => {
-      let place = listing?.placeOfDrawn[index];
-      return place === void 0 ? null : listing?.paths[place] ?? null;
+      let place2 = listing?.placeOfDrawn[index];
+      return place2 === void 0 ? null : listing?.paths[place2] ?? null;
     });
   }
   function treeNow(document2, changedPaths) {
@@ -16071,9 +16164,9 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       input.checked = isViewed, label.setAttribute(PATH_ATTRIBUTE, header.path), state?.onToggle(header, isViewed);
     }), label.append(input, LABEL3), label;
   }
-  function toggleIn2(container, place, { path, state }) {
+  function toggleIn2(container, place2, { path, state }) {
     let toggle = container.querySelector(`:scope .${TOGGLE_CLASS4}`) ?? createToggle2(container.ownerDocument);
-    toggle.isConnected || place(toggle), toggle.setAttribute(PATH_ATTRIBUTE, path);
+    toggle.isConnected || place2(toggle), toggle.setAttribute(PATH_ATTRIBUTE, path);
     let input = toggle.querySelector("input"), isViewed = state.isViewed(path);
     input !== null && input.checked !== isViewed && (input.checked = isViewed);
   }
@@ -17169,6 +17262,111 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     styles: [style_default16]
   };
 
+  // azure-devops/src/features/linked-work-item/work-item-group-rows.ts
+  var GROUP_ROW_CLASS = "fix-ado-work-item-group", PULL_REQUEST_ROW_SELECTOR2 = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
+  function placeBefore(list, node, before) {
+    node.parentNode === list ? list.moveBefore(node, before) : before === null ? list.append(node) : before.before(node);
+  }
+  function placeInOrder(list, ordered, shown) {
+    if (ordered.length === shown.length && ordered.every((node, index) => node === shown[index]))
+      return;
+    let after = shown.at(-1)?.nextSibling ?? null;
+    for (let node of ordered)
+      placeBefore(list, node, after);
+  }
+  function createGroupRow(list, key) {
+    let { ownerDocument } = list, row = ownerDocument.createElement("tr");
+    row.className = GROUP_ROW_CLASS, row.dataset.fixAdoWorkItemGroup = key;
+    let cell2 = ownerDocument.createElement("td");
+    return cell2.colSpan = list.closest("table")?.querySelectorAll("col").length ?? 1, row.append(cell2), row;
+  }
+  function groupRowFor(list, key) {
+    return [
+      ...list.querySelectorAll(`:scope > .${GROUP_ROW_CLASS}`)
+    ].find((row) => row.dataset.fixAdoWorkItemGroup === key) ?? createGroupRow(list, key);
+  }
+  var workItemHref = (basePath2, workItemId) => workItemId === null ? null : `${basePath2}/_workitems/edit/${workItemId}`;
+  function createGroupTitle(document2, href, { label, title }) {
+    if (href === null)
+      return [Object.assign(document2.createElement("span"), { textContent: label })];
+    let link = Object.assign(document2.createElement("a"), { textContent: label });
+    if (link.setAttribute("href", href), link.target = "_blank", link.rel = "noopener", title === null)
+      return [link];
+    let titleText = Object.assign(document2.createElement("span"), {
+      className: "fix-ado-work-item-group-title",
+      textContent: title
+    });
+    return [link, " ", titleText];
+  }
+  function showGroupTitle(row, basePath2, group2) {
+    let [cell2] = row.cells, href = workItemHref(basePath2, group2.workItemId), shown = JSON.stringify([href, group2.label, group2.title]);
+    cell2 === void 0 || row.dataset.fixAdoShownTitle === shown || (cell2.replaceChildren(...createGroupTitle(row.ownerDocument, href, group2)), row.dataset.fixAdoShownTitle = shown);
+  }
+  var rowIndex = (row) => Number(row.getAttribute("aria-rowindex"));
+  function orderedNodes(list, basePath2, groups) {
+    return groups === null ? [...list.querySelectorAll(PULL_REQUEST_ROW_SELECTOR2)].toSorted(
+      (first, second) => rowIndex(first) - rowIndex(second)
+    ) : groups.flatMap((group2) => {
+      let groupRow = groupRowFor(list, group2.key);
+      return showGroupTitle(groupRow, basePath2, group2), [groupRow, ...group2.rows];
+    });
+  }
+  function showWorkItemGroups(list, basePath2, groups) {
+    let shownGroupRows = [...list.querySelectorAll(`:scope > .${GROUP_ROW_CLASS}`)];
+    if (groups === null && shownGroupRows.length === 0)
+      return;
+    let managed = /* @__PURE__ */ new Set([...shownGroupRows, ...list.querySelectorAll(PULL_REQUEST_ROW_SELECTOR2)]), shown = [...list.children].filter((child) => managed.has(child)), ordered = orderedNodes(list, basePath2, groups), kept = new Set(ordered);
+    for (let groupRow of shownGroupRows.filter((row) => !kept.has(row)))
+      groupRow.remove();
+    placeInOrder(
+      list,
+      ordered,
+      shown.filter((node) => node.isConnected)
+    );
+  }
+  var LOADING_ATTRIBUTE = "data-fix-ado-groups-loading";
+  function showGroupsLoading(list, isLoading) {
+    let table = list.closest("table");
+    table === null || table.hasAttribute(LOADING_ATTRIBUTE) === isLoading || (table.toggleAttribute(LOADING_ATTRIBUTE, isLoading), isLoading ? table.setAttribute("aria-busy", "true") : table.removeAttribute("aria-busy"));
+  }
+  var HUE_ATTRIBUTE = "data-fix-ado-work-item-hue", HUE_PROPERTY = "--fix-ado-work-item-hue", FULL_TURN = 360, BLUE_HUE = 250, GROUP_ROW_SELECTOR = ":scope > tr.fix-ado-work-item-group";
+  function showHue(element4, hue) {
+    let shown = hue === null ? null : String(hue);
+    element4.getAttribute(HUE_ATTRIBUTE) !== shown && (shown === null ? (element4.removeAttribute(HUE_ATTRIBUTE), element4.style.removeProperty(HUE_PROPERTY)) : (element4.setAttribute(HUE_ATTRIBUTE, shown), element4.style.setProperty(HUE_PROPERTY, shown)));
+  }
+  var singleWorkItem = (linked) => linked?.ids.length === 1 ? linked.ids[0] ?? null : null;
+  function coloredWorkItems({ rows, isGrouped }) {
+    let counts = /* @__PURE__ */ new Map();
+    for (let { linked } of rows) {
+      let id = singleWorkItem(linked);
+      id !== null && counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, count]) => isGrouped || count > 1).map(([id]) => id));
+  }
+  function workItemHues(workItemIds) {
+    let ids = [...new Set(workItemIds)].toSorted((first, second) => first - second);
+    return new Map(
+      ids.map((id, index) => [
+        id,
+        Math.floor(BLUE_HUE + (index + 1) * FULL_TURN / (ids.length + 1)) % FULL_TURN
+      ])
+    );
+  }
+  function showListColors({ list, rows, isGrouped }, colored, hues) {
+    let hueOf2 = (id) => id !== null && colored.has(id) ? hues.get(id) ?? null : null;
+    for (let { row, linked } of rows)
+      showHue(row, hueOf2(singleWorkItem(linked)));
+    for (let groupRow of list.querySelectorAll(GROUP_ROW_SELECTOR)) {
+      let id = Number(groupRow.dataset.fixAdoWorkItemGroup);
+      showHue(groupRow, isGrouped && Number.isInteger(id) ? hueOf2(id) : null);
+    }
+  }
+  function showWorkItemColors(lists) {
+    let colored = lists.map((list) => coloredWorkItems(list)), hues = workItemHues(colored.flatMap((ids) => [...ids]));
+    for (let [index, list] of lists.entries())
+      showListColors(list, colored[index] ?? /* @__PURE__ */ new Set(), hues);
+  }
+
   // azure-devops/src/features/linked-work-item/linked-work-item-fetcher.ts
   var LINKED_WORK_ITEMS_REFRESH_INTERVAL_MS = 3e5;
   async function fetchLinkedWorkItems(client, pullRequest) {
@@ -17296,69 +17494,6 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     placeInTabbar(document2, toggle) || placeAboveLists(document2, toggle), onToggleBySwitch.set(toggle, state.onToggle), showSwitchOn(toggle, state.isOn);
   }
 
-  // azure-devops/src/features/linked-work-item/work-item-group-rows.ts
-  var GROUP_ROW_CLASS = "fix-ado-work-item-group", PULL_REQUEST_ROW_SELECTOR2 = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
-  function placeBefore(list, node, before) {
-    node.parentNode === list ? list.moveBefore(node, before) : before === null ? list.append(node) : before.before(node);
-  }
-  function placeInOrder(list, ordered, shown) {
-    if (ordered.length === shown.length && ordered.every((node, index) => node === shown[index]))
-      return;
-    let after = shown.at(-1)?.nextSibling ?? null;
-    for (let node of ordered)
-      placeBefore(list, node, after);
-  }
-  function createGroupRow(list, key) {
-    let { ownerDocument } = list, row = ownerDocument.createElement("tr");
-    row.className = GROUP_ROW_CLASS, row.dataset.fixAdoWorkItemGroup = key;
-    let cell2 = ownerDocument.createElement("td");
-    return cell2.colSpan = list.closest("table")?.querySelectorAll("col").length ?? 1, row.append(cell2), row;
-  }
-  function groupRowFor(list, key) {
-    return [
-      ...list.querySelectorAll(`:scope > .${GROUP_ROW_CLASS}`)
-    ].find((row) => row.dataset.fixAdoWorkItemGroup === key) ?? createGroupRow(list, key);
-  }
-  var workItemHref = (basePath2, workItemId) => workItemId === null ? null : `${basePath2}/_workitems/edit/${workItemId}`;
-  function createGroupTitle(document2, href, { label, title }) {
-    if (href === null)
-      return [Object.assign(document2.createElement("span"), { textContent: label })];
-    let link = Object.assign(document2.createElement("a"), { textContent: label });
-    if (link.setAttribute("href", href), link.target = "_blank", link.rel = "noopener", title === null)
-      return [link];
-    let titleText = Object.assign(document2.createElement("span"), {
-      className: "fix-ado-work-item-group-title",
-      textContent: title
-    });
-    return [link, " ", titleText];
-  }
-  function showGroupTitle(row, basePath2, group2) {
-    let [cell2] = row.cells, href = workItemHref(basePath2, group2.workItemId), shown = JSON.stringify([href, group2.label, group2.title]);
-    cell2 === void 0 || row.dataset.fixAdoShownTitle === shown || (cell2.replaceChildren(...createGroupTitle(row.ownerDocument, href, group2)), row.dataset.fixAdoShownTitle = shown);
-  }
-  var rowIndex = (row) => Number(row.getAttribute("aria-rowindex"));
-  function orderedNodes(list, basePath2, groups) {
-    return groups === null ? [...list.querySelectorAll(PULL_REQUEST_ROW_SELECTOR2)].toSorted(
-      (first, second) => rowIndex(first) - rowIndex(second)
-    ) : groups.flatMap((group2) => {
-      let groupRow = groupRowFor(list, group2.key);
-      return showGroupTitle(groupRow, basePath2, group2), [groupRow, ...group2.rows];
-    });
-  }
-  function showWorkItemGroups(list, basePath2, groups) {
-    let shownGroupRows = [...list.querySelectorAll(`:scope > .${GROUP_ROW_CLASS}`)];
-    if (groups === null && shownGroupRows.length === 0)
-      return;
-    let managed = /* @__PURE__ */ new Set([...shownGroupRows, ...list.querySelectorAll(PULL_REQUEST_ROW_SELECTOR2)]), shown = [...list.children].filter((child) => managed.has(child)), ordered = orderedNodes(list, basePath2, groups), kept = new Set(ordered);
-    for (let groupRow of shownGroupRows.filter((row) => !kept.has(row)))
-      groupRow.remove();
-    placeInOrder(
-      list,
-      ordered,
-      shown.filter((node) => node.isConnected)
-    );
-  }
-
   // azure-devops/src/features/linked-work-item/style.css
   var style_default17 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
 .fix-ado-linked-work-item::before {
@@ -17398,6 +17533,51 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
 .fix-ado-work-item-group-title {
   color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
 }
+
+/* A work item's colour: a 3px bar at the front of its rows and its group row, over the line
+   under each, so a group's bar runs on. On a row Azure DevOps marks with something new, the bar
+   is 5px and takes the place of the blue mark, which would not read next to it. The work item's link takes
+   the same colour. work-item-group-rows.ts sets the hue. Not in Windows 98 mode, nor while the
+   table shows its skeleton. */
+:root:not([data-fix-ado-win98])
+  :is(a.bolt-table-row, tr.fix-ado-work-item-group)[data-fix-ado-work-item-hue] {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset-block: 0 -1px;
+    inset-inline-start: 0;
+    width: 3px;
+    background: oklch(0.65 0.15 var(--fix-ado-work-item-hue));
+    pointer-events: none;
+  }
+
+  &.bolt-list-row-marked::after {
+    width: 5px;
+  }
+
+  /* Azure DevOps's own list draws its blue mark as the first cell's left border. */
+  &.bolt-list-row-marked > .bolt-list-cell:first-child {
+    border-left-color: transparent;
+  }
+
+  & .fix-ado-linked-work-item,
+  &.fix-ado-work-item-group > td > a {
+    color: oklch(0.65 0.15 var(--fix-ado-work-item-hue));
+  }
+}
+
+table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
+  display: none;
+}
+
+@media (forced-colors: active) {
+  [data-fix-ado-work-item-hue]::after {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+}
 `;
 
   // azure-devops/src/features/linked-work-item/index.ts
@@ -17412,6 +17592,12 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
     }
     return groupByWorkItem(linkedRows);
   }
+  function withLinkedWorkItems(rows, fetcher) {
+    return rows.map(({ row, pullRequest }) => ({
+      linked: fetcher.linkedWorkItems(pullRequest.pullRequestId),
+      row
+    }));
+  }
   function showLinkedWorkItemLabels(rows, fetcher, isGrouped) {
     for (let { row, pullRequest } of rows) {
       let linked = isGrouped ? null : fetcher.linkedWorkItems(pullRequest.pullRequestId);
@@ -17419,8 +17605,8 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
     }
   }
   var linkedWorkItem = {
-    change: { kind: "updated", version: "1.27.0" },
-    description: "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. A switch groups the lists by work item, each under its work item's id and title on a grey row.",
+    change: { kind: "updated", version: "1.28.0" },
+    description: "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. Pull requests of the same work item share a colour bar at the front, and that colour on the id. A switch groups the lists by work item, each under its work item's id and title on a grey row, with a placeholder while the work items load.",
     id: "linked-work-item",
     name: "Linked work item",
     start({ basePath: basePath2, client, document: document2, now }) {
@@ -17430,11 +17616,16 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
         now
       }), isGrouped = GM_getValue(IS_GROUPED_KEY, !1), isList = !1;
       function showAll() {
+        let colored = [];
         for (let list of document2.querySelectorAll(LIST_SELECTOR)) {
           let rows = findRows(list), groups = isList && isGrouped ? groupsOf2(rows, fetcher) : null;
-          showWorkItemGroups(list, basePath2, groups), showLinkedWorkItemLabels(rows, fetcher, groups !== null);
+          showWorkItemGroups(list, basePath2, groups), showGroupsLoading(list, isList && isGrouped && groups === null && rows.length > 0), showLinkedWorkItemLabels(rows, fetcher, groups !== null), colored.push({
+            isGrouped: groups !== null,
+            list,
+            rows: isList ? withLinkedWorkItems(rows, fetcher) : []
+          });
         }
-        showListSwitch(
+        showWorkItemColors(colored), showListSwitch(
           document2,
           GROUP_SWITCH,
           isList ? { isOn: isGrouped, onToggle: toggleGroups } : null
@@ -17450,175 +17641,6 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
       };
     },
     styles: [switch_default, list_switch_default, style_default17]
-  };
-
-  // azure-devops/src/features/one-line-rows/one-line-rows.ts
-  var ONE_LINE_ATTRIBUTE = "data-fix-ado-one-line";
-  function showOneLineRows(document2, isOneLine) {
-    let root = document2.documentElement;
-    root.hasAttribute(ONE_LINE_ATTRIBUTE) !== isOneLine && root.toggleAttribute(ONE_LINE_ATTRIBUTE, isOneLine);
-  }
-  function isWindows98Mode(document2) {
-    return Object.hasOwn(document2.documentElement.dataset, "fixAdoWin98");
-  }
-
-  // azure-devops/src/features/one-line-rows/style.css
-  var style_default18 = `/* Each pull request on one line, as design B. one-line-rows.ts marks <html> on a list page while
-   the One line switch is on. Windows 98 mode lays the rows out itself, so it is left alone. */
-:root[data-fix-ado-one-line]:not([data-fix-ado-win98]) .repos-pr-list {
-  /* The columns after the spacer: author, title, reviewers, comments, time. */
-  & > colgroup > col:nth-child(2) {
-    width: 32px !important;
-  }
-
-  & > colgroup > col:nth-child(4) {
-    width: 112px !important;
-  }
-
-  & > colgroup > col:nth-child(5) {
-    width: 60px !important;
-  }
-
-  & > colgroup > col:nth-child(6) {
-    width: 148px !important;
-  }
-
-  & .bolt-list-cell {
-    height: 32px;
-  }
-
-  /* Azure DevOps pads each cell 9px 12px. */
-  & .bolt-table-cell-content {
-    padding-block: 0;
-    padding-inline: 6px;
-  }
-
-  /* The row's More button: 24px, as its 34px would make the row taller. */
-  & .bolt-table-cell-side-action .bolt-button {
-    padding: 4px;
-  }
-
-  /* The author, and each reviewer: 20px avatars. The initials scale with the size. */
-  & :is([aria-colindex="1"], .pr-reviewer) :is(.bolt-coin, .bolt-coin-content) {
-    --fix-ado-avatar-size: 20px !important;
-    width: 20px;
-    height: 20px;
-  }
-
-  /* The title, then the line under it to its right, which takes the space left. */
-  & .bolt-table-two-line-cell > .bolt-table-cell-content {
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-  }
-
-  & .bolt-table-two-line-cell-item:first-child {
-    flex: 0 1 auto;
-    min-width: 0;
-  }
-
-  & .bolt-table-two-line-cell-item:nth-child(2) {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-
-  /* A step under Azure DevOps's sizes: titles 14px for its 15px, comments and time 13px for
-     its 14px. The line under the title keeps its 12px. */
-  & .bolt-table-two-line-cell-item .body-l {
-    font-size: 14px;
-  }
-
-  & :is([aria-colindex="4"], [aria-colindex="5"]) .bolt-table-cell-content {
-    font-size: 13px;
-  }
-
-  /* The pipeline status before the title. */
-  & .fix-ado-pipeline-status {
-    order: -1;
-    width: 14px;
-    height: 14px;
-    margin: 0 8px 0 0;
-  }
-
-  /* Reviewers overlap, each with a ring in the row's colour. Required ones glow less. */
-  & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) > .pr-reviewer {
-    margin: 0 -4px 0 0 !important;
-  }
-
-  /* A row, so the vote icon's empty wrapper sits beside the avatar instead of on a line
-     under it. The icon itself is placed on the reviewer as before. */
-  & .pr-reviewer {
-    display: flex;
-  }
-
-  & .pr-reviewer .bolt-coin {
-    border-radius: 50%;
-    box-shadow: 0 0 0 1.5px var(--background-color, #fff);
-  }
-
-  & .pr-reviewer[data-fix-ado-required] .bolt-coin {
-    box-shadow:
-      0 0 0 1.5px var(--background-color, #fff),
-      0 0 0 3px var(--communication-background, rgb(0, 120, 212));
-  }
-
-  /* Group by work item's group titles: 12px, as the line under a title. */
-  & .fix-ado-work-item-group > td {
-    font-size: 12px;
-  }
-
-  /* The time: the publish time alone when it shows, as it says more than the update time. */
-  & [aria-colindex="5"] .bolt-table-cell-content {
-    justify-content: flex-end;
-  }
-
-  & .bolt-table-cell-content:has(> .fix-ado-published-since) {
-    flex-direction: row;
-    align-items: center;
-
-    & > :not(.fix-ado-published-since) {
-      display: none;
-    }
-  }
-}
-
-/* Forced colors drop box shadows, so a required reviewer keeps an outline. */
-@media (forced-colors: active) {
-  :root[data-fix-ado-one-line]:not([data-fix-ado-win98])
-    .repos-pr-list
-    .pr-reviewer[data-fix-ado-required]
-    .bolt-coin {
-    outline: 2px solid Highlight;
-    outline-offset: 1px;
-  }
-}
-`;
-
-  // azure-devops/src/features/one-line-rows/index.ts
-  var IS_ONE_LINE_KEY = "one-line-rows-on", ONE_LINE_SWITCH = { className: "fix-ado-one-line-switch", label: "One line" }, oneLineRows = {
-    change: { kind: "new", version: "1.27.0" },
-    description: "Each pull request in a list on one line, so more of them fit on the screen. A One line switch on the lists flips between one line and Azure DevOps's two. Not in Windows 98 mode.",
-    id: "one-line-rows",
-    name: "Pull requests on one line",
-    start({ document: document2 }) {
-      let isOneLine = GM_getValue(IS_ONE_LINE_KEY, !1), isList = !1;
-      function show3() {
-        showOneLineRows(document2, isList && isOneLine), showListSwitch(
-          document2,
-          ONE_LINE_SWITCH,
-          isList ? { isOn: isOneLine, onToggle: toggle } : null
-        );
-      }
-      function toggle() {
-        isOneLine = !isOneLine, GM_setValue(IS_ONE_LINE_KEY, isOneLine), show3();
-      }
-      return {
-        sync({ page }) {
-          isList = (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") && !isWindows98Mode(document2), show3();
-        }
-      };
-    },
-    styles: [switch_default, list_switch_default, style_default18]
   };
 
   // azure-devops/src/features/pipeline-status/index.ts
@@ -17643,8 +17665,14 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
     styles: [pipeline_status_icon_default]
   };
 
+  // azure-devops/src/core/elapsed-time.ts
+  function largestWholeUnit(elapsedMs) {
+    let days = Math.floor(elapsedMs / 864e5);
+    return days >= 365 ? [Math.floor(days / 365), "year"] : days >= 30 ? [Math.floor(days / 30), "month"] : days >= 1 ? [days, "day"] : elapsedMs >= 36e5 ? [Math.floor(elapsedMs / 36e5), "hour"] : [Math.floor(elapsedMs / 6e4), "minute"];
+  }
+
   // azure-devops/src/features/published-since/published-since.ts
-  var relativeTime2 = new Intl.RelativeTimeFormat("en", { numeric: "always" }), isDraftUpdate = (thread) => thread.isDeleted !== !0 && thread.properties?.CodeReviewThreadType?.$value === "IsDraftUpdate" && thread.publishedDate !== void 0;
+  var MAX_WAIT_MS = 2 * 864e5, SUNDAY = 0, SATURDAY = 6, relativeTime2 = new Intl.RelativeTimeFormat("en", { numeric: "always" }), isDraftUpdate = (thread) => thread.isDeleted !== !0 && thread.properties?.CodeReviewThreadType?.$value === "IsDraftUpdate" && thread.publishedDate !== void 0;
   function publishedAt(creationDate, threads) {
     let draftUpdates = threads.filter((thread) => isDraftUpdate(thread)).map((thread) => Date.parse(thread.publishedDate ?? ""));
     return draftUpdates.length > 0 ? Math.max(...draftUpdates) : Date.parse(creationDate);
@@ -17656,20 +17684,16 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
     let [count, unit] = largestWholeUnit(elapsed);
     return `Published ${relativeTime2.format(-count, unit)}`;
   }
-  function largestWholeUnit(elapsedMs) {
-    let days = Math.floor(elapsedMs / 864e5);
-    return days >= 365 ? [Math.floor(days / 365), "year"] : days >= 30 ? [Math.floor(days / 30), "month"] : days >= 1 ? [days, "day"] : elapsedMs >= 36e5 ? [Math.floor(elapsedMs / 36e5), "hour"] : [Math.floor(elapsedMs / 6e4), "minute"];
-  }
   function weekdayTimeBetween(fromMs, toMs) {
     let total = 0, start = fromMs;
     for (; start < toMs; ) {
       let day = new Date(start), nextMidnight = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime(), end = Math.min(nextMidnight, toMs);
-      day.getDay() !== 0 && day.getDay() !== 6 && (total += end - start), start = end;
+      day.getDay() !== SUNDAY && day.getDay() !== SATURDAY && (total += end - start), start = end;
     }
     return total;
   }
   function isPublishedTooLongAgo(publishedAtMs, nowMs) {
-    return weekdayTimeBetween(publishedAtMs, nowMs) > 1728e5;
+    return weekdayTimeBetween(publishedAtMs, nowMs) > MAX_WAIT_MS;
   }
   function showsPublishedSince(page) {
     return page.kind === "pull-request-inbox" || page.kind === "pull-request-list" && page.listPage.status === "active";
@@ -17723,7 +17747,7 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
   }
 
   // azure-devops/src/features/published-since/style.css
-  var style_default19 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
+  var style_default18 = `/* The publish time under the update time in pull request lists. pr-list.ts adds the line. */
 .bolt-table-cell-content:has(> .fix-ado-published-since) {
   flex-direction: column;
   align-items: flex-start;
@@ -17772,7 +17796,7 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
         }
       };
     },
-    styles: [style_default19]
+    styles: [style_default18]
   };
 
   // azure-devops/src/features/required-reviewers/reviewer-fetcher.ts
@@ -17841,7 +17865,7 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
   }
 
   // azure-devops/src/features/required-reviewers/style.css
-  var style_default20 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
+  var style_default19 = `/* Required reviewers in the pull request list. pr-list.ts sets the data attributes. */
 
 /* A glow that spills outside the circle, so the circle keeps its full size. */
 .pr-reviewer[data-fix-ado-required] .bolt-coin {
@@ -17888,7 +17912,1006 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
         }
       };
     },
-    styles: [style_default20]
+    styles: [style_default19]
+  };
+
+  // azure-devops/src/features/table-rows/table-age.ts
+  var AGE_CELL_SELECTOR = '[aria-colindex="5"]', AGE_CLASS = "fix-ado-table-age", STALE_ATTRIBUTE = "data-fix-ado-is-stale", AGE_LETTERS = ["c", "·", "u", "·", "p"], AGE_TOOLTIP = "Age: created · updated · published", NO_AGE = "–", PUBLISHED_SINCE_CLASS2 = "fix-ado-published-since", TOO_LONG_AGO_CLASS2 = "fix-ado-published-since-too-long", PUBLISHED_PATTERN = /^Published (?:just now|(?<count>\d+) (?<unit>minute|hour|day|month|year)s? ago)$/u, CREATED_WORD = "Created", SHORT_UNITS = {
+    day: "d",
+    hour: "h",
+    minute: "m",
+    month: "mo",
+    year: "y"
+  }, AGES = ["created", "updated", "published"], relativeTime3 = new Intl.RelativeTimeFormat("en", { numeric: "always" }), textOf = (element4) => (element4.textContent ?? "").replaceAll(/\s+/gu, " ").trim();
+  function ageSince(word, at, now) {
+    let elapsed = now - at;
+    if (elapsed < 6e4)
+      return { full: `${word} just now`, short: "now" };
+    let [count, unit] = largestWholeUnit(elapsed);
+    return {
+      full: `${word} ${relativeTime3.format(-count, unit)}`,
+      short: `${count}${SHORT_UNITS[unit] ?? ""}`
+    };
+  }
+  function publishedAge(row) {
+    let published = row.querySelector(`.${PUBLISHED_SINCE_CLASS2}`), full = published === null ? "" : textOf(published), groups = PUBLISHED_PATTERN.exec(full)?.groups;
+    if (published === null || groups === void 0)
+      return null;
+    let { count, unit } = groups;
+    return {
+      full,
+      isStale: published.classList.contains(TOO_LONG_AGO_CLASS2),
+      short: unit === void 0 ? "now" : `${count}${SHORT_UNITS[unit] ?? ""}`
+    };
+  }
+  function siteTime(row) {
+    let time = row.querySelector(`${AGE_CELL_SELECTOR} time.bolt-time-item[datetime]`), line2 = time?.closest(".bolt-table-cell-content > *");
+    return !time || !line2 ? null : {
+      at: Date.parse(time.getAttribute("datetime") ?? ""),
+      isCreated: textOf(line2).startsWith(CREATED_WORD)
+    };
+  }
+  function needsCreationDate(row) {
+    return siteTime(row)?.isCreated !== !0;
+  }
+  function pullRequestIdOf(row) {
+    return Number(/\/pullrequest\/(?<id>\d+)/u.exec(row.getAttribute("href") ?? "")?.groups?.id);
+  }
+  function agesOf(row, { createdAt: createdAt2, now }) {
+    let time = siteTime(row), created = time?.isCreated === !0 ? time.at : createdAt2(pullRequestIdOf(row));
+    return {
+      created: created === null ? null : ageSince("Created", created, now),
+      published: publishedAge(row),
+      updated: time === null || time.isCreated ? null : ageSince("Updated", time.at, now)
+    };
+  }
+  function slotsOf(cell2) {
+    let shown = cell2.querySelector(`:scope > .${AGE_CLASS}`);
+    if (shown !== null)
+      return shown;
+    let { ownerDocument } = cell2, slots = Object.assign(ownerDocument.createElement("span"), { className: AGE_CLASS });
+    slots.setAttribute("aria-hidden", "true");
+    let parts = AGES.flatMap((age, index) => [
+      ...index === 0 ? [] : [
+        Object.assign(ownerDocument.createElement("span"), {
+          className: `${AGE_CLASS}-dot`,
+          textContent: "·"
+        })
+      ],
+      Object.assign(ownerDocument.createElement("span"), { className: `${AGE_CLASS}-${age}` })
+    ]);
+    return slots.append(...parts), cell2.append(slots), slots;
+  }
+  function showAttribute(element4, name, value) {
+    element4.getAttribute(name) !== value && (value === null ? element4.removeAttribute(name) : element4.setAttribute(name, value));
+  }
+  function showSlots(slots, ages) {
+    for (let age of AGES) {
+      let slot = slots.querySelector(`.${AGE_CLASS}-${age}`), text = ages[age]?.short ?? NO_AGE;
+      slot !== null && slot.textContent !== text && (slot.textContent = text);
+    }
+    let published = slots.querySelector(`.${AGE_CLASS}-published`);
+    published !== null && showAttribute(published, STALE_ATTRIBUTE, ages.published?.isStale === !0 ? "" : null);
+  }
+  function showAge(row, times) {
+    let cell2 = row.querySelector(`:scope > ${AGE_CELL_SELECTOR}`);
+    if (!cell2)
+      return;
+    let ages = agesOf(row, times);
+    showSlots(slotsOf(cell2), ages);
+    let full = AGES.flatMap((age) => ages[age]?.full ?? []).join(" · ");
+    showTooltip(cell2, full === "" ? null : full);
+  }
+  function showAgeHead(cell2) {
+    let { ownerDocument } = cell2, legend = Object.assign(ownerDocument.createElement("span"), {
+      className: `${AGE_CLASS}-legend`
+    });
+    legend.append(
+      ...AGE_LETTERS.map(
+        (letter) => Object.assign(ownerDocument.createElement("span"), { textContent: letter })
+      )
+    ), cell2.replaceChildren(legend), showTooltip(cell2, AGE_TOOLTIP);
+  }
+  function removeAge(row) {
+    let cell2 = row.querySelector(`:scope > ${AGE_CELL_SELECTOR}`);
+    cell2?.querySelector(`:scope > .${AGE_CLASS}`)?.remove(), cell2 && showTooltip(cell2, null);
+  }
+
+  // azure-devops/src/features/table-rows/table-rows.ts
+  var TABLE_ATTRIBUTE = "data-fix-ado-table", HEAD_CLASS = "fix-ado-table-head", CREATED_BY_ME_ATTRIBUTE = "data-fix-ado-created-by-me", CREATED_BY_ME_TITLE = "Created by me", CARD_SELECTOR3 = ".repos-pr-section-card", CARD_TITLE_SELECTOR2 = ".repos-pr-section-header-title > .text-ellipsis", AUTHOR_CELL_SELECTOR = '[aria-colindex="1"]', ID_CLASS = "fix-ado-table-id", REPOSITORY_CLASS = "fix-ado-table-repository", HAS_REPOSITORY_ATTRIBUTE = "data-fix-ado-has-repository", TARGET_CLASS = "fix-ado-table-target", BRANCH_CLASS = "fix-ado-table-branch", WORK_ITEM_CLASS = "fix-ado-table-work-item", WORK_ITEM_LABEL_CLASS = "fix-ado-linked-work-item", LIST_SELECTOR2 = "table.repos-pr-list", ROW_SELECTOR6 = ':scope > tbody > a.bolt-table-row[href*="/pullrequest/"]', LINE_UNDER_TITLE_SELECTOR2 = ".bolt-table-two-line-cell-item:nth-child(2) .secondary-text", COLUMNS = [
+    ["pipeline", ""],
+    ["title", "Pull request"],
+    ["author", "Author"],
+    ["id", "Id"],
+    ["repository", "Repository"],
+    ["target", "Target"],
+    ["work-item", "Work item"],
+    ["reviewers", "Reviewers"],
+    ["comments", "Comments"],
+    ["age", "Age"]
+  ];
+  function createHeadCell(document2, column, label) {
+    let cell2 = document2.createElement("th");
+    return cell2.className = `${HEAD_CLASS}-${column}`, cell2.textContent = label, column === "age" && showAgeHead(cell2), cell2;
+  }
+  function createHead(document2) {
+    let head = document2.createElement("thead");
+    head.className = HEAD_CLASS;
+    let row = document2.createElement("tr");
+    return row.append(...COLUMNS.map(([column, label]) => createHeadCell(document2, column, label))), head.append(row), head;
+  }
+  function isCreatedByMe(list) {
+    return list.closest(CARD_SELECTOR3)?.querySelector(CARD_TITLE_SELECTOR2)?.textContent?.trim() === CREATED_BY_ME_TITLE;
+  }
+  function markHasRepository(list, isTable) {
+    let hasRepository = isTable && [...list.querySelectorAll(`:scope > tbody > a > .${REPOSITORY_CLASS}`)].some(
+      (cell2) => cell2.textContent !== ""
+    );
+    list.hasAttribute(HAS_REPOSITORY_ATTRIBUTE) !== hasRepository && list.toggleAttribute(HAS_REPOSITORY_ATTRIBUTE, hasRepository);
+  }
+  function markCreatedByMe(list, isTable) {
+    let isMarked = isTable && isCreatedByMe(list);
+    list.hasAttribute(CREATED_BY_ME_ATTRIBUTE) !== isMarked && list.toggleAttribute(CREATED_BY_ME_ATTRIBUTE, isMarked);
+  }
+  function showHead(list, isTable) {
+    let shown = list.querySelector(`:scope > .${HEAD_CLASS}`);
+    if (!isTable) {
+      shown?.remove();
+      return;
+    }
+    let [body] = list.tBodies;
+    shown === null && body !== void 0 && body.before(createHead(list.ownerDocument));
+  }
+  function cellOf(row, className) {
+    let shown = row.querySelector(`:scope > td.${className}`);
+    if (shown !== null)
+      return shown;
+    let cell2 = row.ownerDocument.createElement("td");
+    return cell2.className = className, row.append(cell2), cell2;
+  }
+  function showText(element4, text) {
+    element4.textContent !== text && (element4.textContent = text);
+  }
+  function showAuthor(row) {
+    let cell2 = row.querySelector(`:scope > ${AUTHOR_CELL_SELECTOR}`), avatar = cell2?.querySelector(".bolt-coin");
+    if (!cell2 || !avatar)
+      return;
+    let name = avatarName(avatar);
+    showTooltip(cell2, name);
+  }
+  function showId(row) {
+    let id = /\/pullrequest\/(?<id>\d+)/u.exec(row.getAttribute("href") ?? "")?.groups?.id ?? "";
+    showText(cellOf(row, ID_CLASS), `!${id}`);
+  }
+  function showRepository(row) {
+    let repository = row.querySelector(".secondary-text .padding-horizontal-4:not(.monospaced-xs)")?.textContent ?? "", cell2 = cellOf(row, REPOSITORY_CLASS);
+    showText(cell2, repository), showTooltip(cell2, repository);
+  }
+  function showTarget(row) {
+    let branch = row.querySelector(".secondary-text .monospaced-xs")?.textContent ?? "", cell2 = cellOf(row, TARGET_CLASS);
+    showTooltip(cell2, branch);
+    let shownBranch = cell2.querySelector(`:scope > .${BRANCH_CLASS}`);
+    if (shownBranch !== null && cell2.childNodes.length === 1) {
+      showText(shownBranch, branch);
+      return;
+    }
+    cell2.replaceChildren(
+      Object.assign(row.ownerDocument.createElement("span"), {
+        className: BRANCH_CLASS,
+        textContent: branch
+      })
+    );
+  }
+  function showWorkItem(row) {
+    let cell2 = cellOf(row, WORK_ITEM_CLASS), label = row.querySelector(`.${WORK_ITEM_LABEL_CLASS}`);
+    label !== null && label.parentElement !== cell2 && cell2.append(label);
+    let isId = label?.textContent?.startsWith("#") ?? !1;
+    Object.hasOwn(cell2.dataset, "fixAdoIsId") !== isId && cell2.toggleAttribute("data-fix-ado-is-id", isId);
+  }
+  function removeCells(row) {
+    let label = row.querySelector(`.${WORK_ITEM_CLASS} > .${WORK_ITEM_LABEL_CLASS}`);
+    label !== null && row.querySelector(LINE_UNDER_TITLE_SELECTOR2)?.append(label);
+    let author = row.querySelector(`:scope > ${AUTHOR_CELL_SELECTOR}`);
+    author !== null && showTooltip(author, null), removeAge(row);
+    for (let added of row.querySelectorAll(
+      `.${ID_CLASS}, .${REPOSITORY_CLASS}, .${TARGET_CLASS}, .${WORK_ITEM_CLASS}`
+    ))
+      added.remove();
+  }
+  function showCells(row, times) {
+    showAuthor(row), showId(row), showRepository(row), showTarget(row), showWorkItem(row), showAge(row, times);
+  }
+  function showTableRows(document2, isTable, times) {
+    let root = document2.documentElement;
+    root.hasAttribute(TABLE_ATTRIBUTE) !== isTable && root.toggleAttribute(TABLE_ATTRIBUTE, isTable);
+    for (let list of document2.querySelectorAll(LIST_SELECTOR2))
+      showList(list, isTable, times);
+  }
+  function showList(list, isTable, times) {
+    showHead(list, isTable), markCreatedByMe(list, isTable);
+    for (let row of list.querySelectorAll(ROW_SELECTOR6))
+      isTable ? showCells(row, times) : removeCells(row);
+    markHasRepository(list, isTable);
+  }
+  function isWindows98Mode(document2) {
+    return Object.hasOwn(document2.documentElement.dataset, "fixAdoWin98");
+  }
+
+  // azure-devops/src/features/table-rows/creation-dates.ts
+  function createCreationDates({ client, now }) {
+    let fetched = /* @__PURE__ */ new Map(), retryAt = /* @__PURE__ */ new Map(), isFetching = !1;
+    async function fetchOne(pullRequest) {
+      try {
+        fetched.set(
+          pullRequest.pullRequestId,
+          Date.parse(await client.getPullRequestCreationDate(pullRequest))
+        ), retryAt.delete(pullRequest.pullRequestId);
+      } catch {
+        retryAt.set(pullRequest.pullRequestId, now() + FAILED_REQUEST_RETRY_MS);
+      }
+    }
+    let isDue = ({ pullRequestId }) => !fetched.has(pullRequestId) && (retryAt.get(pullRequestId) ?? 0) <= now();
+    return {
+      createdAt: (pullRequestId) => fetched.get(pullRequestId) ?? null,
+      async sync(pullRequests) {
+        if (!isFetching) {
+          isFetching = !0;
+          try {
+            for (let pullRequest of pullRequests.filter((listed) => isDue(listed)))
+              await fetchOne(pullRequest);
+          } finally {
+            isFetching = !1;
+          }
+        }
+      }
+    };
+  }
+
+  // azure-devops/src/features/table-rows/style.css
+  var style_default20 = `/* The pull request lists as a table, as design B of the inbox redesigns. table-rows.ts marks
+   <html> on a list page while the Table switch is on, and adds the header and the cells Azure
+   DevOps has no column for. Each row becomes a grid on the same columns, so the site's cells can
+   take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
+:root[data-fix-ado-table]:not([data-fix-ado-win98]) table.repos-pr-list {
+  --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
+  /* One grid per table; the header and each row are subgrids of it. A column a list does not have
+     is 0px wide, and its cells do not show. The title keeps at least 240px. Repository, Target and
+     Work item are as wide as their longest text in the table, and shrink first, with
+     their full text on hover. */
+  --fix-ado-table-author-width: 72px;
+  --fix-ado-table-repository-width: 0px;
+  --fix-ado-table-work-item-width: minmax(0, max-content);
+  --fix-ado-table-columns: [pipeline] 40px [title] minmax(240px, 1fr) [author]
+    var(--fix-ado-table-author-width) [id] 72px [repository] var(--fix-ado-table-repository-width)
+    [target] minmax(0, max-content) [work-item] var(--fix-ado-table-work-item-width) [reviewers]
+    100px [comments] 92px [age] 130px [more] 32px;
+
+  display: grid;
+  grid-template-columns: var(--fix-ado-table-columns);
+  font-size: 14px;
+  line-height: 20px;
+
+  /* "Created by me" lists only your own pull requests, so it has no Author column. */
+  &[data-fix-ado-created-by-me] {
+    --fix-ado-table-author-width: 0px;
+
+    & :is(.fix-ado-table-head-author, a.bolt-table-row > [aria-colindex="1"]) {
+      display: none;
+    }
+  }
+
+  /* Only the inbox names each pull request's repository: there it gets a column. */
+  &[data-fix-ado-has-repository] {
+    --fix-ado-table-repository-width: minmax(0, max-content);
+  }
+
+  &:not([data-fix-ado-has-repository]) > .fix-ado-table-head th.fix-ado-table-head-repository,
+  &:not([data-fix-ado-has-repository]) > tbody > a.bolt-table-row > .fix-ado-table-repository {
+    display: none;
+  }
+
+  /* Grouped lists show the work item in the group rows instead of a column, also while Linked
+     work item loads the groups. */
+  &:is(:has(.fix-ado-work-item-group), [data-fix-ado-groups-loading]) {
+    --fix-ado-table-work-item-width: 0px;
+  }
+
+  /* While Linked work item loads the groups, the rows show as a skeleton instead of popping from
+     ungrouped to grouped. Each row keeps its height and its text, hidden, so the columns keep
+     their widths; each column shows a grey bar that pulses. */
+  &[data-fix-ado-groups-loading] {
+    & > .fix-ado-table-head th.fix-ado-table-head-work-item,
+    & > tbody > a.bolt-table-row > .fix-ado-table-work-item {
+      display: none;
+    }
+
+    & > tbody > a.bolt-table-row > td {
+      position: relative;
+      color: transparent;
+    }
+
+    & > tbody > a.bolt-table-row > td > * {
+      visibility: hidden;
+    }
+
+    /* The bar every column shares, in :where() so each column's own bar below wins. */
+    & > tbody > a.bolt-table-row > :where(td:not(.bolt-table-cell-side-action))::after,
+    & > tbody > a.bolt-table-row > :where([aria-colindex="2"])::before {
+      content: "";
+      position: absolute;
+      top: 13px;
+      left: 10px;
+      height: 10px;
+      border-radius: 5px;
+      background: var(--fix-ado-table-line);
+      animation: fix-ado-table-skeleton 1.2s ease-in-out infinite alternate;
+    }
+
+    /* The pipeline status, then the title, in rows of three lengths. */
+    & > tbody > a.bolt-table-row > [aria-colindex="2"]::before {
+      top: 10px;
+      left: 14px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="2"]::after {
+      left: 50px;
+      width: 320px;
+    }
+
+    & > tbody > a.bolt-table-row:nth-of-type(3n + 2) > [aria-colindex="2"]::after {
+      width: 220px;
+    }
+
+    & > tbody > a.bolt-table-row:nth-of-type(3n + 3) > [aria-colindex="2"]::after {
+      width: 400px;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="1"]::after {
+      top: 7px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+    }
+
+    & > tbody > a.bolt-table-row > .fix-ado-table-id::after {
+      width: 44px;
+    }
+
+    & > tbody > a.bolt-table-row > .fix-ado-table-repository::after {
+      width: 64px;
+    }
+
+    & > tbody > a.bolt-table-row > .fix-ado-table-target::after {
+      width: 96px;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="3"]::after {
+      width: 56px;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="4"]::after {
+      right: 10px;
+      left: auto;
+      width: 24px;
+    }
+
+    & > tbody > a.bolt-table-row > [aria-colindex="5"]::after {
+      right: 10px;
+      left: auto;
+      width: 96px;
+    }
+  }
+
+  & > colgroup {
+    display: none;
+  }
+
+  & > :is(.fix-ado-table-head, tbody) {
+    display: contents;
+  }
+
+  & > tbody > * {
+    grid-column: 1 / -1;
+  }
+
+  /* The header and the rows: subgrids of the table, so they share its columns. */
+  & > .fix-ado-table-head > tr,
+  & > tbody > a.bolt-table-row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--fix-ado-table-line);
+  }
+
+  & > .fix-ado-table-head > tr > th,
+  & > tbody > a.bolt-table-row > td {
+    display: flex;
+    grid-row: 1;
+    align-items: center;
+    min-width: 0;
+    padding: 0 10px;
+    border: 0;
+  }
+
+  & > .fix-ado-table-head th {
+    height: 32px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: 0.04em;
+    text-align: start;
+    text-transform: uppercase;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  }
+
+  & .fix-ado-table-head-comments,
+  & .fix-ado-table-head-age {
+    justify-content: flex-end;
+  }
+
+  /* A column header that does not fit, such as a shrunk Repository, ends in an ellipsis. */
+  & > .fix-ado-table-head th:not(.fix-ado-table-head-comments, .fix-ado-table-head-age) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 32px;
+  }
+
+  /* Each header cell on its column by name, as some columns are 0px wide. */
+  & .fix-ado-table-head-pipeline {
+    grid-column: pipeline;
+  }
+
+  & .fix-ado-table-head-title {
+    grid-column: title;
+  }
+
+  & .fix-ado-table-head-author {
+    grid-column: author;
+  }
+
+  & .fix-ado-table-head-id {
+    grid-column: id;
+  }
+
+  & .fix-ado-table-head-repository {
+    grid-column: repository;
+  }
+
+  & .fix-ado-table-head-target {
+    grid-column: target;
+  }
+
+  & .fix-ado-table-head-work-item {
+    grid-column: work-item;
+  }
+
+  & .fix-ado-table-head-reviewers {
+    grid-column: reviewers;
+  }
+
+  & .fix-ado-table-head-comments {
+    grid-column: comments;
+  }
+
+  & .fix-ado-table-head-age {
+    grid-column: age;
+  }
+
+  /* Azure DevOps skips drawing rows out of view, which contains each row's layout. A subgrid
+     cannot be contained, so every row is drawn. */
+  & > tbody > a.bolt-table-row {
+    position: relative;
+    content-visibility: visible;
+  }
+
+  /* Something new since the last visit: Azure DevOps's 2px bar, on the row as its first cell is
+     hidden, and its semibold title. */
+  & > tbody > a.bolt-list-row-marked {
+    box-shadow: inset 2px 0 0 rgba(var(--palette-primary-tint-10, 43, 136, 216), 1);
+  }
+
+  & .bolt-list-row-marked .bolt-table-two-line-cell-item .body-l.font-weight-semibold {
+    font-weight: 600;
+  }
+
+  /* No line under the last row: the card ends there. */
+  & > tbody > a.bolt-table-row:not(:has(~ a.bolt-table-row)) {
+    border-bottom: 0;
+  }
+
+  & > tbody > a.bolt-table-row > td {
+    height: 36px;
+  }
+
+  & .bolt-table-cell-content {
+    min-width: 0;
+    padding: 0;
+  }
+
+  /* Azure DevOps's spacer cells on both ends. */
+  & > tbody > a.bolt-table-row > td.bolt-table-cell-compact {
+    display: none;
+  }
+
+  /* The row's More button has its own column on the right, so it covers nothing. */
+  & > tbody > a.bolt-table-row > td.bolt-table-cell-side-action {
+    grid-column: more;
+    justify-content: center;
+    padding: 0;
+  }
+
+  & .bolt-table-cell-side-action .bolt-button {
+    padding: 4px;
+  }
+
+  /* A work item group row: a 28px band, halfway between the page's grey and the card's white,
+     so it stands apart from both. */
+  & > tbody > tr.fix-ado-work-item-group {
+    display: block;
+    background-color: color-mix(
+      in srgb,
+      rgba(var(--palette-neutral-2, 248, 248, 248), 1) 50%,
+      var(--background-color, #fff)
+    );
+    border-bottom: 1px solid var(--fix-ado-table-line);
+  }
+
+  & > tbody > tr.fix-ado-work-item-group > td {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    /* 28px with the line under it. */
+    height: 27px;
+    padding: 0 10px;
+    border-top: 0;
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  }
+
+  /* The row after a group row keeps its own line: the group row has none above it. */
+  & .fix-ado-work-item-group + a.bolt-table-row > .bolt-table-cell {
+    border-top-color: transparent;
+  }
+
+  /* The pipeline status and the title: the status sits in the first column. */
+  /* The status 14px in, so it lines up with the card's 12px chevron above it, 16px in. */
+  & [aria-colindex="2"] {
+    grid-column: pipeline / span 2;
+    overflow: hidden;
+  }
+
+  & > tbody > a.bolt-table-row > [aria-colindex="2"] {
+    padding-left: 14px;
+  }
+
+  & .bolt-table-two-line-cell > .bolt-table-cell-content {
+    flex-direction: row;
+    min-width: 0;
+  }
+
+  & .bolt-table-two-line-cell-item:first-child {
+    overflow: visible;
+    padding: 0;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  & .bolt-table-two-line-cell-item:nth-child(2) {
+    display: none;
+  }
+
+  & .fix-ado-pipeline-status {
+    order: -1;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 0 12px 0 0;
+  }
+
+  & .bolt-table-two-line-cell-item .body-l {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  }
+
+  /* Draft, Auto-complete, Conflicts and the other pills after the title, in Azure DevOps's
+     colours. */
+  & .bolt-table-two-line-cell-item:first-child .bolt-pill {
+    box-sizing: border-box;
+    height: 18px;
+    margin: 0;
+    padding: 0 7px;
+    border-width: 1px;
+    border-style: solid;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+
+    & .bolt-pill-content {
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  /* The author: a 22px avatar, with the name as the cell's tooltip. */
+  & [aria-colindex="1"] {
+    grid-column: author;
+  }
+
+  & :is([aria-colindex="1"], .pr-reviewer) :is(.bolt-coin, .bolt-coin-content) {
+    --fix-ado-avatar-size: 22px !important;
+    width: 22px;
+    height: 22px;
+  }
+
+  &
+    :is(
+      .fix-ado-table-id,
+      .fix-ado-table-repository,
+      .fix-ado-table-target,
+      .fix-ado-table-work-item,
+      [aria-colindex="4"]
+    ) {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  }
+
+  & .fix-ado-table-id {
+    grid-column: id;
+  }
+
+  &
+    > tbody
+    > a.bolt-table-row
+    > :is(.fix-ado-table-repository, .fix-ado-table-target, .fix-ado-table-work-item) {
+    display: block;
+    line-height: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  & .fix-ado-table-repository {
+    grid-column: repository;
+  }
+
+  & .fix-ado-table-target {
+    grid-column: target;
+  }
+
+  & .fix-ado-table-branch {
+    font-family: "Cascadia Mono", Menlo, Consolas, "Courier New", monospace;
+    font-size: 11px;
+  }
+
+  & .fix-ado-table-work-item {
+    grid-column: work-item;
+  }
+
+  & .fix-ado-table-work-item[data-fix-ado-is-id] {
+    color: var(--communication-foreground, rgb(0, 90, 158));
+  }
+
+  /* The work item's place before Linked work item adds the label after its own text. */
+  & .fix-ado-linked-work-item::before {
+    content: none;
+  }
+
+  &:has(.fix-ado-work-item-group) > tbody > a.bolt-table-row > .fix-ado-table-work-item,
+  &:has(.fix-ado-work-item-group) > .fix-ado-table-head th.fix-ado-table-head-work-item {
+    display: none;
+  }
+
+  /* Reviewers: 22px avatars that overlap, each with a ring in the row's colour. Required ones
+     come first with a blue ring. */
+  & [aria-colindex="3"] {
+    grid-column: reviewers;
+
+    & .bolt-table-cell-content > div {
+      min-width: 0;
+    }
+  }
+
+  & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) > .pr-reviewer {
+    display: flex;
+    margin: 0 -5px 0 0 !important;
+  }
+
+  & .pr-reviewer .bolt-coin {
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px var(--background-color, #fff);
+  }
+
+  & .pr-reviewer[data-fix-ado-required] .bolt-coin {
+    box-shadow:
+      0 0 0 1.5px var(--background-color, #fff),
+      0 0 0 3px var(--communication-background, rgb(0, 120, 212));
+  }
+
+  /* A reviewer's vote: an 11px badge on the avatar's corner. */
+  & .repos-pr-reviewer-vote {
+    inset: auto -3px -3px auto;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 11px;
+    height: 11px;
+    border: 1.5px solid var(--background-color, #fff);
+    border-radius: 50%;
+    font-size: 7px;
+  }
+
+  /* The +2 after the reviewers: plain text. */
+  & [aria-colindex="3"] .bolt-pill {
+    min-width: 0;
+    margin-left: 13px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+
+    & .bolt-pill-content {
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  /* Comments: on the right, a 12px icon and the count. */
+  & [aria-colindex="4"] {
+    grid-column: comments;
+    justify-content: flex-end;
+
+    & [role="group"] {
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    & .fluent-icons-enabled {
+      display: flex;
+      flex: none;
+      width: 12px;
+      height: 12px;
+      overflow: clip;
+    }
+
+    /* Azure DevOps moves the active comment icon 4px right and 2px down, which the box would
+       cut off. */
+    & .fabric-icon {
+      position: static;
+      padding: 0;
+      font-size: 12px;
+      line-height: 12px;
+    }
+
+    & .repos-pr-list-comment-count {
+      padding: 0;
+    }
+
+    & .has-active-comments,
+    & [role="group"]:has(.has-active-comments) {
+      color: var(--status-warning-text, rgba(184, 94, 6, 1));
+    }
+  }
+
+  /* The age as "5d · 3d · 2d": created, updated and published, each in a fixed slot so the
+     dots line up. The site's full time stays for screen readers, and shows as the tooltip. */
+  & [aria-colindex="5"] {
+    grid-column: age;
+    justify-content: flex-end;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+
+    &:has(> .fix-ado-table-age) > .bolt-table-cell-content {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+
+  /* Each age centred in its slot and the dots centred between them; the header's c, u and p
+     sit in the same grid, right above the ages they name. */
+  & :is(.fix-ado-table-age, .fix-ado-table-age-legend) {
+    display: grid;
+    grid-template-columns: 30px 10px 30px 10px 30px;
+    text-align: center;
+  }
+
+  & .fix-ado-table-age-published[data-fix-ado-is-stale] {
+    color: var(--status-error-text, rgb(218, 10, 0));
+  }
+
+  & .fix-ado-table-age-legend {
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}
+
+/* The section cards, as design B draws them: a 1px line and 8px corners instead of a shadow, a
+   40px header with its line under it, a 15px semibold title, a 12px chevron and a count pill,
+   and 14px between cards. */
+:root[data-fix-ado-table]:not([data-fix-ado-win98]) .repos-pr-section-card {
+  overflow: clip;
+  padding: 0;
+  border: 1px solid var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
+  border-radius: 8px;
+  box-shadow: none;
+
+  .rhythm-vertical-16 > &:not(:first-child) {
+    margin-top: 14px;
+  }
+
+  /* The header. A card without one, as on a repository's Completed tab, starts with its content. */
+  & > .flex-row:first-child:not(.bolt-card-content) {
+    box-sizing: border-box;
+    align-items: center;
+    gap: 10px;
+    height: 39px;
+    padding: 0 16px;
+  }
+
+  &:has(> .bolt-card-content) > .flex-row:first-child:not(.bolt-card-content) {
+    border-bottom: 1px solid var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
+  }
+
+  & .repos-pr-section-expand-button.bolt-button.icon-only {
+    flex: none;
+    align-self: center;
+    width: 12px;
+    min-width: 0;
+    height: 12px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: var(--text-disabled-color, rgba(0, 0, 0, 0.38));
+
+    & .fabric-icon {
+      font-size: 12px;
+    }
+  }
+
+  & .repos-pr-section-header {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  & .repos-pr-section-header .bolt-header-title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 18px;
+    color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+  }
+
+  & .repos-pr-section-header-title {
+    align-items: center;
+    padding: 0;
+    white-space: nowrap;
+  }
+
+  /* "· Waiting for author" after the title, a space apart, as one line of text. */
+  & .fix-ado-assigned-tab-name {
+    margin-inline-start: 0;
+
+    &::before {
+      content: "\\a0";
+    }
+  }
+
+  & .repos-pr-section-header-title .bolt-pill {
+    box-sizing: border-box;
+    margin: 0 0 0 10px;
+    padding: 0 7px;
+    border: 1px solid var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
+    border-radius: 999px;
+    background: rgba(var(--palette-neutral-100, 0, 0, 0), 0.03);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 15px;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+
+    & .bolt-pill-content {
+      margin: 0;
+      padding: 0;
+    }
+  }
+}
+
+/* The card's column around the list sizes to its content; the table fills the card, as Azure
+   DevOps's own table does. */
+:root[data-fix-ado-table]:not([data-fix-ado-win98])
+  .flex-column:has(> .bolt-table-container > table.repos-pr-list) {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+/* Forced colors drop box shadows, so a required reviewer keeps an outline. */
+@media (forced-colors: active) {
+  :root[data-fix-ado-table]:not([data-fix-ado-win98])
+    table.repos-pr-list
+    .pr-reviewer[data-fix-ado-required]
+    .bolt-coin {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+}
+
+@keyframes fix-ado-table-skeleton {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::after,
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::before {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::after,
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::before {
+    forced-color-adjust: none;
+    background: GrayText;
+  }
+}
+`;
+
+  // azure-devops/src/features/table-rows/index.ts
+  var IS_TABLE_KEY = "table-rows-on", TABLE_SWITCH = { className: "fix-ado-table-switch", label: "Table" }, tableRows = {
+    change: { kind: "new", version: "1.28.0" },
+    description: "The pull request lists as a table: a column each for the title, author, id, repository on the inbox, target, reviewers, comments and age, under a header, one 36px row per pull request. The age column shows when each pull request was created, updated and published. On by default; a Table switch on the lists flips between the table and Azure DevOps's two lines. Not in Windows 98 mode.",
+    id: "table-rows",
+    name: "Pull requests as a table",
+    start({ basePath: basePath2, client, document: document2, now }) {
+      let isTable = GM_getValue(IS_TABLE_KEY, !0), isList = !1, creationDates = createCreationDates({ client, now });
+      function show3() {
+        showTableRows(document2, isList && isTable, {
+          createdAt: creationDates.createdAt,
+          now: now()
+        }), showListSwitch(document2, TABLE_SWITCH, isList ? { isOn: isTable, onToggle: toggle } : null);
+      }
+      function toggle() {
+        isTable = !isTable, GM_setValue(IS_TABLE_KEY, isTable), show3();
+      }
+      return {
+        sync({ page, isTabActive: isTabActive2 }) {
+          if (isList = (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") && !isWindows98Mode(document2), show3(), isList && isTable && isTabActive2) {
+            let undated = findPullRequestRows(document2, basePath2).filter(
+              ({ row }) => needsCreationDate(row)
+            );
+            creationDates.sync(undated.map(({ pullRequest }) => pullRequest)).then(show3);
+          }
+        }
+      };
+    },
+    styles: [switch_default, list_switch_default, style_default20]
   };
 
   // azure-devops/src/features/pull-request-list-features.ts
@@ -17898,11 +18921,11 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
     publishedSince,
     linkedWorkItem,
     assignedToMeStacked,
-    oneLineRows
+    tableRows
   ];
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
-  var CARD_SELECTOR3 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS2 = "fix-ado-days-in-column";
+  var CARD_SELECTOR4 = ".wit-card[data-itemid]", COLUMN_SELECTOR = ".kanban-board-column[data-column]", BAR_CLASS2 = "fix-ado-days-in-column";
   function columnEnteredAt(updates) {
     for (let update2 of updates.toReversed()) {
       let columnChange = update2.fields?.["System.BoardColumn"];
@@ -17939,7 +18962,7 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
   }
   function findCards(document2) {
     let cards = /* @__PURE__ */ new Map();
-    for (let card of document2.querySelectorAll(CARD_SELECTOR3)) {
+    for (let card of document2.querySelectorAll(CARD_SELECTOR4)) {
       let id = Number(card.dataset.itemid);
       Number.isInteger(id) && id > 0 && cards.set(id, [...cards.get(id) ?? [], card]);
     }
