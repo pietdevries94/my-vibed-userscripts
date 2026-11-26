@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.26.0
-// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; Draft pull requests, and groups of only drafts, on a slightly grey background with lighter text. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
+// @version      1.27.0
+// @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. Pull request lists: Pipeline status on each pull request; Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; A One line switch on the lists that puts each pull request on one line. Pull request: A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request; Starred reviewers to add in one click, also on a new pull request; Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them. Pull request Overview: Each check's warnings and errors above the description, in a box that collapses; Oldest first, with a button to flip the order; A button that scrolls to the bottom; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread; A New chip that glows on pushes and other changes you have not seen. Boards: Days in column dots on cards, with a toggle per column. Everywhere: Avatar initials; Light or Dark to match the system; Pull request lists and boards that reload on changes; A Windows 98 mode, a work in progress and off by default.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
 // @grant        GM_addStyle
@@ -17169,71 +17169,6 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     styles: [style_default16]
   };
 
-  // azure-devops/src/features/grey-drafts/style.css
-  var style_default17 = `/* A draft pull request's row, in the lists and the inbox: a slight grey from the theme's
-   text colour, so it works in Light and Dark, and text a step lighter than the site's. The
-   site's selected row keeps its colours. With Group by work item on, a group of only drafts
-   gets the same colours; work-item-group-rows.ts marks it. */
-a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected),
-.fix-ado-work-item-group[data-fix-ado-drafts-only] {
-  --text-secondary-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.45);
-
-  background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.03);
-  color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.7);
-
-  &:hover {
-    background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.05);
-  }
-}
-
-/* Windows 98 mode: the white field with a touch of the light face grey, with dark grey
-   text. A selected or focused row stays navy. */
-html[data-fix-ado-win98]
-  :is(
-    a.bolt-table-row:has(.repos-pr-list-draft-pill):not(.selected, .focused),
-    .fix-ado-work-item-group[data-fix-ado-drafts-only]
-  ) {
-  --text-secondary-color: var(--win98-shadow);
-
-  color: #404040;
-
-  &,
-  &:hover {
-    background-color: color-mix(in oklab, var(--win98-light) 30%, var(--win98-field-face));
-  }
-}
-
-/* Windows 98 mode sets a group's text colours on its cell and title. */
-html[data-fix-ado-win98] .fix-ado-work-item-group[data-fix-ado-drafts-only] {
-  & > td {
-    color: #404040;
-  }
-
-  .fix-ado-work-item-group-title {
-    color: var(--win98-shadow);
-  }
-}
-
-/* A group of only drafts shows its work item's link lighter too. */
-.fix-ado-work-item-group[data-fix-ado-drafts-only] a {
-  color: color-mix(in oklab, var(--communication-foreground, rgb(0, 90, 158)) 70%, transparent);
-}
-
-html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only] > td > a {
-  color: color-mix(in oklab, #0000ee 70%, transparent);
-}
-`;
-
-  // azure-devops/src/features/grey-drafts/index.ts
-  var greyDrafts = {
-    change: { kind: "new", version: "1.26.0" },
-    description: "Draft pull requests, and groups of only drafts, on a slightly grey background with lighter text.",
-    id: "grey-drafts",
-    name: "Grey drafts",
-    start: () => null,
-    styles: [style_default17]
-  };
-
   // azure-devops/src/features/linked-work-item/linked-work-item-fetcher.ts
   var LINKED_WORK_ITEMS_REFRESH_INTERVAL_MS = 3e5;
   async function fetchLinkedWorkItems(client, pullRequest) {
@@ -17304,11 +17239,24 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
     return id === void 0 ? null : ids.length > 1 ? { text: "Multiple work items", tooltip: ids.map((each) => `#${each}`).join(", ") } : { text: `#${id}`, tooltip: title };
   }
 
-  // azure-devops/src/features/linked-work-item/group-toggle.ts
-  var TOGGLE_CLASS5 = "fix-ado-group-toggle", BAR_CLASS = "fix-ado-group-toggle-bar", LABEL4 = "Group by work item", TABBAR_SELECTOR4 = ".bolt-tabbar:has(> .bolt-tabbar-tabs)", PAGE_CONTENT_SELECTOR = ".page-content", onToggleBySwitch = /* @__PURE__ */ new WeakMap();
-  function createToggle3(document2) {
-    let toggle = createSwitch(document2, LABEL4);
-    return toggle.classList.add(TOGGLE_CLASS5), toggle.addEventListener("click", () => {
+  // azure-devops/src/core/list-switch.css
+  var list_switch_default = `/* A switch on the pull request lists. switch.css styles the switch; list-switch.ts places it. */
+.bolt-tabbar > .fix-ado-switch {
+  margin: 0 8px;
+}
+
+/* The inbox has no tab bar, so its switches get a bar of their own above the lists. */
+.fix-ado-list-switch-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+`;
+
+  // azure-devops/src/core/list-switch.ts
+  var BAR_CLASS = "fix-ado-list-switch-bar", TABBAR_SELECTOR4 = ".bolt-tabbar:has(> .bolt-tabbar-tabs)", PAGE_CONTENT_SELECTOR = ".page-content", onToggleBySwitch = /* @__PURE__ */ new WeakMap();
+  function createListSwitch(document2, { className, label }) {
+    let toggle = createSwitch(document2, label);
+    return toggle.classList.add(className), toggle.addEventListener("click", () => {
       onToggleBySwitch.get(toggle)?.();
     }), toggle;
   }
@@ -17316,8 +17264,10 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
     let tabbar = document2.querySelector(TABBAR_SELECTOR4);
     if (tabbar === null)
       return !1;
+    if (toggle.parentElement === tabbar)
+      return !0;
     let buttons = tabbar.querySelector(":scope > .bolt-header-commandbar");
-    return buttons === null ? toggle.parentElement !== tabbar && tabbar.append(toggle) : toggle.nextElementSibling !== buttons && buttons.before(toggle), !0;
+    return buttons === null ? tabbar.append(toggle) : buttons.before(toggle), !0;
   }
   function barAboveLists(content) {
     let bar = content.querySelector(`:scope > .${BAR_CLASS}`) ?? Object.assign(content.ownerDocument.createElement("div"), { className: BAR_CLASS });
@@ -17332,18 +17282,22 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
     let bar = barAboveLists(content);
     toggle.parentElement !== bar && bar.append(toggle);
   }
-  function showGroupToggle(document2, state) {
-    let shown = document2.querySelector(`.${TOGGLE_CLASS5}`);
+  function removeListSwitch(document2, { className }) {
+    document2.querySelector(`.${className}`)?.remove();
+    let bar = document2.querySelector(`.${BAR_CLASS}`);
+    bar !== null && bar.childElementCount === 0 && bar.remove();
+  }
+  function showListSwitch(document2, listSwitch, state) {
     if (state === null) {
-      shown?.remove(), document2.querySelector(`.${BAR_CLASS}`)?.remove();
+      removeListSwitch(document2, listSwitch);
       return;
     }
-    let toggle = shown ?? createToggle3(document2);
-    placeInTabbar(document2, toggle) || placeAboveLists(document2, toggle), onToggleBySwitch.set(toggle, state.onToggle), showSwitchOn(toggle, state.isGrouped);
+    let toggle = document2.querySelector(`.${listSwitch.className}`) ?? createListSwitch(document2, listSwitch);
+    placeInTabbar(document2, toggle) || placeAboveLists(document2, toggle), onToggleBySwitch.set(toggle, state.onToggle), showSwitchOn(toggle, state.isOn);
   }
 
   // azure-devops/src/features/linked-work-item/work-item-group-rows.ts
-  var GROUP_ROW_CLASS = "fix-ado-work-item-group", DRAFTS_ONLY_ATTRIBUTE = "data-fix-ado-drafts-only", PULL_REQUEST_ROW_SELECTOR2 = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
+  var GROUP_ROW_CLASS = "fix-ado-work-item-group", PULL_REQUEST_ROW_SELECTOR2 = ':scope > a.bolt-table-row[href*="/pullrequest/"]';
   function placeBefore(list, node, before) {
     node.parentNode === list ? list.moveBefore(node, before) : before === null ? list.append(node) : before.before(node);
   }
@@ -17382,17 +17336,13 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
     let [cell2] = row.cells, href = workItemHref(basePath2, group2.workItemId), shown = JSON.stringify([href, group2.label, group2.title]);
     cell2 === void 0 || row.dataset.fixAdoShownTitle === shown || (cell2.replaceChildren(...createGroupTitle(row.ownerDocument, href, group2)), row.dataset.fixAdoShownTitle = shown);
   }
-  function markDraftsOnly(row, group2) {
-    let isDraftsOnly = group2.rows.length > 0 && group2.rows.every((pullRequestRow) => isDraftRow(pullRequestRow));
-    row.hasAttribute(DRAFTS_ONLY_ATTRIBUTE) !== isDraftsOnly && row.toggleAttribute(DRAFTS_ONLY_ATTRIBUTE, isDraftsOnly);
-  }
   var rowIndex = (row) => Number(row.getAttribute("aria-rowindex"));
   function orderedNodes(list, basePath2, groups) {
     return groups === null ? [...list.querySelectorAll(PULL_REQUEST_ROW_SELECTOR2)].toSorted(
       (first, second) => rowIndex(first) - rowIndex(second)
     ) : groups.flatMap((group2) => {
       let groupRow = groupRowFor(list, group2.key);
-      return showGroupTitle(groupRow, basePath2, group2), markDraftsOnly(groupRow, group2), [groupRow, ...group2.rows];
+      return showGroupTitle(groupRow, basePath2, group2), [groupRow, ...group2.rows];
     });
   }
   function showWorkItemGroups(list, basePath2, groups) {
@@ -17410,25 +17360,24 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
   }
 
   // azure-devops/src/features/linked-work-item/style.css
-  var style_default18 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
+  var style_default17 = `/* The linked work item at the end of the line under a pull request's title. pr-list.ts adds it. */
 .fix-ado-linked-work-item::before {
   content: "·";
   margin-inline: 0.5em;
 }
 
-/* The "Group by work item" switch. core/switch.css styles it; group-toggle.ts places it. */
-.bolt-tabbar > .fix-ado-group-toggle {
-  margin: 0 8px;
-}
-
-/* The inbox has no tab bar, so the switch gets a bar of its own above the lists. */
-.fix-ado-group-toggle-bar {
-  display: flex;
-  justify-content: flex-end;
-}
-
 /* A group's title row in a pull request list: its work item's id as a link, then its title.
-   work-item-group-rows.ts adds it. */
+   work-item-group-rows.ts adds it. A slight grey from the theme's text colour, so it works in
+   Light and Dark, and sets it apart from the pull requests under it. */
+.fix-ado-work-item-group {
+  background-color: rgba(var(--palette-neutral-100, 0, 0, 0), 0.03);
+}
+
+/* Windows 98 mode: the white field with a touch of the light face grey. */
+html[data-fix-ado-win98] .fix-ado-work-item-group {
+  background-color: color-mix(in oklab, var(--win98-light) 30%, var(--win98-field-face));
+}
+
 .fix-ado-work-item-group > td {
   padding: 8px 16px;
   /* A line above each group, stronger than the lines between rows, to divide the groups. */
@@ -17452,7 +17401,7 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
 `;
 
   // azure-devops/src/features/linked-work-item/index.ts
-  var IS_GROUPED_KEY = "linked-work-item-grouped", LIST_SELECTOR = "table.repos-pr-list > tbody";
+  var IS_GROUPED_KEY = "linked-work-item-grouped", LIST_SELECTOR = "table.repos-pr-list > tbody", GROUP_SWITCH = { className: "fix-ado-group-toggle", label: "Group by work item" };
   function groupsOf2(rows, fetcher) {
     let linkedRows = [];
     for (let { row, pullRequest } of rows) {
@@ -17470,8 +17419,8 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
     }
   }
   var linkedWorkItem = {
-    change: { kind: "new", version: "1.24.0" },
-    description: "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. A switch groups the lists by work item, each under its work item's id and title.",
+    change: { kind: "updated", version: "1.27.0" },
+    description: "The id of the work item linked to each pull request in a list, under its title, with its title on hover. Multiple work items when there are more. A switch groups the lists by work item, each under its work item's id and title on a grey row.",
     id: "linked-work-item",
     name: "Linked work item",
     start({ basePath: basePath2, client, document: document2, now }) {
@@ -17485,7 +17434,11 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
           let rows = findRows(list), groups = isList && isGrouped ? groupsOf2(rows, fetcher) : null;
           showWorkItemGroups(list, basePath2, groups), showLinkedWorkItemLabels(rows, fetcher, groups !== null);
         }
-        showGroupToggle(document2, isList ? { isGrouped, onToggle: toggleGroups } : null);
+        showListSwitch(
+          document2,
+          GROUP_SWITCH,
+          isList ? { isOn: isGrouped, onToggle: toggleGroups } : null
+        );
       }
       function toggleGroups() {
         isGrouped = !isGrouped, GM_setValue(IS_GROUPED_KEY, isGrouped), showAll();
@@ -17496,7 +17449,176 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
         }
       };
     },
-    styles: [switch_default, style_default18]
+    styles: [switch_default, list_switch_default, style_default17]
+  };
+
+  // azure-devops/src/features/one-line-rows/one-line-rows.ts
+  var ONE_LINE_ATTRIBUTE = "data-fix-ado-one-line";
+  function showOneLineRows(document2, isOneLine) {
+    let root = document2.documentElement;
+    root.hasAttribute(ONE_LINE_ATTRIBUTE) !== isOneLine && root.toggleAttribute(ONE_LINE_ATTRIBUTE, isOneLine);
+  }
+  function isWindows98Mode(document2) {
+    return Object.hasOwn(document2.documentElement.dataset, "fixAdoWin98");
+  }
+
+  // azure-devops/src/features/one-line-rows/style.css
+  var style_default18 = `/* Each pull request on one line, as design B. one-line-rows.ts marks <html> on a list page while
+   the One line switch is on. Windows 98 mode lays the rows out itself, so it is left alone. */
+:root[data-fix-ado-one-line]:not([data-fix-ado-win98]) .repos-pr-list {
+  /* The columns after the spacer: author, title, reviewers, comments, time. */
+  & > colgroup > col:nth-child(2) {
+    width: 32px !important;
+  }
+
+  & > colgroup > col:nth-child(4) {
+    width: 112px !important;
+  }
+
+  & > colgroup > col:nth-child(5) {
+    width: 60px !important;
+  }
+
+  & > colgroup > col:nth-child(6) {
+    width: 148px !important;
+  }
+
+  & .bolt-list-cell {
+    height: 32px;
+  }
+
+  /* Azure DevOps pads each cell 9px 12px. */
+  & .bolt-table-cell-content {
+    padding-block: 0;
+    padding-inline: 6px;
+  }
+
+  /* The row's More button: 24px, as its 34px would make the row taller. */
+  & .bolt-table-cell-side-action .bolt-button {
+    padding: 4px;
+  }
+
+  /* The author, and each reviewer: 20px avatars. The initials scale with the size. */
+  & :is([aria-colindex="1"], .pr-reviewer) :is(.bolt-coin, .bolt-coin-content) {
+    --fix-ado-avatar-size: 20px !important;
+    width: 20px;
+    height: 20px;
+  }
+
+  /* The title, then the line under it to its right, which takes the space left. */
+  & .bolt-table-two-line-cell > .bolt-table-cell-content {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  & .bolt-table-two-line-cell-item:first-child {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  & .bolt-table-two-line-cell-item:nth-child(2) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* A step under Azure DevOps's sizes: titles 14px for its 15px, comments and time 13px for
+     its 14px. The line under the title keeps its 12px. */
+  & .bolt-table-two-line-cell-item .body-l {
+    font-size: 14px;
+  }
+
+  & :is([aria-colindex="4"], [aria-colindex="5"]) .bolt-table-cell-content {
+    font-size: 13px;
+  }
+
+  /* The pipeline status before the title. */
+  & .fix-ado-pipeline-status {
+    order: -1;
+    width: 14px;
+    height: 14px;
+    margin: 0 8px 0 0;
+  }
+
+  /* Reviewers overlap, each with a ring in the row's colour. Required ones glow less. */
+  & :is(.rhythm-horizontal-8, [data-fix-ado-reviewers]) > .pr-reviewer {
+    margin: 0 -4px 0 0 !important;
+  }
+
+  /* A row, so the vote icon's empty wrapper sits beside the avatar instead of on a line
+     under it. The icon itself is placed on the reviewer as before. */
+  & .pr-reviewer {
+    display: flex;
+  }
+
+  & .pr-reviewer .bolt-coin {
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px var(--background-color, #fff);
+  }
+
+  & .pr-reviewer[data-fix-ado-required] .bolt-coin {
+    box-shadow:
+      0 0 0 1.5px var(--background-color, #fff),
+      0 0 0 3px var(--communication-background, rgb(0, 120, 212));
+  }
+
+  /* Group by work item's group titles: 12px, as the line under a title. */
+  & .fix-ado-work-item-group > td {
+    font-size: 12px;
+  }
+
+  /* The time: the publish time alone when it shows, as it says more than the update time. */
+  & [aria-colindex="5"] .bolt-table-cell-content {
+    justify-content: flex-end;
+  }
+
+  & .bolt-table-cell-content:has(> .fix-ado-published-since) {
+    flex-direction: row;
+    align-items: center;
+
+    & > :not(.fix-ado-published-since) {
+      display: none;
+    }
+  }
+}
+
+/* Forced colors drop box shadows, so a required reviewer keeps an outline. */
+@media (forced-colors: active) {
+  :root[data-fix-ado-one-line]:not([data-fix-ado-win98])
+    .repos-pr-list
+    .pr-reviewer[data-fix-ado-required]
+    .bolt-coin {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+}
+`;
+
+  // azure-devops/src/features/one-line-rows/index.ts
+  var IS_ONE_LINE_KEY = "one-line-rows-on", ONE_LINE_SWITCH = { className: "fix-ado-one-line-switch", label: "One line" }, oneLineRows = {
+    change: { kind: "new", version: "1.27.0" },
+    description: "Each pull request in a list on one line, so more of them fit on the screen. A One line switch on the lists flips between one line and Azure DevOps's two. Not in Windows 98 mode.",
+    id: "one-line-rows",
+    name: "Pull requests on one line",
+    start({ document: document2 }) {
+      let isOneLine = GM_getValue(IS_ONE_LINE_KEY, !1), isList = !1;
+      function show3() {
+        showOneLineRows(document2, isList && isOneLine), showListSwitch(
+          document2,
+          ONE_LINE_SWITCH,
+          isList ? { isOn: isOneLine, onToggle: toggle } : null
+        );
+      }
+      function toggle() {
+        isOneLine = !isOneLine, GM_setValue(IS_ONE_LINE_KEY, isOneLine), show3();
+      }
+      return {
+        sync({ page }) {
+          isList = (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") && !isWindows98Mode(document2), show3();
+        }
+      };
+    },
+    styles: [switch_default, list_switch_default, style_default18]
   };
 
   // azure-devops/src/features/pipeline-status/index.ts
@@ -17776,7 +17898,7 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
     publishedSince,
     linkedWorkItem,
     assignedToMeStacked,
-    greyDrafts
+    oneLineRows
   ];
 
   // azure-devops/src/features/days-in-column/days-in-column.ts
@@ -17890,23 +18012,23 @@ html[data-fix-ado-win98] body .fix-ado-work-item-group[data-fix-ado-drafts-only]
   }
 
   // azure-devops/src/features/days-in-column/days-in-column-toggle.ts
-  var HEADER_SELECTOR3 = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS6 = "fix-ado-days-toggle";
+  var HEADER_SELECTOR3 = ".kanban-board-column-header", COLUMN_SELECTOR2 = ".kanban-board-column[data-column]", TOGGLE_CLASS5 = "fix-ado-days-toggle";
   function showColumnState(column, toggle, isHidden) {
     Object.hasOwn(column.dataset, "fixAdoDaysHidden") !== isHidden && (isHidden ? column.dataset.fixAdoDaysHidden = "" : delete column.dataset.fixAdoDaysHidden);
     let pressed = String(!isHidden);
     toggle.getAttribute("aria-pressed") !== pressed && (toggle.setAttribute("aria-pressed", pressed), toggle.title = isHidden ? "Show days in column" : "Hide days in column", toggle.setAttribute("aria-label", "Days in column"));
   }
-  function createToggle4(document2, onClick3) {
+  function createToggle3(document2, onClick3) {
     let toggle = document2.createElement("button");
-    return toggle.type = "button", toggle.className = TOGGLE_CLASS6, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
+    return toggle.type = "button", toggle.className = TOGGLE_CLASS5, toggle.append(...Array.from({ length: 3 }, () => document2.createElement("span"))), toggle.addEventListener("click", (event) => {
       event.preventDefault(), event.stopPropagation(), onClick3();
     }), toggle;
   }
   function findOrAddToggle2(header, onClick3) {
-    let existing = header.querySelector(`.${TOGGLE_CLASS6}`);
+    let existing = header.querySelector(`.${TOGGLE_CLASS5}`);
     if (existing !== null)
       return existing;
-    let toggle = createToggle4(header.ownerDocument, onClick3);
+    let toggle = createToggle3(header.ownerDocument, onClick3);
     return (header.querySelector(".justify-space-between > .flex-row") ?? header).append(toggle), toggle;
   }
   function createDaysInColumnToggles(options) {
