@@ -8,7 +8,7 @@ The site reuses a class in another structure, and the rule follows it there. Exa
 
 ## Heights and widths the site sets natively
 
-The site sets sizes inline or in its own CSS: fixed field widths (270px), minimum column widths, cell heights taller than the row, transparent borders that take space, a header margin the design does not have. Measure the computed box (`getBoundingClientRect`, `getComputedStyle`) of every part of a row, not only the row. Anything 0.5px off is a sub-pixel position: find the half pixel and remove it.
+The site sets sizes inline or in its own CSS: fixed field widths (270px), minimum column widths, cell heights taller than the row, transparent borders that take space, a header margin the design does not have. Measure the computed box (`getBoundingClientRect`, `getComputedStyle`) of every part of a row, not only the row. Anything 0.5px off is a sub-pixel position: find the half pixel and remove it, such as a cell's 1px top border that one page keeps and another drops. The script's own features set sizes too, some with `!important`: Required reviewers spaced the table's reviewers 8px apart over the mode's 2px. List the rules that match an element (walk `document.styleSheets`) before raising a selector's weight.
 
 ## Long values and narrow layouts
 
@@ -25,6 +25,10 @@ Menus, tooltips and drop-downs render in a portal outside the page, so page-scop
 ## States a capture cannot hold
 
 `:hover`, `:focus` and animations are not in a capture. Reach them on the fake site (`page.hover()`), diff them as their own state, and check them with a failure count. A hover rule that looks right can still miss the text when the cells are taller than the row.
+
+## Literal colours in a look with schemes
+
+A look with a dark scheme switches its tokens, so a literal colour stays light in dark: white wells, black text on the dark face, black glyphs in data URIs, pastel diff lines under white code. Build every colour from a token; where a data URI must be black, give it a dark variant under `&:where(:root[data-win98-scheme="dark"] *)`. Check every page in both schemes.
 
 ## Fonts that break measurements
 
