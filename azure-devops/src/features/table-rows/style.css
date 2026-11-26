@@ -494,7 +494,9 @@
       0 0 0 3px var(--communication-background, rgb(0, 120, 212));
   }
 
-  /* A reviewer's vote: an 11px badge on the avatar's corner, inside the row's height. */
+  /* A reviewer's vote: an 11px badge on the avatar's corner, inside the row's height. The
+     glyph's line is as tall as the glyph, so the badge centres it: with Azure DevOps's 12px
+     line the Waiting for author clock hung below the badge. */
   & .repos-pr-reviewer-vote {
     inset: auto -3px 0 auto;
     display: grid;
@@ -505,6 +507,7 @@
     border: 1.5px solid var(--callout-background-color, var(--background-color, #fff));
     border-radius: 50%;
     font-size: 7px;
+    line-height: 1;
   }
 
   /* The +2 after the reviewers: plain text. */
