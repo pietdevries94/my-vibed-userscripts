@@ -8,7 +8,7 @@ import { showListSwitch } from "../../core/list-switch.ts";
 import style from "./style.css";
 import switchStyle from "../../core/switch.css";
 
-/** The switch on the lists. Off until the owner turns it on. */
+/** The switch on the lists. On until the owner turns it off. */
 const IS_TABLE_KEY = "table-rows-on";
 const TABLE_SWITCH = { className: "fix-ado-table-switch", label: "Table" };
 
@@ -19,7 +19,7 @@ const tableRows: Feature = {
   id: "table-rows",
   name: "Pull requests as a table",
   start({ basePath, client, document, now }) {
-    let isTable = GM_getValue<boolean>(IS_TABLE_KEY, false);
+    let isTable = GM_getValue<boolean>(IS_TABLE_KEY, true);
     let isList = false;
     const creationDates = createCreationDates({ client, now });
 
