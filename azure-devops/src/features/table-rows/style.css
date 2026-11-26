@@ -31,12 +31,12 @@
   }
 
   /* Only the inbox names each pull request's repository: there it gets a column. */
-  &:has(.fix-ado-table-repository:not(:empty)) {
+  &[data-fix-ado-has-repository] {
     --fix-ado-table-repository-width: minmax(0, max-content);
   }
 
-  &:not(:has(.fix-ado-table-repository:not(:empty))) .fix-ado-table-head-repository,
-  & > tbody > a.bolt-table-row > .fix-ado-table-repository:empty {
+  &:not([data-fix-ado-has-repository]) > .fix-ado-table-head th.fix-ado-table-head-repository,
+  &:not([data-fix-ado-has-repository]) > tbody > a.bolt-table-row > .fix-ado-table-repository {
     display: none;
   }
 

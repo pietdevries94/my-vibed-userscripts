@@ -228,6 +228,13 @@ test("leaves the repository cell empty where Azure DevOps names no repository, a
   const row = rowOf(document);
   assert.equal(row.querySelector(".fix-ado-table-repository")?.textContent, "");
   assert.equal(row.querySelector(".fix-ado-table-target")?.textContent, "main");
+  assert.equal(document.querySelector("table")?.dataset.fixAdoHasRepository, undefined);
+});
+
+test("marks a list that names a repository, so it gets a Repository column", () => {
+  const { document } = createList().window;
+  showTableRows(document, true, NO_CREATION_DATES);
+  assert.equal(document.querySelector("table")?.dataset.fixAdoHasRepository, "");
 });
 
 test("takes everything away when turned off, and puts the work item back under the title", () => {
@@ -237,7 +244,7 @@ test("takes everything away when turned off, and puts the work item back under t
   assert.equal(document.querySelector('[class*="fix-ado-table"]'), null);
   assert.equal(
     document.querySelector(
-      "[data-fix-ado-tooltip], [data-fix-ado-created-by-me], [data-fix-ado-is-stale]",
+      "[data-fix-ado-tooltip], [data-fix-ado-created-by-me], [data-fix-ado-is-stale], [data-fix-ado-has-repository]",
     ),
     null,
   );

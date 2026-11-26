@@ -19,6 +19,7 @@ const CARD_TITLE_SELECTOR = ".repos-pr-section-header-title > .text-ellipsis";
 const AUTHOR_CELL_SELECTOR = '[aria-colindex="1"]';
 const ID_CLASS = "fix-ado-table-id";
 const REPOSITORY_CLASS = "fix-ado-table-repository";
+const HAS_REPOSITORY_ATTRIBUTE = "data-fix-ado-has-repository";
 const TARGET_CLASS = "fix-ado-table-target";
 const BRANCH_CLASS = "fix-ado-table-branch";
 const WORK_ITEM_CLASS = "fix-ado-table-work-item";
@@ -63,6 +64,19 @@ function createHead(document: Document): HTMLTableSectionElement {
 function isCreatedByMe(list: HTMLTableElement): boolean {
   const title = list.closest(CARD_SELECTOR)?.querySelector(CARD_TITLE_SELECTOR);
   return title?.textContent?.trim() === CREATED_BY_ME_TITLE;
+}
+
+/** Marks a list where a row names its repository: only there the table has a Repository column.
+ *  A mark from the script, as CSS can miss a cell that gets its text after it was added. */
+function markHasRepository(list: HTMLTableElement, isTable: boolean): void {
+  const hasRepository =
+    isTable &&
+    [...list.querySelectorAll(`:scope > tbody > a > .${REPOSITORY_CLASS}`)].some(
+      (cell) => cell.textContent !== "",
+    );
+  if (list.hasAttribute(HAS_REPOSITORY_ATTRIBUTE) !== hasRepository) {
+    list.toggleAttribute(HAS_REPOSITORY_ATTRIBUTE, hasRepository);
+  }
 }
 
 function markCreatedByMe(list: HTMLTableElement, isTable: boolean): void {
@@ -194,16 +208,22 @@ function showTableRows(document: Document, isTable: boolean, times: AgeTimes): v
     root.toggleAttribute(TABLE_ATTRIBUTE, isTable);
   }
   for (const list of document.querySelectorAll<HTMLTableElement>(LIST_SELECTOR)) {
-    showHead(list, isTable);
-    markCreatedByMe(list, isTable);
-    for (const row of list.querySelectorAll(ROW_SELECTOR)) {
-      if (isTable) {
-        showCells(row, times);
-      } else {
-        removeCells(row);
-      }
+    showList(list, isTable, times);
+  }
+}
+
+/** One list as a table, or as Azure DevOps's own. */
+function showList(list: HTMLTableElement, isTable: boolean, times: AgeTimes): void {
+  showHead(list, isTable);
+  markCreatedByMe(list, isTable);
+  for (const row of list.querySelectorAll(ROW_SELECTOR)) {
+    if (isTable) {
+      showCells(row, times);
+    } else {
+      removeCells(row);
     }
   }
+  markHasRepository(list, isTable);
 }
 
 /** True while Windows 98 mode is on: it marks <html> when it starts, and lays the rows out itself. */
