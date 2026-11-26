@@ -3,6 +3,7 @@
 // or is not known yet. The full times show as the cell's tooltip.
 
 import { MINUTE_MS, largestWholeUnit } from "../../core/elapsed-time.ts";
+import { showTooltip } from "../../core/tooltip.ts";
 
 const AGE_CELL_SELECTOR = '[aria-colindex="5"]';
 const AGE_CLASS = "fix-ado-table-age";
@@ -170,7 +171,7 @@ function showAge(row: Element, times: AgeTimes): void {
   const ages = agesOf(row, times);
   showSlots(slotsOf(cell), ages);
   const full = AGES.flatMap((age) => ages[age]?.full ?? []).join(" · ");
-  showAttribute(cell, "title", full === "" ? null : full);
+  showTooltip(cell, full === "" ? null : full);
 }
 
 /** The Age header: c, u and p, in the grid of the ages below them. */
@@ -185,14 +186,16 @@ function showAgeHead(cell: Element): void {
     ),
   );
   cell.replaceChildren(legend);
-  cell.setAttribute("title", AGE_TOOLTIP);
+  showTooltip(cell, AGE_TOOLTIP);
 }
 
 /** Takes the ages away, with the cell's tooltip. */
 function removeAge(row: Element): void {
   const cell = row.querySelector(`:scope > ${AGE_CELL_SELECTOR}`);
   cell?.querySelector(`:scope > .${AGE_CLASS}`)?.remove();
-  cell?.removeAttribute("title");
+  if (cell) {
+    showTooltip(cell, null);
+  }
 }
 
 export type { AgeTimes };

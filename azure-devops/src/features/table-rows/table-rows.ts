@@ -1,12 +1,13 @@
 // The pull request lists as a table, as design B of the inbox redesigns. Marks <html>, puts a
 // header above each list and gives each row the cells Azure DevOps has no column for: the id, the
-// repository, the target branch and the work item. The author shows as an avatar, with the name as its cell's tooltip,
-// and the age as "3d p", with the full time as its cell's tooltip. style.css lays the rows out
-// from the mark.
+// repository, the target branch and the work item. The author shows as an avatar, with the name
+// in Azure DevOps's tooltip, and table-age.ts shows the ages. style.css lays the rows out from the
+// mark.
 
 import { removeAge, showAge, showAgeHead } from "./table-age.ts";
 import type { AgeTimes } from "./table-age.ts";
 import { avatarName } from "../../pull-requests/avatars.ts";
+import { showTooltip } from "../../core/tooltip.ts";
 
 const TABLE_ATTRIBUTE = "data-fix-ado-table";
 const HEAD_CLASS = "fix-ado-table-head";
@@ -109,9 +110,7 @@ function showAuthor(row: Element): void {
     return;
   }
   const name = avatarName(avatar);
-  if (cell.getAttribute("title") !== name) {
-    cell.setAttribute("title", name);
-  }
+  showTooltip(cell, name);
 }
 
 function showId(row: Element): void {
@@ -128,13 +127,6 @@ function showRepository(row: Element): void {
   const cell = cellOf(row, REPOSITORY_CLASS);
   showText(cell, repository);
   showTooltip(cell, repository);
-}
-
-/** The cell's full text on hover, for when the column has shrunk. */
-function showTooltip(cell: Element, text: string): void {
-  if (cell.getAttribute("title") !== text) {
-    cell.setAttribute("title", text);
-  }
 }
 
 /** The target branch, in Azure DevOps's monospace. */
@@ -174,7 +166,10 @@ function removeCells(row: Element): void {
   if (label !== null) {
     row.querySelector(LINE_UNDER_TITLE_SELECTOR)?.append(label);
   }
-  row.querySelector(`:scope > ${AUTHOR_CELL_SELECTOR}`)?.removeAttribute("title");
+  const author = row.querySelector(`:scope > ${AUTHOR_CELL_SELECTOR}`);
+  if (author !== null) {
+    showTooltip(author, null);
+  }
   removeAge(row);
   for (const added of row.querySelectorAll(
     `.${ID_CLASS}, .${REPOSITORY_CLASS}, .${TARGET_CLASS}, .${WORK_ITEM_CLASS}`,

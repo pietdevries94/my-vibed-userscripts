@@ -20,8 +20,8 @@ function firstCapturedRow(page: string): HTMLElement {
   return first.row;
 }
 
-const shownLabels = (row: HTMLElement): Element[] => [
-  ...row.querySelectorAll(".fix-ado-linked-work-item"),
+const shownLabels = (row: HTMLElement): HTMLElement[] => [
+  ...row.querySelectorAll<HTMLElement>(".fix-ado-linked-work-item"),
 ];
 
 for (const page of ["pr-list", "pr-inbox"]) {
@@ -36,7 +36,7 @@ for (const page of ["pr-list", "pr-inbox"]) {
 
       const [label] = shownLabels(row);
       assert.equal(label?.textContent, "#123");
-      assert.equal(label?.getAttribute("title"), "Fix the login form");
+      assert.equal(label?.dataset.fixAdoTooltip, "Fix the login form");
       assert.equal(label?.closest(".bolt-table-two-line-cell-item"), secondLine);
       assert.equal(label?.parentElement?.lastElementChild, label);
       assert.equal(secondLine?.textContent, `${textBefore}#123`);
@@ -49,7 +49,7 @@ test("showing the work item again adds no second label", { skip: fixtures.skip }
   showLinkedWorkItem(row, { text: "#123", tooltip: "Fix the login form" });
   showLinkedWorkItem(row, { text: "Multiple work items", tooltip: "#123, #456" });
   assert.deepEqual(
-    shownLabels(row).map((label) => [label.textContent, label.getAttribute("title")]),
+    shownLabels(row).map((label) => [label.textContent, label.dataset.fixAdoTooltip]),
     [["Multiple work items", "#123, #456"]],
   );
 });
@@ -58,7 +58,7 @@ test("a work item without a title loses the hover", { skip: fixtures.skip }, () 
   const row = firstCapturedRow("pr-list");
   showLinkedWorkItem(row, { text: "#123", tooltip: "Fix the login form" });
   showLinkedWorkItem(row, { text: "#123", tooltip: null });
-  assert.equal(shownLabels(row)[0]?.hasAttribute("title"), false);
+  assert.equal(shownLabels(row)[0]?.dataset.fixAdoTooltip, undefined);
 });
 
 test("without a linked work item, the label goes", { skip: fixtures.skip }, () => {

@@ -98,15 +98,18 @@ test("gives each pull request the author's name as a tooltip, its id, repository
   const { document } = createList().window;
   showTableRows(document, true, NO_CREATION_DATES);
   const row = rowOf(document);
-  assert.equal(row.querySelector('[aria-colindex="1"]')?.getAttribute("title"), "Doe, Jane");
+  assert.equal(
+    row.querySelector<HTMLElement>('[aria-colindex="1"]')?.dataset.fixAdoTooltip,
+    "Doe, Jane",
+  );
   assert.equal(row.querySelector(":scope > td.fix-ado-table-id")?.textContent, "!4021");
-  const repository = row.querySelector(":scope > td.fix-ado-table-repository");
+  const repository = row.querySelector<HTMLElement>(":scope > td.fix-ado-table-repository");
   assert.equal(repository?.textContent, "Webshop");
-  const target = row.querySelector(":scope > td.fix-ado-table-target");
+  const target = row.querySelector<HTMLElement>(":scope > td.fix-ado-table-target");
   assert.equal(target?.textContent, "main");
   // The full text on hover, for when the columns shrink to give the title room.
-  assert.equal(repository?.getAttribute("title"), "Webshop");
-  assert.equal(target?.getAttribute("title"), "main");
+  assert.equal(repository?.dataset.fixAdoTooltip, "Webshop");
+  assert.equal(target?.dataset.fixAdoTooltip, "main");
   assert.equal(target?.querySelector(".fix-ado-table-branch")?.textContent, "main");
   const workItem = row.querySelector(":scope > td.fix-ado-table-work-item");
   assert.equal(workItem?.textContent, "#77");
@@ -126,7 +129,7 @@ const createdAt = (pullRequestId: number): number | null =>
 /** The row's ages as they show, created, updated and published, its tooltip, and whether the
  *  publish time shows as stale. */
 function agesOf(row: Element): { ages: string[]; tooltip: string | null; isStale: boolean } {
-  const cell = row.querySelector('[aria-colindex="5"]');
+  const cell = row.querySelector<HTMLElement>('[aria-colindex="5"]');
   assert.ok(cell);
   const slots = ["created", "updated", "published"].map((age) =>
     cell.querySelector<HTMLElement>(`.fix-ado-table-age-${age}`),
@@ -134,7 +137,7 @@ function agesOf(row: Element): { ages: string[]; tooltip: string | null; isStale
   return {
     ages: slots.map((slot) => slot?.textContent ?? ""),
     isStale: slots[2] ? Object.hasOwn(slots[2].dataset, "fixAdoIsStale") : false,
-    tooltip: cell.getAttribute("title"),
+    tooltip: cell.dataset.fixAdoTooltip ?? null,
   };
 }
 
@@ -159,14 +162,14 @@ test("shows when the pull request was created, updated and published, with the f
 test("heads the ages with c, u and p, one above each, and says what they stand for as the tooltip", () => {
   const { document } = createList().window;
   showTableRows(document, true, NO_CREATION_DATES);
-  const head = document.querySelector(".fix-ado-table-head-age");
+  const head = document.querySelector<HTMLElement>(".fix-ado-table-head-age");
   assert.deepEqual(
     [...(head?.querySelectorAll(".fix-ado-table-age-legend > *") ?? [])].map(
       (letter) => letter.textContent,
     ),
     ["c", "·", "u", "·", "p"],
   );
-  assert.equal(head?.getAttribute("title"), "Age: created · updated · published");
+  assert.equal(head?.dataset.fixAdoTooltip, "Age: created · updated · published");
 });
 
 test("shows a dash for an age that does not apply or is not known yet", () => {
@@ -233,7 +236,9 @@ test("takes everything away when turned off, and puts the work item back under t
   showTableRows(document, false, NO_CREATION_DATES);
   assert.equal(document.querySelector('[class*="fix-ado-table"]'), null);
   assert.equal(
-    document.querySelector("[title], [data-fix-ado-created-by-me], [data-fix-ado-is-stale]"),
+    document.querySelector(
+      "[data-fix-ado-tooltip], [data-fix-ado-created-by-me], [data-fix-ado-is-stale]",
+    ),
     null,
   );
   assert.equal(

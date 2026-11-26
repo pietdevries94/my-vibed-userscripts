@@ -8,6 +8,7 @@ import type { Reviewer } from "./reviewers.ts";
 import type { ShownStatus } from "../pipeline/pipeline-status-icon.ts";
 import { findReviewerByLabel } from "./reviewers.ts";
 import { parsePullRequestHref } from "./pull-request-link.ts";
+import { showTooltip } from "../core/tooltip.ts";
 
 const PULL_REQUEST_ROW_SELECTOR = 'a.bolt-table-row[href*="/pullrequest/"]';
 const TITLE_LINE_SELECTOR = ".bolt-table-two-line-cell-item";
@@ -124,15 +125,6 @@ function linkedWorkItemElement(row: HTMLElement): HTMLElement | null {
   label.className = LINKED_WORK_ITEM_CLASS;
   lineUnderTitle.append(label);
   return label;
-}
-
-/** Sets the element's hover text, or removes it for null. Only touches the DOM on a change. */
-function showTooltip(element: HTMLElement, tooltip: string | null): void {
-  if (tooltip === null) {
-    element.removeAttribute("title");
-  } else if (element.getAttribute("title") !== tooltip) {
-    element.setAttribute("title", tooltip);
-  }
 }
 
 /**
