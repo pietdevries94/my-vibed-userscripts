@@ -25,7 +25,8 @@ interface TableRow {
   reviewers: (Person & { isRequired: boolean; vote: string | null })[];
   moreReviewers: string;
   comments: { text: string; isActive: boolean } | null;
-  time: { text: string; isStale: boolean };
+  /** "3d" and c, u or p, as the age cell shows them, and its tooltip. */
+  time: { short: string; kind: string; full: string; isStale: boolean };
 }
 
 type Band = { link: string; title: string | null } | { label: string };
@@ -91,16 +92,13 @@ function reviewersOf(cell: Element | null): TableRow["reviewers"] {
 }
 
 function timeOf(row: Element): TableRow["time"] {
-  const published = row.querySelector(".fix-ado-published-since");
-  if (published !== null) {
-    return {
-      isStale: published.classList.contains("fix-ado-published-since-too-long"),
-      text: text(published),
-    };
-  }
+  const cell = row.querySelector<HTMLElement>('[aria-colindex="5"]');
+  const [short = "", kind = ""] = text(cell?.querySelector(".fix-ado-table-age")).split(" ");
   return {
-    isStale: false,
-    text: text(row.querySelector('[aria-colindex="5"] .bolt-table-cell-content > div')),
+    full: cell?.getAttribute("title") ?? "",
+    isStale: cell !== null && Object.hasOwn(cell.dataset, "fixAdoIsStale"),
+    kind,
+    short,
   };
 }
 

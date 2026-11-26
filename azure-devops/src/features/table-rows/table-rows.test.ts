@@ -13,7 +13,11 @@ const CELLS = `<td class="bolt-table-cell-compact"></td>
     <div class="bolt-table-two-line-cell-item"><div class="body-l">Fix the thing</div></div>
     <div class="bolt-table-two-line-cell-item"><div class="secondary-text"><span>Doe, Jane request !4021 into
       <span class="padding-horizontal-4">Webshop</span><span class="monospaced-xs padding-horizontal-4">main</span></span><span class="fix-ado-linked-work-item">#77</span></div></div>
-  </div></td>`;
+  </div></td>
+  <td aria-colindex="5"><div class="bolt-table-cell-content"><div>Updated <span class="text-ellipsis"><time class="bolt-time-item" datetime="2026-01-10T12:00:00.000Z">3 days ago</time></span></div></div></td>`;
+
+/** Three days and a bit after the row's update time. */
+const NOW = Date.parse("2026-01-13T13:00:00.000Z");
 
 /** A section card with this title and a list with one pull request row. Azure DevOps puts an <a>
  *  row in the table with DOM calls, which an HTML parser would move out of the table, so the row is
@@ -96,6 +100,51 @@ test("marks the Created by me list, which lists only your own pull requests and 
   assert.equal(isMarkedCreatedByMe("Assigned to me"), false);
 });
 
+/** The row's age as it shows, its tooltip, and whether it shows as stale. */
+function ageOf(row: Element): { text: string; tooltip: string | null; isStale: boolean } {
+  const cell = row.querySelector<HTMLElement>('[aria-colindex="5"]');
+  assert.ok(cell);
+  return {
+    isStale: Object.hasOwn(cell.dataset, "fixAdoIsStale"),
+    text: cell.querySelector(".fix-ado-table-age")?.textContent ?? "",
+    tooltip: cell.getAttribute("title"),
+  };
+}
+
+test("shows the age as how long ago, and u for updated, with the full time as the tooltip", () => {
+  const { document } = createList().window;
+  showTableRows(document, true, NOW);
+  assert.deepEqual(ageOf(rowOf(document)), {
+    isStale: false,
+    text: "3d u",
+    tooltip: "Updated 3 days ago",
+  });
+  assert.equal(
+    document.querySelector(".fix-ado-table-head-age")?.getAttribute("title"),
+    "c: created, u: updated, p: published",
+  );
+});
+
+test("shows the publish time as p where Published since shows it, stale when it is too long ago", () => {
+  const { document } = createList().window;
+  const published = document.createElement("div");
+  published.className = "fix-ado-published-since fix-ado-published-since-too-long";
+  published.textContent = "Published 5 hours ago";
+  document.querySelector('[aria-colindex="5"] .bolt-table-cell-content')?.append(published);
+  showTableRows(document, true, NOW);
+  assert.deepEqual(ageOf(rowOf(document)), {
+    isStale: true,
+    text: "5h p",
+    tooltip: "Published 5 hours ago",
+  });
+});
+
+test("shows an age under a minute as now", () => {
+  const { document } = createList().window;
+  showTableRows(document, true, Date.parse("2026-01-10T12:00:30.000Z"));
+  assert.equal(ageOf(rowOf(document)).text, "now u");
+});
+
 test("marks a work item cell without an id, such as Multiple work items, as plain text", () => {
   const { document } = createList().window;
   const label = document.querySelector(".fix-ado-linked-work-item");
@@ -133,7 +182,10 @@ test("takes everything away when turned off, and puts the work item back under t
   showTableRows(document, true);
   showTableRows(document, false);
   assert.equal(document.querySelector('[class*="fix-ado-table"]'), null);
-  assert.equal(document.querySelector("[title], [data-fix-ado-created-by-me]"), null);
+  assert.equal(
+    document.querySelector("[title], [data-fix-ado-created-by-me], [data-fix-ado-is-stale]"),
+    null,
+  );
   assert.equal(
     document.querySelector(".secondary-text > .fix-ado-linked-work-item")?.textContent,
     "#77",

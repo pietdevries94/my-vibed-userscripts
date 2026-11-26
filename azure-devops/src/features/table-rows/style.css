@@ -6,7 +6,7 @@
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
   /* Fixed widths, so the columns of every list on the page line up. */
   --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 72px [id] 72px [target]
-    180px [reviewers] 100px [comments] 92px [age] 172px;
+    180px [reviewers] 100px [comments] 92px [age] 64px;
 
   display: block;
   font-size: 14px;
@@ -15,13 +15,13 @@
   /* Without Group by work item, a Work item column takes the place of the group rows. */
   &:not(:has(.fix-ado-work-item-group)) {
     --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 72px [id] 72px [target]
-      180px [work-item] 110px [reviewers] 100px [comments] 92px [age] 172px;
+      180px [work-item] 110px [reviewers] 100px [comments] 92px [age] 64px;
   }
 
   /* "Created by me" lists only your own pull requests, so it has no Author column. */
   &[data-fix-ado-created-by-me] {
     --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [id] 72px [target] 180px
-      [reviewers] 100px [comments] 92px [age] 172px;
+      [reviewers] 100px [comments] 92px [age] 64px;
 
     & :is(.fix-ado-table-head-author, a.bolt-table-row > [aria-colindex="1"]) {
       display: none;
@@ -30,7 +30,7 @@
 
   &[data-fix-ado-created-by-me]:not(:has(.fix-ado-work-item-group)) {
     --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [id] 72px [target] 180px
-      [work-item] 110px [reviewers] 100px [comments] 92px [age] 172px;
+      [work-item] 110px [reviewers] 100px [comments] 92px [age] 64px;
   }
 
   & > colgroup {
@@ -368,31 +368,28 @@
     }
   }
 
-  /* The age: on the right, the publish time alone when it shows, as it says more. */
+  /* The age as "3d p", on the right: how long ago, and c, u or p for created, updated or
+     published. The site's full time stays for screen readers, and shows as the tooltip. */
   & [aria-colindex="5"] {
     grid-column: age;
     justify-content: flex-end;
-    color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
 
-    & .bolt-table-cell-content {
-      display: block;
+    &[data-fix-ado-is-stale] {
+      color: var(--status-error-text, rgb(218, 10, 0));
+    }
+
+    &:has(> .fix-ado-table-age) > .bolt-table-cell-content {
+      position: absolute;
+      width: 1px;
+      height: 1px;
       overflow: hidden;
-      text-overflow: ellipsis;
+      clip-path: inset(50%);
       white-space: nowrap;
-      text-align: end;
-      line-height: 36px;
     }
-
-    /* Inline down to the time, so "Updated 3 days ago" reads as one run of text. */
-    & .bolt-table-cell-content > *,
-    & .bolt-table-cell-content > * > .text-ellipsis {
-      display: inline;
-      overflow: visible;
-    }
-  }
-
-  & .bolt-table-cell-content:has(> .fix-ado-published-since) > :not(.fix-ado-published-since) {
-    display: none;
   }
 }
 

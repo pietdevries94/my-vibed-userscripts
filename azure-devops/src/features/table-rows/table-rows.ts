@@ -1,8 +1,10 @@
 // The pull request lists as a table, as design B of the inbox redesigns. Marks <html>, puts a
 // header above each list and gives each row the cells Azure DevOps has no column for: the id, the
-// target and the work item. The author shows as an avatar, with the name as its cell's tooltip.
-// style.css lays the rows out from the mark.
+// target and the work item. The author shows as an avatar, with the name as its cell's tooltip,
+// and the age as "3d p", with the full time as its cell's tooltip. style.css lays the rows out
+// from the mark.
 
+import { AGE_LEGEND, removeAge, showAge } from "./table-age.ts";
 import { avatarName } from "../../pull-requests/avatars.ts";
 
 const TABLE_ATTRIBUTE = "data-fix-ado-table";
@@ -35,16 +37,21 @@ const COLUMNS = [
   ["age", "Age"],
 ] as const;
 
+function createHeadCell(document: Document, column: string, label: string): HTMLElement {
+  const cell = document.createElement("th");
+  cell.className = `${HEAD_CLASS}-${column}`;
+  cell.textContent = label;
+  if (column === "age") {
+    cell.title = AGE_LEGEND;
+  }
+  return cell;
+}
+
 function createHead(document: Document): HTMLTableSectionElement {
   const head = document.createElement("thead");
   head.className = HEAD_CLASS;
   const row = document.createElement("tr");
-  for (const [column, label] of COLUMNS) {
-    const cell = document.createElement("th");
-    cell.className = `${HEAD_CLASS}-${column}`;
-    cell.textContent = label;
-    row.append(cell);
-  }
+  row.append(...COLUMNS.map(([column, label]) => createHeadCell(document, column, label)));
   head.append(row);
   return head;
 }
@@ -149,20 +156,22 @@ function removeCells(row: Element): void {
     row.querySelector(LINE_UNDER_TITLE_SELECTOR)?.append(label);
   }
   row.querySelector(`:scope > ${AUTHOR_CELL_SELECTOR}`)?.removeAttribute("title");
+  removeAge(row);
   for (const added of row.querySelectorAll(`.${ID_CLASS}, .${TARGET_CLASS}, .${WORK_ITEM_CLASS}`)) {
     added.remove();
   }
 }
 
-function showCells(row: Element): void {
+function showCells(row: Element, now: number): void {
   showAuthor(row);
   showId(row);
   showTarget(row);
   showWorkItem(row);
+  showAge(row, now);
 }
 
 /** Shows the lists as a table, or as Azure DevOps's own. Only touches the DOM on a change. */
-function showTableRows(document: Document, isTable: boolean): void {
+function showTableRows(document: Document, isTable: boolean, now = Date.now()): void {
   const root = document.documentElement;
   if (root.hasAttribute(TABLE_ATTRIBUTE) !== isTable) {
     root.toggleAttribute(TABLE_ATTRIBUTE, isTable);
@@ -171,7 +180,11 @@ function showTableRows(document: Document, isTable: boolean): void {
     showHead(list, isTable);
     markCreatedByMe(list, isTable);
     for (const row of list.querySelectorAll(ROW_SELECTOR)) {
-      (isTable ? showCells : removeCells)(row);
+      if (isTable) {
+        showCells(row, now);
+      } else {
+        removeCells(row);
+      }
     }
   }
 }
