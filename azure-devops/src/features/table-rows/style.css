@@ -4,15 +4,16 @@
    take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
 :root[data-fix-ado-table]:not([data-fix-ado-win98]) table.repos-pr-list {
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
-  /* Fixed widths, so the columns of every list on the page line up. A column a list does not
-     have is 0px wide, and its cells do not show. */
+  /* The same widths in every list, so the columns of the page line up. A column a list does not
+     have is 0px wide, and its cells do not show. The title keeps at least 240px: Repository,
+     Target and Work item shrink first, with their full text on hover. */
   --fix-ado-table-author-width: 72px;
   --fix-ado-table-repository-width: 0px;
-  --fix-ado-table-work-item-width: 110px;
-  --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author]
+  --fix-ado-table-work-item-width: minmax(0, 110px);
+  --fix-ado-table-columns: [pipeline] 36px [title] minmax(240px, 1fr) [author]
     var(--fix-ado-table-author-width) [id] 72px [repository] var(--fix-ado-table-repository-width)
-    [target] 160px [work-item] var(--fix-ado-table-work-item-width) [reviewers] 100px [comments]
-    92px [age] 130px [more] 32px;
+    [target] minmax(0, 160px) [work-item] var(--fix-ado-table-work-item-width) [reviewers] 100px
+    [comments] 92px [age] 130px [more] 32px;
 
   display: block;
   font-size: 14px;
@@ -29,7 +30,7 @@
 
   /* Only the inbox names each pull request's repository: there it gets a column. */
   &:has(.fix-ado-table-repository:not(:empty)) {
-    --fix-ado-table-repository-width: 120px;
+    --fix-ado-table-repository-width: minmax(0, 120px);
   }
 
   &:not(:has(.fix-ado-table-repository:not(:empty))) .fix-ado-table-head-repository,
@@ -89,6 +90,15 @@
   & .fix-ado-table-head-comments,
   & .fix-ado-table-head-age {
     justify-content: flex-end;
+  }
+
+  /* A column header that does not fit, such as a shrunk Repository, ends in an ellipsis. */
+  & > .fix-ado-table-head th:not(.fix-ado-table-head-comments, .fix-ado-table-head-age) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 32px;
   }
 
   /* Each header cell on its column by name, as some columns are 0px wide. */
@@ -337,7 +347,7 @@
   }
 
   &:has(.fix-ado-work-item-group) > tbody > a.bolt-table-row > .fix-ado-table-work-item,
-  &:has(.fix-ado-work-item-group) .fix-ado-table-head-work-item {
+  &:has(.fix-ado-work-item-group) > .fix-ado-table-head th.fix-ado-table-head-work-item {
     display: none;
   }
 

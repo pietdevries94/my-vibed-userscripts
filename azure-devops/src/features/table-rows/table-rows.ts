@@ -125,13 +125,23 @@ function showRepository(row: Element): void {
   const repository =
     row.querySelector(".secondary-text .padding-horizontal-4:not(.monospaced-xs)")?.textContent ??
     "";
-  showText(cellOf(row, REPOSITORY_CLASS), repository);
+  const cell = cellOf(row, REPOSITORY_CLASS);
+  showText(cell, repository);
+  showTooltip(cell, repository);
+}
+
+/** The cell's full text on hover, for when the column has shrunk. */
+function showTooltip(cell: Element, text: string): void {
+  if (cell.getAttribute("title") !== text) {
+    cell.setAttribute("title", text);
+  }
 }
 
 /** The target branch, in Azure DevOps's monospace. */
 function showTarget(row: Element): void {
   const branch = row.querySelector(".secondary-text .monospaced-xs")?.textContent ?? "";
   const cell = cellOf(row, TARGET_CLASS);
+  showTooltip(cell, branch);
   const shownBranch = cell.querySelector(`:scope > .${BRANCH_CLASS}`);
   if (shownBranch !== null && cell.childNodes.length === 1) {
     showText(shownBranch, branch);

@@ -100,9 +100,13 @@ test("gives each pull request the author's name as a tooltip, its id, repository
   const row = rowOf(document);
   assert.equal(row.querySelector('[aria-colindex="1"]')?.getAttribute("title"), "Doe, Jane");
   assert.equal(row.querySelector(":scope > td.fix-ado-table-id")?.textContent, "!4021");
-  assert.equal(row.querySelector(":scope > td.fix-ado-table-repository")?.textContent, "Webshop");
+  const repository = row.querySelector(":scope > td.fix-ado-table-repository");
+  assert.equal(repository?.textContent, "Webshop");
   const target = row.querySelector(":scope > td.fix-ado-table-target");
   assert.equal(target?.textContent, "main");
+  // The full text on hover, for when the columns shrink to give the title room.
+  assert.equal(repository?.getAttribute("title"), "Webshop");
+  assert.equal(target?.getAttribute("title"), "main");
   assert.equal(target?.querySelector(".fix-ado-table-branch")?.textContent, "main");
   const workItem = row.querySelector(":scope > td.fix-ado-table-work-item");
   assert.equal(workItem?.textContent, "#77");
