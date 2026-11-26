@@ -20,6 +20,22 @@ test("every element the script added goes, with what it holds", () => {
   assert.equal(copy.querySelector(".bolt-button")?.textContent, "Filter");
 });
 
+test("the table's header and cells, the group rows and the stacked cards go too", () => {
+  const body = bodyOf(
+    `<div class="repos-pr-section-card fix-ado-assigned-card"><table></table></div>
+    <table class="repos-pr-list"><thead class="fix-ado-table-head"><tr><th>Id</th></tr></thead><tbody>
+      <tr class="fix-ado-work-item-group"><td>#12</td></tr>
+      <tr><td>Fix the thing<span class="fix-ado-linked-work-item">#12</span></td>
+        <td class="fix-ado-table-id">!4021</td><td class="fix-ado-table-target">main</td></tr>
+    </tbody></table>
+    <label class="fix-ado-table-switch">Table</label>`,
+  );
+  const copy = withoutScriptMarks(body);
+  assert.equal(copy.querySelector("[class*='fix-ado-']"), null);
+  assert.equal(copy.querySelectorAll("table").length, 1);
+  assert.equal(copy.querySelector("td")?.textContent, "Fix the thing");
+});
+
 test("the page's own elements stay, without the script's attributes and style properties", () => {
   const body = bodyOf(
     `<div class="bolt-coin" data-fix-ado-initials="QB" style="--fix-ado-hue: 12"><img alt=""></div>`,
