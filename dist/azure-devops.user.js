@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fix Azure DevOps
 // @namespace    https://github.com/pietdevries94/my-vibed-userscripts
-// @version      1.30.1
+// @version      1.31.0
 // @description  Adds missing features to Azure DevOps. A settings panel in the top bar turns each one on or off and marks new ones. General: Pull request lists and boards that reload on changes; A button that collapses the side panel of the inbox, Work and the organization home, as on a project. Appearance: Light or Dark to match the system; Avatar initials; A Windows 98 mode, a work in progress and off by default. Pull request lists: Required reviewers first; How long ago each active pull request was published, in red after two weekdays; The linked work item's id on each pull request, in a colour shared by the pull requests of one work item, with a switch that groups the lists by work item; The Assigned to me tabs under each other, as cards that fold on their own, so you scroll through them all; The lists as a table, with a column per field under a header, on by default with a Table switch. Comments and activity: Oldest first, with a button to flip the order; Pushes folded to one line, with a button that shows their commits; Lines that add reviewers joined to one; A New chip that glows on pushes and other changes you have not seen; A button that scrolls to the bottom; A chip with each thread's status; Threads that collapse, with buttons that collapse or expand all of them, or only the done ones; Resolved, Won't fix and Closed threads that start collapsed, unless a comment is unread; Unread comments that glow, with buttons to the first and next unread. Code review: Reviews that post your pending comments in one go, with your vote; A Viewed checkbox on each file in the Files tab, as on GitHub, with viewed files and folders collapsed and buttons to expand or collapse them; Starred reviewers to add in one click, also on a new pull request. Pipelines: Pipeline status on each pull request in the lists; Each check's warnings and errors above the description, in a box that collapses; A Pipeline tab with runs, stages, steps, warnings, errors and logs, and buttons to start, cancel or open a run; A pipeline run page's tabs, such as Code Coverage, as tabs of the pull request. Boards: Days in column dots on cards, with a toggle per column.
 // @match        https://dev.azure.com/*
 // @match        https://*.visualstudio.com/*
@@ -305,8 +305,8 @@
     start(context) {
       if (context.isInFrame)
         return null;
-      let isWindows98Mode2 = GM_getValue(WINDOWS_98_MODE_ID, !1);
-      return startSystemTheme(context, () => isWindows98Mode2), null;
+      let isWindows98Mode = GM_getValue(WINDOWS_98_MODE_ID, !1);
+      return startSystemTheme(context, () => isWindows98Mode), null;
     },
     styles: []
   };
@@ -3044,7 +3044,9 @@ html[data-fix-ado-win98]:is(
       box-shadow: var(--win98-thin);
     }
 
-    &:has(.repos-pr-section-tabs) > .flex-row:first-child:not(.bolt-card-content) {
+    /* A stacked Assigned to me card hides its sub-tabs and names its tab in the title. */
+    &:has(.repos-pr-section-tabs):not(:has(.fix-ado-assigned-tab-name))
+      > .flex-row:first-child:not(.bolt-card-content) {
       height: 46px;
       align-items: flex-end;
       padding-bottom: 4px;
@@ -3181,6 +3183,420 @@ html[data-fix-ado-win98]:is(
     overflow: hidden;
     text-overflow: ellipsis;
     color: #404040;
+  }
+}
+
+/* A work item's colour, as in the PullRequestsTable artboard: one of five palette colours, which
+   Linked work item gives in the order of the work items' ids, shown as a 9px swatch in a black
+   frame at the front of each of its rows and its group row. */
+html[data-fix-ado-win98] {
+  [data-fix-ado-work-item-palette-color="0"] {
+    --fix-ado-work-item-color: var(--win98-teal);
+  }
+
+  [data-fix-ado-work-item-palette-color="1"] {
+    --fix-ado-work-item-color: var(--win98-purple);
+  }
+
+  [data-fix-ado-work-item-palette-color="2"] {
+    --fix-ado-work-item-color: var(--win98-olive);
+  }
+
+  [data-fix-ado-work-item-palette-color="3"] {
+    --fix-ado-work-item-color: var(--win98-green);
+  }
+
+  [data-fix-ado-work-item-palette-color="4"] {
+    --fix-ado-work-item-color: var(--win98-maroon);
+  }
+}
+
+html[data-fix-ado-win98]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body {
+  .bolt-tabbar > .fix-ado-table-switch {
+    align-self: center;
+  }
+
+  /* The card list: a list with coloured rows gives every row a column for the swatch, so the
+     avatars stay lined up. */
+  html:not([data-fix-ado-table])
+    &
+    .repos-pr-list:has(> tbody > [data-fix-ado-work-item-palette-color])
+    > tbody
+    > a.bolt-table-row {
+    grid-template-columns: 9px 32px minmax(0, 1fr) 120px 70px 160px;
+
+    &::before {
+      content: "";
+      height: 9px;
+    }
+  }
+
+  a.bolt-table-row[data-fix-ado-work-item-palette-color]::before,
+  a.bolt-table-row[data-fix-ado-work-item-palette-color] > [aria-colindex="2"]::before,
+  .fix-ado-work-item-group[data-fix-ado-work-item-palette-color] > td::before {
+    background: var(--fix-ado-work-item-color);
+    box-shadow: 0 0 0 1px var(--win98-text);
+  }
+
+  /* The work item's number in its swatch's colour. */
+  .fix-ado-work-item-group[data-fix-ado-work-item-palette-color] > td > a,
+  a.bolt-table-row[data-fix-ado-work-item-palette-color] .fix-ado-linked-work-item {
+    color: var(--fix-ado-work-item-color);
+  }
+
+  .fix-ado-work-item-group[data-fix-ado-work-item-palette-color] > td::before {
+    content: "";
+    order: -1;
+    flex: none;
+    width: 9px;
+    height: 9px;
+  }
+}
+
+/* An empty card's message in a table, in line with the card's title: after the header's 10px,
+   the 13px +/- box and its 8px. */
+html[data-fix-ado-win98][data-fix-ado-table]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body
+  .repos-pr-section-no-results-message {
+  margin: 0;
+  padding: 6px 0 6px calc(10px + 13px + 8px);
+}
+
+/* Pull requests as a table, as in the PullRequestsTable artboard: Explorer's Details view. Each
+   card's list is white, under a row of raised column headers, with a 20px line per pull request.
+   As in the normal table, the list is one grid and the header and each row are subgrids of it,
+   so Repository, Target and Work item are as wide as their longest text; text that does not fit
+   ends in an ellipsis. */
+html[data-fix-ado-win98][data-fix-ado-table]:is(
+    [data-fix-ado-win98="pull-request-list"],
+    [data-fix-ado-win98="pull-request-inbox"]
+  )
+  body
+  table.repos-pr-list {
+  --fix-ado-table-author-width: 46px;
+  --fix-ado-table-repository-width: 0px;
+  --fix-ado-table-work-item-width: minmax(0, max-content);
+
+  display: grid;
+  grid-template-columns:
+    [pipeline] 36px [title] minmax(240px, 1fr) [author] var(--fix-ado-table-author-width)
+    [id] max-content [repository] var(--fix-ado-table-repository-width)
+    [target] minmax(0, max-content) [work-item] var(--fix-ado-table-work-item-width)
+    [reviewers] max-content [comments] max-content [age] max-content;
+
+  &[data-fix-ado-has-repository] {
+    --fix-ado-table-repository-width: minmax(0, max-content);
+  }
+
+  &[data-fix-ado-created-by-me] {
+    --fix-ado-table-author-width: 0px;
+  }
+
+  /* Grouped lists name the work item in their group rows, also while Linked work item loads the
+     groups. */
+  &:is(:has(.fix-ado-work-item-group), [data-fix-ado-groups-loading]) {
+    --fix-ado-table-work-item-width: 0px;
+  }
+
+  &:is(:has(.fix-ado-work-item-group), [data-fix-ado-groups-loading])
+    :is(.fix-ado-table-head-work-item, a.bolt-table-row > .fix-ado-table-work-item),
+  &:not([data-fix-ado-has-repository])
+    :is(.fix-ado-table-head-repository, a.bolt-table-row > .fix-ado-table-repository),
+  &[data-fix-ado-created-by-me]
+    :is(.fix-ado-table-head-author, a.bolt-table-row > [aria-colindex="1"]) {
+    display: none;
+  }
+
+  & > :is(.fix-ado-table-head, tbody) {
+    display: contents;
+  }
+
+  & > tbody > * {
+    grid-column: 1 / -1;
+  }
+
+  & > .fix-ado-table-head > tr,
+  & > tbody > a.bolt-table-row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    gap: 0;
+    padding: 0;
+  }
+
+  /* Azure DevOps skips drawing rows out of view, which contains each row's layout. A subgrid
+     cannot be contained, so every row is drawn. */
+  & > tbody > a.bolt-table-row {
+    content-visibility: visible;
+  }
+
+  & > .fix-ado-table-head th {
+    display: block;
+    grid-row: 1;
+    height: 18px;
+    padding: 0 6px;
+    overflow: hidden;
+    background: var(--win98-face);
+    box-shadow: var(--win98-raised);
+    font-weight: 400;
+    line-height: 18px;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fix-ado-table-head-pipeline {
+    grid-column: pipeline;
+  }
+
+  .fix-ado-table-head-title {
+    grid-column: title;
+  }
+
+  .fix-ado-table-head-author {
+    grid-column: author;
+  }
+
+  .fix-ado-table-head-id {
+    grid-column: id;
+  }
+
+  .fix-ado-table-head-repository {
+    grid-column: repository;
+  }
+
+  .fix-ado-table-head-target {
+    grid-column: target;
+  }
+
+  .fix-ado-table-head-work-item {
+    grid-column: work-item;
+  }
+
+  .fix-ado-table-head-reviewers {
+    grid-column: reviewers;
+  }
+
+  .fix-ado-table-head-comments {
+    grid-column: comments;
+  }
+
+  .fix-ado-table-head-age {
+    grid-column: age;
+  }
+
+  /* Each age centred in its slot and the dots between them; the header's c, u and p sit in the
+     same slots, right above the ages they name. */
+  :is(.fix-ado-table-age, .fix-ado-table-age-legend) {
+    display: grid;
+    grid-template-columns: 30px 10px 30px 10px 30px;
+    text-align: center;
+  }
+
+  & > tbody > a.bolt-table-row {
+    height: 20px;
+
+    & > td {
+      display: flex;
+      grid-row: 1;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      height: 20px;
+      padding: 0 6px;
+      /* Azure DevOps's line between rows, which would centre the cells half a pixel low. */
+      border: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    & > :is(.bolt-table-spacer-cell, .bolt-table-cell-side-action) {
+      display: none;
+    }
+
+    .bolt-table-cell-content {
+      min-width: 0;
+      padding: 0;
+    }
+
+    /* The swatch, the pipeline status and the title with its pills, on the first two columns. */
+    & > [aria-colindex="2"] {
+      grid-column: pipeline / span 2;
+      padding-left: 5px;
+
+      &::before {
+        content: "";
+        flex: none;
+        width: 9px;
+        height: 9px;
+      }
+
+      .bolt-table-cell-content {
+        flex-direction: row;
+      }
+    }
+
+    .bolt-table-two-line-cell-item:first-child {
+      gap: 4px;
+      min-width: 0;
+      overflow: hidden;
+
+      .fix-ado-pipeline-status {
+        order: -1;
+        margin-right: 6px;
+      }
+
+      .body-l {
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+
+    .bolt-table-two-line-cell-item:nth-child(2) {
+      display: none;
+    }
+
+    & > [aria-colindex="1"] {
+      grid-column: author;
+    }
+
+    & > .fix-ado-table-id {
+      grid-column: id;
+    }
+
+    & > .fix-ado-table-repository {
+      grid-column: repository;
+    }
+
+    & > .fix-ado-table-target {
+      grid-column: target;
+    }
+
+    .fix-ado-table-branch {
+      font-family: var(--win98-mono);
+    }
+
+    & > .fix-ado-table-work-item {
+      grid-column: work-item;
+
+      &[data-fix-ado-is-id] {
+        color: var(--win98-link);
+      }
+    }
+
+    /* While Linked work item loads the row's work items: a grey bar that pulses. */
+    &[data-fix-ado-work-item-loading] > .fix-ado-table-work-item::after {
+      content: "";
+      flex: none;
+      width: 48px;
+      height: 8px;
+      background: var(--win98-face);
+      animation: fix-ado-table-skeleton 1.2s ease-in-out infinite alternate;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    }
+
+    /* The label has its own column: no separator from the line under the title. */
+    .fix-ado-linked-work-item::before {
+      content: none;
+    }
+
+    & > :is(.fix-ado-table-repository, .fix-ado-table-target, .fix-ado-table-work-item) > *,
+    & > .fix-ado-table-target {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    & > [aria-colindex="3"] {
+      grid-column: reviewers;
+
+      .rhythm-horizontal-8 {
+        gap: 2px;
+      }
+
+      /* Required reviewers spaces each reviewer with an !important margin, and puts the required
+         ones first by order: 2px apart instead, and 6px after a required one, clear of its
+         frame. */
+      .pr-reviewer {
+        margin: 0 !important;
+      }
+
+      .pr-reviewer[data-fix-ado-required] {
+        margin-right: 6px !important;
+      }
+
+      /* A reviewer's vote: a 9px badge on the avatar's corner, so it does not cover the 16px
+         avatar. */
+      .repos-pr-reviewer-vote {
+        inset: auto -2px -2px auto;
+        display: grid;
+        place-items: center;
+        box-sizing: border-box;
+        width: 9px;
+        height: 9px;
+        border: 1px solid var(--win98-field-face);
+        border-radius: 50%;
+        font-size: 6px;
+        line-height: 1;
+      }
+    }
+
+    & > [aria-colindex="4"] {
+      grid-column: comments;
+    }
+
+    /* Only the ages: the site's times and Published since are the table's Age column. */
+    & > [aria-colindex="5"] {
+      grid-column: age;
+
+      /* Kept for screen readers, out of sight. */
+      & > .bolt-table-cell-content {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+    }
+
+    .fix-ado-table-age-published[data-fix-ado-is-stale] {
+      color: var(--win98-maroon);
+      font-weight: 700;
+    }
+
+    /* Avatars 16px, initials too. */
+    .bolt-coin,
+    .bolt-coin-content {
+      width: 16px;
+      height: 16px;
+      font-size: 8px;
+    }
+
+    [data-fix-ado-initials]::after {
+      font-size: 8px;
+    }
+  }
+
+  /* A group row's swatch in line with its rows' swatches. */
+  & > tbody > .fix-ado-work-item-group > td {
+    padding-left: 5px;
+  }
+
+  /* Something new since the last visit: the title in bold, as Outlook Express shows unread mail. */
+  .bolt-list-row-marked .bolt-table-two-line-cell-item .body-l {
+    font-weight: 700;
   }
 }
 
@@ -3419,6 +3835,11 @@ html[data-fix-ado-win98]:is(
     .repos-pr-section-header-title {
       align-items: center;
       gap: 8px;
+
+      /* A stacked Assigned to me card names its tab after the title, a space apart. */
+      &:has(> .fix-ado-assigned-tab-name) {
+        gap: 0;
+      }
     }
 
     .bolt-pill {
@@ -3625,7 +4046,7 @@ html[data-fix-ado-win98]:is(
 
   /* A section header with sub-tabs: the +/- box at the bottom, the title 14px high and 3px
      above the tabs. */
-  .repos-pr-section-card:has(.repos-pr-section-tabs) {
+  .repos-pr-section-card:has(.repos-pr-section-tabs):not(:has(.fix-ado-assigned-tab-name)) {
     .bolt-button.repos-pr-section-expand-button {
       align-self: flex-end;
       margin-bottom: 5px;
@@ -3634,6 +4055,24 @@ html[data-fix-ado-win98]:is(
     .repos-pr-section-header-title {
       height: 14px;
       margin-bottom: 3px;
+    }
+  }
+
+  /* A stacked Assigned to me card's tab name: "· Active" a space after the title, and its count
+     8px after it, as every section's count. */
+  .fix-ado-assigned-tab-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+
+    &::before {
+      content: "\\a0";
+      margin-right: -8px;
+    }
+
+    .bolt-pill {
+      margin: 0;
     }
   }
 
@@ -9205,6 +9644,7 @@ html[data-fix-ado-win98]:is(
   --win98-maroon: #800000;
   --win98-green: #008000;
   --win98-teal: #008080;
+  --win98-purple: #800080;
   --win98-title: linear-gradient(90deg, var(--win98-navy), var(--win98-title-end));
   --win98-title-inactive: linear-gradient(90deg, #808080, #b5b5b5);
 
@@ -18088,10 +18528,17 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     let table = list.closest("table");
     table === null || table.hasAttribute(LOADING_ATTRIBUTE) === isLoading || (table.toggleAttribute(LOADING_ATTRIBUTE, isLoading), isLoading ? table.setAttribute("aria-busy", "true") : table.removeAttribute("aria-busy"));
   }
-  var HUE_ATTRIBUTE = "data-fix-ado-work-item-hue", HUE_PROPERTY = "--fix-ado-work-item-hue", FULL_TURN = 360, BLUE_HUE = 250, GROUP_ROW_SELECTOR = ":scope > tr.fix-ado-work-item-group";
+  var HUE_ATTRIBUTE = "data-fix-ado-work-item-hue", HUE_PROPERTY = "--fix-ado-work-item-hue", PALETTE_COLOR_ATTRIBUTE = "data-fix-ado-work-item-palette-color", PALETTE_COLORS = 5, FULL_TURN = 360, BLUE_HUE = 250, GROUP_ROW_SELECTOR = ":scope > tr.fix-ado-work-item-group";
+  function showPaletteColor(element4, paletteColor) {
+    let shown = paletteColor === null ? null : String(paletteColor);
+    element4.getAttribute(PALETTE_COLOR_ATTRIBUTE) !== shown && (shown === null ? element4.removeAttribute(PALETTE_COLOR_ATTRIBUTE) : element4.setAttribute(PALETTE_COLOR_ATTRIBUTE, shown));
+  }
   function showHue(element4, hue) {
     let shown = hue === null ? null : String(hue);
     element4.getAttribute(HUE_ATTRIBUTE) !== shown && (shown === null ? (element4.removeAttribute(HUE_ATTRIBUTE), element4.style.removeProperty(HUE_PROPERTY)) : (element4.setAttribute(HUE_ATTRIBUTE, shown), element4.style.setProperty(HUE_PROPERTY, shown)));
+  }
+  function showColor(element4, color) {
+    showHue(element4, color?.hue ?? null), showPaletteColor(element4, color?.paletteColor ?? null);
   }
   var singleWorkItem = (linked) => linked?.ids.length === 1 ? linked.ids[0] ?? null : null;
   function coloredWorkItems({ rows, isGrouped }) {
@@ -18102,28 +18549,31 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
     }
     return new Set([...counts].filter(([, count]) => isGrouped || count > 1).map(([id]) => id));
   }
-  function workItemHues(workItemIds) {
+  function workItemColors(workItemIds) {
     let ids = [...new Set(workItemIds)].toSorted((first, second) => first - second);
     return new Map(
       ids.map((id, index) => [
         id,
-        Math.floor(BLUE_HUE + (index + 1) * FULL_TURN / (ids.length + 1)) % FULL_TURN
+        {
+          hue: Math.floor(BLUE_HUE + (index + 1) * FULL_TURN / (ids.length + 1)) % FULL_TURN,
+          paletteColor: index % PALETTE_COLORS
+        }
       ])
     );
   }
-  function showListColors({ list, rows, isGrouped }, colored, hues) {
-    let hueOf2 = (id) => id !== null && colored.has(id) ? hues.get(id) ?? null : null;
+  function showListColors({ list, rows, isGrouped }, colored, colors) {
+    let colorOf = (id) => id !== null && colored.has(id) ? colors.get(id) ?? null : null;
     for (let { row, linked } of rows)
-      showHue(row, hueOf2(singleWorkItem(linked)));
+      showColor(row, colorOf(singleWorkItem(linked)));
     for (let groupRow of list.querySelectorAll(GROUP_ROW_SELECTOR)) {
       let id = Number(groupRow.dataset.fixAdoWorkItemGroup);
-      showHue(groupRow, isGrouped && Number.isInteger(id) ? hueOf2(id) : null);
+      showColor(groupRow, isGrouped && Number.isInteger(id) ? colorOf(id) : null);
     }
   }
   function showWorkItemColors(lists) {
-    let colored = lists.map((list) => coloredWorkItems(list)), hues = workItemHues(colored.flatMap((ids) => [...ids]));
+    let colored = lists.map((list) => coloredWorkItems(list)), colors = workItemColors(colored.flatMap((ids) => [...ids]));
     for (let [index, list] of lists.entries())
-      showListColors(list, colored[index] ?? /* @__PURE__ */ new Set(), hues);
+      showListColors(list, colored[index] ?? /* @__PURE__ */ new Set(), colors);
   }
 
   // azure-devops/src/features/linked-work-item/linked-work-item-fetcher.ts
@@ -18156,6 +18606,7 @@ html[data-fix-ado-run-tab-frame] .run-details-page > :not(.run-details-tab-conte
       }
     }
     return {
+      isLoading: (pullRequestId) => !fetched.has(pullRequestId),
       linkedWorkItems: (pullRequestId) => fetched.get(pullRequestId)?.linkedWorkItems ?? null,
       async sync() {
         if (!isFetching) {
@@ -18357,14 +18808,17 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
       row
     }));
   }
+  var LOADING_ATTRIBUTE2 = "data-fix-ado-work-item-loading";
   function showLinkedWorkItemLabels(rows, fetcher, isGrouped) {
     for (let { row, pullRequest } of rows) {
       let linked = isGrouped ? null : fetcher.linkedWorkItems(pullRequest.pullRequestId);
       showLinkedWorkItem(row, linked === null ? null : linkedWorkItemLabel(linked));
+      let isLoading = !isGrouped && fetcher.isLoading(pullRequest.pullRequestId);
+      row.hasAttribute(LOADING_ATTRIBUTE2) !== isLoading && row.toggleAttribute(LOADING_ATTRIBUTE2, isLoading);
     }
   }
   var linkedWorkItem = {
-    change: { kind: "updated", version: "1.28.0" },
+    change: { kind: "updated", version: "1.31.0" },
     description: "The work item id under the title, in a colour its pull requests share, and a switch that groups the lists by work item.",
     id: "linked-work-item",
     name: "Linked work item",
@@ -18652,6 +19106,36 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
     styles: [style_default21]
   };
 
+  // azure-devops/src/features/table-rows/creation-dates.ts
+  function createCreationDates({ client, now }) {
+    let fetched = /* @__PURE__ */ new Map(), retryAt = /* @__PURE__ */ new Map(), isFetching = !1;
+    async function fetchOne(pullRequest) {
+      try {
+        fetched.set(
+          pullRequest.pullRequestId,
+          Date.parse(await client.getPullRequestCreationDate(pullRequest))
+        ), retryAt.delete(pullRequest.pullRequestId);
+      } catch {
+        retryAt.set(pullRequest.pullRequestId, now() + FAILED_REQUEST_RETRY_MS);
+      }
+    }
+    let isDue = ({ pullRequestId }) => !fetched.has(pullRequestId) && (retryAt.get(pullRequestId) ?? 0) <= now();
+    return {
+      createdAt: (pullRequestId) => fetched.get(pullRequestId) ?? null,
+      async sync(pullRequests) {
+        if (!isFetching) {
+          isFetching = !0;
+          try {
+            for (let pullRequest of pullRequests.filter((listed) => isDue(listed)))
+              await fetchOne(pullRequest);
+          } finally {
+            isFetching = !1;
+          }
+        }
+      }
+    };
+  }
+
   // azure-devops/src/features/table-rows/table-age.ts
   var AGE_CELL_SELECTOR = '[aria-colindex="5"]', AGE_CLASS = "fix-ado-table-age", STALE_ATTRIBUTE = "data-fix-ado-is-stale", AGE_LETTERS = ["c", "·", "u", "·", "p"], AGE_TOOLTIP = "Age: created · updated · published", NO_AGE = "–", PUBLISHED_SINCE_CLASS2 = "fix-ado-published-since", TOO_LONG_AGO_CLASS2 = "fix-ado-published-since-too-long", PUBLISHED_PATTERN = /^Published (?:just now|(?<count>\d+) (?<unit>minute|hour|day|month|year)s? ago)$/u, CREATED_WORD = "Created", SHORT_UNITS = {
     day: "d",
@@ -18870,45 +19354,12 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
       isTable ? showCells(row, times) : removeCells(row);
     markHasRepository(list, isTable);
   }
-  function isWindows98Mode(document2) {
-    return Object.hasOwn(document2.documentElement.dataset, "fixAdoWin98");
-  }
-
-  // azure-devops/src/features/table-rows/creation-dates.ts
-  function createCreationDates({ client, now }) {
-    let fetched = /* @__PURE__ */ new Map(), retryAt = /* @__PURE__ */ new Map(), isFetching = !1;
-    async function fetchOne(pullRequest) {
-      try {
-        fetched.set(
-          pullRequest.pullRequestId,
-          Date.parse(await client.getPullRequestCreationDate(pullRequest))
-        ), retryAt.delete(pullRequest.pullRequestId);
-      } catch {
-        retryAt.set(pullRequest.pullRequestId, now() + FAILED_REQUEST_RETRY_MS);
-      }
-    }
-    let isDue = ({ pullRequestId }) => !fetched.has(pullRequestId) && (retryAt.get(pullRequestId) ?? 0) <= now();
-    return {
-      createdAt: (pullRequestId) => fetched.get(pullRequestId) ?? null,
-      async sync(pullRequests) {
-        if (!isFetching) {
-          isFetching = !0;
-          try {
-            for (let pullRequest of pullRequests.filter((listed) => isDue(listed)))
-              await fetchOne(pullRequest);
-          } finally {
-            isFetching = !1;
-          }
-        }
-      }
-    };
-  }
 
   // azure-devops/src/features/table-rows/style.css
   var style_default22 = `/* The pull request lists as a table, as design B of the inbox redesigns. table-rows.ts marks
    <html> on a list page while the Table switch is on, and adds the header and the cells Azure
    DevOps has no column for. Each row becomes a grid on the same columns, so the site's cells can
-   take the design's order. Windows 98 mode lays the rows out itself, so it is left alone. */
+   take the design's order. Windows 98 mode styles the table in its own CSS, so it is left alone. */
 :root[data-fix-ado-table]:not([data-fix-ado-win98]) table.repos-pr-list {
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
   /* One grid per table; the header and each row are subgrids of it. A column a list does not have
@@ -19154,6 +19605,19 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
 
   & .bolt-list-row-marked .bolt-table-two-line-cell-item .body-l.font-weight-semibold {
     font-weight: 600;
+  }
+
+  /* While Linked work item loads a row's work items, its Work item cell shows a grey bar that
+     pulses, as the skeleton rows do. */
+  & > tbody > a.bolt-table-row[data-fix-ado-work-item-loading] > .fix-ado-table-work-item::after {
+    content: "";
+    display: inline-block;
+    vertical-align: middle;
+    width: 56px;
+    height: 10px;
+    border-radius: 5px;
+    background: var(--fix-ado-table-line);
+    animation: fix-ado-table-skeleton 1.2s ease-in-out infinite alternate;
   }
 
   /* No line under the last row: the card ends there. */
@@ -19638,7 +20102,8 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::after,
-  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::before {
+  :root[data-fix-ado-table] table.repos-pr-list[data-fix-ado-groups-loading] td::before,
+  :root[data-fix-ado-table] a.bolt-table-row[data-fix-ado-work-item-loading] td::after {
     animation: none;
   }
 }
@@ -19654,8 +20119,8 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
 
   // azure-devops/src/features/table-rows/index.ts
   var IS_TABLE_KEY = "table-rows-on", TABLE_SWITCH = { className: "fix-ado-table-switch", label: "Table" }, tableRows = {
-    change: { kind: "new", version: "1.28.0" },
-    description: "A column per field and one row per pull request. A Table switch on the lists flips it. Not in Windows 98 mode.",
+    change: { kind: "updated", version: "1.31.0" },
+    description: "A column per field and one row per pull request. A Table switch on the lists flips it.",
     id: "table-rows",
     name: "Pull requests as a table",
     start({ basePath: basePath2, client, document: document2, now }) {
@@ -19671,7 +20136,7 @@ table[data-fix-ado-groups-loading] [data-fix-ado-work-item-hue]::after {
       }
       return {
         sync({ page, isTabActive: isTabActive2 }) {
-          if (isList = (page.kind === "pull-request-list" || page.kind === "pull-request-inbox") && !isWindows98Mode(document2), show3(), isList && isTable && isTabActive2) {
+          if (isList = page.kind === "pull-request-list" || page.kind === "pull-request-inbox", show3(), isList && isTable && isTabActive2) {
             let undated = findPullRequestRows(document2, basePath2).filter(
               ({ row }) => needsCreationDate(row)
             );
