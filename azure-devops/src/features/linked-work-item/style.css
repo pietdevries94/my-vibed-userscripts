@@ -39,7 +39,7 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
 
 /* A work item's colour: a 3px bar at the front of its rows and its group row, over the line
    under each, so a group's bar runs on. On a row Azure DevOps marks with something new, the bar
-   is 5px and covers the blue mark, which would not read next to it. The work item's link takes
+   is 5px and takes the place of the blue mark, which would not read next to it. The work item's link takes
    the same colour. work-item-group-rows.ts sets the hue. Not in Windows 98 mode, nor while the
    table shows its skeleton. */
 :root:not([data-fix-ado-win98])
@@ -58,6 +58,11 @@ html[data-fix-ado-win98] .fix-ado-work-item-group {
 
   &.bolt-list-row-marked::after {
     width: 5px;
+  }
+
+  /* Azure DevOps's own list draws its blue mark as the first cell's left border. */
+  &.bolt-list-row-marked > .bolt-list-cell:first-child {
+    border-left-color: transparent;
   }
 
   & .fix-ado-linked-work-item,
