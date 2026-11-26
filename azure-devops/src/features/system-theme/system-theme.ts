@@ -23,8 +23,6 @@ type ThemeLooks = Record<string, ThemeLook>;
 
 interface SystemThemeOptions {
   document: Document;
-  /** True in Windows 98 mode, which Azure DevOps's dark palette breaks: the page wants Light. */
-  isLightForced: () => boolean;
   looks: { load: () => ThemeLooks; save: (looks: ThemeLooks) => void };
   onSystemThemeChange: (listener: () => void) => void;
   prefersDark: () => boolean;
@@ -122,7 +120,7 @@ function rememberLook({ document, looks }: SystemThemeOptions): void {
 /** The theme to switch to, or null when the page shows it already or shows a theme the script leaves alone. */
 function themeToSwitchTo(options: SystemThemeOptions): string | null {
   const current = currentThemeId(options.document);
-  const wanted = options.prefersDark() && !options.isLightForced() ? DARK_THEME_ID : LIGHT_THEME_ID;
+  const wanted = options.prefersDark() ? DARK_THEME_ID : LIGHT_THEME_ID;
   return isFollowedTheme(current) && current !== wanted ? wanted : null;
 }
 
@@ -146,7 +144,6 @@ async function switchToSystemTheme(
   const wanted = themeToSwitchTo(options);
   log("System theme: checked", {
     current: currentThemeId(options.document) ?? null,
-    isLightForced: options.isLightForced(),
     isPageLoad,
     prefersDark: options.prefersDark(),
     rememberedThemes: Object.keys(options.looks.load()),

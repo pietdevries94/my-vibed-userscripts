@@ -118,38 +118,3 @@ test("a theme picked in Azure DevOps's own panel is remembered on the next check
 
   assert.deepEqual(page.stored, { [DARK]: DARK_LOOK, [LIGHT]: LIGHT_LOOK });
 });
-
-test("Windows 98 mode keeps a light page Light on a dark system", async () => {
-  const page = pageIn(LIGHT, LIGHT_LOOK);
-  page.prefersDark.matches = true;
-  page.isLightForced = true;
-  page.stored = { [DARK]: DARK_LOOK };
-  await follow(page).start();
-
-  assert.deepEqual(page.saved, []);
-  assert.equal(rootStyleOf(page.document), LIGHT_ROOT);
-});
-
-test("Windows 98 mode switches a dark page to Light on a dark system", async () => {
-  const page = pageIn(DARK, DARK_LOOK);
-  page.prefersDark.matches = true;
-  page.isLightForced = true;
-  page.stored = { [LIGHT]: LIGHT_LOOK };
-  await follow(page).start();
-
-  assert.deepEqual(page.saved, [LIGHT]);
-  assert.equal(rootStyleOf(page.document), LIGHT_ROOT);
-});
-
-test("in Windows 98 mode, the system turning dark leaves the page Light", async () => {
-  const page = pageIn(LIGHT, LIGHT_LOOK);
-  page.isLightForced = true;
-  page.stored = { [DARK]: DARK_LOOK };
-  const systemTheme = follow(page);
-  await systemTheme.start();
-  page.prefersDark.change(true);
-  await systemTheme.settled();
-
-  assert.deepEqual(page.saved, []);
-  assert.equal(rootStyleOf(page.document), LIGHT_ROOT);
-});

@@ -31,13 +31,42 @@ function windows98PageOf(
   return WORK_ITEM_PATH.test(location.pathname) ? "work-item" : null;
 }
 
+/** The start of the body classes Azure DevOps sets per theme, such as `ms-vss-web-vsts-theme-dark`. */
+const THEME_CLASS_PREFIX = "ms-vss-web-vsts-theme";
+const DARK_SUFFIX = "-dark";
+
+/** True while Azure DevOps shows Dark: it marks the body with the theme's id, or its class. */
+function isDarkTheme(body: HTMLElement): boolean {
+  const { theme } = body.dataset;
+  if (theme !== undefined) {
+    return theme.endsWith(DARK_SUFFIX);
+  }
+  return [...body.classList].some(
+    (name) => name.startsWith(THEME_CLASS_PREFIX) && name.endsWith(DARK_SUFFIX),
+  );
+}
+
+/** Marks `<html>` with the dark scheme while Azure DevOps shows Dark, for the tokens. */
+function showScheme(document: Document): void {
+  const isDark = document.body !== null && isDarkTheme(document.body);
+  const root = document.documentElement;
+  if ((root.dataset.win98Scheme === "dark") !== isDark) {
+    if (isDark) {
+      root.dataset.win98Scheme = "dark";
+    } else {
+      delete root.dataset.win98Scheme;
+    }
+  }
+}
+
 interface Windows98Mode {
   sync: (page: Page, location: { pathname: string; search: string }) => void;
 }
 
 /**
- * Marks `<html>` with the captured page it shows, empty on any other page, for the
- * stylesheet. Copies the page title to the top bar, which shows it in its title bar.
+ * Marks `<html>` with the captured page it shows, empty on any other page, and with the dark
+ * scheme while Azure DevOps shows Dark, for the stylesheet. Copies the page title to the top
+ * bar, which shows it in its title bar.
  */
 function createWindows98Mode(document: Document): Windows98Mode {
   const root = document.documentElement;
@@ -47,6 +76,7 @@ function createWindows98Mode(document: Document): Windows98Mode {
       if (root.dataset.fixAdoWin98 !== windows98Page) {
         root.dataset.fixAdoWin98 = windows98Page;
       }
+      showScheme(document);
       const topBar = document.querySelector<HTMLElement>(TOP_BAR_SELECTOR);
       if (topBar && topBar.dataset.fixAdoWindowTitle !== document.title) {
         topBar.dataset.fixAdoWindowTitle = document.title;
@@ -56,4 +86,4 @@ function createWindows98Mode(document: Document): Windows98Mode {
 }
 
 export type { Windows98Page };
-export { createWindows98Mode, windows98PageOf };
+export { createWindows98Mode, showScheme, windows98PageOf };

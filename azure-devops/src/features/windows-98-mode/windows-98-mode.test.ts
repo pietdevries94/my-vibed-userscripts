@@ -81,3 +81,20 @@ test("a page without a top bar, such as a run page in a frame, still gets marked
   createWindows98Mode(document).sync(OTHER, at("/org/harbor/_build/results", "?buildId=3"));
   assert.equal(document.documentElement.dataset.fixAdoWin98, "pipeline-run");
 });
+
+test("the dark scheme follows Azure DevOps's Dark theme, by its body class or id", () => {
+  const { document } = new JSDOM("<!doctype html><body></body>").window;
+  const mode = createWindows98Mode(document);
+  const scheme = (): string | undefined => document.documentElement.dataset.win98Scheme;
+  mode.sync(OTHER, at("/org"));
+  assert.equal(scheme(), undefined);
+  document.body.className = "ms-vss-web-vsts-theme-dark";
+  mode.sync(OTHER, at("/org"));
+  assert.equal(scheme(), "dark");
+  document.body.className = "ms-vss-web-vsts-theme";
+  mode.sync(OTHER, at("/org"));
+  assert.equal(scheme(), undefined);
+  document.body.dataset.theme = "ms.vss-web.vsts-theme-dark";
+  mode.sync(OTHER, at("/org"));
+  assert.equal(scheme(), "dark");
+});

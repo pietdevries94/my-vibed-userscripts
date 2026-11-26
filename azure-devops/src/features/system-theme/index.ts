@@ -1,23 +1,43 @@
 import type { Feature } from "../../core/feature.ts";
-import { startSystemTheme } from "./start-system-theme.ts";
+import type { ThemeLooks } from "./system-theme.ts";
+import { createSystemTheme } from "./system-theme.ts";
 
-// The storage key and default of Windows 98 mode's on/off choice. Saving a choice reloads the
-// page, so it is read once.
-const WINDOWS_98_MODE_ID = "windows-98-mode";
+const THEME_LOOKS_KEY = "system-theme-looks";
+const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
 
 const followSystemTheme: Feature = {
   change: { kind: "new", version: "1.7.2" },
-  description: "Switches between Light and Dark with your system. Windows 98 mode stays Light.",
+  description: "Switches between Light and Dark with your system.",
   // The key of the earlier menu setting, so the owner's choice stays.
   id: "follow-system-theme",
   name: "Match the system theme",
-  start(context) {
+  start({ client, document, isInFrame, reloadWhenIdle }) {
     // A frame shows a run page inside a pull request; the top page follows the system.
-    if (context.isInFrame) {
+    if (isInFrame) {
       return null;
     }
-    const isWindows98Mode = GM_getValue<boolean>(WINDOWS_98_MODE_ID, false);
-    startSystemTheme(context, () => isWindows98Mode);
+    const systemDark = globalThis.matchMedia(SYSTEM_DARK_QUERY);
+    const theme = createSystemTheme({
+      document,
+      looks: {
+        load: () => GM_getValue<ThemeLooks>(THEME_LOOKS_KEY, {}),
+        save: (looks) => {
+          GM_setValue(THEME_LOOKS_KEY, looks);
+        },
+      },
+      onSystemThemeChange: (listener) => {
+        systemDark.addEventListener("change", listener);
+      },
+      prefersDark: () => systemDark.matches,
+      reload: reloadWhenIdle,
+      saveTheme: async (themeId) => client.saveTheme(themeId),
+    });
+    // Azure DevOps marks the theme on the body after the script starts, and again when
+    // the theme panel switches.
+    new MutationObserver(() => {
+      theme.onPageChange();
+    }).observe(document.body, { attributeFilter: ["class", "data-theme"], attributes: true });
+    void theme.start();
     // The theme has its own observer and listener. It needs no sync.
     return null;
   },

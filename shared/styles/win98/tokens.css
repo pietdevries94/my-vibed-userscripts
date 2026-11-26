@@ -17,6 +17,7 @@
   --win98-title-text: #fff;
   --win98-selected-text: #fff;
   --win98-field-face: #fff;
+  --win98-secondary-text: #404040;
   --win98-navy: #000080;
   --win98-title-end: #1084d0;
   --win98-desktop: var(--win98-teal);
@@ -75,8 +76,8 @@
 }
 
 /* The dark scheme, measured from a dark Windows 98 colour scheme: a #3f3f3f face, bevels lit with
-   #9f9f9f and shaded with #292929 and black, white text, a black-to-grey title bar. Fields share
-   the face; the selection is the light grey with black text. */
+   #9f9f9f and shaded with #292929 and black, and white text. Fields share the face. Title bars
+   and the selection keep Windows 98's navy and blue. */
 [data-win98-scheme="dark"] {
   /* Colours. */
   --win98-face: #3f3f3f;
@@ -86,16 +87,13 @@
   --win98-dark: #000;
   --win98-text: #fff;
   --win98-title-text: #fff;
-  --win98-selected-text: #000;
   --win98-field-face: #3f3f3f;
-  --win98-navy: #9f9f9f;
-  --win98-title-end: #808080;
+  --win98-secondary-text: #c0c0c0;
   --win98-tooltip: #4a4a20;
   --win98-link: #b0b0ff;
   --win98-olive: #c0c000;
   --win98-maroon: #ff8c8c;
   --win98-purple: #ff80ff;
-  --win98-title: linear-gradient(90deg, #000, #808080);
   --win98-title-inactive: linear-gradient(90deg, #3f3f3f, #2b2b2b);
 
   /* Bevels. */
