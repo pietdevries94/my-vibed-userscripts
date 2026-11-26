@@ -19,7 +19,7 @@ A restyle of the site's own pages follows `restyle`.
 
 ## Reuse
 
-Before building a control, such as a switch or a toggle button, rebase on `main` and look for one the script already has. A worktree branch can be behind `main`. Reuse it; move it to `<script>/src/core/` when a second feature needs it.
+Before building a control, such as a switch or a toggle button, rebase on `main` and look for one the script already has. A worktree branch can be behind `main`. Reuse it; move it to `<script>/src/core/` when a second feature needs it. A tooltip uses the site's own, never a `title` attribute: in azure-devops, give the element `showTooltip` from `core/tooltip.ts`, which shows Azure DevOps's tooltip. The fixtures hold no tooltip CSS, so it shows unstyled on the fake site; say so in the hand-off.
 
 ## Loop
 
