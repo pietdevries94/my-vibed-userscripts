@@ -1,6 +1,10 @@
 /* Windows 98's visual language as custom properties: colours, bevels, fonts, sizes and the
    16px pixel icons. Components (components.css) and a script's own rules build on these, so a
-   look is changed in one place. Import it before the rules that use it. */
+   look is changed in one place. Import it before the rules that use it.
+
+   The dark scheme overrides the values, never the names, under [data-win98-scheme="dark"]. Put
+   the attribute on <html> for a whole page, or on any element for a part of one; that element
+   paints var(--win98-face) as its background. */
 
 :root {
   /* Colours. */
@@ -10,6 +14,8 @@
   --win98-shadow: #808080;
   --win98-dark: #0a0a0a;
   --win98-text: #000;
+  --win98-title-text: #fff;
+  --win98-selected-text: #fff;
   --win98-field-face: #fff;
   --win98-navy: #000080;
   --win98-title-end: #1084d0;
@@ -66,4 +72,56 @@
   --win98-icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000000' d='M3 0h10v1h-10zM2 1h1v1h-1zM13 1h1v1h-1zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM1 6h1v1h-1zM14 6h1v1h-1zM1 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM14 8h1v1h-1zM1 9h1v1h-1zM14 9h1v1h-1zM2 10h1v1h-1zM13 10h1v1h-1zM3 11h4v1h-4zM8 11h5v1h-5zM6 12h1v1h-1zM8 12h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM4 14h2v1h-2z'/%3E%3Cpath fill='%23ffffff' d='M3 1h10v1h-10zM2 2h5v1h-5zM9 2h5v1h-5zM2 3h5v1h-5zM9 3h5v1h-5zM2 4h12v1h-12zM2 5h4v1h-4zM9 5h5v1h-5zM2 6h5v1h-5zM9 6h5v1h-5zM2 7h5v1h-5zM9 7h5v1h-5zM2 8h5v1h-5zM9 8h5v1h-5zM2 9h4v1h-4zM10 9h4v1h-4zM3 10h10v1h-10zM7 11h1v1h-1zM7 12h1v1h-1zM6 13h1v1h-1z'/%3E%3Cpath fill='%230000ff' d='M7 2h2v1h-2zM7 3h2v1h-2zM6 5h3v1h-3zM7 6h2v1h-2zM7 7h2v1h-2zM7 8h2v1h-2zM6 9h4v1h-4z'/%3E%3C/svg%3E");
   --win98-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E");
   --win98-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E");
+}
+
+/* The dark scheme, measured from a dark Windows 98 colour scheme: a #3f3f3f face, bevels lit with
+   #9f9f9f and shaded with #292929 and black, white text, a black-to-grey title bar. Fields share
+   the face; the selection is the light grey with black text. */
+[data-win98-scheme="dark"] {
+  /* Colours. */
+  --win98-face: #3f3f3f;
+  --win98-light: #3f3f3f;
+  --win98-highlight: #9f9f9f;
+  --win98-shadow: #292929;
+  --win98-dark: #000;
+  --win98-text: #fff;
+  --win98-title-text: #fff;
+  --win98-selected-text: #000;
+  --win98-field-face: #3f3f3f;
+  --win98-navy: #9f9f9f;
+  --win98-title-end: #808080;
+  --win98-tooltip: #4a4a20;
+  --win98-link: #b0b0ff;
+  --win98-olive: #c0c000;
+  --win98-maroon: #ff8c8c;
+  --win98-purple: #ff80ff;
+  --win98-title: linear-gradient(90deg, #000, #808080);
+  --win98-title-inactive: linear-gradient(90deg, #3f3f3f, #2b2b2b);
+
+  /* Bevels. */
+  --win98-raised:
+    inset -1px -1px #000, inset 1px 1px #9f9f9f, inset -2px -2px #292929, inset 2px 2px #3f3f3f;
+  --win98-pressed:
+    inset -1px -1px #9f9f9f, inset 1px 1px #000, inset -2px -2px #3f3f3f, inset 2px 2px #292929;
+  --win98-sunken:
+    inset -1px -1px #9f9f9f, inset 1px 1px #292929, inset -2px -2px #3f3f3f, inset 2px 2px #000;
+  --win98-thin: inset -1px -1px #292929, inset 1px 1px #9f9f9f;
+  --win98-window:
+    inset -1px -1px #000, inset 1px 1px #3f3f3f, inset -2px -2px #292929, inset 2px 2px #9f9f9f;
+  --win98-well: inset -1px -1px #9f9f9f, inset 1px 1px #292929;
+  --win98-default:
+    inset 0 0 0 1px #000, inset -2px -2px #000, inset 2px 2px #9f9f9f, inset -3px -3px #292929,
+    inset 3px 3px #3f3f3f;
+  --win98-menu:
+    inset -1px -1px #000, inset 1px 1px #3f3f3f, inset -2px -2px #292929, inset 2px 2px #9f9f9f,
+    2px 2px 0 rgba(0, 0, 0, 0.6);
+  --win98-etched: inset 0 1px #292929, inset 0 2px #9f9f9f;
+
+  /* Icons whose black or grey would vanish on the dark face: the passed check, the none dash, the
+     checkbox's check and the caret turn white or light grey. The others keep their black
+     outlines, as Windows 98's own icons do. */
+  --win98-icon-passed: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23ffffff' d='M13 3h1v1h-1zM12 4h2v1h-2zM11 5h3v1h-3zM2 6h1v1h-1zM10 6h3v1h-3zM2 7h2v1h-2zM9 7h3v1h-3zM2 8h3v1h-3zM8 8h3v1h-3zM3 9h3v1h-3zM7 9h3v1h-3zM4 10h5v1h-5zM5 11h3v1h-3zM6 12h1v1h-1z'/%3E%3C/svg%3E");
+  --win98-icon-none: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%239f9f9f' d='M4 7h8v1h-8zM4 8h8v1h-8z'/%3E%3C/svg%3E");
+  --win98-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath fill='%23ffffff' d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E");
+  --win98-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%23ffffff' d='M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z'/%3E%3C/svg%3E");
 }

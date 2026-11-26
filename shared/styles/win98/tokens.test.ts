@@ -32,12 +32,29 @@ for (const file of [
   });
 }
 
-test("tokens.css defines each token once", () => {
-  const names = [...read("shared/styles/win98/tokens.css").matchAll(TOKEN_DEFINITION)].map(
-    (match) => match.groups?.token ?? "",
-  );
+const DARK_SCHEME_RULE = '[data-win98-scheme="dark"] {';
+
+function tokenNames(css: string): string[] {
+  return [...css.matchAll(TOKEN_DEFINITION)].map((match) => match.groups?.token ?? "");
+}
+
+const tokensCss = read("shared/styles/win98/tokens.css");
+const lightNames = tokenNames(tokensCss.slice(0, tokensCss.indexOf(DARK_SCHEME_RULE)));
+const darkNames = tokenNames(tokensCss.slice(tokensCss.indexOf(DARK_SCHEME_RULE)));
+
+test("tokens.css defines each token once per scheme", () => {
+  for (const names of [lightNames, darkNames]) {
+    assert.deepEqual(
+      names.filter((name, index) => names.indexOf(name) !== index),
+      [],
+    );
+  }
+});
+
+test("the dark scheme only overrides tokens the light scheme defines", () => {
+  assert.ok(darkNames.length > 0);
   assert.deepEqual(
-    names.filter((name, index) => names.indexOf(name) !== index),
+    darkNames.filter((name) => !lightNames.includes(name)),
     [],
   );
 });
