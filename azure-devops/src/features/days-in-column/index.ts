@@ -7,7 +7,7 @@ const HIDDEN_COLUMNS_KEY = "days-in-column-hidden-columns";
 
 const daysInColumn: Feature = {
   change: { kind: "new", version: "1.7.2" },
-  description: "A dot per day a card has been in its board column, with a toggle per column.",
+  description: "A dot per day a card has been in its column. Turn it on per column on the board.",
   id: "days-in-column",
   name: "Days in column",
   start({ client, document, now }) {

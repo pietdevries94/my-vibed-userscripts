@@ -22,12 +22,12 @@ test(
     const topBar = document.querySelector(".region-header-menubar");
     const ownItemCount = topBar?.children.length ?? 0;
     const panel = createSettingsPanel({
-      categories: [],
       document,
       isOn: () => true,
       markChangesSeen: ignore,
       reload: ignore,
       save: ignore,
+      sections: [],
       seenChangeVersion: () => null,
     });
     panel.sync();

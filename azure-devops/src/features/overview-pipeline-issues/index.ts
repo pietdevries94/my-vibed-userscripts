@@ -5,10 +5,9 @@ import { pullRequestOf } from "../../core/page.ts";
 
 const overviewPipelineIssues: Feature = {
   change: { kind: "new", version: "1.7.2" },
-  description:
-    "The warnings and errors of each check's latest run, above the pull request description.",
+  description: "Each check's warnings and errors above the description.",
   id: "overview-pipeline-issues",
-  name: "Warnings and errors",
+  name: "Warnings and errors on the Overview",
   start({ basePath, client, document, isInFrame, now }) {
     if (isInFrame) {
       return null;

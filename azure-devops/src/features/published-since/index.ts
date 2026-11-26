@@ -17,10 +17,9 @@ type PullRequestRowWithDraft = PullRequestRow & { isDraft: boolean };
 
 const publishedSince: Feature = {
   change: { kind: "updated", version: "1.17.1" },
-  description:
-    "How long ago each active pull request in a list left draft, under its update time. Red after two weekdays.",
+  description: "How long ago a pull request left draft. Red after two weekdays.",
   id: "published-since",
-  name: "Published since",
+  name: "Time since published",
   start({ basePath, client, document, now }) {
     const findRows = (): PullRequestRowWithDraft[] =>
       findPullRequestRows(document, basePath).map(({ row, pullRequest }) => ({

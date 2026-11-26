@@ -55,11 +55,19 @@ interface Feature {
   start: (context: FeatureContext) => FeatureRun | null;
 }
 
-/** The features the settings panel lists under one heading. */
-interface FeatureCategory {
-  /** Its heading in the settings panel: the place in Azure DevOps where its features show. */
-  name: string;
+/** Features in a settings section, under a heading of their own when the group has a name. */
+interface SettingsGroup {
+  name?: string;
   features: Feature[];
+}
+
+/** A page of the settings panel, with the features on one subject, such as Pipelines. */
+interface SettingsSection {
+  /** Its entry in the side bar and its heading. */
+  name: string;
+  /** One line under its heading on what its features change. */
+  description: string;
+  groups: SettingsGroup[];
 }
 
 /** Reads a saved choice, or the fallback when the owner never saved one. `GM_getValue` fits. */
@@ -74,10 +82,11 @@ export { isFeatureOn };
 export type {
   SavedChoice,
   Feature,
-  FeatureCategory,
   FeatureChange,
   FeatureContext,
   FeatureRun,
+  SettingsGroup,
+  SettingsSection,
   SyncReason,
   Tick,
 };

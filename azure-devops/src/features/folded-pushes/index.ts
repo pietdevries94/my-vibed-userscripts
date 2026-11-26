@@ -4,10 +4,9 @@ import style from "./style.css";
 
 const foldedPushes: Feature = {
   change: { kind: "new", version: "1.12.0" },
-  description:
-    "A push on a pull request's Overview is one line, like its other updates, with a button that shows its commits.",
+  description: "Each push on one line, with a button that shows its commits.",
   id: "folded-pushes",
-  name: "Folded pushes",
+  name: "Fold pushes",
   start({ document, isInFrame }) {
     if (isInFrame) {
       return null;

@@ -4,10 +4,9 @@ import style from "./style.css";
 
 const joinedReviewerLines: Feature = {
   change: { kind: "new", version: "1.12.0" },
-  description:
-    "Lines next to each other on a pull request's Overview that add a reviewer are one line, with required and optional reviewers grouped.",
+  description: "Lines that add reviewers become one line.",
   id: "joined-reviewer-lines",
-  name: "Joined reviewer lines",
+  name: "Join reviewer lines",
   start({ document, isInFrame }) {
     if (isInFrame) {
       return null;

@@ -10,10 +10,9 @@ const MAX_VISIT_AGE_MS = 2_592_000_000;
 
 const newActivityChips: Feature = {
   change: { kind: "new", version: "1.18.0" },
-  description:
-    "A New chip that glows on pushes, votes and other lines on a pull request's Overview that came after your last visit.",
+  description: "A glowing New chip on pushes, votes and other updates.",
   id: "new-activity-chips",
-  name: "New chips on pushes and other changes",
+  name: "Mark what changed since your last visit",
   start({ basePath, document, isInFrame, now }) {
     if (isInFrame) {
       return null;

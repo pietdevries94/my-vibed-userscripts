@@ -7,10 +7,10 @@ const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
 
 const followSystemTheme: Feature = {
   change: { kind: "new", version: "1.7.2" },
-  description: "Azure DevOps shows Light or Dark to match the system.",
+  description: "Switches between Light and Dark with your system.",
   // The key of the earlier menu setting, so the owner's choice stays.
   id: "follow-system-theme",
-  name: "Follow system theme",
+  name: "Match the system theme",
   start({ client, document, isInFrame, reloadWhenIdle }) {
     // A frame shows a run page inside a pull request; the top page follows the system.
     if (isInFrame) {

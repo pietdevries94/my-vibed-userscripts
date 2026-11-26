@@ -5,8 +5,7 @@ import win98Tokens from "../../../../shared/styles/win98/tokens.css";
 
 const windows98Mode: Feature = {
   change: { kind: "new", version: "1.19.0" },
-  description:
-    "Azure DevOps as Windows 98: title bar, Start menu side bar, bevelled buttons and grey windows.",
+  description: "Title bars, a Start menu side bar, bevelled buttons and grey windows.",
   id: "windows-98-mode",
   isOffByDefault: true,
   name: "Windows 98 mode",

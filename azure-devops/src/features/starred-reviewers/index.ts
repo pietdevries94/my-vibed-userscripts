@@ -16,8 +16,7 @@ function schedule(callback: () => void, delayMs: number): () => void {
 
 const starredReviewers: Feature = {
   change: { kind: "updated", version: "1.9.0" },
-  description:
-    "Star reviewers, then add a starred one as optional or required reviewer in one click, also on a new pull request.",
+  description: "Add a starred reviewer in one click, also on a new pull request.",
   id: "starred-reviewers",
   name: "Starred reviewers",
   start({ basePath, client, document, isInFrame }) {

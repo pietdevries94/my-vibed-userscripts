@@ -4,20 +4,20 @@ import {
   createSettingsButtonItem,
   removeUnseenCountBadge,
 } from "./settings-button.ts";
-import type { Feature, FeatureCategory, FeatureChange } from "./feature.ts";
+import type { Feature, FeatureChange, SettingsSection } from "./feature.ts";
 import { button, element } from "./settings-panel-markup.ts";
+import { createNav } from "./settings-panel-nav.ts";
+import { createPane } from "./settings-panel-pane.ts";
+import { isRowOn } from "./settings-panel-row.ts";
 
-const ISSUE_LINK_TEXT = "Found a bug or have a suggestion?";
-const NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new";
 const TOP_BAR_SELECTOR = ".region-header-menubar";
 const DIALOG_CLASS = "fix-ado-settings";
 const TITLE_ID = "fix-ado-settings-title";
-const CHIP_TEXT = { new: "New", updated: "Updated" } as const;
 
 interface SettingsPanelOptions {
   document: Document;
-  /** In the order the panel lists them. */
-  categories: FeatureCategory[];
+  /** In the order the side bar lists them. */
+  sections: SettingsSection[];
   isOn: (feature: Feature) => boolean;
   /** The version of the feature's latest change the owner has seen, or null when none. */
   seenChangeVersion: (feature: Feature) => string | null;
@@ -34,8 +34,8 @@ interface SettingsPanel {
   open: () => void;
 }
 
-function allFeatures({ categories }: SettingsPanelOptions): Feature[] {
-  return categories.flatMap((category) => category.features);
+function allFeatures({ sections }: SettingsPanelOptions): Feature[] {
+  return sections.flatMap((section) => section.groups.flatMap((group) => group.features));
 }
 
 /** The features with a change the owner has not seen. */
@@ -54,88 +54,34 @@ function chipKind(feature: Feature, options: SettingsPanelOptions): FeatureChang
   return feature.change?.kind ?? "new";
 }
 
-function chipElement(document: Document, text: string, kind: string): HTMLElement {
-  return element(document, "span", {
-    className: `fix-ado-settings-chip fix-ado-settings-chip-${kind}`,
-    text,
-  });
-}
-
-/** The feature's name, with a New or Updated chip while its change is unseen, then its tag. */
-function featureName(
-  document: Document,
-  feature: Feature,
-  chip: FeatureChange["kind"] | null,
-): HTMLElement {
-  const name = element(document, "span", {
-    className: "fix-ado-settings-feature-name",
-    text: feature.name,
-  });
-  if (chip) {
-    name.append(chipElement(document, CHIP_TEXT[chip], chip));
-  }
-  if (feature.tag !== undefined) {
-    name.append(chipElement(document, feature.tag, "tag"));
-  }
-  return name;
-}
-
-interface FeatureRowParts {
-  feature: Feature;
-  isOn: boolean;
-  /** Null when the feature has no unseen change. */
-  chip: FeatureChange["kind"] | null;
-}
-
-function featureRow(document: Document, { feature, isOn, chip }: FeatureRowParts): HTMLElement {
-  const row = element(document, "label", { className: "fix-ado-settings-feature" });
-  const checkbox = element(document, "input", { className: "fix-ado-settings-checkbox" });
-  checkbox.type = "checkbox";
-  checkbox.checked = isOn;
-  checkbox.dataset.featureId = feature.id;
-  const text = element(document, "span", { className: "fix-ado-settings-feature-text" });
-  text.append(
-    featureName(document, feature, chip),
-    element(document, "span", {
-      className: "fix-ado-settings-feature-description",
-      text: feature.description,
-    }),
-  );
-  row.append(checkbox, text);
-  return row;
-}
-
 /** The choices that differ from the stored ones, by feature id. */
 function changedChoices(dialog: HTMLElement, options: SettingsPanelOptions): Map<string, boolean> {
   const changed = new Map<string, boolean>();
   for (const feature of allFeatures(options)) {
-    const checkbox = dialog.querySelector<HTMLInputElement>(
-      `input[data-feature-id="${feature.id}"]`,
-    );
-    if (checkbox && checkbox.checked !== options.isOn(feature)) {
-      changed.set(feature.id, checkbox.checked);
+    const row = dialog.querySelector(`[data-feature-id="${feature.id}"]`);
+    if (row && isRowOn(row) !== options.isOn(feature)) {
+      changed.set(feature.id, isRowOn(row));
     }
   }
   return changed;
 }
 
-/** Opens a new issue on the script's GitHub repository, in a new tab. */
-function issueLink(document: Document): HTMLAnchorElement {
-  const link = element(document, "a", {
-    className: "fix-ado-settings-issue-link",
-    text: ISSUE_LINK_TEXT,
-  });
-  link.href = NEW_ISSUE_URL;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  return link;
+function changeCountText(count: number): string {
+  if (count === 0) {
+    return "";
+  }
+  return count === 1 ? "1 change" : `${count} changes`;
 }
 
-function createButtons(
-  dialog: HTMLDialogElement,
-  options: SettingsPanelOptions,
-): { buttons: HTMLElement; save: HTMLButtonElement } {
+interface Footer {
+  footer: HTMLElement;
+  /** Shows the number of changed choices, and turns Save on when there are any. */
+  showChanges: () => void;
+}
+
+function createFooter(dialog: HTMLDialogElement, options: SettingsPanelOptions): Footer {
   const { document } = options;
+  const count = element(document, "span", { className: "fix-ado-settings-change-count" });
   const cancel = button(
     document,
     { className: "bolt-button enabled bolt-focus-treatment", text: "Cancel" },
@@ -152,54 +98,65 @@ function createButtons(
     },
   );
   save.disabled = true;
-  const buttons = element(document, "div", { className: "fix-ado-settings-buttons" });
-  buttons.append(issueLink(document), cancel, save);
-  return { buttons, save };
+  const footer = element(document, "div", { className: "fix-ado-settings-buttons" });
+  footer.append(count, cancel, save);
+  return {
+    footer,
+    showChanges() {
+      const changed = changedChoices(dialog, options).size;
+      count.textContent = changeCountText(changed);
+      save.disabled = changed === 0;
+    },
+  };
 }
 
-/** A category's name as a heading, above a card per feature. */
-function categorySection(
-  category: FeatureCategory,
-  options: SettingsPanelOptions,
-  unseen: Feature[],
-): HTMLElement {
-  const { document } = options;
-  const section = element(document, "section", { className: "fix-ado-settings-category" });
-  const cards = element(document, "div", { className: "fix-ado-settings-features" });
-  cards.append(
-    ...category.features.map((feature) =>
-      featureRow(document, {
-        chip: unseen.includes(feature) ? chipKind(feature, options) : null,
-        feature,
-        isOn: options.isOn(feature),
-      }),
-    ),
-  );
-  section.append(
-    element(document, "h3", { className: "fix-ado-settings-category-name", text: category.name }),
-    cards,
-  );
-  return section;
-}
-
-function createDialog(options: SettingsPanelOptions, unseen: Feature[]): HTMLDialogElement {
-  const { document } = options;
-  const dialog = element(document, "dialog", { className: DIALOG_CLASS });
-  dialog.setAttribute("aria-labelledby", TITLE_ID);
-  const { buttons, save } = createButtons(dialog, options);
+function panelTitle(document: Document): HTMLElement {
   const title = element(document, "h2", {
     className: "fix-ado-settings-title",
     text: SETTINGS_TITLE,
   });
   title.id = TITLE_ID;
-  dialog.addEventListener("change", () => {
-    save.disabled = changedChoices(dialog, options).size === 0;
+  return title;
+}
+
+interface DialogParts {
+  nav: HTMLElement;
+  pane: HTMLElement;
+  footer: HTMLElement;
+}
+
+/** The side bar and the pane next to each other, above the footer. */
+function fillDialog(dialog: HTMLDialogElement, { nav, pane, footer }: DialogParts): void {
+  const { ownerDocument } = dialog;
+  const body = element(ownerDocument, "div", { className: "fix-ado-settings-body" });
+  body.append(nav, pane);
+  dialog.setAttribute("aria-labelledby", TITLE_ID);
+  dialog.append(body, footer);
+}
+
+function createDialog(options: SettingsPanelOptions, unseen: Feature[]): HTMLDialogElement {
+  const { document } = options;
+  const dialog = element(document, "dialog", { className: DIALOG_CLASS });
+  const pane = createPane({
+    chip: (feature) => (unseen.includes(feature) ? chipKind(feature, options) : null),
+    document,
+    isOn: options.isOn,
+    sections: options.sections,
   });
-  dialog.append(
-    title,
-    ...options.categories.map((category) => categorySection(category, options, unseen)),
-    buttons,
-  );
+  const nav = createNav({
+    document,
+    onChange: () => {
+      pane.show(nav.view(), nav.query());
+    },
+    sections: options.sections,
+    title: panelTitle(document),
+    unseenCount: unseen.length,
+  });
+  const { footer, showChanges } = createFooter(dialog, options);
+  // A row switches itself on click; the dialog hears the click after it.
+  dialog.addEventListener("click", showChanges);
+  fillDialog(dialog, { footer, nav: nav.element, pane: pane.element });
+  pane.show(nav.view(), "");
   return dialog;
 }
 

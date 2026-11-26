@@ -8,9 +8,10 @@ import { watchPullRequestList } from "./pr-list-watch.ts";
 
 const reloadOnChanges: Feature = {
   change: { kind: "new", version: "1.7.2" },
-  description: "Pull request lists and boards reload when their content changes on the server.",
+  description:
+    "Pull request lists and boards reload when their content changes on the server. Waits while you type.",
   id: "reload-on-changes",
-  name: "Reload on changes",
+  name: "Reload lists and boards when they change",
   start({ basePath, client, document, now, reloadWhenIdle }) {
     let shownPage: Page = { kind: "other" };
     function watchedPage(): WatchedPage<unknown> | null {

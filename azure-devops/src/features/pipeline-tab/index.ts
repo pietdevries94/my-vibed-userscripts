@@ -8,8 +8,7 @@ import style from "./style.css";
 
 const pipelineTab: Feature = {
   change: { kind: "new", version: "1.7.2" },
-  description:
-    "A Pipeline tab on each pull request with its runs, stages, steps, warnings, errors and logs, and a button to start or cancel a run.",
+  description: "Runs, stages, steps and logs, with buttons to start or cancel a run.",
   id: "pipeline-tab",
   name: "Pipeline tab",
   start({ basePath, client, document, isInFrame, now }) {

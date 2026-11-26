@@ -4,10 +4,9 @@ import style from "./style.css";
 
 const unreadComments: Feature = {
   change: { kind: "new", version: "1.17.0" },
-  description:
-    "Unread comments on a pull request's Overview glow, one glow around comments that follow each other. Go to first unread, above the feed, and Go to next unread, on each group, scroll to them.",
+  description: "Unread comments glow, with buttons to the first and next one.",
   id: "unread-comments",
-  name: "Unread comments",
+  name: "Highlight unread comments",
   start({ document, isInFrame }) {
     if (isInFrame) {
       return null;

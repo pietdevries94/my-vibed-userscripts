@@ -7,8 +7,7 @@ const ORDER_KEY = "activity-order";
 
 const activityOrder: Feature = {
   change: { kind: "new", version: "1.11.0" },
-  description:
-    "The comments and updates on a pull request's Overview run from old to new, with a button to flip them.",
+  description: "Comments and updates run from old to new. A button flips the order.",
   id: "activity-order",
   name: "Oldest first",
   start({ document, isInFrame }) {

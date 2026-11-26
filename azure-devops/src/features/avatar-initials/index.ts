@@ -4,10 +4,10 @@ import style from "./style.css";
 
 const avatarInitials: Feature = {
   change: { kind: "new", version: "1.7.2" },
-  description: "Initials on avatars, in a colour per person.",
+  description: "Shows initials in a colour per person.",
   // The key of the earlier menu setting, so the owner's choice stays.
   id: "avatar-initials",
-  name: "Avatar initials",
+  name: "Initials on avatars",
   start: ({ document }) => ({
     sync() {
       showInitialsOnAvatars(document);

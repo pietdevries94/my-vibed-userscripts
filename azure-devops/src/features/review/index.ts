@@ -10,8 +10,7 @@ const MAX_REVIEW_AGE_MS = 2_592_000_000;
 
 const review: Feature = {
   change: { kind: "new", version: "1.10.0" },
-  description:
-    "Start a review on a pull request: collect comments that only you see, then post them in one go, with your vote.",
+  description: "Collect comments only you see, then post them together with your vote.",
   id: "review",
   name: "Reviews",
   start({ basePath, client, document, isInFrame, now }) {

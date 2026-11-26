@@ -15,7 +15,7 @@ const TABLE_SWITCH = { className: "fix-ado-table-switch", label: "Table" };
 const tableRows: Feature = {
   change: { kind: "new", version: "1.28.0" },
   description:
-    "The pull request lists as a table: a column each for the title, author, id, repository on the inbox, target, reviewers, comments and age, under a header, one 36px row per pull request. The age column shows when each pull request was created, updated and published. On by default; a Table switch on the lists flips between the table and Azure DevOps's two lines. Not in Windows 98 mode.",
+    "A column per field and one row per pull request. A Table switch on the lists flips it. Not in Windows 98 mode.",
   id: "table-rows",
   name: "Pull requests as a table",
   start({ basePath, client, document, now }) {

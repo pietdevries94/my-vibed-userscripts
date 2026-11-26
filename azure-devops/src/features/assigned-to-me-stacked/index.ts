@@ -64,10 +64,9 @@ function createCardFolding(onChange: () => void): CardFolding {
 
 const assignedToMeStacked: Feature = {
   change: { kind: "new", version: "1.25.0" },
-  description:
-    "The tabs of the Assigned to me card as cards of their own, under each other, each titled with its tab, so you scroll through them all.",
+  description: "Each tab as its own card, so you scroll through them all.",
   id: "assigned-to-me-stacked",
-  name: "Assigned to me tabs under each other",
+  name: "Stack the Assigned to me tabs",
   start({ basePath, client, document, now }) {
     let assigned: { scope: string; value: AssignedToMe } | null = null;
     let nextFetchAt = 0;

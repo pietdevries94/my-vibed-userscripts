@@ -27,51 +27,27 @@ test("without a top bar, there is no button and nothing fails", () => {
   assert.equal(page.document.querySelector("button"), null);
 });
 
-test("the button opens the panel with a checkbox per feature, checked when on", () => {
+test("the button opens the panel with a switch per feature, on when the feature is on", () => {
   const page = pageWith(TOP_BAR, { onIds: ["tab"] });
   page.panel.sync();
   page.document.querySelector<HTMLButtonElement>(".region-header-menubar button")?.click();
   assert.equal(page.dialog()?.open, true);
-  assert.equal(page.checkbox("tab").checked, true);
-  assert.equal(page.checkbox("dots").checked, false);
+  assert.equal(page.isSwitchOn("tab"), true);
+  assert.equal(page.toggle("tab").getAttribute("role"), "switch");
+  assert.equal(page.isSwitchOn("dots"), false);
   assert.match(page.dialog()?.textContent ?? "", /Pipeline tab.*What Pipeline tab does\./su);
 });
 
-test("the panel lists each category's features under a heading with its name", () => {
-  const page = pageWith(TOP_BAR, {
-    categories: [
-      { features: [featureNamed("tab", "Pipeline tab")], name: "Pull request" },
-      {
-        features: [featureNamed("dots", "Days in column"), featureNamed("lanes", "Lane totals")],
-        name: "Boards",
-      },
-    ],
-  });
+test("the footer counts the changed choices", () => {
+  const page = pageWith(TOP_BAR);
   page.panel.open();
-  const sections = [...page.document.querySelectorAll("dialog section")];
-  assert.deepEqual(
-    sections.map((section) => section.querySelector("h3")?.textContent),
-    ["Pull request", "Boards"],
-  );
-  assert.deepEqual(
-    sections.map((section) =>
-      [...section.querySelectorAll("input")].map((checkbox) => checkbox.dataset.featureId),
-    ),
-    [["tab"], ["dots", "lanes"]],
-  );
-});
-
-test("a choice in a later category is saved too", () => {
-  const page = pageWith(TOP_BAR, {
-    categories: [
-      { features: [featureNamed("tab", "Pipeline tab")], name: "Pull request" },
-      { features: [featureNamed("dots", "Days in column")], name: "Boards" },
-    ],
-  });
-  page.panel.open();
-  flip(page.checkbox("dots"));
-  page.button("Save and reload page").click();
-  assert.deepEqual(page.saved, [new Map([["dots", false]])]);
+  const count = (): string =>
+    page.document.querySelector(".fix-ado-settings-change-count")?.textContent ?? "";
+  assert.equal(count(), "");
+  flip(page.toggle("dots"));
+  assert.equal(count(), "1 change");
+  flip(page.toggle("tab"));
+  assert.equal(count(), "2 changes");
 });
 
 test("the panel has no warning; the save button says that it reloads the page", () => {
@@ -87,16 +63,16 @@ test("Save and reload page stays off until a choice changes, and back off when i
   page.panel.open();
   const save = page.button("Save and reload page");
   assert.equal(save.disabled, true);
-  flip(page.checkbox("dots"));
+  flip(page.toggle("dots"));
   assert.equal(save.disabled, false);
-  flip(page.checkbox("dots"));
+  flip(page.toggle("dots"));
   assert.equal(save.disabled, true);
 });
 
 test("Save and reload page stores only the changed choices, then reloads", () => {
   const page = pageWith(TOP_BAR);
   page.panel.open();
-  flip(page.checkbox("dots"));
+  flip(page.toggle("dots"));
   page.button("Save and reload page").click();
   assert.deepEqual(page.saved, [new Map([["dots", false]])]);
   assert.equal(page.reloads, 1);
@@ -105,7 +81,7 @@ test("Save and reload page stores only the changed choices, then reloads", () =>
 test("Cancel closes the panel and stores nothing", () => {
   const page = pageWith(TOP_BAR);
   page.panel.open();
-  flip(page.checkbox("tab"));
+  flip(page.toggle("tab"));
   page.button("Cancel").click();
   assert.equal(page.dialog()?.open ?? false, false);
   assert.deepEqual(page.saved, []);
@@ -115,10 +91,10 @@ test("Cancel closes the panel and stores nothing", () => {
 test("opening again shows the stored choices, not the cancelled ones", () => {
   const page = pageWith(TOP_BAR);
   page.panel.open();
-  flip(page.checkbox("tab"));
+  flip(page.toggle("tab"));
   page.button("Cancel").click();
   page.panel.open();
-  assert.equal(page.checkbox("tab").checked, true);
+  assert.equal(page.isSwitchOn("tab"), true);
   assert.equal(page.document.querySelectorAll("dialog").length, 1);
 });
 
@@ -126,7 +102,7 @@ const badge = (page: TestPage): string | null =>
   page.document.querySelector(".region-header-menubar .fix-ado-settings-badge")?.textContent ??
   null;
 const chip = (page: TestPage, id: string): string | null =>
-  page.checkbox(id).closest("label")?.querySelector(".fix-ado-settings-chip")?.textContent ?? null;
+  page.toggle(id).querySelector(".fix-ado-settings-chip")?.textContent ?? null;
 
 test("the button shows how many feature changes the owner has not seen", () => {
   const page = pageWith(TOP_BAR, { features: CHANGED_FEATURES });
@@ -197,7 +173,7 @@ test("a feature the owner never saw shows New, even when its change is an update
 });
 
 const chips = (page: TestPage, id: string): string[] =>
-  [...(page.checkbox(id).closest("label")?.querySelectorAll(".fix-ado-settings-chip") ?? [])].map(
+  [...(page.toggle(id).querySelectorAll(".fix-ado-settings-chip") ?? [])].map(
     (found) => found.textContent,
   );
 
@@ -219,7 +195,7 @@ test("the panel links to a new GitHub issue, opened in a new tab", () => {
   const page = pageWith(TOP_BAR);
   page.panel.open();
   const link = page.document.querySelector<HTMLAnchorElement>("dialog a");
-  assert.equal(link?.textContent, "Found a bug or have a suggestion?");
+  assert.equal(link?.textContent, "Report a bug or suggest a feature");
   assert.equal(link.href, "https://github.com/pietdevries94/my-vibed-userscripts/issues/new");
   assert.equal(link.target, "_blank");
   assert.equal(link.rel, "noopener noreferrer");

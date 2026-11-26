@@ -1083,17 +1083,16 @@ html[data-fix-ado-win98] .fix-ado-settings-button .fix-ado-settings-badge.fix-ad
   font: 700 9px/9px var(--win98-font);
 }
 
-/* The settings panel, as in the Settings artboards: a window whose frame is a border image, so
-   the features scroll inside it, under a title bar that stays at the top and buttons that stay
-   at the bottom. */
+/* The settings panel, after the Settings artboards: a window whose frame is a border image,
+   with a title bar across the top. The side bar is a list box with the section in navy, each
+   group a group box, each switch a checkbox, and the buttons along the bottom. */
 html[data-fix-ado-win98] .fix-ado-settings {
   box-sizing: border-box;
-  overflow-y: auto;
   border: 3px solid transparent;
   border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7' shape-rendering='crispEdges'%3E%3Crect width='7' height='7' fill='%230a0a0a'/%3E%3Cpath d='M0 0h6v1H1v5H0z' fill='%23dfdfdf'/%3E%3Crect x='1' y='1' width='5' height='5' fill='%23808080'/%3E%3Cpath d='M1 1h4v1H2v3H1z' fill='%23fff'/%3E%3Crect x='2' y='2' width='3' height='3' fill='%23c0c0c0'/%3E%3C/svg%3E")
     3 / 3px stretch;
   border-radius: 0;
-  padding: 0 7px 7px;
+  padding: 18px 0 0;
   background: var(--win98-face);
   box-shadow: none;
   color: #000;
@@ -1104,19 +1103,108 @@ html[data-fix-ado-win98] .fix-ado-settings {
   }
 
   .fix-ado-settings-title {
-    position: sticky;
+    position: absolute;
     top: 0;
-    z-index: 1;
+    right: 0;
+    left: 0;
     height: 18px;
-    margin: 0 -7px;
+    margin: 0;
     padding: 0 4px;
     background: var(--win98-title);
     color: #fff;
     font: 700 11px/18px var(--win98-font);
   }
 
-  .fix-ado-settings-category,
-  .fix-ado-settings-category + .fix-ado-settings-category {
+  .fix-ado-settings-nav {
+    width: 180px;
+    padding: 8px 0 8px 8px;
+    border: 0;
+  }
+
+  .fix-ado-settings-search-field {
+    height: 21px;
+    border: 0;
+    border-radius: 0;
+    padding: 0 4px;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
+    font: 11px var(--win98-font);
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: -4px;
+    }
+  }
+
+  .fix-ado-settings-nav-items {
+    flex-grow: 1;
+    gap: 0;
+    margin-bottom: 8px;
+    padding: 2px;
+    background: #fff;
+    box-shadow: var(--win98-sunken);
+  }
+
+  .fix-ado-settings-nav-item {
+    padding: 1px 3px;
+    border-radius: 0;
+
+    &:hover {
+      background: transparent;
+    }
+
+    &[aria-current="page"] {
+      background: var(--win98-navy);
+      color: #fff;
+      font-weight: 400;
+    }
+
+    &:focus-visible {
+      outline: 1px dotted #000;
+      outline-offset: -1px;
+    }
+  }
+
+  .fix-ado-settings-nav-count {
+    min-width: 0;
+    border: 1px solid #000;
+    border-radius: 0;
+    padding: 0 3px;
+    background: var(--win98-tooltip);
+    color: #000;
+    font: 700 10px/12px var(--win98-font);
+  }
+
+  .fix-ado-settings-issue-link {
+    margin-top: 0;
+    padding: 0;
+    color: #0000ee;
+    text-decoration: underline;
+  }
+
+  .fix-ado-settings-pane {
+    padding: 8px 10px 10px;
+  }
+
+  .fix-ado-settings-view-note,
+  .fix-ado-settings-no-match,
+  .fix-ado-settings-section-description {
+    margin-bottom: 8px;
+    color: #000;
+  }
+
+  .fix-ado-settings-section-name,
+  .fix-ado-settings-pane-filtered .fix-ado-settings-section-name {
+    margin: 0 0 4px;
+    font: 700 11px/14px var(--win98-font);
+  }
+
+  .fix-ado-settings-section:not([hidden]) ~ .fix-ado-settings-section {
+    margin-top: 14px;
+  }
+
+  /* A group box: an etched line round the features, its name on the line. */
+  .fix-ado-settings-group {
     position: relative;
     margin-top: 14px;
     padding: 12px 8px 6px;
@@ -1126,7 +1214,7 @@ html[data-fix-ado-win98] .fix-ado-settings {
       1px 1px #fff;
   }
 
-  .fix-ado-settings-category-name {
+  .fix-ado-settings-group-name {
     position: absolute;
     top: -7px;
     left: 6px;
@@ -1137,14 +1225,52 @@ html[data-fix-ado-win98] .fix-ado-settings {
     font: 400 11px/14px var(--win98-font);
   }
 
-  .fix-ado-settings-feature,
-  .fix-ado-settings-feature:hover {
-    gap: 6px;
+  .fix-ado-settings-features {
     border: 0;
     border-radius: 0;
+  }
+
+  /* Each row's switch as a Win98 checkbox before the name, as core/switch.css looks on
+     captured pages. */
+  .fix-ado-settings-feature.fix-ado-switch,
+  .fix-ado-settings-feature.fix-ado-switch:hover {
+    align-items: flex-start;
+    gap: 6px;
     padding: 3px 2px;
+    border: 0;
     background: transparent;
-    box-shadow: none;
+    color: #000;
+    font-size: 11px;
+
+    &:focus-visible {
+      outline: 0;
+
+      .fix-ado-switch-text {
+        outline: 1px dotted #000;
+      }
+    }
+
+    .fix-ado-switch-pill {
+      order: 0;
+      width: 13px;
+      height: 13px;
+      margin-top: 1px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: #fff;
+      box-shadow: var(--win98-sunken);
+    }
+
+    &[aria-checked="true"] .fix-ado-switch-pill {
+      background:
+        var(--win98-check) center / 7px 7px no-repeat,
+        #fff;
+    }
+
+    .fix-ado-switch-knob {
+      display: none;
+    }
   }
 
   .fix-ado-settings-feature-name {
@@ -1153,29 +1279,6 @@ html[data-fix-ado-win98] .fix-ado-settings {
 
   .fix-ado-settings-feature-description {
     color: #404040;
-  }
-
-  .fix-ado-settings-checkbox {
-    appearance: none;
-    width: 13px;
-    height: 13px;
-    margin: 1px 0 0;
-    border: 0;
-    border-radius: 0;
-    background: #fff;
-    box-shadow: var(--win98-sunken);
-
-    &:checked {
-      background:
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='7'%3E%3Cpath d='M0 3l2 2 5-5v2L2 7 0 5z'/%3E%3C/svg%3E")
-          center / 7px 7px no-repeat,
-        #fff;
-    }
-
-    &:focus-visible {
-      outline: 1px dotted #000;
-      outline-offset: 2px;
-    }
   }
 
   /* New: tooltip yellow. Updated: the face grey, so the two read apart. The class twice
@@ -1202,12 +1305,9 @@ html[data-fix-ado-win98] .fix-ado-settings {
 
   /* The buttons: Save and reload page first as the default, then Cancel, as Win98 orders them. */
   .fix-ado-settings-buttons {
-    position: sticky;
-    bottom: -7px;
-    z-index: 1;
     gap: 6px;
-    margin: 0 -7px -7px;
-    padding: 8px 7px 7px;
+    padding: 8px 10px 10px;
+    border: 0;
     background: var(--win98-face);
 
     & > .primary {
@@ -1222,10 +1322,9 @@ html[data-fix-ado-win98] .fix-ado-settings {
     }
   }
 
-  .fix-ado-settings-issue-link {
+  .fix-ado-settings-change-count {
     order: -2;
-    color: #0000ee;
-    text-decoration: underline;
+    color: #000;
   }
 }
 

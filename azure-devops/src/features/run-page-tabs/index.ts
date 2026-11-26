@@ -22,10 +22,9 @@ const runTabStorage: RunTabStorage = {
 
 const runPageTabs: Feature = {
   change: { kind: "new", version: "1.20.0" },
-  description:
-    "A switch on each tab of a pipeline run page, such as Code Coverage, that shows that tab of the pipeline's latest run as a tab on its pull requests.",
+  description: "Tabs such as Code Coverage on the pull request. Pick them on the run page.",
   id: "run-page-tabs",
-  name: "Run page tabs in pull requests",
+  name: "Run page tabs",
   start({ basePath, client, document, isInFrame, now }) {
     if (isInFrame) {
       const frame = createRunTabFrame(document);

@@ -32,18 +32,31 @@
   pointer-events: none;
 }
 
-/* The settings panel: a dialog over the page, in Azure DevOps's own theme colours. */
+/* The settings panel: a dialog over the page, in Azure DevOps's own theme colours. A side bar
+   of sections on the left, the shown section on the right, and the buttons along the bottom. */
 .fix-ado-settings {
-  width: min(1080px, calc(100vw - 32px));
-  max-height: calc(100vh - 64px);
-  padding: 24px;
+  --fix-ado-settings-accent: var(--communication-background, rgb(0, 120, 212));
+  --fix-ado-settings-muted: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  --fix-ado-settings-line: var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  --fix-ado-settings-hover: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+
+  flex-direction: column;
+  width: min(960px, calc(100vw - 32px));
+  height: min(680px, calc(100vh - 64px));
+  box-sizing: border-box;
+  padding: 0;
   border: none;
   border-radius: 8px;
+  overflow: hidden;
   background: var(--callout-background-color, rgb(255, 255, 255));
   color: var(--text-primary-color, rgba(0, 0, 0, 0.9));
   box-shadow:
     0 25.6px 57.6px rgba(0, 0, 0, 0.22),
     0 4.8px 14.4px rgba(0, 0, 0, 0.18);
+}
+
+.fix-ado-settings[open] {
+  display: flex;
 }
 
 /* Scrolling in the panel or over the backdrop stops there, and leaves the page behind it. */
@@ -57,76 +70,226 @@
   overscroll-behavior: contain;
 }
 
+.fix-ado-settings [hidden] {
+  display: none;
+}
+
+.fix-ado-settings-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fix-ado-settings-body {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+/* The side bar: the title, search, a button per section, and the issue link at the bottom. */
+.fix-ado-settings-nav {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 260px;
+  box-sizing: border-box;
+  padding: 20px 12px;
+  border-right: 1px solid var(--fix-ado-settings-line);
+  overflow-y: auto;
+}
+
 .fix-ado-settings-title {
+  margin: 0 10px 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.fix-ado-settings-search {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.fix-ado-settings-search-field {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+
+  &::placeholder {
+    color: var(--fix-ado-settings-muted);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fix-ado-settings-accent);
+    outline-offset: -1px;
+  }
+}
+
+.fix-ado-settings-nav-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 16px;
+}
+
+.fix-ado-settings-nav-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin: 0 0 16px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--fix-ado-settings-hover);
+  }
+
+  &[aria-current="page"] {
+    background: color-mix(in srgb, var(--fix-ado-settings-accent) 14%, transparent);
+    font-weight: 600;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fix-ado-settings-accent);
+    outline-offset: -2px;
+  }
+}
+
+.fix-ado-settings-nav-count {
+  min-width: 18px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--fix-ado-settings-accent);
+  color: var(--text-on-communication-background, rgb(255, 255, 255));
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.fix-ado-settings-issue-link {
+  margin-top: auto;
+  padding: 0 10px;
+  color: var(--communication-foreground, rgb(0, 90, 158));
+}
+
+/* The shown section, which scrolls on its own. */
+.fix-ado-settings-pane {
+  flex-grow: 1;
+  min-width: 0;
+  padding: 20px 28px 28px;
+  overflow-y: auto;
+}
+
+.fix-ado-settings-view-note,
+.fix-ado-settings-no-match {
+  margin: 0 0 20px;
+  color: var(--fix-ado-settings-muted);
+}
+
+/* Space above each section and group that shows after another one. Hidden ones are skipped. */
+.fix-ado-settings-section:not([hidden]) ~ .fix-ado-settings-section {
+  margin-top: 24px;
+}
+
+.fix-ado-settings-section-name {
+  margin: 0 0 4px;
   font-size: 20px;
   font-weight: 600;
 }
 
-/* A heading per category, above its cards. */
-.fix-ado-settings-category + .fix-ado-settings-category {
+.fix-ado-settings-section-description {
+  margin: 0 0 20px;
+  color: var(--fix-ado-settings-muted);
+}
+
+/* What's new and search results list several sections: their names as small headings. */
+.fix-ado-settings-pane-filtered {
+  .fix-ado-settings-section-name {
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .fix-ado-settings-section-description {
+    display: none;
+  }
+}
+
+.fix-ado-settings-group:not([hidden]) ~ .fix-ado-settings-group {
   margin-top: 20px;
 }
 
-.fix-ado-settings-category-name {
+.fix-ado-settings-group-name {
   margin: 0 0 8px;
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-  font-size: 14px;
+  color: var(--fix-ado-settings-muted);
+  font-size: 13px;
   font-weight: 600;
 }
 
-/* A card per feature, three next to each other. A narrow window gets two, then one. */
+/* A group's features: rows in one box, a line between each. */
 .fix-ado-settings-features {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 900px) {
-  .fix-ado-settings-features {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 600px) {
-  .fix-ado-settings-features {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.fix-ado-settings-feature {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border-subtle-color, rgba(0, 0, 0, 0.08));
+  border: 1px solid var(--fix-ado-settings-line);
   border-radius: 6px;
-  cursor: pointer;
+  overflow: hidden;
 }
 
-.fix-ado-settings-feature:hover {
-  background: var(--palette-black-alpha-6, rgba(0, 0, 0, 0.06));
+/* A row is a switch (core/switch.css) that fills it: the name and description, then the pill
+   on the right. */
+.fix-ado-settings-feature.fix-ado-switch {
+  width: 100%;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 0;
+  font-size: inherit;
+  text-align: start;
+
+  &:hover {
+    background: var(--fix-ado-settings-hover);
+  }
+
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .fix-ado-switch-pill {
+    order: 1;
+  }
 }
 
-.fix-ado-settings-checkbox {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin: 2px 0 0;
-  accent-color: var(--communication-background, rgb(0, 120, 212));
+/* A line above each row that shows after another one, also while search hides some. */
+.fix-ado-settings-feature:not([hidden]) ~ .fix-ado-settings-feature {
+  border-top: 1px solid var(--fix-ado-settings-line);
 }
 
-.fix-ado-settings-feature-text {
+.fix-ado-settings-feature .fix-ado-switch-text {
   display: flex;
   flex-direction: column;
+  flex-grow: 1;
   gap: 2px;
+  min-width: 0;
 }
 
 .fix-ado-settings-feature-name {
   font-weight: 600;
+}
+
+.fix-ado-settings-feature-description {
+  color: var(--fix-ado-settings-muted);
 }
 
 .fix-ado-settings-chip {
@@ -141,7 +304,7 @@
 }
 
 .fix-ado-settings-chip-new {
-  background: var(--communication-background, rgb(0, 120, 212));
+  background: var(--fix-ado-settings-accent);
   color: var(--text-on-communication-background, rgb(255, 255, 255));
 }
 
@@ -152,28 +315,47 @@
 
 .fix-ado-settings-chip-tag {
   border: 1px solid var(--palette-black-alpha-20, rgba(0, 0, 0, 0.2));
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
+  color: var(--fix-ado-settings-muted);
 }
 
-.fix-ado-settings-feature-description {
-  color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-}
-
+/* The footer: the number of changes on the left, the buttons on the right. */
 .fix-ado-settings-buttons {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 20px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--fix-ado-settings-line);
 }
 
-/* The issue link sits left of the buttons, on the same row. */
-.fix-ado-settings-issue-link {
+.fix-ado-settings-change-count {
   margin-right: auto;
-  color: var(--communication-foreground, rgb(0, 90, 158));
+  color: var(--fix-ado-settings-muted);
 }
 
 .fix-ado-settings-buttons .bolt-button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* A narrow window: the side bar above the section, its entries in a wrapping row. */
+@media (max-width: 700px) {
+  .fix-ado-settings-body {
+    flex-direction: column;
+  }
+
+  .fix-ado-settings-nav {
+    width: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--fix-ado-settings-line);
+    overflow-y: visible;
+  }
+
+  .fix-ado-settings-nav-items {
+    flex-flow: row wrap;
+  }
+
+  .fix-ado-settings-issue-link {
+    margin-top: 0;
+  }
 }

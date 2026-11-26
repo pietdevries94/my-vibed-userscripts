@@ -1,5 +1,6 @@
-import { FEATURES, FEATURE_CATEGORIES } from "./features/index.ts";
+import { FEATURES, SETTINGS_SECTIONS } from "./features/index.ts";
 import type { Feature, SyncReason } from "./core/feature.ts";
+import { SETTINGS_PANEL_STYLE } from "./core/settings-panel-style.ts";
 import { apiBasePath } from "./pull-requests/pull-request-link.ts";
 import { createAdoClient } from "./core/ado-client.ts";
 import { createFeatureRunner } from "./core/feature-runner.ts";
@@ -8,7 +9,6 @@ import { createSyncBeforePaint } from "./core/sync-before-paint.ts";
 import { isFeatureOn } from "./core/feature.ts";
 import { parsePage } from "./core/page.ts";
 import { reloadWhenIdle } from "./core/reload-when-idle.ts";
-import settingsPanelStyle from "./core/settings-panel.css";
 
 const TIMER_INTERVAL_MS = 5000;
 
@@ -22,7 +22,6 @@ const seenChangeKey = ({ id }: Feature): string => `${id}-seen-change`;
 const settingsPanel = isInFrame
   ? null
   : createSettingsPanel({
-      categories: FEATURE_CATEGORIES,
       document,
       isOn,
       markChangesSeen: (features) => {
@@ -38,10 +37,11 @@ const settingsPanel = isInFrame
           GM_setValue(id, isChosenOn);
         }
       },
+      sections: SETTINGS_SECTIONS,
       seenChangeVersion: (feature) => GM_getValue<string | null>(seenChangeKey(feature), null),
     });
 if (settingsPanel) {
-  GM_addStyle(settingsPanelStyle);
+  GM_addStyle(SETTINGS_PANEL_STYLE);
   // A way in when Azure DevOps changes its top bar and the button is gone.
   GM_registerMenuCommand("Settings", settingsPanel.open);
 }

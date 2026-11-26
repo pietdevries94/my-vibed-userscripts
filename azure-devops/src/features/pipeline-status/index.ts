@@ -5,9 +5,9 @@ import statusIconStyle from "../../pipeline/pipeline-status-icon.css";
 
 const pipelineStatusOnPullRequests: Feature = {
   change: { kind: "new", version: "1.7.2" },
-  description: "A pipeline status icon on each pull request in a list.",
+  description: "A pipeline status icon on each pull request.",
   id: "pipeline-status",
-  name: "Pipeline status on pull requests",
+  name: "Pipeline status",
   start({ basePath, client, document, now }) {
     const poller = createPipelineStatusPoller<HTMLElement>({
       client,
