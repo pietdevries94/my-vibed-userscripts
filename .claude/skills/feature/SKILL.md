@@ -13,6 +13,8 @@ Change only the parts the owner names. When a word could mean two parts of the p
 
 When the owner had a design made for the change, every visible style change goes into that design first, the owner approves it, and only then into code. That includes fixes found while checking.
 
+When the owner wants a design matched pixel for pixel, the design page is the spec: it uses the site's own fonts and theme colours, and can draw the fake site's rows. A Playwright diff then reads each table or part from the fake site, draws the same rows in the design and compares the screenshots. `azure-devops/design-diffs/pr-table.ts` is the worked example. Give the design page a doctype before you load it: without one it renders in quirks mode, whose line heights differ.
+
 A restyle of the site's own pages follows `restyle`.
 
 ## Reuse
