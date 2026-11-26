@@ -4,7 +4,8 @@
 // and the age as "3d p", with the full time as its cell's tooltip. style.css lays the rows out
 // from the mark.
 
-import { AGE_LEGEND, removeAge, showAge } from "./table-age.ts";
+import { removeAge, showAge, showAgeHead } from "./table-age.ts";
+import type { AgeTimes } from "./table-age.ts";
 import { avatarName } from "../../pull-requests/avatars.ts";
 
 const TABLE_ATTRIBUTE = "data-fix-ado-table";
@@ -42,7 +43,7 @@ function createHeadCell(document: Document, column: string, label: string): HTML
   cell.className = `${HEAD_CLASS}-${column}`;
   cell.textContent = label;
   if (column === "age") {
-    cell.title = AGE_LEGEND;
+    showAgeHead(cell);
   }
   return cell;
 }
@@ -162,16 +163,16 @@ function removeCells(row: Element): void {
   }
 }
 
-function showCells(row: Element, now: number): void {
+function showCells(row: Element, times: AgeTimes): void {
   showAuthor(row);
   showId(row);
   showTarget(row);
   showWorkItem(row);
-  showAge(row, now);
+  showAge(row, times);
 }
 
 /** Shows the lists as a table, or as Azure DevOps's own. Only touches the DOM on a change. */
-function showTableRows(document: Document, isTable: boolean, now = Date.now()): void {
+function showTableRows(document: Document, isTable: boolean, times: AgeTimes): void {
   const root = document.documentElement;
   if (root.hasAttribute(TABLE_ATTRIBUTE) !== isTable) {
     root.toggleAttribute(TABLE_ATTRIBUTE, isTable);
@@ -181,7 +182,7 @@ function showTableRows(document: Document, isTable: boolean, now = Date.now()): 
     markCreatedByMe(list, isTable);
     for (const row of list.querySelectorAll(ROW_SELECTOR)) {
       if (isTable) {
-        showCells(row, now);
+        showCells(row, times);
       } else {
         removeCells(row);
       }

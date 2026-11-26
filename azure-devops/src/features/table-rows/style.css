@@ -6,7 +6,7 @@
   --fix-ado-table-line: var(--component-grid-cell-bottom-border-color, rgb(234, 234, 234));
   /* Fixed widths, so the columns of every list on the page line up. */
   --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 72px [id] 72px [target]
-    180px [reviewers] 100px [comments] 92px [age] 64px;
+    180px [reviewers] 100px [comments] 92px [age] 116px [more] 32px;
 
   display: block;
   font-size: 14px;
@@ -15,13 +15,13 @@
   /* Without Group by work item, a Work item column takes the place of the group rows. */
   &:not(:has(.fix-ado-work-item-group)) {
     --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [author] 72px [id] 72px [target]
-      180px [work-item] 110px [reviewers] 100px [comments] 92px [age] 64px;
+      180px [work-item] 110px [reviewers] 100px [comments] 92px [age] 116px [more] 32px;
   }
 
   /* "Created by me" lists only your own pull requests, so it has no Author column. */
   &[data-fix-ado-created-by-me] {
     --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [id] 72px [target] 180px
-      [reviewers] 100px [comments] 92px [age] 64px;
+      [reviewers] 100px [comments] 92px [age] 116px [more] 32px;
 
     & :is(.fix-ado-table-head-author, a.bolt-table-row > [aria-colindex="1"]) {
       display: none;
@@ -30,7 +30,7 @@
 
   &[data-fix-ado-created-by-me]:not(:has(.fix-ado-work-item-group)) {
     --fix-ado-table-columns: [pipeline] 36px [title] minmax(0, 1fr) [id] 72px [target] 180px
-      [work-item] 110px [reviewers] 100px [comments] 92px [age] 64px;
+      [work-item] 110px [reviewers] 100px [comments] 92px [age] 116px [more] 32px;
   }
 
   & > colgroup {
@@ -118,10 +118,10 @@
     display: none;
   }
 
-  /* The row's More button keeps its place on the right, over the age, when it shows. */
+  /* The row's More button has its own column on the right, so it covers nothing. */
   & > tbody > a.bolt-table-row > td.bolt-table-cell-side-action {
-    position: absolute;
-    inset: 0 0 auto auto;
+    grid-column: more;
+    justify-content: center;
     padding: 0;
   }
 
@@ -368,8 +368,8 @@
     }
   }
 
-  /* The age as "3d p", on the right: how long ago, and c, u or p for created, updated or
-     published. The site's full time stays for screen readers, and shows as the tooltip. */
+  /* The age as "5d · 3d · 2d": created, updated and published, each in a fixed slot so the
+     dots line up. The site's full time stays for screen readers, and shows as the tooltip. */
   & [aria-colindex="5"] {
     grid-column: age;
     justify-content: flex-end;
@@ -377,10 +377,6 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     color: var(--text-secondary-color, rgba(0, 0, 0, 0.55));
-
-    &[data-fix-ado-is-stale] {
-      color: var(--status-error-text, rgb(218, 10, 0));
-    }
 
     &:has(> .fix-ado-table-age) > .bolt-table-cell-content {
       position: absolute;
@@ -390,6 +386,27 @@
       clip-path: inset(50%);
       white-space: nowrap;
     }
+  }
+
+  & .fix-ado-table-age {
+    display: grid;
+    grid-template-columns: 24px 12px 24px 12px 24px;
+    text-align: end;
+  }
+
+  & .fix-ado-table-age-dot {
+    text-align: center;
+  }
+
+  & .fix-ado-table-age-published[data-fix-ado-is-stale] {
+    color: var(--status-error-text, rgb(218, 10, 0));
+  }
+
+  & .fix-ado-table-age-legend {
+    margin-left: 4px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
   }
 }
 

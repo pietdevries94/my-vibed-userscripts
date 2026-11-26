@@ -25,8 +25,15 @@ interface TableRow {
   reviewers: (Person & { isRequired: boolean; vote: string | null })[];
   moreReviewers: string;
   comments: { text: string; isActive: boolean } | null;
-  /** "3d" and c, u or p, as the age cell shows them, and its tooltip. */
-  time: { short: string; kind: string; full: string; isStale: boolean };
+  /** The created, updated and published ages as the age cell shows them, "–" for none, and its
+   *  tooltip. */
+  time: {
+    created: string;
+    updated: string;
+    published: string;
+    isStale: boolean;
+    full: string;
+  };
 }
 
 type Band = { link: string; title: string | null } | { label: string };
@@ -93,12 +100,15 @@ function reviewersOf(cell: Element | null): TableRow["reviewers"] {
 
 function timeOf(row: Element): TableRow["time"] {
   const cell = row.querySelector<HTMLElement>('[aria-colindex="5"]');
-  const [short = "", kind = ""] = text(cell?.querySelector(".fix-ado-table-age")).split(" ");
+  const slot = (age: string): HTMLElement | null | undefined =>
+    cell?.querySelector<HTMLElement>(`.fix-ado-table-age-${age}`);
+  const published = slot("published");
   return {
+    created: text(slot("created")),
     full: cell?.getAttribute("title") ?? "",
-    isStale: cell !== null && Object.hasOwn(cell.dataset, "fixAdoIsStale"),
-    kind,
-    short,
+    isStale: published ? Object.hasOwn(published.dataset, "fixAdoIsStale") : false,
+    published: text(published),
+    updated: text(slot("updated")),
   };
 }
 

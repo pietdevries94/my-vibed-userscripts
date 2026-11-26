@@ -1,6 +1,7 @@
 import { isWindows98Mode, showTableRows } from "./table-rows.ts";
 import { JSDOM } from "jsdom";
 import assert from "node:assert/strict";
+import { needsCreationDate } from "./table-age.ts";
 import { test } from "node:test";
 
 /** The test reads the records with takeRecords instead. */
@@ -18,6 +19,7 @@ const CELLS = `<td class="bolt-table-cell-compact"></td>
 
 /** Three days and a bit after the row's update time. */
 const NOW = Date.parse("2026-01-13T13:00:00.000Z");
+const NO_CREATION_DATES = { createdAt: (): null => null, now: NOW };
 
 /** A section card with this title and a list with one pull request row. Azure DevOps puts an <a>
  *  row in the table with DOM calls, which an HTML parser would move out of the table, so the row is
@@ -57,33 +59,43 @@ function isIdCell(row: Element): boolean {
 /** True when the table shows the list of a card with this title as the Created by me list. */
 function isMarkedCreatedByMe(cardTitle: string): boolean {
   const { document } = createList(cardTitle).window;
-  showTableRows(document, true);
+  showTableRows(document, true, NO_CREATION_DATES);
   const list = document.querySelector<HTMLElement>("table");
   return list !== null && Object.hasOwn(list.dataset, "fixAdoCreatedByMe");
 }
 
 test("marks the page while the lists show as a table, and unmarks it after", () => {
   const { document } = createList().window;
-  showTableRows(document, true);
+  showTableRows(document, true, NO_CREATION_DATES);
   assert.equal(Object.hasOwn(document.documentElement.dataset, "fixAdoTable"), true);
-  showTableRows(document, false);
+  showTableRows(document, false, NO_CREATION_DATES);
   assert.equal(Object.hasOwn(document.documentElement.dataset, "fixAdoTable"), false);
 });
 
 test("puts a header with the column names above each list", () => {
   const { document } = createList().window;
-  showTableRows(document, true);
+  showTableRows(document, true, NO_CREATION_DATES);
   const heads = [...document.querySelectorAll("table > thead.fix-ado-table-head th")];
   assert.deepEqual(
     heads.map((head) => head.textContent),
-    ["", "Pull request", "Author", "Id", "Target", "Work item", "Reviewers", "Comments", "Age"],
+    [
+      "",
+      "Pull request",
+      "Author",
+      "Id",
+      "Target",
+      "Work item",
+      "Reviewers",
+      "Comments",
+      "Age (c · u · p)",
+    ],
   );
   assert.equal(document.querySelector("table > thead + tbody") !== null, true);
 });
 
 test("gives each pull request the author's name as a tooltip, its id, its target and its work item", () => {
   const { document } = createList().window;
-  showTableRows(document, true);
+  showTableRows(document, true, NO_CREATION_DATES);
   const row = rowOf(document);
   assert.equal(row.querySelector('[aria-colindex="1"]')?.getAttribute("title"), "Doe, Jane");
   assert.equal(row.querySelector(":scope > td.fix-ado-table-id")?.textContent, "!4021");
@@ -100,49 +112,76 @@ test("marks the Created by me list, which lists only your own pull requests and 
   assert.equal(isMarkedCreatedByMe("Assigned to me"), false);
 });
 
-/** The row's age as it shows, its tooltip, and whether it shows as stale. */
-function ageOf(row: Element): { text: string; tooltip: string | null; isStale: boolean } {
-  const cell = row.querySelector<HTMLElement>('[aria-colindex="5"]');
+/** Five days before NOW: when the row's pull request was created. */
+const CREATED_AT = Date.parse("2026-01-08T13:00:00.000Z");
+const createdAt = (pullRequestId: number): number | null =>
+  pullRequestId === 4021 ? CREATED_AT : null;
+
+/** The row's ages as they show, created, updated and published, its tooltip, and whether the
+ *  publish time shows as stale. */
+function agesOf(row: Element): { ages: string[]; tooltip: string | null; isStale: boolean } {
+  const cell = row.querySelector('[aria-colindex="5"]');
   assert.ok(cell);
+  const slots = ["created", "updated", "published"].map((age) =>
+    cell.querySelector<HTMLElement>(`.fix-ado-table-age-${age}`),
+  );
   return {
-    isStale: Object.hasOwn(cell.dataset, "fixAdoIsStale"),
-    text: cell.querySelector(".fix-ado-table-age")?.textContent ?? "",
+    ages: slots.map((slot) => slot?.textContent ?? ""),
+    isStale: slots[2] ? Object.hasOwn(slots[2].dataset, "fixAdoIsStale") : false,
     tooltip: cell.getAttribute("title"),
   };
 }
 
-test("shows the age as how long ago, and u for updated, with the full time as the tooltip", () => {
-  const { document } = createList().window;
-  showTableRows(document, true, NOW);
-  assert.deepEqual(ageOf(rowOf(document)), {
-    isStale: false,
-    text: "3d u",
-    tooltip: "Updated 3 days ago",
-  });
-  assert.equal(
-    document.querySelector(".fix-ado-table-head-age")?.getAttribute("title"),
-    "c: created, u: updated, p: published",
-  );
-});
-
-test("shows the publish time as p where Published since shows it, stale when it is too long ago", () => {
-  const { document } = createList().window;
+function addPublishedSince(document: Document, text: string): void {
   const published = document.createElement("div");
   published.className = "fix-ado-published-since fix-ado-published-since-too-long";
-  published.textContent = "Published 5 hours ago";
+  published.textContent = text;
   document.querySelector('[aria-colindex="5"] .bolt-table-cell-content')?.append(published);
-  showTableRows(document, true, NOW);
-  assert.deepEqual(ageOf(rowOf(document)), {
+}
+
+test("shows when the pull request was created, updated and published, with the full times as the tooltip", () => {
+  const { document } = createList().window;
+  addPublishedSince(document, "Published 2 days ago");
+  showTableRows(document, true, { createdAt, now: NOW });
+  assert.deepEqual(agesOf(rowOf(document)), {
+    ages: ["5d", "3d", "2d"],
     isStale: true,
-    text: "5h p",
-    tooltip: "Published 5 hours ago",
+    tooltip: "Created 5 days ago · Updated 3 days ago · Published 2 days ago",
   });
+});
+
+test("explains the ages in the Age header, and in full as its tooltip", () => {
+  const { document } = createList().window;
+  showTableRows(document, true, NO_CREATION_DATES);
+  const head = document.querySelector(".fix-ado-table-head-age");
+  assert.equal(head?.textContent, "Age (c · u · p)");
+  assert.equal(head?.getAttribute("title"), "Created · updated · published");
+});
+
+test("shows a dash for an age that does not apply or is not known yet", () => {
+  const { document } = createList().window;
+  showTableRows(document, true, { createdAt: () => null, now: NOW });
+  assert.deepEqual(agesOf(rowOf(document)).ages, ["–", "3d", "–"]);
+});
+
+test("takes a row Azure DevOps shows as created as never updated", () => {
+  const { document } = createList().window;
+  const line = document.querySelector('[aria-colindex="5"] .bolt-table-cell-content > div');
+  assert.ok(line?.firstChild);
+  line.firstChild.textContent = "Created ";
+  showTableRows(document, true, { createdAt: () => null, now: NOW });
+  assert.deepEqual(agesOf(rowOf(document)), {
+    ages: ["3d", "–", "–"],
+    isStale: false,
+    tooltip: "Created 3 days ago",
+  });
+  assert.equal(needsCreationDate(rowOf(document)), false);
 });
 
 test("shows an age under a minute as now", () => {
   const { document } = createList().window;
-  showTableRows(document, true, Date.parse("2026-01-10T12:00:30.000Z"));
-  assert.equal(ageOf(rowOf(document)).text, "now u");
+  showTableRows(document, true, { createdAt, now: Date.parse("2026-01-10T12:00:30.000Z") });
+  assert.deepEqual(agesOf(rowOf(document)).ages.slice(0, 2), ["1d", "now"]);
 });
 
 test("marks a work item cell without an id, such as Multiple work items, as plain text", () => {
@@ -150,19 +189,19 @@ test("marks a work item cell without an id, such as Multiple work items, as plai
   const label = document.querySelector(".fix-ado-linked-work-item");
   assert.ok(label);
   label.textContent = "Multiple work items";
-  showTableRows(document, true);
+  showTableRows(document, true, NO_CREATION_DATES);
   assert.equal(isIdCell(rowOf(document)), false);
 });
 
 test("follows a row Azure DevOps reuses for another pull request", () => {
   const { document } = createList().window;
-  showTableRows(document, true);
+  showTableRows(document, true, NO_CREATION_DATES);
   const row = rowOf(document);
   row.setAttribute("href", "/org/proj/_git/repo/pullrequest/4022");
   const branch = row.querySelector(".monospaced-xs");
   assert.ok(branch);
   branch.textContent = "release";
-  showTableRows(document, true);
+  showTableRows(document, true, NO_CREATION_DATES);
   assert.equal(row.querySelectorAll(".fix-ado-table-id").length, 1);
   assert.equal(row.querySelector(".fix-ado-table-id")?.textContent, "!4022");
   assert.equal(row.querySelector(".fix-ado-table-target")?.textContent, "Webshop → release");
@@ -171,7 +210,7 @@ test("follows a row Azure DevOps reuses for another pull request", () => {
 test("shows the branch alone where Azure DevOps names no repository, as on a repository's own list", () => {
   const { document } = createList().window;
   document.querySelector(".padding-horizontal-4:not(.monospaced-xs)")?.remove();
-  showTableRows(document, true);
+  showTableRows(document, true, NO_CREATION_DATES);
   const target = rowOf(document).querySelector(".fix-ado-table-target");
   assert.equal(target?.textContent, "main");
   assert.equal(target?.firstElementChild?.className, "fix-ado-table-branch");
@@ -179,8 +218,8 @@ test("shows the branch alone where Azure DevOps names no repository, as on a rep
 
 test("takes everything away when turned off, and puts the work item back under the title", () => {
   const { document } = createList("Created by me").window;
-  showTableRows(document, true);
-  showTableRows(document, false);
+  showTableRows(document, true, NO_CREATION_DATES);
+  showTableRows(document, false, NO_CREATION_DATES);
   assert.equal(document.querySelector('[class*="fix-ado-table"]'), null);
   assert.equal(
     document.querySelector("[title], [data-fix-ado-created-by-me], [data-fix-ado-is-stale]"),
@@ -194,7 +233,7 @@ test("takes everything away when turned off, and puts the work item back under t
 
 test("writes nothing when the page already shows the table", () => {
   const { window } = createList();
-  showTableRows(window.document, true);
+  showTableRows(window.document, true, NO_CREATION_DATES);
   const observer = new window.MutationObserver(ignoreRecords);
   observer.observe(window.document.documentElement, {
     attributes: true,
@@ -202,7 +241,7 @@ test("writes nothing when the page already shows the table", () => {
     childList: true,
     subtree: true,
   });
-  showTableRows(window.document, true);
+  showTableRows(window.document, true, NO_CREATION_DATES);
   assert.deepEqual(observer.takeRecords(), []);
 });
 
