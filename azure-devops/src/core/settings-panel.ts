@@ -13,6 +13,8 @@ import { isRowOn } from "./settings-panel-row.ts";
 const TOP_BAR_SELECTOR = ".region-header-menubar";
 const DIALOG_CLASS = "fix-ado-settings";
 const TITLE_ID = "fix-ado-settings-title";
+const ISSUE_LINK_TEXT = "Report a bug or suggest a feature";
+const NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new";
 
 interface SettingsPanelOptions {
   document: Document;
@@ -73,6 +75,16 @@ function changeCountText(count: number): string {
   return count === 1 ? "1 change" : `${count} changes`;
 }
 
+/** Opens a new issue on the script's GitHub repository, in a new tab. */
+function issueLink(document: Document): HTMLAnchorElement {
+  const link = element(document, "a", {
+    className: "fix-ado-settings-issue-link",
+    text: ISSUE_LINK_TEXT,
+  });
+  Object.assign(link, { href: NEW_ISSUE_URL, rel: "noopener noreferrer", target: "_blank" });
+  return link;
+}
+
 interface Footer {
   footer: HTMLElement;
   /** Shows the number of changed choices, and turns Save on when there are any. */
@@ -99,7 +111,7 @@ function createFooter(dialog: HTMLDialogElement, options: SettingsPanelOptions):
   );
   save.disabled = true;
   const footer = element(document, "div", { className: "fix-ado-settings-buttons" });
-  footer.append(count, cancel, save);
+  footer.append(issueLink(document), count, cancel, save);
   return {
     footer,
     showChanges() {

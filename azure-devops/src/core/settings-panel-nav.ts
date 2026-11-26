@@ -2,8 +2,6 @@ import type { SettingsSection } from "./feature.ts";
 import type { View } from "./settings-panel-pane.ts";
 import { element } from "./settings-panel-markup.ts";
 
-const ISSUE_LINK_TEXT = "Report a bug or suggest a feature";
-const NEW_ISSUE_URL = "https://github.com/pietdevries94/my-vibed-userscripts/issues/new";
 const SEARCH_TEXT = "Search settings";
 const WHATS_NEW = "What’s new";
 
@@ -29,16 +27,6 @@ interface Nav {
 interface NavItem {
   view: View;
   element: HTMLButtonElement;
-}
-
-/** Opens a new issue on the script's GitHub repository, in a new tab. */
-function issueLink(document: Document): HTMLAnchorElement {
-  const link = element(document, "a", {
-    className: "fix-ado-settings-issue-link",
-    text: ISSUE_LINK_TEXT,
-  });
-  Object.assign(link, { href: NEW_ISSUE_URL, rel: "noopener noreferrer", target: "_blank" });
-  return link;
 }
 
 /** A search field whose label only screen readers read: its placeholder shows the same words. */
@@ -97,18 +85,18 @@ function markCurrent(items: NavItem[], view: View, query: string): void {
   }
 }
 
-/** The side bar element, with the title, search, entries and issue link in it. */
+/** The side bar element, with the title, search and entries in it. */
 function navElement(options: NavOptions, search: HTMLElement, items: NavItem[]): HTMLElement {
   const { document } = options;
   const list = element(document, "div", { className: "fix-ado-settings-nav-items" });
   list.append(...items.map((item) => item.element));
   const nav = element(document, "nav", { className: "fix-ado-settings-nav" });
   nav.setAttribute("aria-label", "Settings sections");
-  nav.append(options.title, search, list, issueLink(document));
+  nav.append(options.title, search, list);
   return nav;
 }
 
-/** The side bar: the title, search, an entry per section, and the issue link at the bottom. */
+/** The side bar: the title, search and an entry per section. */
 function createNav(options: NavOptions): Nav {
   const { search, field } = searchField(options.document);
   const items = navItems(options);

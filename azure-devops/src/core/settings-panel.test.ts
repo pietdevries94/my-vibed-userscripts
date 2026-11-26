@@ -191,10 +191,12 @@ test("a feature's tag shows as a chip after its name, also once its change is se
   assert.deepEqual(chips(page, "retro"), ["WIP"]);
 });
 
-test("the panel links to a new GitHub issue, opened in a new tab", () => {
+test("the bottom bar links to a new GitHub issue, opened in a new tab, before the buttons", () => {
   const page = pageWith(TOP_BAR);
   page.panel.open();
   const link = page.document.querySelector<HTMLAnchorElement>("dialog a");
+  assert.equal(link?.parentElement, page.button("Cancel").parentElement);
+  assert.equal(link?.parentElement?.firstElementChild, link);
   assert.equal(link?.textContent, "Report a bug or suggest a feature");
   assert.equal(link.href, "https://github.com/pietdevries94/my-vibed-userscripts/issues/new");
   assert.equal(link.target, "_blank");

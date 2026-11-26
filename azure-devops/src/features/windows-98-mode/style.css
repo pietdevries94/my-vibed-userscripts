@@ -1175,13 +1175,6 @@ html[data-fix-ado-win98] .fix-ado-settings {
     font: 700 10px/12px var(--win98-font);
   }
 
-  .fix-ado-settings-issue-link {
-    margin-top: 0;
-    padding: 0;
-    color: #0000ee;
-    text-decoration: underline;
-  }
-
   .fix-ado-settings-pane {
     padding: 8px 10px 10px;
   }
@@ -1320,6 +1313,13 @@ html[data-fix-ado-win98] .fix-ado-settings {
       text-shadow: 1px 1px #fff;
       opacity: 1;
     }
+  }
+
+  /* The issue link first, then the number of changes, before the buttons. */
+  .fix-ado-settings-issue-link {
+    order: -3;
+    color: #0000ee;
+    text-decoration: underline;
   }
 
   .fix-ado-settings-change-count {

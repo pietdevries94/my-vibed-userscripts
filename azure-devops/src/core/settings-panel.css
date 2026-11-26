@@ -182,12 +182,6 @@
   text-align: center;
 }
 
-.fix-ado-settings-issue-link {
-  margin-top: auto;
-  padding: 0 10px;
-  color: var(--communication-foreground, rgb(0, 90, 158));
-}
-
 /* The shown section, which scrolls on its own. */
 .fix-ado-settings-pane {
   flex-grow: 1;
@@ -318,7 +312,7 @@
   color: var(--fix-ado-settings-muted);
 }
 
-/* The footer: the number of changes on the left, the buttons on the right. */
+/* The footer: the issue link on the left, the number of changes and the buttons on the right. */
 .fix-ado-settings-buttons {
   display: flex;
   align-items: center;
@@ -328,8 +322,12 @@
   border-top: 1px solid var(--fix-ado-settings-line);
 }
 
-.fix-ado-settings-change-count {
+.fix-ado-settings-issue-link {
   margin-right: auto;
+  color: var(--communication-foreground, rgb(0, 90, 158));
+}
+
+.fix-ado-settings-change-count {
   color: var(--fix-ado-settings-muted);
 }
 
@@ -353,9 +351,5 @@
 
   .fix-ado-settings-nav-items {
     flex-flow: row wrap;
-  }
-
-  .fix-ado-settings-issue-link {
-    margin-top: 0;
   }
 }
